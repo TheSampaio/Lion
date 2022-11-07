@@ -1,40 +1,47 @@
 #include "PCH.h"
-#include "Window.h"
+#include "Application.h"
 
-// Static variables
-static Window s_Window;
+#include "Game.h"
 
-// Functions's prototypes
-void ResizeViewport(GLFWwindow* Window, int Width, int Height);
+// Main game's class
+class SuperGame : public Game
+{
+public:
+    void Start();
+    void Update(float& DeltaTime);
+    void Draw();
+    void End();
 
-int main()
-{    
-    // Setups and create a window
-    s_Window.SetTitle("OpenGL Window");
-    s_Window.SetSize(600, 400);
-    s_Window.SetOpenGLVersion(4, 0);
-    s_Window.Create();
+private:
 
-    // Sighs window's callbacks
-    glfwSetFramebufferSizeCallback(s_Window.GetId(), ResizeViewport);
+};
 
-    // Main loop
-    while (!glfwWindowShouldClose(s_Window.GetId())) // Windows's loop
-    {
-        s_Window.SetBackgroundColor(0.80f, 0.85f, 0.90f);
-
-        // TODO: Draw Here!
-
-        s_Window.ProcessEvents();
-        s_Window.SwapBuffers();
-    }
-           
-    return 0;
+void SuperGame::Start()
+{
+    Debug::Log::Info("The game was initialized");
 }
 
-// Resizes window's viewport
-void ResizeViewport(GLFWwindow* Window, int Width, int Height)
+void SuperGame::Update(float& DeltaTime)
 {
-    s_Window.SetSize(Width, Height);
-    glViewport(0, 0, Width, Height);
+}
+
+void SuperGame::Draw()
+{
+}
+
+void SuperGame::End()
+{
+    Debug::Log::Info("The game was finalized");
+}
+
+// ========== Entry Point ========== //
+int main()
+{    
+    Application Application;
+
+    Application.GetWindow()->SetSize(1280, 720);
+    Application.GetWindow()->SetTitle("Super Game");
+    Application.GetWindow()->SetBackgroundColor(0.80f, 0.85f, 0.95f);
+
+    return Application.Start(new SuperGame);
 }

@@ -1,8 +1,6 @@
 #include "PCH.h"
 #include "Window.h"
 
-#include "Utils.h"
-
 Window::Window()
     : m_Id(nullptr)
 {
@@ -28,7 +26,7 @@ Window::~Window()
     glfwTerminate();
 }
 
-void Window::Create()
+bool Window::Create()
 {
     // Creates a window
     m_Id = glfwCreateWindow(m_Size[0], m_Size[1], m_Title.c_str(), nullptr, nullptr);
@@ -52,8 +50,13 @@ void Window::Create()
         exit(EXIT_FAILURE);
     }
 
-    // Creating a viewport
+    // Creates a viewport
     glViewport(0, 0, GetSize()[0], GetSize()[1]);
+
+    // Changes background's color
+    glClearColor(m_BackgroundColor[0], m_BackgroundColor[1], m_BackgroundColor[2], 1.0f);
+
+    return (m_Id) ? true : false;
 }
 
 void Window::SetOpenGLVersion(unsigned int Major, unsigned int Minor)
