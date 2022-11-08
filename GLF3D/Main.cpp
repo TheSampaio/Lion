@@ -18,7 +18,7 @@ private:
 
 void SuperGame::Start()
 {
-    Debug::Log::Info("The game was initialized");
+    Debug::Log::Info("The game was initialized.");
 }
 
 void SuperGame::Update(float& DeltaTime)
@@ -31,7 +31,7 @@ void SuperGame::Draw()
 
 void SuperGame::End()
 {
-    Debug::Log::Info("The game was finalized");
+    Debug::Log::Info("The game was finalized.");
 }
 
 // ========== Entry Point ========== //
