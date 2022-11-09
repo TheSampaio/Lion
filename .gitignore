@@ -1,8 +1,14 @@
 # Directories
+Dependencies/
+
 .vs/
 .vscode/
+
+_Bin/
+_Obj/
 build/
-Dependencies/
 
 # Files
 *.user
+*.sln
+Makefile
