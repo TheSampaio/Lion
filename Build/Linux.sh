@@ -3,7 +3,7 @@
 echo .
 echo "==== Building Premake5 ===="
 cd -
-./premake5 gmake2
+./premake5.exe gmake2
 
 # MakeFile
 echo .
