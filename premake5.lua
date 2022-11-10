@@ -1,3 +1,4 @@
+-- WORKSPACE
 workspace "GLF3D"
     configurations {
         "Debug",
@@ -6,6 +7,7 @@ workspace "GLF3D"
 
     language "C++"
     cppdialect "C++14"
+    architecture "x64"
 
     filter "configurations:Debug"
         defines "GLF_DEBUG"
@@ -19,31 +21,51 @@ workspace "GLF3D"
 
     OutPutDir = "%{cfg.system}/%{cfg.buildcfg}/%{cfg.architecture}/"
 
+-- PROJECT GLF3D
 project "GLF3D"
     kind "ConsoleApp"
     location "%{prj.name}"
 
-    pchheader("%{prj.name}/PCH.h")
-    pchsource("${prj.name}/PCH.cpp")
+    -- Precompiled Headers
+    pchheader("PCH.h")
+    pchsource("GLF3D/PCH.cpp")
 
+    -- Output directories
+    targetdir ("_Bin/" .. OutPutDir .. "%{prj.name}")
+    objdir    ("_Obj/" .. OutPutDir .. "%{prj.name}")
+
+    -- Files & Includes
     files {
+        "Dependencies/glad/src/glad.c",
+
         "%{prj.name}/**.h",
         "%{prj.name}/**.cpp",
     }
 
-    targetdir ("_Bin/" .. OutPutDir .. "%{prj.name}")
-    objdir    ("_Obj/" .. OutPutDir .. "%{prj.name}")
+    includedirs {
+        "Dependencies/glfw/include",
+        "Dependencies/glad/include",
+        "Dependencies/glm/glm",
+    }
 
-    filter "system:windows"
-        defines "GLF_WIN32"
+    -- Filters
+    filter "files:Dependencies/glad/src/glad.c"
+        flags "NoPCH"
+
+    filter "system:windows" -- Windows
+        defines "GLF_WIN"
         systemversion "latest"
 
-    filter "system:linux"
+        links {
+            "Dependencies/glfw/lib-vc2022/glfw3",
+            "opengl32",
+        }
+
+    filter "system:linux" -- Linux
         defines "GLF_TUX"
         systemversion "latest"
 
         links {
             "glfw",
-            "GLEW",
             "GL",
         }

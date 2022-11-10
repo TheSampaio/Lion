@@ -1,4 +1,4 @@
-# Directories
+# === Directories ===
 Dependencies/
 
 .vs/
@@ -8,7 +8,11 @@ _Bin/
 _Obj/
 build/
 
-# Files
+# === Files ===
 *.user
 *.sln
+*.vcxproj
+*.vcxproj.filters
+
 Makefile
+glad.c

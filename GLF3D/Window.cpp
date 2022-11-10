@@ -43,9 +43,9 @@ bool Window::Create()
     glfwMakeContextCurrent(m_Id);
 
     // Loads GLEW
-    if (glewInit() != GLEW_OK)
+    if (!gladLoadGL())
     {
-        Debug::Log::Error("Failed to load GLEW.");
+        Debug::Log::Error("Failed to load GLAD.");
         glfwTerminate();
         exit(EXIT_FAILURE);
     }
