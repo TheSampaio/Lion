@@ -19,16 +19,12 @@ workspace "GLF3D"
         symbols "Off"
         optimize "Speed"
 
-    OutPutDir = "%{cfg.system}/%{cfg.buildcfg}/%{cfg.architecture}/"
+    OutPutDir = "%{cfg.system}-%{cfg.architecture}/%{cfg.buildcfg}/"
 
 -- PROJECT GLF3D
 project "GLF3D"
     kind "ConsoleApp"
     location "%{prj.name}"
-
-    -- Precompiled Headers
-    pchheader("PCH.h")
-    pchsource("GLF3D/PCH.cpp")
 
     -- Output directories
     targetdir ("_Bin/" .. OutPutDir .. "%{prj.name}")
@@ -56,6 +52,11 @@ project "GLF3D"
         defines "GLF_WIN"
         systemversion "latest"
 
+        -- Precompiled Headers
+        pchheader("PCH.h")
+        pchsource("%{prj.name}/PCH.cpp")
+
+        -- Libraries
         links {
             "Dependencies/glfw/lib-vc2022/glfw3",
             "opengl32",
@@ -65,6 +66,10 @@ project "GLF3D"
         defines "GLF_TUX"
         systemversion "latest"
 
+        -- Precompiled Headers
+        pchheader("%{prj.name}/PCH.h")
+
+        -- Libraries
         links {
             "glfw",
             "GL",

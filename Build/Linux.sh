@@ -1,15 +1,16 @@
 
 # Premake5
-ECHO .
-ECHO "==== Building Premake5 ===="
-CD -
+echo .
+echo "==== Building Premake5 ===="
+cd -
+chmod +x ./premake5.elf
 ./premake5.elf gmake2
 
 # MakeFile
-ECHO .
-MAKE
+echo .
+make
 
 # Run Program
-ECHO .
-./_Bin/linux/Debug/GLF3D/GLF3D
-ECHO .
+echo .
+./_Bin/linux-x86_64/Debug/GLF3D/GLF3D
+echo .
