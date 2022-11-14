@@ -1,7 +1,9 @@
 #ifndef GLF3D_WINDOW_H
 #define GLF3D_WINDOW_H
 
-class Window
+#include "Core.h"
+
+class GLF3D_API Window
 {
 public:
     Window();

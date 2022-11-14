@@ -1,7 +1,7 @@
 #include "PCH.h"
 #include "Application.h"
 
-Game*   Application::s_Game = nullptr;
+Game* Application::s_Game = nullptr;
 Window* Application::s_Window = nullptr;
 
 Application::Application()

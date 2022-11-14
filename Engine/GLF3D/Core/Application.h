@@ -1,10 +1,11 @@
 #ifndef GLF3D_APPLICATION_H
 #define GLF3D_APPLICATION_H
 
-#include "Game.h"
+#include "Core.h"
 #include "Window.h"
+#include "../Scene/Game.h"
 
-class Application
+class GLF3D_API Application
 {
 public:
     Application();

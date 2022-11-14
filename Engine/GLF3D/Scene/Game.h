@@ -1,9 +1,10 @@
 #ifndef GLF3D_GAME_H
 #define GLF3D_GAME_H
 
-#include "Window.h"
+#include "../Core/Core.h"
+#include "../Core/Window.h"
 
-class Game
+class GLF3D_API Game
 {
 public:
 	Game();
