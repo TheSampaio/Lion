@@ -1,5 +1,6 @@
-#ifndef GLF3D_PCH_H
-#define GLF3D_PCH_H
+// === PRECOMPILED HEADER === //
+#ifndef GLF3D_CORE_H
+#define GLF3D_CORE_H
 
 // Standard
 #include <array>
@@ -12,6 +13,6 @@
 #include <GLFW/glfw3.h>
 
 // Personal 
-#include "GLF3D/Core/Debugger.h"
+#include "Source/GLF3D/Core/Debugger.h"
 
-#endif
+#endif // !GLF3D_CORE_H

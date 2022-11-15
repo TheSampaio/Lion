@@ -1,5 +1,5 @@
-#ifndef GLF3D_CORE_H
-#define GLF3D_CORE_H
+#ifndef GLF3D_EXPORTER_H
+#define GLF3D_EXPORTER_H
 
 #ifdef GLF_WIN
 	#ifdef GLF_DLL

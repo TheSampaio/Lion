@@ -1,7 +1,7 @@
 #ifndef GLF3D_APPLICATION_H
 #define GLF3D_APPLICATION_H
 
-#include "Core.h"
+#include "_Exporter.h"
 #include "Window.h"
 #include "../Scene/Game.h"
 

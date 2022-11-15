@@ -1,10 +1,7 @@
 #pragma once
 
-#include <GLF3D.h>
-
-#include "Core/Application.h"
-#include "Core/Debugger.h"
-#include "Scene/Game.h"
+#include <GLF3D/Core/Application.h>
+#include <GLF3D/Scene/Game.h>
 
 // Main game's class
 class MainGame : public Game

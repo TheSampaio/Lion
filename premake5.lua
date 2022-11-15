@@ -22,9 +22,9 @@ workspace "GLF3D"
     OutPutDir = "%{cfg.system}-%{cfg.architecture}/%{cfg.buildcfg}/"
 
 -- // === PROJECT GLF3D === // --
-project "Engine"
+project "GLF3D"
     kind "SharedLib"
-    location "%{prj.name}"
+    location "Engine"
 
     defines "GLF_DLL"
 
@@ -36,13 +36,13 @@ project "Engine"
     files {
         "Dependencies/Source/glad/glad.c",
 
-        "%{prj.name}/**.h",
-        "%{prj.name}/**.cpp",
+        "%{prj.location}/**.h",
+        "%{prj.location}/**.cpp",
     }
 
     includedirs {
         "Dependencies/Include",
-        "%{prj.name}",
+        "%{prj.location}",
     }    
 
     -- Filters
@@ -53,12 +53,12 @@ project "Engine"
     filter "system:windows"
         defines "GLF_WIN"
         systemversion "latest"
-        staticruntime "On"
-        buildoptions "/MD"
+        staticruntime "Off"
+        runtime "Release"
 
         -- Precompiled Headers
-        pchheader("PCH.h")
-        pchsource("%{prj.name}/PCH.cpp")
+        pchheader("Core.h")
+        pchsource("%{prj.location}/Core.cpp")
 
         -- Libraries
         links {
@@ -77,7 +77,7 @@ project "Engine"
         systemversion "latest"
 
         -- Precompiled Headers
-        pchheader("PCH.h")
+        pchheader("Core.h")
 
         -- Libraries
         links {
@@ -92,9 +92,9 @@ project "Sandbox"
 
     -- Output directories
     targetdir ("_Bin/" .. OutPutDir .. "%{prj.name}")
-    objdir    ("_Obj/" .. OutPutDir .. "%{prj.name}")
+    objdir    ("_Obj/" .. OutPutDir .. "%{prj.name}")    
 
-    -- Files & Includes
+    -- Includes
     files {
         "Dependencies/Source/glad/glad.c",
 
@@ -104,17 +104,26 @@ project "Sandbox"
 
     includedirs {
         "Dependencies/Include",
-        "Engine/GLF3D",
+        "Engine/Source",
+        "%{prj.location}",
     }
+
+    -- Filters
+    filter "files:Dependencies/Source/glad/glad.c"
+        flags "NoPCH"
 
      -- Windows
      filter "system:windows"
         defines "GLF_WIN"
         systemversion "latest"
-        staticruntime "On"
-        buildoptions "/MD"
+        staticruntime "Off"
+        runtime "Release"
+
+        -- Precompiled Headers
+        pchheader("GLF3D.h")
+        pchsource("%{prj.location}/GLF3D.cpp")
 
         -- Libraries
         links {
-            "Engine",
+            "GLF3D",
         }

@@ -1,4 +1,5 @@
-#include "MainGame.h"
+#include "GLF3D.h"
+#include "Sandbox.h"
 
 int main()
 {

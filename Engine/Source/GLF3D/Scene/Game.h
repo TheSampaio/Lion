@@ -1,7 +1,7 @@
 #ifndef GLF3D_GAME_H
 #define GLF3D_GAME_H
 
-#include "../Core/Core.h"
+#include "../Core/_Exporter.h"
 #include "../Core/Window.h"
 
 class GLF3D_API Game

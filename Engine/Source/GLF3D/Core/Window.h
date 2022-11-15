@@ -1,7 +1,7 @@
 #ifndef GLF3D_WINDOW_H
 #define GLF3D_WINDOW_H
 
-#include "Core.h"
+#include "_Exporter.h"
 
 class GLF3D_API Window
 {
