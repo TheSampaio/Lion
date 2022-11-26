@@ -1,4 +1,5 @@
-#pragma once
+#ifndef SANDBOX_GAME_H
+#define SANDBOX_GAME_H
 
 #include <GLF3D/Core/Application.h>
 #include <GLF3D/Scene/Game.h>
@@ -15,3 +16,5 @@ public:
 private:
 
 };
+
+#endif

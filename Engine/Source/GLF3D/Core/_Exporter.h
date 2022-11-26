@@ -8,7 +8,11 @@
 		#define GLF3D_API __declspec(dllimport)
 	#endif
 #else
-	#error GLF3D does not suport Linux yet!
+	#ifdef GLF_DLL
+		#define GLF3D_API __attribute__((visibility("default")))
+	#else
+		#define GLF3D_API
+	#endif
 #endif
 
-#endif // !GLF3D_CORE_H
+#endif // !GLF3D_EXPORTER_H

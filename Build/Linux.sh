@@ -12,5 +12,5 @@ make
 
 # Run Program
 echo .
-./_Bin/linux-x86_64/Debug/GLF3D/GLF3D
+./_Bin/linux-x86_64/Debug/Sandbox/Sandbox
 echo .

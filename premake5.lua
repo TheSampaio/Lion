@@ -75,6 +75,8 @@ project "GLF3D"
     filter "system:linux"
         defines "GLF_TUX"
         systemversion "latest"
+        staticruntime "Off"
+        runtime "Release"
 
         -- Precompiled Headers
         pchheader("Core.h")
@@ -113,7 +115,7 @@ project "Sandbox"
         flags "NoPCH"
 
      -- Windows
-     filter "system:windows"
+    filter "system:windows"
         defines "GLF_WIN"
         systemversion "latest"
         staticruntime "Off"
@@ -126,4 +128,17 @@ project "Sandbox"
         -- Libraries
         links {
             "GLF3D",
+        }
+
+    filter "system:linux"
+        defines "GLF_TUX"
+        systemversion "latest"
+        staticruntime "Off"
+        runtime "Release"
+
+        pchheader("GLF3D.h")
+        pchsource("%{prj.location}/GLF3D.cpp")
+
+        links {
+            "GLF3D"
         }
