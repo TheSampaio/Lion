@@ -1,7 +1,7 @@
 #include "Core.h"
 #include "Application.h"
 
-Game* Application::s_Game = nullptr;
+Game*   Application::s_Game = nullptr;
 Window* Application::s_Window = nullptr;
 
 Application::Application()
@@ -11,6 +11,7 @@ Application::Application()
 
 Application::~Application()
 {
+    delete s_Game;
     delete s_Window;
 }
 
@@ -18,7 +19,6 @@ Application::~Application()
 bool Application::Start(Game* World)
 {
     s_Game = World;
-    s_Game->SetWindow(s_Window);
 
     if (!s_Window->Create())
     {

@@ -3,11 +3,11 @@
 
 int main()
 {
-    Application Application;
+    Application Engine;
 
-    Application.GetWindow()->SetSize(1280, 720);
-    Application.GetWindow()->SetTitle("Sandbox");
-    Application.GetWindow()->SetBackgroundColor(0.80f, 0.85f, 0.95f);
+    Engine.GetWindow()->SetSize(1280, 720);
+    Engine.GetWindow()->SetTitle("Sandbox");
+    Engine.GetWindow()->SetBackgroundColor(0.25f, 0.25f, 0.25f);
 
-    return Application.Start(new MainGame);
+    return Engine.Start(new Sandbox);
 }

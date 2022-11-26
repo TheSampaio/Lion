@@ -5,7 +5,7 @@
 #include <GLF3D/Scene/Game.h>
 
 // Main game's class
-class MainGame : public Game
+class Sandbox : public Game
 {
 public:
     void Start();

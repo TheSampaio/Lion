@@ -1,20 +1,20 @@
 #include "GLF3D.h"
 #include "Sandbox.h"
 
-void MainGame::Start()
+void Sandbox::Start()
 {
 	Debug::Log::Info("Game Initialized.");
 }
 
-void MainGame::Update(float& DeltaTime)
+void Sandbox::Update(float& DeltaTime)
 {
 }
 
-void MainGame::Draw()
+void Sandbox::Draw()
 {
 }
 
-void MainGame::End()
+void Sandbox::End()
 {
 	Debug::Log::Info("Game Finalized.");
 }

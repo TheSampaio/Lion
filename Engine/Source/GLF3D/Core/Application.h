@@ -17,6 +17,8 @@ public:
     // Get methods
     inline Window*& GetWindow() const { return s_Window; }
 
+    friend Game;
+
 private:
     bool Run();
 
