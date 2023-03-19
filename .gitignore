@@ -1,12 +1,11 @@
 # === Directories ===
-Dependencies/
-
 .vs/
 .vscode/
+_Output/
 
-_Bin/
-_Obj/
-build/
+_Dependencies/Include/
+_Dependencies/Lib/
+_Dependencies/Source/
 
 # === Files ===
 *.user

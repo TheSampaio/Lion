@@ -1,41 +1,80 @@
 #ifndef GLF3D_WINDOW_H
 #define GLF3D_WINDOW_H
 
-#include "_Exporter.h"
+// Enumerate window's display modes
+enum EDisplayMode
+{
+	Fullscreen = 0,
+	Windowed
+};
+
+// Enumerate window's V-Sync modes
+enum ESynchronizationMode
+{
+	Disabled = 0,
+	Full,
+	Half
+};
 
 class GLF3D_API Window
 {
 public:
-    Window();
-    ~Window();
+	Window();
+	~Window();
 
-    // Main methods
-    bool Create();
+	// Main methods
+	bool Close();
 
-    inline bool Close()         { return glfwWindowShouldClose(m_Id); }
-    inline void ClearBuffers()  { glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT); }
-    inline void ProcessEvents() { glfwPollEvents(); }      // Processes window's events
-    inline void SwapBuffers()   { glfwSwapBuffers(m_Id); } // Swaps window's buffers
+	// Get methods
+	inline GLFWwindow*& GetId()                               { return m_Id; }
+	inline GLFWmonitor*& GetMonitor()                         { return m_Monitor; }
+	inline std::string& GetTitle()                            { return m_Title; }
 
-    // Get methods
-    inline GLFWwindow*& GetId()                        { return m_Id; }
-    inline std::array<unsigned int, 2> GetSize() const { return m_Size; }
-    
-    // Set methods
-    void SetOpenGLVersion(unsigned int Major = 3, unsigned int Minor = 3);
+	inline unsigned short GetSynchronizationMode()            { return m_SynchronizationMode; }
+	inline unsigned short GetDisplayMode()                    { return m_DisplayMode; }
 
-    inline void SetVerticalSynchronization(bool State)           { glfwSwapInterval(State); }
-    inline void SetTitle(std::string Title)                      { m_Title = Title; }
-    inline void SetSize(unsigned int Width, unsigned int Heigth) { m_Size = {Width, Heigth}; }
-    inline void SetBackgroundColor(float R, float G, float B)    { m_BackgroundColor = { R, G, B }; }
+	inline std::array<unsigned short, 2> GetSize()            { return m_Size; }
+	inline std::array<unsigned short, 2> GetCenter()          { return m_Center; }
+	inline std::array<int, 2> GetScreen()                     { return m_Screen; }
+	inline std::array<int, 2> GetPosition()                   { return m_Position; }
+	inline std::array<unsigned short, 2> GetOpenGLVersion()   { return m_OpenGLVersion; }
+	inline std::array<unsigned short, 3> GetBackgroundColor() { return m_BackgroundColor; }
+
+	// Set methods
+	inline void SetTitle(const char* Title)                                                       { m_Title = Title; }
+	inline void SetSynchronizationMode(ESynchronizationMode SynchronizationMode)                  { m_SynchronizationMode = SynchronizationMode; }
+	inline void SetDisplayMode(EDisplayMode DisplayMode)                                          { m_DisplayMode = DisplayMode; }
+	inline void SetSize(unsigned short Width, unsigned short Height)                              { m_Size = { Width, Height }; }
+	inline void SetOpenGLVersion(unsigned short Major, unsigned short Minor)                      { m_OpenGLVersion = { Major, Minor }; }
+	inline void SetBackgroundColor(unsigned short Red, unsigned short Green, unsigned short Blue) { m_BackgroundColor = { Red, Green, Blue }; }
+
+	// Friend classes
+	friend class Application;
 
 private:
-    GLFWwindow* m_Id;
+	// Attributes
+	GLFWwindow* m_Id;
+	GLFWmonitor* m_Monitor;
 
-    std::string m_Title;
-    std::array<unsigned int, 2> m_Size;
-    std::array<unsigned int, 2> m_GLVersion;
-    std::array<float, 3> m_BackgroundColor;
+	std::string m_Title;
+	ESynchronizationMode m_SynchronizationMode;
+	EDisplayMode m_DisplayMode;
+
+	std::array<unsigned short, 2> m_Size;
+	std::array<unsigned short, 2> m_Center;
+	std::array<int, 2> m_Screen;
+	std::array<int, 2> m_Position;
+	std::array<unsigned short, 3> m_BackgroundColor;
+	std::array<unsigned short, 2> m_OpenGLVersion;
+
+	// Static attribures
+	static class Debug& s_Debug;
+
+	// Main methods
+	bool Create();
+	void ProcessEvents();
+	void ClearBuffers();
+	void SwapBuffers();
 };
 
 #endif

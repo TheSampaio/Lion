@@ -19,9 +19,9 @@ workspace "GLF3D"
         symbols "Off"
         optimize "Speed"
 
-    OutPutDir = "%{cfg.system}-%{cfg.architecture}/%{cfg.buildcfg}/"
+    OutputDir = "%{cfg.system}-%{cfg.architecture}/%{cfg.buildcfg}/"
 
--- // === PROJECT GLF3D === // --
+-- // ==================== PROJECT GLF3D ==================== // --
 project "GLF3D"
     kind "SharedLib"
     location "Engine"
@@ -29,24 +29,24 @@ project "GLF3D"
     defines "GLF_DLL"
 
     -- Output directories
-    targetdir ("_Bin/" .. OutPutDir .. "%{prj.name}")
-    objdir    ("_Obj/" .. OutPutDir .. "%{prj.name}")
+    targetdir ("_Output/Bin/" .. OutputDir .. "%{prj.name}")
+    objdir    ("_Output/Obj/" .. OutputDir .. "%{prj.name}")
 
     -- Files & Includes
     files {
-        "Dependencies/Source/glad/glad.c",
+        "_Dependencies/Source/glad.c",
 
         "%{prj.location}/**.h",
         "%{prj.location}/**.cpp",
     }
 
     includedirs {
-        "Dependencies/Include",
+        "_Dependencies/Include",
         "%{prj.location}",
     }    
 
     -- Filters
-    filter "files:Dependencies/Source/glad/glad.c"
+    filter "files:_Dependencies/Source/glad.c"
         flags "NoPCH"
 
     -- Windows
@@ -62,13 +62,13 @@ project "GLF3D"
 
         -- Libraries
         links {
-            "Dependencies/Lib/glfw/lib-vc2022/glfw3_mt",
+            "_Dependencies/Lib/Windows/glfw3",
             "opengl32",
         }
 
         postbuildcommands
         {
-            "{COPY} %{cfg.buildtarget.relpath} ../_Bin/" .. OutPutDir .. "/Sandbox"
+            "{COPY} %{cfg.buildtarget.relpath} ../_Output/Bin/" .. OutputDir .. "/Sandbox"
         }
 
     -- Linux
@@ -87,31 +87,31 @@ project "GLF3D"
             "GL",
         }
 
--- // === PROJECT SANDBOX === // --
+-- // ==================== PROJECT SANDBOX ==================== // --
 project "Sandbox"
     kind "ConsoleApp"
     location "%{prj.name}"
 
     -- Output directories
-    targetdir ("_Bin/" .. OutPutDir .. "%{prj.name}")
-    objdir    ("_Obj/" .. OutPutDir .. "%{prj.name}")    
+    targetdir ("_Output/Bin/" .. OutputDir .. "%{prj.name}")
+    objdir    ("_Output/Obj/" .. OutputDir .. "%{prj.name}")    
 
     -- Includes
     files {
-        "Dependencies/Source/glad/glad.c",
+        "_Dependencies/Source/glad.c",
 
         "%{prj.name}/**.h",
         "%{prj.name}/**.cpp",
     }
 
     includedirs {
-        "Dependencies/Include",
-        "Engine/Source",
+        "_Dependencies/Include",
+        "Engine/Include",
         "%{prj.location}",
     }
 
     -- Filters
-    filter "files:Dependencies/Source/glad/glad.c"
+    filter "files:_Dependencies/Source/glad.c"
         flags "NoPCH"
 
      -- Windows
@@ -122,8 +122,8 @@ project "Sandbox"
         runtime "Release"
 
         -- Precompiled Headers
-        pchheader("GLF3D.h")
-        pchsource("%{prj.location}/GLF3D.cpp")
+        pchheader("PCH.h")
+        pchsource("%{prj.location}/PCH.cpp")
 
         -- Libraries
         links {

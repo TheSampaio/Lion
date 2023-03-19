@@ -1,20 +1,17 @@
 #ifndef SANDBOX_GAME_H
 #define SANDBOX_GAME_H
 
-#include <GLF3D/Core/Application.h>
-#include <GLF3D/Scene/Game.h>
-
 // Main game's class
-class Sandbox : public Game
+class Sandbox : public Application
 {
 public:
+    Sandbox();
+
+    // Main methods
     void Start();
-    void Update(float& DeltaTime);
-    void Draw();
-    void End();
-
-private:
-
+    void Update(float DeltaTime);
+    void DrawCall();
+    void Finalize();
 };
 
 #endif

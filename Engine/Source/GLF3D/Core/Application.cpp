@@ -1,54 +1,55 @@
 #include "Core.h"
 #include "Application.h"
 
-Game*   Application::s_Game = nullptr;
-Window* Application::s_Window = nullptr;
+// initialize static pointers
+std::unique_ptr<Debug>  Application::s_Debug = nullptr;
+std::unique_ptr<Window> Application::s_Window = nullptr;
 
 Application::Application()
 {
-    s_Window = new Window;
+    // Creates unique pointers
+    s_Debug = std::make_unique<Debug>();
+    s_Window = std::make_unique<Window>();
 }
 
-Application::~Application()
+// Runs the game
+bool Application::Run()
 {
-    delete s_Game;
-    delete s_Window;
-}
-
-// Starts the game
-bool Application::Start(Game* World)
-{
-    s_Game = World;
-
+    // Creates a window
     if (!s_Window->Create())
     {
-        Debug::Log::Error("Failed to create a Window");
+        s_Debug->Log(Error, "Failed to create a window.");
         return EXIT_FAILURE;
     }
 
-    return Run();
+    // Runs main loop (Gameloop)
+    return Loop();
 }
 
-// Runs the engine
-bool Application::Run()
+// Main loop
+bool Application::Loop()
 {
-    s_Game->Start();
+    // Start timer and game
+    // TODO: s_Timer->Start()
+    this->Start();
 
     do
     {
-        // Events
+        // Process all window's events
         s_Window->ProcessEvents();
 
-        float Temporary = 1.0f;
-        s_Game->Update(Temporary);
+        // Update game and clear all buffers
+        this->Update(1.0f);
         s_Window->ClearBuffers();
 
-        s_Game->Draw();
+        // Draw everything and swap buffers
+        this->DrawCall();
+        // TODO: s_Renderer->Draw();
         s_Window->SwapBuffers();
 
     } while (!s_Window->Close());
 
-    s_Game->End();
-
+    // Finish game
+    this->Finalize();
     return false;
 }
