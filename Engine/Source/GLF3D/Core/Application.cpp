@@ -2,14 +2,16 @@
 #include "Application.h"
 
 // initialize static pointers
-std::unique_ptr<Debug>  Application::s_Debug = nullptr;
-std::unique_ptr<Window> Application::s_Window = nullptr;
+std::unique_ptr<Debug>    Application::s_Debug = nullptr;
+std::unique_ptr<Window>   Application::s_Window = nullptr;
+std::unique_ptr<Renderer> Application::s_Renderer = nullptr;
 
 Application::Application()
 {
     // Creates unique pointers
     s_Debug = std::make_unique<Debug>();
     s_Window = std::make_unique<Window>();
+    s_Renderer = std::make_unique<Renderer>();
 }
 
 // Runs the game
@@ -19,6 +21,12 @@ bool Application::Run()
     if (!s_Window->Create())
     {
         s_Debug->Log(Error, "Failed to create a window.");
+        return EXIT_FAILURE;
+    }
+
+    if (!s_Renderer->Init())
+    {
+        s_Debug->Log(Error, "Failed to initialize renderer.");
         return EXIT_FAILURE;
     }
 
@@ -44,7 +52,7 @@ bool Application::Loop()
 
         // Draw everything and swap buffers
         this->DrawCall();
-        // TODO: s_Renderer->Draw();
+        //s_Renderer->Draw();
         s_Window->SwapBuffers();
 
     } while (!s_Window->Close());

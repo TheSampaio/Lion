@@ -44,6 +44,7 @@ public:
 	inline void SetTitle(const char* Title)                                                       { m_Title = Title; }
 	inline void SetSynchronizationMode(ESynchronizationMode SynchronizationMode)                  { m_SynchronizationMode = SynchronizationMode; }
 	inline void SetDisplayMode(EDisplayMode DisplayMode)                                          { m_DisplayMode = DisplayMode; }
+	inline void SetMaximize(bool Maximize)                                                        { m_bMaximize = Maximize; }
 	inline void SetSize(unsigned short Width, unsigned short Height)                              { m_Size = { Width, Height }; }
 	inline void SetOpenGLVersion(unsigned short Major, unsigned short Minor)                      { m_OpenGLVersion = { Major, Minor }; }
 	inline void SetBackgroundColor(unsigned short Red, unsigned short Green, unsigned short Blue) { m_BackgroundColor = { Red, Green, Blue }; }
@@ -59,6 +60,8 @@ private:
 	std::string m_Title;
 	ESynchronizationMode m_SynchronizationMode;
 	EDisplayMode m_DisplayMode;
+
+	bool m_bMaximize;
 
 	std::array<unsigned short, 2> m_Size;
 	std::array<unsigned short, 2> m_Center;

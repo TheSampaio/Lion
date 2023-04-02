@@ -8,4 +8,9 @@
 
 // Events
 
+// Renderer
+#include "../Source/GLF3D/Renderer/VAO.h"
+#include "../Source/GLF3D/Renderer/VBO.h"
+#include "../Source/GLF3D/Renderer/EBO.h"
+
 // Scene

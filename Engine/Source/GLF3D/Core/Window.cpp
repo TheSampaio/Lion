@@ -24,6 +24,8 @@ Window::Window()
 	m_SynchronizationMode = ESynchronizationMode::Disabled;
 	m_DisplayMode = EDisplayMode::Windowed;
 
+	m_bMaximize = true;
+
 	// Initializes window's size and center position
 	m_Size = { 800, 600 };
 	m_Center = { static_cast<unsigned short>(m_Size[0] / 2), static_cast<unsigned short>(m_Size[1] / 2) };
@@ -76,7 +78,9 @@ bool Window::Create()
 		{
 			m_Position = { (m_Screen[0] / 2) - (m_Size[0] / 2), (m_Screen[1] / 2) - (m_Size[1] / 2) };
 			glfwSetWindowPos(m_Id, m_Position[0], m_Position[1]);
-			glfwMaximizeWindow(m_Id);
+
+			if (m_bMaximize)
+				glfwMaximizeWindow(m_Id);
 		}
 	}
 

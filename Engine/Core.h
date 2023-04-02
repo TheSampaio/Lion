@@ -4,14 +4,16 @@
 
 // Standard
 #include <array>
+#include <fstream>
 #include <iostream>
 #include <memory>
 #include <string>
 #include <vector>
 
-// External
+// Additional
 #include <glad/glad.h>
 #include <glfw/glfw3.h>
+#include <glm/glm.hpp>
 
 // === DLL EXPORTER === //
 #ifdef GLF_WIN

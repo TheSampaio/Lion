@@ -4,7 +4,8 @@
 // Enumerates log modes
 enum ELogMode
 {
-    Information = 0,
+    None = 0,
+    Information,
     Warning,
     Error
 };
@@ -14,7 +15,7 @@ class GLF3D_API Debug
 public:
     Debug() {};
 
-    void Log(ELogMode Mode, const char* Text, bool BreakLine = true);
+    void Log(ELogMode Mode, const char* Text, bool BreakLine = true, bool Pause = false);
 };
 
 #endif

@@ -38,6 +38,7 @@ project "GLF3D"
 
         "%{prj.location}/**.h",
         "%{prj.location}/**.cpp",
+        "%{prj.location}/**.glsl",
     }
 
     includedirs {
