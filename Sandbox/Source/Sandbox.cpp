@@ -10,7 +10,7 @@ Sandbox::Sandbox()
 	GetWindow()->SetOpenGLVersion(4, 6);
 	GetWindow()->SetDisplayMode(Windowed);
 	GetWindow()->SetSynchronizationMode(Full);
-	GetWindow()->SetBackgroundColor(50, 50, 50);
+	GetWindow()->SetBackgroundColor(230, 245, 255);
 
 	ShaderProgram = nullptr;
 	VertexArray = nullptr;
@@ -23,7 +23,7 @@ void Sandbox::Start()
 	GetDebug()->Log(Information, "Game Initialized.");
 
 	// Create shader program
-	ShaderProgram = new Shader("../../GLF3D/Engine/Shaders/DefaultVert.glsl", "../../GLF3D/Engine/Shaders/DefaultFrag.glsl");
+	ShaderProgram = new Shader("../../Owl/Engine/Shaders/DefaultVert.glsl", "../../Owl/Engine/Shaders/DefaultFrag.glsl");
 
 	// Create buffers
 	VertexArray = new VAO;

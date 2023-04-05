@@ -16,18 +16,18 @@
 #include <glm/glm.hpp>
 
 // === DLL EXPORTER === //
-#ifdef GLF_WIN
-	#ifdef GLF_DLL
-		#define GLF3D_API __declspec(dllexport)
+#ifdef _WIN
+	#ifdef _DLL
+		#define OWL_API __declspec(dllexport)
 	#else
-		#define GLF3D_API __declspec(dllimport)
+		#define OWL_API __declspec(dllimport)
 	#endif
 #else
-	#ifdef GLF_DLL
-		#define GLF3D_API __attribute__((visibility("default")))
+	#ifdef _DLL
+		#define OWL_API __attribute__((visibility("default")))
 	#else
-		#define GLF3D_API
+		#define OWL_API
 	#endif
 #endif
 
-#endif // !GLF3D_CORE_H
+#endif

@@ -1,7 +1,7 @@
-#ifndef GLF3D_VAO_H
-#define GLF3D_VAO_H
+#ifndef OWL_VAO_H
+#define OWL_VAO_H
 
-class GLF3D_API VAO
+class OWL_API VAO
 {
 public:
 	VAO();
@@ -17,4 +17,4 @@ private:
 };
 
 
-#endif // !GLF3D_VAO_H
+#endif

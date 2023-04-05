@@ -1,11 +1,11 @@
-#ifndef GLF3D_APPLICATION_H
-#define GLF3D_APPLICATION_H
+#ifndef OWL_APPLICATION_H
+#define OWL_APPLICATION_H
 
 #include "Debug.h"
 #include "Renderer.h"
 #include "Window.h"
 
-class GLF3D_API Application
+class OWL_API Application
 {
 public:
     Application();
@@ -19,8 +19,8 @@ public:
     virtual void Finalize() {};
 
     // Get methods
-    inline Debug* GetDebug()     { return s_Debug.get(); }
-    inline Window* GetWindow()   { return s_Window.get(); }
+    inline Debug* GetDebug()       { return s_Debug.get(); }
+    inline Window* GetWindow()     { return s_Window.get(); }
     inline Renderer* GetRenderer() { return s_Renderer.get(); }
 
     // Friends

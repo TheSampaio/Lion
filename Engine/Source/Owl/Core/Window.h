@@ -1,5 +1,5 @@
-#ifndef GLF3D_WINDOW_H
-#define GLF3D_WINDOW_H
+#ifndef OWL_WINDOW_H
+#define OWL_WINDOW_H
 
 // Enumerate window's display modes
 enum EDisplayMode
@@ -16,7 +16,7 @@ enum ESynchronizationMode
 	Half
 };
 
-class GLF3D_API Window
+class OWL_API Window
 {
 public:
 	Window();

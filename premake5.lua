@@ -1,32 +1,32 @@
 -- // === WORKSPACE === // --
-workspace "GLF3D"
+workspace "Owl"
     configurations {
         "Debug",
         "Release",
     }    
 
     language "C++"
-    cppdialect "C++14"
+    cppdialect "C++20"
     architecture "x64"
 
     filter "configurations:Debug"
-        defines "GLF_DEBUG"
+        defines "OWL_DEBUG"
         symbols "On"
         optimize "Off"
 
     filter "configurations:Release"
-        defines "GLF_RELEASE"
+        defines "_RELEASE"
         symbols "Off"
         optimize "Speed"
 
     OutputDir = "%{cfg.system}-%{cfg.architecture}/%{cfg.buildcfg}/"
 
--- // ==================== PROJECT GLF3D ==================== // --
-project "GLF3D"
+-- // ==================== PROJECT OWL ==================== // --
+project "Owl"
     kind "SharedLib"
     location "Engine"
 
-    defines "GLF_DLL"
+    defines "_DLL"
 
     -- Output directories
     targetdir ("_Output/Bin/" .. OutputDir .. "%{prj.name}")
@@ -52,7 +52,7 @@ project "GLF3D"
 
     -- Windows
     filter "system:windows"
-        defines "GLF_WIN"
+        defines "_WIN"
         systemversion "latest"
         staticruntime "Off"
         runtime "Release"
@@ -74,8 +74,9 @@ project "GLF3D"
 
     -- Linux
     filter "system:linux"
-        defines "GLF_TUX"
+        defines "_TUX"
         systemversion "latest"
+
         staticruntime "Off"
         runtime "Release"
 
@@ -117,9 +118,10 @@ project "Sandbox"
 
      -- Windows
     filter "system:windows"
-        defines "GLF_WIN"
+        defines "_WIN"
         systemversion "latest"
-        staticruntime "Off"
+
+        staticruntime "On"
         runtime "Release"
 
         -- Precompiled Headers
@@ -128,18 +130,18 @@ project "Sandbox"
 
         -- Libraries
         links {
-            "GLF3D",
+            "Owl",
         }
 
     filter "system:linux"
-        defines "GLF_TUX"
+        defines "_TUX"
         systemversion "latest"
         staticruntime "Off"
         runtime "Release"
 
-        pchheader("GLF3D.h")
-        pchsource("%{prj.location}/GLF3D.cpp")
+        pchheader("Owl.h")
+        pchsource("%{prj.location}/Owl.cpp")
 
         links {
-            "GLF3D"
+            "Owl"
         }

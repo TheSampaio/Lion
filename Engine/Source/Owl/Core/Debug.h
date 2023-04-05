@@ -1,5 +1,5 @@
-#ifndef GLF3D_DEBUG_H
-#define GLF3D_DEBUG_H
+#ifndef OWL_DEBUG_H
+#define OWL_DEBUG_H
 
 // Enumerates log modes
 enum ELogMode
@@ -10,7 +10,7 @@ enum ELogMode
     Error
 };
 
-class GLF3D_API Debug
+class OWL_API Debug
 {
 public:
     Debug() {};

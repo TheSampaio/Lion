@@ -1,12 +1,12 @@
-#ifndef GLF3D_VBO_H
-#define GLF3D_VBO_H
+#ifndef OWL_VBO_H
+#define OWL_VBO_H
 
-struct GLF3D_API Vertex
+struct OWL_API Vertex
 {
 	glm::vec4 Position, Color;
 };
 
-class GLF3D_API VBO
+class OWL_API VBO
 {
 public:
 	VBO(std::vector<Vertex> Vertices);
@@ -19,4 +19,4 @@ private:
 	GLuint m_Id;
 };
 
-#endif // !GLF3D_VBO_H
+#endif

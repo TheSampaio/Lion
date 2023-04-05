@@ -1,12 +1,12 @@
-#ifndef GLF3D_EBO_H
-#define GLF3D_EBO_H
+#ifndef OWL_EBO_H
+#define OWL_EBO_H
 
-struct GLF3D_API Index
+struct OWL_API Index
 {
 	GLuint X, Y, Z;
 };
 
-class GLF3D_API EBO
+class OWL_API EBO
 {
 public:
 	EBO(std::vector<Index> Indices);
@@ -19,4 +19,4 @@ private:
 	GLuint m_Id;
 };
 
-#endif // !GLF3D_EBO_H
+#endif

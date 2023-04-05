@@ -1,11 +1,11 @@
-#ifndef GLF3D_RENDERER_H
-#define GLF3D_RENDERER_H
+#ifndef OWL_RENDERER_H
+#define OWL_RENDERER_H
 
 #include "../Renderer/Shader.h"
 #include "../Renderer/VAO.h"
 #include "../Renderer/EBO.h"
 
-class GLF3D_API Renderer
+class OWL_API Renderer
 {
 public:
 	Renderer();
