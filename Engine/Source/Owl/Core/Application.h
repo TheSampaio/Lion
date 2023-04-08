@@ -9,28 +9,36 @@ class OWL_API Application
 {
 public:
     Application();
+    ~Application();
+
+    // Delete copy constructor and assignment operator
+    Application(const Application&) = delete;
+    Application operator=(const Application&) = delete;
 
     // Main methods
     bool Run();
 
-    virtual void Start() {};
-    virtual void Update(float DeltaTime) {};
-    virtual void DrawCall() {};
-    virtual void Finalize() {};
+    // Friends
+    friend Window;
+    friend Renderer;
+    friend class Shader;
+    friend class Mesh;
+
+protected:
+    virtual void Start() = 0;
+    virtual void Update(float DeltaTime) = 0;
+    virtual void Draw() = 0;
+    virtual void Finalize() = 0;
 
     // Get methods
     inline Debug* GetDebug()       { return s_Debug.get(); }
     inline Window* GetWindow()     { return s_Window.get(); }
     inline Renderer* GetRenderer() { return s_Renderer.get(); }
 
-    // Friends
-    friend Window;
-    friend Renderer;
-    friend class Shader;
-
 private:
     // Main methods
     bool Loop();
+    void Init();
 
     // Static attributes
     static std::unique_ptr<Debug> s_Debug;

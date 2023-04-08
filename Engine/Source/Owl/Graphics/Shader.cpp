@@ -8,6 +8,7 @@ Debug& Shader::s_Debug = *Application::s_Debug;
 
 Shader::Shader(const char* VertexShaderFile, const char* FragmentShaderFile)
 {
+	// Compile the vertex and fragment shaders and create a shader program
 	CompileShader(VertexShaderFile, m_VertexShader, GL_VERTEX_SHADER);
 	CompileShader(FragmentShaderFile, m_FragmentShader, GL_FRAGMENT_SHADER);
 	CreateShaderProgram(m_VertexShader, m_FragmentShader);
@@ -15,6 +16,7 @@ Shader::Shader(const char* VertexShaderFile, const char* FragmentShaderFile)
 
 Shader::~Shader()
 {
+	// Deletes the shaders and shader program created
 	glDeleteShader(m_VertexShader);
 	glDeleteShader(m_FragmentShader);
 	glDeleteProgram(m_Id);
@@ -22,6 +24,7 @@ Shader::~Shader()
 
 std::string Shader::LoadShader(const char* FilePath)
 {
+	// Get the content from a text file
 	std::fstream File;
 	std::string Source;
 	std::string Content;
@@ -50,6 +53,7 @@ std::string Shader::LoadShader(const char* FilePath)
 
 void Shader::CompileShader(const char* FilePath, GLuint& ShaderId, GLenum ShaderType)
 {
+	// Compiles a shader
 	std::string Source = LoadShader(FilePath);
 	const char* pSource = Source.c_str();
 
@@ -72,14 +76,15 @@ void Shader::CompileShader(const char* FilePath, GLuint& ShaderId, GLenum Shader
 			std::string ShaderInfoLog(InfoLogLength, '\0');
 			glGetShaderInfoLog(ShaderId, InfoLogLength, nullptr, &ShaderInfoLog[0]);
 
-			s_Debug.Log(Error, "[ERROR] Failed to compile shader ", false);
-			s_Debug.Log(Error, ShaderInfoLog.c_str());
+			s_Debug.Log(Error, "Failed to compile shader ", false);
+			s_Debug.Log(None, ShaderInfoLog.c_str(), false, true);
 		}
 	}
 }
 
 void Shader::CreateShaderProgram(GLuint VextexShader, GLuint FragmentShader)
 {
+	// Creates a shader program and attach the created shaders to the shader program
 	m_Id = glCreateProgram();
 	glAttachShader(m_Id, VextexShader);
 	glAttachShader(m_Id, FragmentShader);
@@ -99,12 +104,12 @@ void Shader::CreateShaderProgram(GLuint VextexShader, GLuint FragmentShader)
 			std::string ProgramInfoLog(InfoLogLength, '\0');
 			glGetProgramInfoLog(m_Id, InfoLogLength, nullptr, &ProgramInfoLog[0]);
 
-			s_Debug.Log(Error, "[ERROR] Failed to link shader program ", false);
-			s_Debug.Log(Error, ProgramInfoLog.c_str());
+			s_Debug.Log(Error, "Failed to link shader program ", false);
+			s_Debug.Log(None, ProgramInfoLog.c_str(), false, true);
 		}
 	}
 
-	// Eliminate what we need anymore
+	// Deatachs the created shaders from the shader program
 	glDetachShader(m_Id, m_VertexShader);
 	glDetachShader(m_Id, m_FragmentShader);
 }

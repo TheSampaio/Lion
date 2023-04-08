@@ -9,19 +9,11 @@ Debug& Window::s_Debug = *Application::s_Debug;
 Window::Window()
 	: m_Id(nullptr), m_Monitor(nullptr)
 {
-	// Initilizes GLFW and log it if failed
-	if (!glfwInit())
-	{
-		s_Debug.Log(Error, "Failed to initialize GLFW.");
-		exit(EXIT_FAILURE);
-	}
-
 	// Setup default attributes
 	m_Monitor = glfwGetPrimaryMonitor();
 
 	// Initializes title, V-Sync and display mode
 	m_Title = "Window";
-	m_SynchronizationMode = ESynchronizationMode::Disabled;
 	m_DisplayMode = EDisplayMode::Windowed;
 
 	m_bMaximize = true;
@@ -43,9 +35,6 @@ Window::~Window()
 {
 	// Destroy window from memory
 	glfwDestroyWindow(m_Id);
-
-	// Finalize glfw
-	glfwTerminate();
 }
 
 bool Window::Create()
@@ -90,7 +79,7 @@ bool Window::Create()
 	// Loads GLAD and log it if failed
 	if (!gladLoadGL())
 	{
-		s_Debug.Log(Error, "Failed to load GLAD.");
+		s_Debug.Log(Error, "Failed to load GLAD.", true, true);
 		return EXIT_FAILURE;
 	}
 
@@ -111,18 +100,4 @@ void Window::ProcessEvents()
 {
 	// Process all window events
 	glfwPollEvents();
-}
-
-void Window::ClearBuffers()
-{
-	// Clear buffers and colorizes window
-	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
-	glClearColor(static_cast<GLfloat>(m_BackgroundColor[0] / 255.0f), static_cast<GLfloat>(m_BackgroundColor[1] / 255.0f), static_cast<GLfloat>(m_BackgroundColor[2] / 255.0f), 1.0f);
-}
-
-void Window::SwapBuffers()
-{
-	// Set V-Sync and Swap buffers
-	glfwSwapInterval(m_SynchronizationMode);
-	glfwSwapBuffers(m_Id);
 }

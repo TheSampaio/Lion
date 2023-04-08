@@ -3,6 +3,7 @@
 
 struct OWL_API Index
 {
+	// Attributes
 	GLuint X, Y, Z;
 };
 
@@ -12,10 +13,12 @@ public:
 	EBO(std::vector<Index> Indices);
 	~EBO();
 
+	// Main methods
 	void Bind();
 	void Unbind();
 
 private:
+	// Attributes
 	GLuint m_Id;
 };
 

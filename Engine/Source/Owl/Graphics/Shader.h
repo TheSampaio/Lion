@@ -11,14 +11,15 @@ public:
 	inline void Activate() { glUseProgram(m_Id); }
 
 	// Get methods
-	inline GLuint& GetProgram()        { return m_Id; }
+	inline GLuint& GetId()             { return m_Id; }
 	inline GLuint& GetVertexShader()   { return m_VertexShader; }
 	inline GLuint& GetFragmentShader() { return m_FragmentShader; }
 
 private:
+	// Attributes
 	GLuint m_Id,
-		m_VertexShader,
-		m_FragmentShader;
+		   m_VertexShader,
+		   m_FragmentShader;
 
 	// Main methods
 	std::string LoadShader(const char* FilePath);

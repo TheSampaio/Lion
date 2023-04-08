@@ -8,19 +8,15 @@ enum EDisplayMode
 	Windowed
 };
 
-// Enumerate window's V-Sync modes
-enum ESynchronizationMode
-{
-	Disabled = 0,
-	Full,
-	Half
-};
-
 class OWL_API Window
 {
 public:
 	Window();
 	~Window();
+
+	// Delete copy constructor and assignment operator
+	Window(const Window&) = delete;
+	Window operator=(const Window&) = delete;
 
 	// Main methods
 	bool Close();
@@ -29,10 +25,7 @@ public:
 	inline GLFWwindow*& GetId()                               { return m_Id; }
 	inline GLFWmonitor*& GetMonitor()                         { return m_Monitor; }
 	inline std::string& GetTitle()                            { return m_Title; }
-
-	inline unsigned short GetSynchronizationMode()            { return m_SynchronizationMode; }
-	inline unsigned short GetDisplayMode()                    { return m_DisplayMode; }
-
+	inline EDisplayMode GetDisplayMode()                      { return m_DisplayMode; }
 	inline std::array<unsigned short, 2> GetSize()            { return m_Size; }
 	inline std::array<unsigned short, 2> GetCenter()          { return m_Center; }
 	inline std::array<int, 2> GetScreen()                     { return m_Screen; }
@@ -42,7 +35,6 @@ public:
 
 	// Set methods
 	inline void SetTitle(const char* Title)                                                       { m_Title = Title; }
-	inline void SetSynchronizationMode(ESynchronizationMode SynchronizationMode)                  { m_SynchronizationMode = SynchronizationMode; }
 	inline void SetDisplayMode(EDisplayMode DisplayMode)                                          { m_DisplayMode = DisplayMode; }
 	inline void SetMaximize(bool Maximize)                                                        { m_bMaximize = Maximize; }
 	inline void SetSize(unsigned short Width, unsigned short Height)                              { m_Size = { Width, Height }; }
@@ -58,7 +50,6 @@ private:
 	GLFWmonitor* m_Monitor;
 
 	std::string m_Title;
-	ESynchronizationMode m_SynchronizationMode;
 	EDisplayMode m_DisplayMode;
 
 	bool m_bMaximize;
@@ -70,14 +61,12 @@ private:
 	std::array<unsigned short, 3> m_BackgroundColor;
 	std::array<unsigned short, 2> m_OpenGLVersion;
 
-	// Static attribures
-	static class Debug& s_Debug;
-
 	// Main methods
 	bool Create();
 	void ProcessEvents();
-	void ClearBuffers();
-	void SwapBuffers();
+
+	// Static attribures
+	static class Debug& s_Debug;
 };
 
 #endif

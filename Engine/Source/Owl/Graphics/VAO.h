@@ -13,6 +13,7 @@ public:
 	void AttribPointer(GLuint Layout, GLint Size, GLsizei Stride, GLenum Offset, GLenum Type = GL_FLOAT, GLboolean Normalized = GL_FALSE);
 
 private:
+	// Attributes
 	GLuint m_Id;
 };
 

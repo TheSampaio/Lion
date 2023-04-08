@@ -15,6 +15,10 @@ class OWL_API Debug
 public:
     Debug() {};
 
+    // Delete copy constructor and assignment operator
+    Debug(const Debug&) = delete;
+    Debug operator=(const Debug&) = delete;
+
     void Log(ELogMode Mode, const char* Text, bool BreakLine = true, bool Pause = false);
 };
 

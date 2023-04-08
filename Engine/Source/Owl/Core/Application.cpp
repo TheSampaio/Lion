@@ -3,15 +3,24 @@
 
 // initialize static pointers
 std::unique_ptr<Debug>    Application::s_Debug = nullptr;
-std::unique_ptr<Window>   Application::s_Window = nullptr;
 std::unique_ptr<Renderer> Application::s_Renderer = nullptr;
+std::unique_ptr<Window>   Application::s_Window = nullptr;
 
 Application::Application()
 {
+    // Initialize all libraries
+    Init();
+
     // Creates unique pointers
     s_Debug = std::make_unique<Debug>();
     s_Window = std::make_unique<Window>();
     s_Renderer = std::make_unique<Renderer>();
+}
+
+Application::~Application()
+{
+    // Finalize glfw
+    glfwTerminate();
 }
 
 // Runs the game
@@ -48,16 +57,25 @@ bool Application::Loop()
 
         // Update game and clear all buffers
         this->Update(1.0f);
-        s_Window->ClearBuffers();
+        s_Renderer->ClearBuffers(*s_Window);
 
         // Draw everything and swap buffers
-        this->DrawCall();
-        //s_Renderer->Draw();
-        s_Window->SwapBuffers();
+        this->Draw();
+        s_Renderer->SwapBuffers(*s_Window);
 
     } while (!s_Window->Close());
 
     // Finish game
     this->Finalize();
     return false;
+}
+
+void Application::Init()
+{
+    // Initilizes GLFW and log it if failed
+    if (!glfwInit())
+    {
+        s_Debug->Log(Error, "Failed to initialize GLFW.");
+        exit(EXIT_FAILURE);
+    }
 }
