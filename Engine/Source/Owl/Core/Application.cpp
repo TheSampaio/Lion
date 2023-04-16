@@ -4,7 +4,10 @@
 // Initializes static pointers
 std::unique_ptr<Input>    Application::s_Input = nullptr;
 std::unique_ptr<Renderer> Application::s_Renderer = nullptr;
+std::unique_ptr<Timer>    Application::s_Timer = nullptr;
 std::unique_ptr<Window>   Application::s_Window = nullptr;
+
+float Application::s_FrameTime = 0.0f;
 
 Application::Application()
 {
@@ -14,6 +17,7 @@ Application::Application()
     // Creates unique pointers
     s_Input = std::make_unique<Input>();
     s_Renderer = std::make_unique<Renderer>();
+    s_Timer = std::make_unique<Timer>();
     s_Window = std::make_unique<Window>();
 }
 
@@ -47,17 +51,19 @@ bool Application::Run()
 bool Application::Loop()
 {
     // Start timer and game
-    // TODO: s_Timer->Start()
+    s_Timer->Start();
     this->Start();
 
     do
     {
+        s_FrameTime = FrameTimeMonitor();
+
         // Process all window's events
         s_Input->ProcessEvents();
         s_Input->ProcessCallbacks();
 
         // Update game and clear all buffers
-        this->Update(1.0f);
+        this->Update(s_FrameTime);
         s_Renderer->ClearBuffers();
 
         // Draw everything and swap buffers
@@ -84,4 +90,36 @@ void Application::Init()
         Debug::Log(Error, "Failed to initialize GLFW.");
         exit(EXIT_FAILURE);
     }
+}
+
+float Application::FrameTimeMonitor()
+{
+#ifdef OWL_DEBUG
+    static float TotalTime = 0.0f;
+    static unsigned FrameCount = 0;
+#endif // OWL_DEBUG
+
+    s_FrameTime =+ s_Timer->Reset();
+
+#ifdef OWL_DEBUG
+    TotalTime += s_FrameTime;
+    FrameCount++;
+
+    if (TotalTime >= 1.0f)
+    {
+        std::stringstream Header;
+
+        Header << std::fixed;
+        Header.precision(1);
+
+        Header << s_Window->GetTitle().c_str() << " | FPS: " << FrameCount << " | MS: " << s_FrameTime * 1000.0f;
+
+        glfwSetWindowTitle(s_Window->GetId(), Header.str().c_str());
+
+        FrameCount = 0;
+        TotalTime -= 1.0f;
+    }
+#endif // OWL_DEBUG
+
+    return s_FrameTime;
 }

@@ -15,7 +15,7 @@ workspace "Owl"
         optimize "Off"
 
     filter "configurations:Release"
-        defines "_RELEASE"
+        defines "OWL_RELEASE"
         symbols "Off"
         optimize "Speed"
 

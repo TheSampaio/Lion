@@ -43,7 +43,7 @@ Sandbox::Sandbox()
 	: Quad01(nullptr), Quad02(nullptr), Quad03(nullptr), Quad04(nullptr)
 {
 	// Setup sandbox's renderer
-	GetRenderer()->SetSynchronizationMode(Disabled);
+	GetRenderer()->SetSynchronizationMode(Full);
 
 	// Setup sandbox's window
 	GetWindow()->SetTitle("Sandbox");
