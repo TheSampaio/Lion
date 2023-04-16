@@ -38,6 +38,19 @@ bool Input::GetKeyTapped(int KeyCode)
 
 void Input::ProcessEvents()
 {
-	// Process all window events
+	// Process all window's events
 	glfwPollEvents();
+}
+
+void Input::ProcessCallbacks()
+{
+	// Process all window's callbacks
+	glfwSetFramebufferSizeCallback(Application::GetWindow()->GetId(), FramebufferCallback);
+}
+
+void Input::FramebufferCallback(GLFWwindow* Id, int Width, int Height)
+{
+	// Resizes window's viewport
+	Application::GetWindow()->SetSize(static_cast<unsigned short>(Width), static_cast<unsigned short>(Height));
+	glViewport(0, 0, Application::GetWindow()->GetSize()[0], Application::GetWindow()->GetSize()[1]);
 }

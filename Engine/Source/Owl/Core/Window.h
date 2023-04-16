@@ -44,6 +44,7 @@ public:
 
 	// Friend classes
 	friend class Application;
+	friend class Input;
 
 private:
 	// Attributes

@@ -54,6 +54,7 @@ bool Application::Loop()
     {
         // Process all window's events
         s_Input->ProcessEvents();
+        s_Input->ProcessCallbacks();
 
         // Update game and clear all buffers
         this->Update(1.0f);

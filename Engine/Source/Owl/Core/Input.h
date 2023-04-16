@@ -21,6 +21,10 @@ public:
 private:
 	// Main methods
 	void ProcessEvents();
+	void ProcessCallbacks();
+
+	// Callbacks methods
+	static void FramebufferCallback(GLFWwindow* Id, int Width, int Height);
 
 	// Static Attributes
 	static bool m_bPressed;
