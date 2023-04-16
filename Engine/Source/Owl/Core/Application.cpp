@@ -72,6 +72,11 @@ bool Application::Loop()
 
 void Application::Init()
 {
+    // IF Windows platform THEN set console title
+#ifdef _WIN
+    system("TITLE Owl Engine");
+#endif // _WIN
+
     // Initilizes GLFW and log it if failed
     if (!glfwInit())
     {
