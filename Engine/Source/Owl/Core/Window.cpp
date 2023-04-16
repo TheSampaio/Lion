@@ -81,9 +81,6 @@ bool Window::Create()
 			{
 				m_Position = { (m_Screen[0] / 2) - (m_Size[0] / 2), (m_Screen[1] / 2) - (m_Size[1] / 2) };
 				glfwSetWindowPos(m_Id, m_Position[0], m_Position[1]);
-
-				if (m_bMaximize)
-					glfwMaximizeWindow(m_Id);
 			}
 		}
 
@@ -114,7 +111,19 @@ bool Window::Create()
 	}
 
 	// Creates a viewport for the window
-	glViewport(0, 0, m_Size[0], m_Size[1]);
+	if (m_DisplayMode == EDisplayMode::Windowed)
+	{
+		if (m_bMaximize)
+		{
+			glfwMaximizeWindow(m_Id);
+			glViewport(0, 0, m_Screen[0], m_Screen[1]);
+		}
+	}
+
+	else
+	{
+		glViewport(0, 0, m_Size[0], m_Size[1]);
+	}
 
 	// Return TRUE if exists a window
 	return (m_Id) ? true : false;
