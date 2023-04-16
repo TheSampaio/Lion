@@ -92,7 +92,8 @@ bool Window::Create()
 		{
 			glfwWindowHint(GLFW_DECORATED, GLFW_FALSE);
 
-			m_Id = glfwCreateWindow(m_Screen[0], m_Screen[1] + 40, m_Title.c_str(), nullptr, nullptr);
+			m_Size = { static_cast<unsigned short>(m_Screen[0]), static_cast<unsigned short>(m_Screen[1] + 40) };
+			m_Id = glfwCreateWindow(m_Size[0], m_Size[1], m_Title.c_str(), nullptr, nullptr);
 
 			if (m_Id)
 			{
@@ -113,7 +114,7 @@ bool Window::Create()
 	}
 
 	// Creates a viewport for the window
-	glViewport(0, 0, m_Size[0], m_Size[1]); // Creating a viewport
+	glViewport(0, 0, m_Size[0], m_Size[1]);
 
 	// Return TRUE if exists a window
 	return (m_Id) ? true : false;
