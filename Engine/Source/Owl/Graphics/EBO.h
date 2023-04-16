@@ -10,8 +10,8 @@ public:
 	~EBO();
 
 	// Main methods
-	void Bind();
-	void Unbind();
+	inline void Bind() { glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_Id); }
+	inline void Unbind() { glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0); }
 
 private:
 	// Attributes

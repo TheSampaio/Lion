@@ -3,6 +3,7 @@
 
 #include "Application.h"
 
+#include "../Graphics/Shader.h"
 #include "../Graphics/VAO.h"
 
 Renderer::Renderer()

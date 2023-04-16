@@ -3,6 +3,7 @@
 
 #include "Application.h"
 
+// Initializes static attributes
 bool Input::m_bPressed = false;
 
 bool Input::GetKeyPressed(int KeyCode)

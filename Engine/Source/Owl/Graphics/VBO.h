@@ -10,8 +10,8 @@ public:
 	~VBO();
 
 	// Main methods
-	void Bind();
-	void Unbind();
+	inline void Bind() { glBindBuffer(GL_ARRAY_BUFFER, m_Id);}
+	inline void Unbind() { glBindBuffer(GL_ARRAY_BUFFER, 0); }
 
 private:
 	// Attributes

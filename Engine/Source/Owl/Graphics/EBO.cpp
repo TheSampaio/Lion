@@ -14,15 +14,3 @@ EBO::~EBO()
 	// Deletes the created element buffer
 	glDeleteBuffers(1, &m_Id);
 }
-
-void EBO::Bind()
-{
-	// Activates the created element buffer
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_Id);
-}
-
-void EBO::Unbind()
-{
-	// Deactivates the created element buffer
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-}

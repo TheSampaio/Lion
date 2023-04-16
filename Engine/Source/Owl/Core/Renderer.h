@@ -3,8 +3,8 @@
 
 #include "Window.h"
 
-#include "../Graphics/Shader.h"
-#include "../Graphics/Mesh.h"
+#include "../Math/Vertex.h"
+#include "../Math/Index.h"
 
 // Enumerate window's V-Sync modes
 enum ESynchronizationMode
@@ -39,7 +39,7 @@ public:
 
 private:
 	// Attributes
-	Shader* m_ShaderProgram;
+	class Shader* m_ShaderProgram;
 	ESynchronizationMode m_SynchronizationMode;
 
 	// Main methods

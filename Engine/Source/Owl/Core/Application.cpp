@@ -1,7 +1,7 @@
 #include "Core.h"
 #include "Application.h"
 
-// initialize static pointers
+// Initializes static pointers
 std::unique_ptr<Input>    Application::s_Input = nullptr;
 std::unique_ptr<Renderer> Application::s_Renderer = nullptr;
 std::unique_ptr<Window>   Application::s_Window = nullptr;
