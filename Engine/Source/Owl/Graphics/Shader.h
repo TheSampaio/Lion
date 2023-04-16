@@ -25,9 +25,6 @@ private:
 	std::string LoadShader(const char* FilePath);
 	void CompileShader(const char* FilePath, GLuint& ShaderId, GLenum ShaderType);
 	void CreateShaderProgram(GLuint VextexShader, GLuint FragmentShader);
-
-	// Static attributes
-	static class Debug& s_Debug;
 };
 
 #endif

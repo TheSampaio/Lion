@@ -4,13 +4,12 @@
 // Core
 #include "../Source/Owl/Core/Application.h"
 #include "../Source/Owl/Core/Debug.h"
+#include "../Source/Owl/Core/Input.h"
 #include "../Source/Owl/Core/Window.h"
 
 // Events
 
-// Renderer
-#include "../Source/Owl/Graphics/VAO.h"
-#include "../Source/Owl/Graphics/VBO.h"
-#include "../Source/Owl/Graphics/EBO.h"
+// Graphics
+#include "../Source/Owl/Graphics/Mesh.h"
 
-// Scene
+// Game

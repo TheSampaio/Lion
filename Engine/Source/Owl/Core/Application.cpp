@@ -2,17 +2,17 @@
 #include "Application.h"
 
 // initialize static pointers
-std::unique_ptr<Debug>    Application::s_Debug = nullptr;
+std::unique_ptr<Input>    Application::s_Input = nullptr;
 std::unique_ptr<Renderer> Application::s_Renderer = nullptr;
 std::unique_ptr<Window>   Application::s_Window = nullptr;
 
 Application::Application()
 {
     // Initialize all libraries
-    Init();
+    this->Init();
 
     // Creates unique pointers
-    s_Debug = std::make_unique<Debug>();
+    s_Input = std::make_unique<Input>();
     s_Window = std::make_unique<Window>();
     s_Renderer = std::make_unique<Renderer>();
 }
@@ -29,13 +29,13 @@ bool Application::Run()
     // Creates a window
     if (!s_Window->Create())
     {
-        s_Debug->Log(Error, "Failed to create a window.");
+        Debug::Log(Error, "Failed to create a window.");
         return EXIT_FAILURE;
     }
 
     if (!s_Renderer->Init())
     {
-        s_Debug->Log(Error, "Failed to initialize renderer.");
+        Debug::Log(Error, "Failed to initialize renderer.");
         return EXIT_FAILURE;
     }
 
@@ -53,7 +53,7 @@ bool Application::Loop()
     do
     {
         // Process all window's events
-        s_Window->ProcessEvents();
+        s_Input->ProcessEvents();
 
         // Update game and clear all buffers
         this->Update(1.0f);
@@ -75,7 +75,7 @@ void Application::Init()
     // Initilizes GLFW and log it if failed
     if (!glfwInit())
     {
-        s_Debug->Log(Error, "Failed to initialize GLFW.");
+        Debug::Log(Error, "Failed to initialize GLFW.");
         exit(EXIT_FAILURE);
     }
 }

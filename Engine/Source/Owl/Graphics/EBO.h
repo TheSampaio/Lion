@@ -7,7 +7,7 @@ struct OWL_API Index
 	GLuint X, Y, Z;
 };
 
-class OWL_API EBO
+class EBO
 {
 public:
 	EBO(std::vector<Index> Indices);

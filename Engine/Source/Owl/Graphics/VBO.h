@@ -7,7 +7,7 @@ struct OWL_API Vertex
 	glm::vec4 Position, Color;
 };
 
-class OWL_API VBO
+class VBO
 {
 public:
 	VBO(std::vector<Vertex> Vertices);

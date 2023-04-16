@@ -1,11 +1,7 @@
 #include "Core.h"
 #include "Renderer.h"
-#include "Application.h"
 
 #include "../Graphics/VAO.h"
-
-// Reference to the engine debugger
-Debug& Renderer::s_Debug = *Application::s_Debug;
 
 Renderer::Renderer()
 	: m_ShaderProgram(nullptr)

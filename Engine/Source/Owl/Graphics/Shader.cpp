@@ -1,10 +1,7 @@
 #include "Core.h"
 #include "Shader.h"
 
-#include "../Core/Application.h"
-
-// Reference to the engine debugger
-Debug& Shader::s_Debug = *Application::s_Debug;
+#include "../Core/Debug.h"
 
 Shader::Shader(const char* VertexShaderFile, const char* FragmentShaderFile)
 {
@@ -43,9 +40,9 @@ std::string Shader::LoadShader(const char* FilePath)
 
 	if (Content.empty())
 	{
-		s_Debug.Log(Error, "Failed to read \"", false);
-		s_Debug.Log(None, FilePath, false);
-		s_Debug.Log(None, "\"", false, true);
+		Debug::Log(Error, "Failed to read \"", false);
+		Debug::Log(None, FilePath, false);
+		Debug::Log(None, "\"", false, true);
 	}
 
 	return Content;
@@ -76,8 +73,8 @@ void Shader::CompileShader(const char* FilePath, GLuint& ShaderId, GLenum Shader
 			std::string ShaderInfoLog(InfoLogLength, '\0');
 			glGetShaderInfoLog(ShaderId, InfoLogLength, nullptr, &ShaderInfoLog[0]);
 
-			s_Debug.Log(Error, "Failed to compile shader ", false);
-			s_Debug.Log(None, ShaderInfoLog.c_str(), false, true);
+			Debug::Log(Error, "Failed to compile shader ", false);
+			Debug::Log(None, ShaderInfoLog.c_str(), false, true);
 		}
 	}
 }
@@ -104,8 +101,8 @@ void Shader::CreateShaderProgram(GLuint VextexShader, GLuint FragmentShader)
 			std::string ProgramInfoLog(InfoLogLength, '\0');
 			glGetProgramInfoLog(m_Id, InfoLogLength, nullptr, &ProgramInfoLog[0]);
 
-			s_Debug.Log(Error, "Failed to link shader program ", false);
-			s_Debug.Log(None, ProgramInfoLog.c_str(), false, true);
+			Debug::Log(Error, "Failed to link shader program ", false);
+			Debug::Log(None, ProgramInfoLog.c_str(), false, true);
 		}
 	}
 

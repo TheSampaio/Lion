@@ -1,7 +1,7 @@
 #ifndef SANDBOX_GAME_H
 #define SANDBOX_GAME_H
 
-#include "../Engine/Source/Owl/Gameplay/Mesh.h"
+#include "../Engine/Source/Owl/Graphics/Mesh.h"
 
 // Main game's class
 class Sandbox : public Application

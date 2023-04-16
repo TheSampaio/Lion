@@ -2,6 +2,7 @@
 #define OWL_APPLICATION_H
 
 #include "Debug.h"
+#include "Input.h"
 #include "Renderer.h"
 #include "Window.h"
 
@@ -19,9 +20,6 @@ public:
     bool Run();
 
     // Friends
-    friend Window;
-    friend Renderer;
-    friend class Shader;
     friend class Mesh;
 
 protected:
@@ -31,7 +29,7 @@ protected:
     virtual void Finalize() = 0;
 
     // Get methods
-    inline Debug* GetDebug()       { return s_Debug.get(); }
+    inline Input* GetInput()       { return s_Input.get(); }
     inline Window* GetWindow()     { return s_Window.get(); }
     inline Renderer* GetRenderer() { return s_Renderer.get(); }
 
@@ -41,7 +39,7 @@ private:
     void Init();
 
     // Static attributes
-    static std::unique_ptr<Debug> s_Debug;
+    static std::unique_ptr<Input> s_Input;
     static std::unique_ptr<Renderer> s_Renderer;
     static std::unique_ptr<Window> s_Window;
 };

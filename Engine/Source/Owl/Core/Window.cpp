@@ -1,10 +1,7 @@
 #include "Core.h"
 #include "Window.h"
 
-#include "Application.h"
-
-// Reference to the engine debugger
-Debug& Window::s_Debug = *Application::s_Debug;
+#include "Debug.h"
 
 Window::Window()
 	: m_Id(nullptr), m_Monitor(nullptr)
@@ -79,7 +76,7 @@ bool Window::Create()
 	// Loads GLAD and log it if failed
 	if (!gladLoadGL())
 	{
-		s_Debug.Log(Error, "Failed to load GLAD.", true, true);
+		Debug::Log(Error, "Failed to load GLAD.", true, true);
 		return EXIT_FAILURE;
 	}
 
@@ -94,10 +91,4 @@ bool Window::Close()
 {
 	// Return close window message
 	return glfwWindowShouldClose(m_Id);
-}
-
-void Window::ProcessEvents()
-{
-	// Process all window events
-	glfwPollEvents();
 }

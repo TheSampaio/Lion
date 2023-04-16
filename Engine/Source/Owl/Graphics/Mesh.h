@@ -15,9 +15,6 @@ public:
 	// Main methods
 	virtual void Draw();
 
-	// Friend classes
-	friend class Renderer;
-
 private:
 	// Attributes
 	VAO* m_VertexArray;

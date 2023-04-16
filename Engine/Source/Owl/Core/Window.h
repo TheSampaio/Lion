@@ -63,7 +63,6 @@ private:
 
 	// Main methods
 	bool Create();
-	void ProcessEvents();
 
 	// Static attribures
 	static class Debug& s_Debug;

@@ -57,7 +57,7 @@ Sandbox::Sandbox()
 void Sandbox::Start()
 {
 	// Just for debbuging
-	GetDebug()->Log(Information, "Game Initialized.");
+	Debug::Log(Information, "Game Initialized.");
 
 	// Load everything that the game will need
 	Quad01 = new Mesh(Vertices01, Indices);
@@ -90,5 +90,5 @@ void Sandbox::Finalize()
 	delete Quad04;
 
 	// Just for debbuging
-	GetDebug()->Log(Information, "Game Finalized.");
+	Debug::Log(Information, "Game Finalized.");
 }

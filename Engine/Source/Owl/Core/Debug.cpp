@@ -1,7 +1,7 @@
 #include "Core.h"
 #include "Debug.h"
 
-void Debug::Log(ELogMode Mode, const char* Text, bool BreakLine, bool Pause)
+void Debug::ILog(ELogMode Mode, const char* Text, bool BreakLine, bool Pause)
 {
 	// Set log status
 	const char* TextMode = (Mode == None) ? "\0" : (Mode == Information) ? "[INFO] " : (Mode == Warning) ? "[WARN] " : "[ERRO] ";

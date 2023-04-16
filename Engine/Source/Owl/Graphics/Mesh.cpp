@@ -2,7 +2,6 @@
 #include "Mesh.h"
 
 #include "../Core/Application.h"
-#include "../Core/Renderer.h"
 
 #include "../Graphics/VAO.h"
 #include "../Graphics/VBO.h"

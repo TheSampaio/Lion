@@ -4,7 +4,7 @@
 #include "Window.h"
 
 #include "../Graphics/Shader.h"
-#include "../Gameplay/Mesh.h"
+#include "../Graphics/Mesh.h"
 
 // Enumerate window's V-Sync modes
 enum ESynchronizationMode
@@ -35,7 +35,6 @@ public:
 	inline ESynchronizationMode GetSynchronizationMode() { return m_SynchronizationMode; }
 
 	// Friend classes
-	friend Mesh;
 	friend class Application;
 
 private:
@@ -46,9 +45,6 @@ private:
 	// Main methods
 	void ClearBuffers(Window& Window);
 	void SwapBuffers(Window& Window);
-
-	// Static attributes
-	static class Debug& s_Debug;
 };
 
 #endif // !GLF3D_RENDERER_H
