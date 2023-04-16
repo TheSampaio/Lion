@@ -1,6 +1,8 @@
 #include "Core.h"
 #include "Renderer.h"
 
+#include "Application.h"
+
 #include "../Graphics/VAO.h"
 
 Renderer::Renderer()
@@ -31,18 +33,24 @@ void Renderer::Draw(std::vector<Index>& Indices)
 	glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(Indices.size() * 3), GL_UNSIGNED_INT, nullptr);
 }
 
-void Renderer::ClearBuffers(Window& Window)
+void Renderer::ClearBuffers()
 {
+	std::array<float, 3> BackgroundColor = {
+		static_cast<float>(Application::GetWindow()->GetBackgroundColor()[0] / 255.0f),
+		static_cast<float>(Application::GetWindow()->GetBackgroundColor()[1] / 255.0f),
+		static_cast<float>(Application::GetWindow()->GetBackgroundColor()[2] / 255.0f)
+	};
+
 	// Clear buffers and colorizes window
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
-	glClearColor(static_cast<GLfloat>(Window.GetBackgroundColor()[0] / 255.0f), static_cast<GLfloat>(Window.GetBackgroundColor()[1] / 255.0f), static_cast<GLfloat>(Window.GetBackgroundColor()[2] / 255.0f), 1.0f);
+	glClearColor(BackgroundColor[0], BackgroundColor[1], BackgroundColor[2], 1.0f);
 
 	m_ShaderProgram->Activate();
 }
 
-void Renderer::SwapBuffers(Window& Window)
+void Renderer::SwapBuffers()
 {
 	// Set V-Sync and Swap buffers
 	glfwSwapInterval(m_SynchronizationMode);
-	glfwSwapBuffers(Window.GetId());
+	glfwSwapBuffers(Application::GetWindow()->GetId());
 }

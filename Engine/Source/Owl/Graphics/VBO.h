@@ -1,13 +1,9 @@
 #ifndef OWL_VBO_H
 #define OWL_VBO_H
 
-struct OWL_API Vertex
-{
-	// Attributes
-	glm::vec4 Position, Color;
-};
+#include "../Math/Vertex.h";
 
-class VBO
+class OWL_API VBO
 {
 public:
 	VBO(std::vector<Vertex> Vertices);

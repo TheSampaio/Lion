@@ -7,9 +7,6 @@
 #include "../Graphics/VBO.h"
 #include "../Graphics/EBO.h"
 
-// Initialize static attributes
-Renderer& Mesh::s_Renderer = *Application::s_Renderer;
-
 Mesh::Mesh(std::vector<Vertex> Vertices, std::vector<Index> Indices)
 {
 	m_Vertices = Vertices;
@@ -34,5 +31,5 @@ Mesh::~Mesh()
 void Mesh::Draw()
 {
 	m_VertexArray->Bind();
-	s_Renderer.Draw(m_Indices);
+	Application::GetRenderer()->Draw(m_Indices);
 }

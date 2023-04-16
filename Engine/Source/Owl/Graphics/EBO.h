@@ -1,13 +1,9 @@
 #ifndef OWL_EBO_H
 #define OWL_EBO_H
 
-struct OWL_API Index
-{
-	// Attributes
-	GLuint X, Y, Z;
-};
+#include "../Math/Index.h";
 
-class EBO
+class OWL_API EBO
 {
 public:
 	EBO(std::vector<Index> Indices);

@@ -4,7 +4,8 @@
 // Enumerate window's display modes
 enum EDisplayMode
 {
-	Fullscreen = 0,
+	Borderless = 0,
+	Fullscreen,
 	Windowed
 };
 
@@ -19,7 +20,7 @@ public:
 	Window operator=(const Window&) = delete;
 
 	// Main methods
-	bool Close();
+	bool Close(bool Force = false);
 
 	// Get methods
 	inline GLFWwindow*& GetId()                               { return m_Id; }
@@ -63,9 +64,6 @@ private:
 
 	// Main methods
 	bool Create();
-
-	// Static attribures
-	static class Debug& s_Debug;
 };
 
 #endif

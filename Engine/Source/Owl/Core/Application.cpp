@@ -8,18 +8,18 @@ std::unique_ptr<Window>   Application::s_Window = nullptr;
 
 Application::Application()
 {
-    // Initialize all libraries
+    // Initializes all libraries
     this->Init();
 
     // Creates unique pointers
     s_Input = std::make_unique<Input>();
-    s_Window = std::make_unique<Window>();
     s_Renderer = std::make_unique<Renderer>();
+    s_Window = std::make_unique<Window>();
 }
 
 Application::~Application()
 {
-    // Finalize glfw
+    // Finalizes glfw
     glfwTerminate();
 }
 
@@ -43,7 +43,7 @@ bool Application::Run()
     return Loop();
 }
 
-// Main loop
+// Main loop (Game loop)
 bool Application::Loop()
 {
     // Start timer and game
@@ -57,11 +57,11 @@ bool Application::Loop()
 
         // Update game and clear all buffers
         this->Update(1.0f);
-        s_Renderer->ClearBuffers(*s_Window);
+        s_Renderer->ClearBuffers();
 
         // Draw everything and swap buffers
         this->Draw();
-        s_Renderer->SwapBuffers(*s_Window);
+        s_Renderer->SwapBuffers();
 
     } while (!s_Window->Close());
 

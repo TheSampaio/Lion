@@ -1,7 +1,7 @@
 #ifndef OWL_VAO_H
 #define OWL_VAO_H
 
-class VAO
+class OWL_API VAO
 {
 public:
 	VAO();

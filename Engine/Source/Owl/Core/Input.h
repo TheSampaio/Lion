@@ -11,9 +11,9 @@ public:
 	Input operator=(const Input&) = delete;
 
 	// Main methods
-	void GetKeyPressed();
-	void GetKeyReleased();
-	void GetKeyTapped();
+	bool GetKeyPressed(int KeyCode);
+	bool GetKeyReleased(int KeyCode);
+	bool GetKeyTapped(int KeyCode);
 
 	// Friends
 	friend class Application;
@@ -21,6 +21,9 @@ public:
 private:
 	// Main methods
 	void ProcessEvents();
+
+	// Static Attributes
+	static bool m_bPressed;
 };
 
 #endif // !OWL_INPUT_H

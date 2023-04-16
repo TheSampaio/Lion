@@ -34,6 +34,21 @@ Window::~Window()
 	glfwDestroyWindow(m_Id);
 }
 
+bool Window::Close(bool Force)
+{
+	if (!Force)
+	{
+		return glfwWindowShouldClose(m_Id);
+	}
+	
+	else
+	{
+		// Forces window to close
+		glfwSetWindowShouldClose(m_Id, Force);
+		return false;
+	}
+}
+
 bool Window::Create()
 {
 	// Setup OpenGL's version
@@ -45,7 +60,7 @@ bool Window::Create()
 	if (m_DisplayMode == EDisplayMode::Fullscreen)
 	{
 		// Create a window and set its position (Fullscreen mode)
-		m_Id = glfwCreateWindow(m_Size[0], m_Size[1], m_Title.data(), m_Monitor, nullptr);
+		m_Id = glfwCreateWindow(m_Size[0], m_Size[1], m_Title.c_str(), m_Monitor, nullptr);
 
 		if (m_Id)
 		{
@@ -58,15 +73,32 @@ bool Window::Create()
 	else
 	{
 		// Create a window and set its position (Windowed mode)
-		m_Id = glfwCreateWindow(m_Size[0], m_Size[1], m_Title.data(), nullptr, nullptr);
-
-		if (m_Id)
+		if (m_DisplayMode == EDisplayMode::Windowed)
 		{
-			m_Position = { (m_Screen[0] / 2) - (m_Size[0] / 2), (m_Screen[1] / 2) - (m_Size[1] / 2) };
-			glfwSetWindowPos(m_Id, m_Position[0], m_Position[1]);
+			m_Id = glfwCreateWindow(m_Size[0], m_Size[1], m_Title.c_str(), nullptr, nullptr);
 
-			if (m_bMaximize)
-				glfwMaximizeWindow(m_Id);
+			if (m_Id)
+			{
+				m_Position = { (m_Screen[0] / 2) - (m_Size[0] / 2), (m_Screen[1] / 2) - (m_Size[1] / 2) };
+				glfwSetWindowPos(m_Id, m_Position[0], m_Position[1]);
+
+				if (m_bMaximize)
+					glfwMaximizeWindow(m_Id);
+			}
+		}
+
+		// Create a window and set its position (Borderless mode)
+		else
+		{
+			glfwWindowHint(GLFW_DECORATED, GLFW_FALSE);
+
+			m_Id = glfwCreateWindow(m_Screen[0], m_Screen[1] + 40, m_Title.c_str(), nullptr, nullptr);
+
+			if (m_Id)
+			{
+				m_Position = { 0, 0 };
+				glfwSetWindowPos(m_Id, m_Position[0], m_Position[1]);
+			}
 		}
 	}
 
@@ -85,10 +117,4 @@ bool Window::Create()
 
 	// Return TRUE if exists a window
 	return (m_Id) ? true : false;
-}
-
-bool Window::Close()
-{
-	// Return close window message
-	return glfwWindowShouldClose(m_Id);
 }

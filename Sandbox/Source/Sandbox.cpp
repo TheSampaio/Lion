@@ -42,6 +42,9 @@ static std::vector<Index> Indices
 Sandbox::Sandbox()
 	: Quad01(nullptr), Quad02(nullptr), Quad03(nullptr), Quad04(nullptr)
 {
+	// Setup sandbox's renderer
+	GetRenderer()->SetSynchronizationMode(Disabled);
+
 	// Setup sandbox's window
 	GetWindow()->SetTitle("Sandbox");
 	GetWindow()->SetSize(1360, 768);
@@ -49,9 +52,6 @@ Sandbox::Sandbox()
 	GetWindow()->SetOpenGLVersion(4, 6);
 	GetWindow()->SetDisplayMode(Windowed);
 	GetWindow()->SetBackgroundColor(230, 245, 250);
-
-	// Setup sandbox's renderer
-	GetRenderer()->SetSynchronizationMode(Disabled);
 }
 
 void Sandbox::Start()
@@ -69,7 +69,7 @@ void Sandbox::Start()
 void Sandbox::Update(float DeltaTime)
 {
 	// Proccess everything in the game
-	// TODO: Exit by pressing the "Escape" key
+	if (GetInput()->GetKeyTapped(GLFW_KEY_ESCAPE)) { GetWindow()->Close(true); }
 }
 
 void Sandbox::Draw()

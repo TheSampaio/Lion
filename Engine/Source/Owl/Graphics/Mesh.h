@@ -1,9 +1,8 @@
 #ifndef OWL_MESH_H
 #define OWL_MESH_H
 
-#include "../Graphics/VAO.h"
-#include "../Graphics/VBO.h"
-#include "../Graphics/EBO.h"
+#include "../Math/Vertex.h"
+#include "../Math/Index.h"
 
 class OWL_API Mesh
 {
@@ -17,15 +16,12 @@ public:
 
 private:
 	// Attributes
-	VAO* m_VertexArray;
-	VBO* m_VertexBuffer;
-	EBO* m_ElementBuffer;
+	class VAO* m_VertexArray;
+	class VBO* m_VertexBuffer;
+	class EBO* m_ElementBuffer;
 
 	std::vector<Vertex> m_Vertices;
 	std::vector<Index> m_Indices;
-
-	// Static attributs
-	static class Renderer& s_Renderer;
 };
 
 #endif // !OWL_MESH_H

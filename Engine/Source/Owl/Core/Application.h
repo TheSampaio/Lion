@@ -20,6 +20,8 @@ public:
     bool Run();
 
     // Friends
+    friend Input;
+    friend Renderer;
     friend class Mesh;
 
 protected:
@@ -29,9 +31,9 @@ protected:
     virtual void Finalize() = 0;
 
     // Get methods
-    inline Input* GetInput()       { return s_Input.get(); }
-    inline Window* GetWindow()     { return s_Window.get(); }
-    inline Renderer* GetRenderer() { return s_Renderer.get(); }
+    static inline Renderer* GetRenderer() { return s_Renderer.get(); }
+    static inline Window* GetWindow()     { return s_Window.get(); }
+    static inline Input* GetInput()       { return s_Input.get(); }
 
 private:
     // Main methods

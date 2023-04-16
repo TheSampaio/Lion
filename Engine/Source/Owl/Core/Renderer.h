@@ -43,8 +43,8 @@ private:
 	ESynchronizationMode m_SynchronizationMode;
 
 	// Main methods
-	void ClearBuffers(Window& Window);
-	void SwapBuffers(Window& Window);
+	void ClearBuffers();
+	void SwapBuffers();
 };
 
 #endif // !GLF3D_RENDERER_H
