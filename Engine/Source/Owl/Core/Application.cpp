@@ -81,7 +81,7 @@ bool Application::Loop()
 void Application::Init()
 {
     // IF Windows platform THEN set console title
-#ifdef _WIN
+#ifdef WL_PLATFORM_WIN
     system("TITLE Owl Engine");
 #endif // _WIN
 
