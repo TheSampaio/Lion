@@ -49,6 +49,21 @@ bool Window::Close(bool Force)
 	}
 }
 
+void Window::SetTitle(const char* Title)
+{
+	if (m_Id)
+	{
+		// Change window's title if it already exists
+		glfwSetWindowTitle(m_Id, Title);
+	}
+
+	else
+	{
+		// Updates window's title attribute
+		m_Title = Title;
+	}
+}
+
 bool Window::Create()
 {
 	// Setup OpenGL's version

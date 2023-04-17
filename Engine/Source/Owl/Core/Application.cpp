@@ -56,6 +56,7 @@ bool Application::Loop()
 
     do
     {
+        // Calculates frametime
         s_FrameTime = FrameTimeMonitor();
 
         // Process all window's events
@@ -109,13 +110,15 @@ float Application::FrameTimeMonitor()
     {
         std::stringstream Header;
 
+        // Fixes header precision
         Header << std::fixed;
         Header.precision(1);
 
+        // Sets new windows's title
         Header << s_Window->GetTitle().c_str() << " | FPS: " << FrameCount << " | MS: " << s_FrameTime * 1000.0f;
+        s_Window->SetTitle(Header.str().c_str());
 
-        glfwSetWindowTitle(s_Window->GetId(), Header.str().c_str());
-
+        // Resets frame count and total time
         FrameCount = 0;
         TotalTime -= 1.0f;
     }

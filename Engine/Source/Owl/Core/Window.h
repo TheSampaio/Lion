@@ -35,7 +35,7 @@ public:
 	inline std::array<unsigned short, 3> GetBackgroundColor() { return m_BackgroundColor; }
 
 	// Set methods
-	inline void SetTitle(const char* Title)                                                       { m_Title = Title; }
+	void SetTitle(const char* Title);
 	inline void SetDisplayMode(EDisplayMode DisplayMode)                                          { m_DisplayMode = DisplayMode; }
 	inline void SetMaximize(bool Maximize)                                                        { m_bMaximize = Maximize; }
 	inline void SetSize(unsigned short Width, unsigned short Height)                              { m_Size = { Width, Height }; }
