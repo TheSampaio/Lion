@@ -18,14 +18,14 @@
 #include <glm/glm.hpp>
 
 // === DLL EXPORTER === //
-#ifdef _WIN
-	#ifdef _DLL
+#ifdef WL_PLATFORM_WIN
+	#ifdef WL_DLL
 		#define OWL_API __declspec(dllexport)
 	#else
 		#define OWL_API __declspec(dllimport)
 	#endif
 #else
-	#ifdef _DLL
+	#ifdef WL_DLL
 		#define OWL_API __attribute__((visibility("default")))
 	#else
 		#define OWL_API

@@ -95,14 +95,14 @@ void Application::Init()
 
 float Application::FrameTimeMonitor()
 {
-#ifdef OWL_DEBUG
+#ifdef WL_DEBUG
     static float TotalTime = 0.0f;
     static unsigned FrameCount = 0;
 #endif // OWL_DEBUG
 
     s_FrameTime =+ s_Timer->Reset();
 
-#ifdef OWL_DEBUG
+#ifdef WL_DEBUG
     TotalTime += s_FrameTime;
     FrameCount++;
 

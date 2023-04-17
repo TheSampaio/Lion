@@ -10,12 +10,12 @@ workspace "Owl"
     architecture "x64"
 
     filter "configurations:Debug"
-        defines "OWL_DEBUG"
+        defines "WL_DEBUG"
         symbols "On"
         optimize "Off"
 
     filter "configurations:Release"
-        defines "OWL_RELEASE"
+        defines "WL_RELEASE"
         symbols "Off"
         optimize "Speed"
 
@@ -26,7 +26,7 @@ project "Owl"
     kind "SharedLib"
     location "Engine"
 
-    defines "_DLL"
+    defines "WL_DLL"
 
     -- Output directories
     targetdir ("_Output/Bin/" .. OutputDir .. "%{prj.name}")
@@ -52,7 +52,7 @@ project "Owl"
 
     -- Windows
     filter "system:windows"
-        defines "_WIN"
+        defines "WL_PLATFORM_WIN"
         systemversion "latest"
         staticruntime "Off"
         runtime "Release"
@@ -74,7 +74,7 @@ project "Owl"
 
     -- Linux
     filter "system:linux"
-        defines "_TUX"
+        defines "WL_PLATFORM_LIN"
         systemversion "latest"
 
         staticruntime "Off"
@@ -118,7 +118,7 @@ project "Sandbox"
 
      -- Windows
     filter "system:windows"
-        defines "_WIN"
+        defines "WL_PLATFORM_WIN"
         systemversion "latest"
 
         staticruntime "On"
@@ -134,7 +134,7 @@ project "Sandbox"
         }
 
     filter "system:linux"
-        defines "_TUX"
+        defines "WL_PLATFORM_LIN"
         systemversion "latest"
         staticruntime "Off"
         runtime "Release"
