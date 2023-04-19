@@ -87,19 +87,33 @@ enum OWL_API EKeyCode
 	// Other keys
 	Tab = GLFW_KEY_TAB,
 	End = GLFW_KEY_END,
+	Menu = GLFW_KEY_MENU,
 	Home = GLFW_KEY_HOME,
+	Minus = GLFW_KEY_MINUS,
 	Space = GLFW_KEY_SPACE,
+	Equal = GLFW_KEY_EQUAL,
+	Comma = GLFW_KEY_COMMA,
 	Pause = GLFW_KEY_PAUSE,
 	Escape = GLFW_KEY_ESCAPE,
 	Return = GLFW_KEY_ENTER,
+	Period = GLFW_KEY_PERIOD,
 	Insert = GLFW_KEY_INSERT,
 	Delete = GLFW_KEY_DELETE,
+	Semicolon = GLFW_KEY_SEMICOLON,
 	Backspace = GLFW_KEY_BACKSPACE,
+	Apostrophe = GLFW_KEY_APOSTROPHE,
+	GraveAccent = GLFW_KEY_GRAVE_ACCENT,
 	PrintScreen = GLFW_KEY_PRINT_SCREEN,
 
 	LockNum = GLFW_KEY_NUM_LOCK,
 	LockCaps = GLFW_KEY_CAPS_LOCK,
 	LockScroll = GLFW_KEY_SCROLL_LOCK,
+
+	Slash = GLFW_KEY_SLASH,
+	Backslash = GLFW_KEY_BACKSLASH,
+
+	BracketRight = GLFW_KEY_RIGHT_BRACKET,
+	BracketLeft = GLFW_KEY_LEFT_BRACKET,
 
 	PageUp = GLFW_KEY_PAGE_UP,
 	PageDown = GLFW_KEY_PAGE_DOWN,
