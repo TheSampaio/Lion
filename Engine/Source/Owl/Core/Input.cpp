@@ -6,19 +6,19 @@
 // Initializes static attributes
 bool Input::m_bPressed = false;
 
-bool Input::GetKeyPressed(int KeyCode)
+bool Input::GetKeyPressed(EKeyCode KeyCode)
 {
 	// Verifies if a key IS pressed
 	return (glfwGetKey(Application::s_Window->GetId(), KeyCode) == GLFW_PRESS) ? true : false;
 }
 
-bool Input::GetKeyReleased(int KeyCode)
+bool Input::GetKeyReleased(EKeyCode KeyCode)
 {
 	// Verifies if a key IS pressed
 	return (glfwGetKey(Application::s_Window->GetId(), KeyCode) == GLFW_RELEASE) ? true : false;
 }
 
-bool Input::GetKeyTapped(int KeyCode)
+bool Input::GetKeyTapped(EKeyCode KeyCode)
 {
 	// Verifies if a key WAS pressed (Tapped)
 	if (glfwGetKey(Application::s_Window->GetId(), KeyCode) == GLFW_PRESS)

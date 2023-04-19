@@ -43,7 +43,7 @@ Sandbox::Sandbox()
 	: Quad01(nullptr), Quad02(nullptr), Quad03(nullptr), Quad04(nullptr)
 {
 	// Setup sandbox's renderer
-	GetRenderer()->SetSynchronizationMode(Full);
+	GetRenderer()->SetSynchronizationMode(Disabled);
 
 	// Setup sandbox's window
 	GetWindow()->SetTitle("Sandbox");
@@ -69,7 +69,7 @@ void Sandbox::Start()
 void Sandbox::Update(float DeltaTime)
 {
 	// Proccess everything in the game
-	if (GetInput()->GetKeyTapped(GLFW_KEY_ESCAPE)) { GetWindow()->Close(true); }
+	if (GetInput()->GetKeyTapped(Escape)) { GetWindow()->Close(true); }
 }
 
 void Sandbox::Draw()
