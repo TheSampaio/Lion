@@ -24,6 +24,7 @@ public:
     // Friends
     friend Input;
     friend Renderer;
+    friend Window;
     friend class Mesh;
 
 protected:

@@ -4,7 +4,8 @@
 #include "Application.h"
 
 // Initializes static attributes
-bool Input::m_bPressed = false;
+int Input::s_KeyCode = 0;
+bool Input::s_bPressed = false;
 
 bool Input::GetKeyPressed(EKeyCode KeyCode)
 {
@@ -23,13 +24,14 @@ bool Input::GetKeyTapped(EKeyCode KeyCode)
 	// Verifies if a key WAS pressed (Tapped)
 	if (glfwGetKey(Application::s_Window->GetId(), KeyCode) == GLFW_PRESS)
 	{
-		m_bPressed = true;
-		return false;
+		s_KeyCode = KeyCode;
+		s_bPressed = true;
 	}
 
-	if ((glfwGetKey(Application::s_Window->GetId(), KeyCode) == GLFW_RELEASE) && (m_bPressed))
+	if ((s_bPressed) && (glfwGetKey(Application::s_Window->GetId(), KeyCode) == GLFW_RELEASE) && (KeyCode == s_KeyCode))
 	{
-		m_bPressed = false;
+		s_KeyCode = 0;
+		s_bPressed = false;
 		return true;
 	}
 

@@ -1,19 +1,17 @@
 #include "Core.h"
 #include "Window.h"
 
-#include "Debug.h"
+#include "Application.h"
 
 Window::Window()
-	: m_Id(nullptr), m_Monitor(nullptr)
+	: m_Id(nullptr), m_Monitor(nullptr), m_bMaximize(true)
 {
-	// Setup default attributes
+	// Set-ups default attributes
 	m_Monitor = glfwGetPrimaryMonitor();
 
 	// Initializes title, V-Sync and display mode
 	m_Title = "Window";
 	m_DisplayMode = EDisplayMode::Windowed;
-
-	m_bMaximize = true;
 
 	// Initializes window's size and center position
 	m_Size = { 800, 600 };
@@ -23,9 +21,8 @@ Window::Window()
 	glfwGetMonitorWorkarea(m_Monitor, 0, 0, &m_Screen[0], &m_Screen[1]);
 	m_Position = { (m_Screen[0] / 2) - (m_Size[0] / 2), (m_Screen[1] / 2) - (m_Size[1] / 2) };
 
-	// Initializes backeground color and OpenGL version
-	m_BackgroundColor = { 0, 0, 0 };
-	m_OpenGLVersion = { 3, 3 };
+	// Initializes backeground colour
+	m_BackgroundColour = { 0, 0, 0 };
 }
 
 Window::~Window()
@@ -66,9 +63,9 @@ void Window::SetTitle(const char* Title)
 
 bool Window::Create()
 {
-	// Setup OpenGL's version
-	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, m_OpenGLVersion[0]);
-	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, m_OpenGLVersion[1]);
+	// Set-ups OpenGL's version
+	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, Application::GetRenderer()->GetOpenGLVersion()[0]);
+	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, Application::GetRenderer()->GetOpenGLVersion()[1]);
 	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
 	// If FULLSCREEN mode
@@ -115,7 +112,7 @@ bool Window::Create()
 		}
 	}
 
-	// Creates a OpenGL's constext for the window
+	// Creates a OpenGL's context for the window
 	glfwMakeContextCurrent(m_Id);
 
 	// Loads GLAD and log it if failed

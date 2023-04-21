@@ -28,19 +28,25 @@ public:
 	bool Init();
 	void Draw(std::vector<Index>& Indices);
 
+	// Get methods
+	inline ESynchronizationMode GetSynchronizationMode()    { return m_SynchronizationMode; }
+	inline std::array<unsigned short, 2> GetOpenGLVersion() { return m_VersionGL; }
+
 	// Set methods
 	inline void SetSynchronizationMode(ESynchronizationMode SynchronizationMode) { m_SynchronizationMode = SynchronizationMode; }
-
-	// Get methods
-	inline ESynchronizationMode GetSynchronizationMode() { return m_SynchronizationMode; }
+	inline void SetWireframeMode(bool Enable)                                    { bWireframe = Enable; }
+	inline void SetOpenGLVersion(unsigned short Major, unsigned short Minor)     { m_VersionGL = { Major, Minor }; }
 
 	// Friend classes
 	friend class Application;
 
 private:
 	// Attributes
-	class Shader* m_ShaderProgram;
 	ESynchronizationMode m_SynchronizationMode;
+	class Shader* m_ShaderProgram;
+	bool bWireframe;
+
+	std::array<unsigned short, 2> m_VersionGL;
 
 	// Main methods
 	void ClearBuffers();

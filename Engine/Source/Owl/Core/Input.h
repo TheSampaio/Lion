@@ -157,7 +157,8 @@ private:
 	static void FramebufferCallback(GLFWwindow* Id, int Width, int Height);
 
 	// Static Attributes
-	static bool m_bPressed;
+	static int s_KeyCode;
+	static bool s_bPressed;
 };
 
 #endif // !OWL_INPUT_H
