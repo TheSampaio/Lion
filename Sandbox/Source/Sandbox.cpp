@@ -2,7 +2,7 @@
 #include "Sandbox.h"
 
 Sandbox::Sandbox()
-	: Quad01(nullptr), Quad02(nullptr), Quad03(nullptr), Quad04(nullptr)
+	: Quads(nullptr)
 {
 	// Setup sandbox's renderer
 	GetRenderer()->SetSynchronizationMode(Disabled);
@@ -22,10 +22,7 @@ void Sandbox::Start()
 	Debug::Log(Information, "Game Initialized.");
 
 	// Load everything that the game will need
-	Quad01 = new Mesh(Vertices01, Indices);
-	Quad02 = new Mesh(Vertices02, Indices);
-	Quad03 = new Mesh(Vertices03, Indices);
-	Quad04 = new Mesh(Vertices04, Indices);
+	Quads = new Mesh(Vertices, Indices);
 }
 
 void Sandbox::Update(float DeltaTime)
@@ -37,19 +34,13 @@ void Sandbox::Update(float DeltaTime)
 void Sandbox::Draw()
 {
 	// Draw everything in the game
-	Quad01->Draw();
-	Quad02->Draw();
-	Quad03->Draw();
-	Quad04->Draw();
+	Quads->Draw();
 }
 
 void Sandbox::Finalize()
 {
 	// Deletes everything loaded in memory by the game
-	delete Quad01;
-	delete Quad02;
-	delete Quad03;
-	delete Quad04;
+	delete Quads;
 
 	// Just for debbuging
 	Debug::Log(Information, "Game Finalized.");
