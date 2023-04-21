@@ -33,13 +33,13 @@ bool Application::Run()
     // Creates a window
     if (!s_Window->Create())
     {
-        Debug::Log(Error, "Failed to create a window.");
+        Debug::Log(Error, "Failed to create a window.", true);
         return EXIT_FAILURE;
     }
 
     if (!s_Renderer->Init())
     {
-        Debug::Log(Error, "Failed to initialize renderer.");
+        Debug::Log(Error, "Failed to initialize renderer.", true);
         return EXIT_FAILURE;
     }
 
@@ -88,7 +88,7 @@ void Application::Init()
     // Initilizes GLFW and log it if failed
     if (!glfwInit())
     {
-        Debug::Log(Error, "Failed to initialize GLFW.");
+        Debug::Log(Error, "Failed to initialize GLFW.", true);
         exit(EXIT_FAILURE);
     }
 }

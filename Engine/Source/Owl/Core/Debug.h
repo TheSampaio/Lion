@@ -14,7 +14,7 @@ class OWL_API Debug
 {
 public:
     // Main methods
-    static void Log(ELogMode Mode, const char* Text, bool BreakLine = true, bool Pause = false) { return Instance().ILog(Mode, Text, BreakLine, Pause); }
+    static void Log(ELogMode Mode, const char* Text, bool Pause = false, bool BreakLine = true) { return Instance().ILog(Mode, Text, Pause, BreakLine); }
 
 private:
     Debug() {};
@@ -26,8 +26,8 @@ private:
     Debug(const Debug&) = delete;
     Debug operator=(const Debug&) = delete;
 
-    // Main interface methods
-    void ILog(ELogMode Mode, const char* Text, bool BreakLine = true, bool Pause = false);
+    // Main internal methods
+    void ILog(ELogMode Mode, const char* Text, bool Pause, bool BreakLine);
 };
 
 #endif
