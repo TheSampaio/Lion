@@ -33,7 +33,7 @@ void Sandbox::Update(float DeltaTime)
 {
 	// Proccess everything in the game
 	if (GetInput()->GetKeyTapped(Escape)) { GetWindow()->Close(true); }
-	if (GetInput()->GetKeyTapped(F2)) { bWireframe = !bWireframe; GetRenderer()->SetWireframeMode(bWireframe); }
+	if (GetInput()->GetKeyTapped(F2))     { bWireframe = !bWireframe; GetRenderer()->SetWireframeMode(bWireframe); }
 }
 
 void Sandbox::Draw()
