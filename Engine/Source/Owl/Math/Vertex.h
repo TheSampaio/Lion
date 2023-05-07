@@ -4,7 +4,8 @@
 struct OWL_API Vertex
 {
 	// Attributes
-	glm::vec4 Position, Color;
+	glm::vec3 Position;
+	glm::vec4 Color;
 };
 
 #endif // !OWL_VERTEX_H

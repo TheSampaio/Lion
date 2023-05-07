@@ -14,3 +14,6 @@
 
 // Graphics
 #include "../Source/Owl/Graphics/Mesh.h"
+
+// Math
+#include "../Source/Owl/Math/Vector.h"
