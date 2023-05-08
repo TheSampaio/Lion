@@ -1,5 +1,5 @@
 #include "Core.h"
-#include "EBO.h"
+#include "Include/EBO.h"
 
 EBO::EBO(std::vector<Index> Indices)
 {

@@ -1,5 +1,5 @@
 #include "Core.h"
-#include "VBO.h"
+#include "Include/VBO.h"
 
 VBO::VBO(std::vector<Vertex> Vertices)
 {

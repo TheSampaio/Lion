@@ -1,7 +1,7 @@
 #ifndef OWL_VBO_H
 #define OWL_VBO_H
 
-#include "../Math/Vertex.h";
+#include "../Math/Include/Vertex.h";
 
 class OWL_API VBO
 {

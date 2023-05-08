@@ -1,7 +1,7 @@
 #include "Core.h"
-#include "Shader.h"
+#include "Include/Shader.h"
 
-#include "../Core/Debug.h"
+#include "../Core/Include/Debug.h"
 
 Shader::Shader(const char* VertexShaderFile, const char* FragmentShaderFile)
 {

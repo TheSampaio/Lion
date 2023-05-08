@@ -1,5 +1,5 @@
 #include "Core.h"
-#include "Debug.h"
+#include "Include/Debug.h"
 
 void Debug::ILog(ELogMode Mode, const char* Text, bool Pause, bool BreakLine)
 {

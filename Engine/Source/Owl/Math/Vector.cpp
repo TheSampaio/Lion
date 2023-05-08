@@ -1,5 +1,5 @@
 #include "Core.h"
-#include "Vector.h"
+#include "Include/Vector.h"
 
 // Initializes static attributes
 glm::vec3 Vector::Zero =     glm::vec3{ 0.0f,  0.0f,  0.0f, };

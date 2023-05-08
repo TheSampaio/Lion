@@ -1,5 +1,5 @@
 #include "Core.h"
-#include "VAO.h"
+#include "Include/VAO.h"
 
 VAO::VAO()
 {

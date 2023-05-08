@@ -1,11 +1,11 @@
 #include "Core.h"
-#include "Mesh.h"
+#include "Include/Mesh.h"
 
-#include "../Core/Application.h"
+#include "../Core/Include/Application.h"
 
-#include "../Graphics/VAO.h"
-#include "../Graphics/VBO.h"
-#include "../Graphics/EBO.h"
+#include "../Graphics/Include/VAO.h"
+#include "../Graphics/Include/VBO.h"
+#include "../Graphics/Include/EBO.h"
 
 Mesh::Mesh(std::vector<Vertex> Vertices, std::vector<Index> Indices)
 {

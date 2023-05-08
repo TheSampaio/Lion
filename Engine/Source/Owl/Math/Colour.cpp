@@ -1,5 +1,5 @@
 #include "Core.h"
-#include "Colour.h"
+#include "Include/Colour.h"
 
 // Initializes static attributes
 glm::vec4 Colour::Black = glm::vec4{ 0.0f, 0.0f, 0.0f, 1.0f };

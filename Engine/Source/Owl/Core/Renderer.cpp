@@ -1,10 +1,10 @@
 #include "Core.h"
-#include "Renderer.h"
+#include "Include/Renderer.h"
 
-#include "Application.h"
+#include "Include/Application.h"
 
-#include "../Graphics/Shader.h"
-#include "../Graphics/VAO.h"
+#include "../Graphics/Include/Shader.h"
+#include "../Graphics/Include/VAO.h"
 
 Renderer::Renderer()
 	: m_ShaderProgram(nullptr), bWireframe(false)

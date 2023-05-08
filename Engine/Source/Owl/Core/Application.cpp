@@ -1,5 +1,5 @@
 #include "Core.h"
-#include "Application.h"
+#include "Include/Application.h"
 
 // Initializes static pointers
 std::unique_ptr<Input>    Application::s_Input = nullptr;

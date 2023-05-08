@@ -3,8 +3,8 @@
 
 #include "Window.h"
 
-#include "../Math/Vertex.h"
-#include "../Math/Index.h"
+#include "../../Math/Include/Vertex.h"
+#include "../../Math/Include/Index.h"
 
 // Enumerate window's V-Sync modes
 enum ESynchronizationMode

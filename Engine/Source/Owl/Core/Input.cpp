@@ -1,7 +1,7 @@
 #include "Core.h"
-#include "Input.h"
+#include "Include/Input.h"
 
-#include "Application.h"
+#include "Include/Application.h"
 
 // Initializes static attributes
 int Input::s_KeyCode = 0;

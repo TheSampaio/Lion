@@ -1,7 +1,7 @@
 #include "Core.h"
-#include "Window.h"
+#include "Include/Window.h"
 
-#include "Application.h"
+#include "Include/Application.h"
 
 Window::Window()
 	: m_Id(nullptr), m_Monitor(nullptr), m_bMaximize(true)

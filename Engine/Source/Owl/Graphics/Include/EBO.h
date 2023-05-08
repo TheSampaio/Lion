@@ -1,7 +1,7 @@
 #ifndef OWL_EBO_H
 #define OWL_EBO_H
 
-#include "../Math/Index.h";
+#include "../Math/Include/Index.h";
 
 class OWL_API EBO
 {

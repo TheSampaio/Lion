@@ -2,19 +2,19 @@
 #include "../Core.h"
 
 // Core
-#include "../Source/Owl/Core/Application.h"
-#include "../Source/Owl/Core/Debug.h"
-#include "../Source/Owl/Core/Input.h"
-#include "../Source/Owl/Core/Renderer.h"
-#include "../Source/Owl/Core/Window.h"
+#include "../Source/Owl/Core/Include/Application.h"
+#include "../Source/Owl/Core/Include/Debug.h"
+#include "../Source/Owl/Core/Include/Input.h"
+#include "../Source/Owl/Core/Include/Renderer.h"
+#include "../Source/Owl/Core/Include/Window.h"
 
 // Events
 
 // Game
 
 // Graphics
-#include "../Source/Owl/Graphics/Mesh.h"
+#include "../Source/Owl/Graphics/Include/Mesh.h"
 
 // Math
-#include "../Source/Owl/Math/Vector.h"
-#include "../Source/Owl/Math/Colour.h"
+#include "../Source/Owl/Math/Include/Vector.h"
+#include "../Source/Owl/Math/Include/Colour.h"

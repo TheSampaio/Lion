@@ -1,8 +1,8 @@
 #ifndef OWL_MESH_H
 #define OWL_MESH_H
 
-#include "../Math/Vertex.h"
-#include "../Math/Index.h"
+#include "../../Math/Include/Vertex.h"
+#include "../../Math/Include/Index.h"
 
 class OWL_API Mesh
 {
