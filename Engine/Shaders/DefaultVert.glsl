@@ -1,12 +1,15 @@
 #version 460 core
 
+// Input
 layout (location = 0) in vec3 iPosition;
-layout (location = 1) in vec4 iColor;
+layout (location = 1) in vec4 iColour;
 
-out vec4 uColor;
+// Output
+out vec4 uColour;
 
+// Shader
 void main()
 {
-    uColor = iColor;
+    uColour = iColour;
     gl_Position = vec4(iPosition, 1.0);
 }

@@ -17,3 +17,4 @@
 
 // Math
 #include "../Source/Owl/Math/Vector.h"
+#include "../Source/Owl/Math/Colour.h"

@@ -2,7 +2,7 @@
 #include "Sandbox.h"
 
 // Initializes static attributes
-bool Sandbox::bWireframe = false;
+bool Sandbox::s_bWireframe = false;
 
 Sandbox::Sandbox()
 	: Quads(nullptr)
@@ -32,8 +32,8 @@ void Sandbox::Start()
 void Sandbox::Update(float DeltaTime)
 {
 	// Proccess everything in the game
+	if (GetInput()->GetKeyTapped(F2)) { s_bWireframe = !s_bWireframe; GetRenderer()->SetWireframeMode(s_bWireframe); }
 	if (GetInput()->GetKeyTapped(F5)) { GetWindow()->Close(true); }
-	if (GetInput()->GetKeyTapped(F2)) { bWireframe = !bWireframe; GetRenderer()->SetWireframeMode(bWireframe); }
 }
 
 void Sandbox::Draw()

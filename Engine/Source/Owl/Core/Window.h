@@ -35,9 +35,9 @@ public:
 
 	// Set methods
 	void SetTitle(const char* Title);
-	inline void SetDisplayMode(EDisplayMode DisplayMode)                                          { m_DisplayMode = DisplayMode; }
-	inline void SetMaximize(bool Maximize)                                                        { m_bMaximize = Maximize; }
-	inline void SetSize(unsigned short Width, unsigned short Height)                              { m_Size = { Width, Height }; }
+	inline void SetDisplayMode(EDisplayMode DisplayMode)                                           { m_DisplayMode = DisplayMode; }
+	inline void SetMaximize(bool Maximize)                                                         { m_bMaximize = Maximize; }
+	inline void SetSize(unsigned short Width, unsigned short Height)                               { m_Size = { Width, Height }; }
 	inline void SetBackgroundColour(unsigned short Red, unsigned short Green, unsigned short Blue) { m_BackgroundColour = { Red, Green, Blue }; }
 
 	// Friend classes

@@ -1,9 +1,21 @@
 #version 460 core
 
-in vec4 uColor;
+// Input
+in vec4 uColour;
+
+// Output
 out vec4 gl_Color;
 
+// Shader
 void main()
 {
-    gl_Color = uColor;
+    if (uColour.a > 1.0)
+    {
+        gl_Color = vec4(uColour.r, uColour.g, uColour.b, 1.0);
+    }
+
+    else
+    {
+        gl_Color = uColour;
+    }
 }

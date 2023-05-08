@@ -18,7 +18,7 @@ private:
     Mesh* Quads;
 
 	// Static attributes
-	static bool bWireframe;
+	static bool s_bWireframe;
 };
 
 #endif
@@ -27,28 +27,28 @@ private:
 static const std::vector<Vertex> Vertices
 {
 	// Red quad
-	Vertex{ Vector::Left,                  glm::vec4{ 1.0f, 0.0f, 0.0f, 1.0f } }, // 0
-	Vertex{ Vector::Zero,                  glm::vec4{ 1.0f, 0.0f, 0.0f, 1.0f } }, // 1
-	Vertex{ Vector::Left + Vector::Up,     glm::vec4{ 1.0f, 0.8f, 0.0f, 1.0f } }, // 2
-	Vertex{ Vector::Up,                    glm::vec4{ 1.0f, 0.8f, 0.0f, 1.0f } }, // 3
+	Vertex{ -Vector::Right,               Colour::Red  },                                         // 0
+	Vertex{  Vector::Zero,                Colour::Red  },                                         // 1
+	Vertex{ -Vector::Right + Vector::Up,  Colour::Red + Colour::Green * 0.8f  },                  // 2
+	Vertex{  Vector::Up,                  Colour::Red + Colour::Green * 0.8f  },                  // 3
 
 	// Green quad
-	Vertex{ Vector::Zero,                  glm::vec4{ 0.0f, 1.0f, 0.0f, 1.0f } }, // 4
-	Vertex{ Vector::Right,                 glm::vec4{ 0.0f, 1.0f, 0.0f, 1.0f } }, // 5
-	Vertex{ Vector::Up,                    glm::vec4{ 0.6f, 1.0f, 0.6f, 1.0f } }, // 6
-	Vertex{ Vector::Right + Vector::Up,    glm::vec4{ 0.6f, 1.0f, 0.6f, 1.0f } }, // 7
+	Vertex{  Vector::Zero,                Colour::Green  },                                       // 4
+	Vertex{  Vector::Right,               Colour::Green  },                                       // 5
+	Vertex{  Vector::Up,                  Colour::Green + (Colour::Red + Colour::Blue) * 0.6f  }, // 6
+	Vertex{  Vector::Right + Vector::Up,  Colour::Green + (Colour::Red + Colour::Blue) * 0.6f  }, // 7
 
 	// Blue quad
-	Vertex{ Vector::Left + Vector::Down,   glm::vec4{ 0.0f, 0.0f, 1.0f, 1.0f } }, // 8
-	Vertex{ Vector::Down,                  glm::vec4{ 0.0f, 0.0f, 1.0f, 1.0f } }, // 9
-	Vertex{ Vector::Left,                  glm::vec4{ 0.0f, 0.8f, 1.0f, 1.0f } }, // 10
-	Vertex{ Vector::Zero,                  glm::vec4{ 0.0f, 0.8f, 1.0f, 1.0f } }, // 11
+	Vertex{ -Vector::Right + -Vector::Up, Colour::Blue  },                                        // 8
+	Vertex{ -Vector::Up,                  Colour::Blue  },                                        // 9
+	Vertex{ -Vector::Right,               Colour::Blue + Colour::Green * 0.8f  },                 // 10
+	Vertex{  Vector::Zero,                Colour::Blue + Colour::Green * 0.8f  },                 // 11
 
 	// Yellow quad
-	Vertex{ Vector::Down,                  glm::vec4{ 1.0f, 1.0f, 0.0f, 1.0f } }, // 12
-	Vertex{ Vector::Right + Vector::Down,  glm::vec4{ 1.0f, 1.0f, 0.0f, 1.0f } }, // 13
-	Vertex{ Vector::Zero,                  glm::vec4{ 1.0f, 1.0f, 0.6f, 1.0f } }, // 14
-	Vertex{ Vector::Right,                 glm::vec4{ 1.0f, 1.0f, 0.6f, 1.0f } }, // 15
+	Vertex{ -Vector::Up,                  Colour::Red + Colour::Green  },                         // 12
+	Vertex{  Vector::Right + -Vector::Up, Colour::Red + Colour::Green  },                         // 13
+	Vertex{  Vector::Zero,                Colour::Red + Colour::Green + Colour::Blue * 0.6f  },   // 14
+	Vertex{  Vector::Right,               Colour::Red + Colour::Green + Colour::Blue * 0.6f  },   // 15
 };
 
 // === Indices (Temporary) =====
