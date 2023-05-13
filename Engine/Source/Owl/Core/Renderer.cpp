@@ -22,6 +22,23 @@ Renderer::~Renderer()
 
 bool Renderer::Init()
 {
+	// Gets graphics card's vendor
+	Debug::Log(Information, "Vendor: ", false, false);
+	Debug::Log(None, reinterpret_cast<const char*>(glGetString(GL_VENDOR)));
+
+	// Gets graphics card's model
+	Debug::Log(Information, "Graphics card: ", false, false);
+	Debug::Log(None, reinterpret_cast<const char*>(glGetString(GL_RENDERER)));
+
+	// Gets OpenGL's version
+	Debug::Log(Information, "OpenGL version: ", false, false);
+	Debug::Log(None, reinterpret_cast<const char*>(glGetString(GL_VERSION)));
+
+	// Gets GLSL's version
+	Debug::Log(Information, "GLSL version: ", false, false);
+	Debug::Log(None, reinterpret_cast<const char*>(glGetString(GL_SHADING_LANGUAGE_VERSION)), false);
+	Debug::Log(None, "===", false);
+
 	// Create shader program
 	m_ShaderProgram = new Shader("../../Owl/Engine/Shaders/DefaultVert.glsl", "../../Owl/Engine/Shaders/DefaultFrag.glsl");
 
