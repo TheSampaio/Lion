@@ -5,7 +5,7 @@
 bool Sandbox::s_bWireframe = false;
 
 Sandbox::Sandbox()
-	: Quads(nullptr)
+	: Square(nullptr)
 {
 	// Set-ups sandbox's renderer
 	GetRenderer()->SetOpenGLVersion(4, 6);
@@ -26,7 +26,10 @@ void Sandbox::Start()
 	Debug::Log(Information, "Game Initialized.");
 
 	// Load everything that the game will need
-	Quads = new Mesh(Vertices, Indices);
+	Square = new Quad();
+
+	// Initializes everything in the game
+	Square->Start();
 }
 
 void Sandbox::Update(float DeltaTime)
@@ -34,18 +37,21 @@ void Sandbox::Update(float DeltaTime)
 	// Proccess everything in the game
 	if (GetInput()->GetKeyTapped(F2)) { s_bWireframe = !s_bWireframe; GetRenderer()->SetWireframeMode(s_bWireframe); }
 	if (GetInput()->GetKeyTapped(F5)) { GetWindow()->Close(true); }
+
+	// Updates everything in the game
+	Square->Update(DeltaTime);
 }
 
 void Sandbox::Draw()
 {
-	// Draw everything in the game
-	Quads->Draw();
+	// Draws everything in the game
+	Square->Draw();
 }
 
 void Sandbox::Finalize()
 {
 	// Deletes everything loaded in memory by the game
-	delete Quads;
+	delete Square;
 
 	// Just for debbuging
 	Debug::Log(Information, "Game Finalized.");

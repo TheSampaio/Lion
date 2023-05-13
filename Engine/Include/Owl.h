@@ -8,13 +8,5 @@
 #include "../Source/Owl/Core/Include/Renderer.h"
 #include "../Source/Owl/Core/Include/Window.h"
 
-// Events
-
 // Game
-
-// Graphics
-#include "../Source/Owl/Graphics/Include/Mesh.h"
-
-// Math
-#include "../Source/Owl/Math/Include/Vector.h"
-#include "../Source/Owl/Math/Include/Colour.h"
+#include "../Source/Owl/Game/Include/Entity.h"
