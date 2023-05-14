@@ -63,7 +63,7 @@ project "Owl"
 
         -- Libraries
         links {
-            "_Dependencies/Lib/Windows/glfw3",
+            "_Dependencies/Lib/glfw3",
             "opengl32",
         }
 
