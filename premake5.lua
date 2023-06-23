@@ -1,9 +1,5 @@
--- // === WORKSPACE === // --
 workspace "Owl"
-    configurations {
-        "Debug",
-        "Release",
-    }    
+    configurations { "Debug", "Release" }
 
     language "C++"
     cppdialect "C++20"
@@ -19,12 +15,12 @@ workspace "Owl"
         symbols "Off"
         optimize "Speed"
 
-    OutputDir = "%{cfg.system}-%{cfg.architecture}/%{cfg.buildcfg}/"
+    OutputDir = "%{cfg.buildcfg}/"
 
--- // ==================== PROJECT OWL ==================== // --
+-- ========== Owl ========== --
 project "Owl"
-    kind "SharedLib"
     location "Engine"
+    kind "SharedLib"
 
     defines "WL_DLL"
 
@@ -32,116 +28,55 @@ project "Owl"
     targetdir ("_Output/Bin/" .. OutputDir .. "%{prj.name}")
     objdir    ("_Output/Obj/" .. OutputDir .. "%{prj.name}")
 
-    -- Files & Includes
-    files {
-        "_Dependencies/Source/glad.c",
+    pchheader("Engine.h")
+    pchsource("%{prj.location}/Engine.cpp")
 
+    files {
         "%{prj.location}/**.h",
         "%{prj.location}/**.cpp",
         "%{prj.location}/**.glsl",
     }
 
     includedirs {
-        "_Dependencies/Include",
         "%{prj.location}",
-    }    
+    }
 
-    -- Filters
-    filter "files:_Dependencies/Source/glad.c"
-        flags "NoPCH"
+    links {
+        "dxgi",
+        "d3d11",
+        "winmm",
+    }
 
-    -- Windows
+    postbuildcommands {
+        "{COPY} %{cfg.buildtarget.relpath} ../_Output/Bin/" .. OutputDir .. "/Sandbox"
+    }
+
     filter "system:windows"
         defines "WL_PLATFORM_WIN"
         systemversion "latest"
-        staticruntime "Off"
-        runtime "Release"
 
-        -- Precompiled Headers
-        pchheader("Core.h")
-        pchsource("%{prj.location}/Core.cpp")
-
-        -- Libraries
-        links {
-            "_Dependencies/Lib/glfw3",
-            "opengl32",
-        }
-
-        postbuildcommands
-        {
-            "{COPY} %{cfg.buildtarget.relpath} ../_Output/Bin/" .. OutputDir .. "/Sandbox"
-        }
-
-    -- Linux
-    filter "system:linux"
-        defines "WL_PLATFORM_LIN"
-        systemversion "latest"
-
-        staticruntime "Off"
-        runtime "Release"
-
-        -- Precompiled Headers
-        pchheader("Core.h")
-
-        -- Libraries
-        links {
-            "glfw",
-            "GL",
-        }
-
--- // ==================== PROJECT SANDBOX ==================== // --
+-- ========== Sandbox ========== --
 project "Sandbox"
+    location "Game"
     kind "ConsoleApp"
-    location "%{prj.name}"
 
     -- Output directories
     targetdir ("_Output/Bin/" .. OutputDir .. "%{prj.name}")
-    objdir    ("_Output/Obj/" .. OutputDir .. "%{prj.name}")    
+    objdir    ("_Output/Obj/" .. OutputDir .. "%{prj.name}")
 
-    -- Includes
     files {
-        "_Dependencies/Source/glad.c",
-
-        "%{prj.name}/**.h",
-        "%{prj.name}/**.cpp",
+        "%{prj.location}/**.h",
+        "%{prj.location}/**.cpp",
     }
 
     includedirs {
-        "_Dependencies/Include",
         "Engine/Include",
-        "%{prj.location}",
     }
 
-    -- Filters
-    filter "files:_Dependencies/Source/glad.c"
-        flags "NoPCH"
+    links {
+        "Owl",
+    }
 
-     -- Windows
     filter "system:windows"
         defines "WL_PLATFORM_WIN"
         systemversion "latest"
-
-        staticruntime "On"
-        runtime "Release"
-
-        -- Precompiled Headers
-        pchheader("PCH.h")
-        pchsource("%{prj.location}/PCH.cpp")
-
-        -- Libraries
-        links {
-            "Owl",
-        }
-
-    filter "system:linux"
-        defines "WL_PLATFORM_LIN"
-        systemversion "latest"
-        staticruntime "Off"
-        runtime "Release"
-
-        pchheader("Owl.h")
-        pchsource("%{prj.location}/Owl.cpp")
-
-        links {
-            "Owl"
-        }

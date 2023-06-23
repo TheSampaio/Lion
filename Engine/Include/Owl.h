@@ -1,12 +1,19 @@
+#pragma once
+
 // PCH
-#include "../Core.h"
+#include "../Engine.h"
 
 // Core
-#include "../Source/Owl/Core/Include/Application.h"
-#include "../Source/Owl/Core/Include/Debug.h"
-#include "../Source/Owl/Core/Include/Input.h"
-#include "../Source/Owl/Core/Include/Renderer.h"
-#include "../Source/Owl/Core/Include/Window.h"
+#include "../Source/Core/Header/Application.h"
+#include "../Source/Core/Header/Window.h"
+#include "../Source/Core/Header/Cursor.h"
 
-// Game
-#include "../Source/Owl/Game/Include/Entity.h"
+// Events
+#include "../Source/Event/Header/Debug.h"
+#include "../Source/Event/Header/Input.h"
+
+// Logic
+#include "../Source/Logic/Header/Game.h"
+
+// Render
+//#include "../Source/Render/Header/Renderer.h"
