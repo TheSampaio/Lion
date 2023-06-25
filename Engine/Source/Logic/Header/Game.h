@@ -11,5 +11,7 @@ namespace owl
 		virtual void OnUpdate() = 0;
 		virtual void OnDraw() = 0;
 		virtual void OnFinish() = 0;
+
+		virtual void OnPause();
 	};
 }

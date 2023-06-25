@@ -2,17 +2,22 @@
 
 // Standard
 #include <array>
+#include <chrono>
 #include <iostream>
 #include <string>
+#include <sstream>
 #include <string_view>
 #include <vector>
 
-// Additional
+// Windows
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
 	#include <windows.h>
 	#include <windowsx.h>
 #endif // !WIN32_LEAN_AND_MEAN
+
+// Additional
+#include <timeapi.h>
 
 // Types
 #include "Source/Math/Header/Types.h"

@@ -1,6 +1,8 @@
 #include "Engine.h"
 #include "Header/Input.h"
 
+#include "../Core/Header/Application.h"
+
 bool owl::Input::s_Keys[256] = { false };
 bool owl::Input::s_Ctrl[256] = { false };
 
@@ -34,6 +36,14 @@ LRESULT owl::Input::Procedure(HWND Window, UINT Message, WPARAM wParam, LPARAM l
 	case WM_SYSKEYUP:
 	case WM_KEYUP:
 		s_Keys[wParam] = false;
+		return 0;
+
+	case WM_SETFOCUS:
+		Application::Resume();
+		return 0;
+
+	case WM_KILLFOCUS:
+		Application::Pause();
 		return 0;
 
 	case WM_DESTROY:

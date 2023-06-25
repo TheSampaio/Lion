@@ -53,8 +53,9 @@ namespace owl
 
 		// === Friends ======
 		friend class Application;
-		friend class Debug;
 		friend class Cursor;
+		friend class Debug;
+		friend class Time;
 
 	protected:
 		Window();

@@ -10,6 +10,8 @@ namespace owl
 		// Sets the window's icon
 		static void SetCursor(const uint Cursor);
 
+		static void SetVisibility(bool bShow) { ShowCursor(bShow); }
+
 		// === Friends ======
 		friend class Window;
 

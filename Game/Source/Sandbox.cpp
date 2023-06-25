@@ -12,6 +12,8 @@ void Sandbox::OnUpdate()
 #ifdef WL_DEBUG
 	if (Input::GetKeyTap(F5)) Window::Close();
 #endif // WL_DEBUG
+
+
 }
 
 void Sandbox::OnDraw()

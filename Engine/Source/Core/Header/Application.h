@@ -18,12 +18,24 @@ namespace owl
 		// Gets the class's static reference
 		static Application& GetInstance() { static Application s_Instance; return s_Instance; }
 
+		// Friends
+		friend class Input;
+
 	private:
 		// Attributes
 		class Game* Game;
 
-		// === Internal MAIN methods ======
-
+		// Internal MAIN methods
 		int IRun(class Game* Level);
+
+		// MAIN methods
+		int Loop();
+
+		// Static attributes
+		static bool s_bPaused;
+
+		// Static methods
+		static void Pause();
+		static void Resume();
 	};
 }
