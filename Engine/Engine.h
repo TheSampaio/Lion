@@ -17,6 +17,9 @@
 #endif // !WIN32_LEAN_AND_MEAN
 
 // Additional
+#include <dxgi.h>
+#include <dxgidebug.h>
+#include <d3d11.h>
 #include <timeapi.h>
 
 // Types

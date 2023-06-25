@@ -15,6 +15,9 @@ int Main()
 	// Set-up the window's cursor
 	Cursor::SetCursor(IDC_CURSOR);
 
+	// Set-up graphics
+	Graphics::SetVerticalSynchronization(Full);
+
 	// Runs the game
 	return Application::Run(new Sandbox);
 }

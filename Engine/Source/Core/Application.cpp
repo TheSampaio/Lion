@@ -7,6 +7,7 @@
 #include "../Event/Header/Time.h"
 #include "../Logic/Header/Game.h"
 #include "../Logic/Header/Timer.h"
+#include "../Render/Header/Graphics.h"
 
 bool owl::Application::s_bPaused = false;
 
@@ -34,14 +35,21 @@ int owl::Application::IRun(class Game* Level)
 		return false;
 	}
 
-	// TODO: Creates the renderer
-	// TODO: Creates the graphics
+	// Initializes graphics
+	if (!Graphics::GetInstance().Initialize())
+	{
+		Debug::Message(Error, "Failed to initialize graphics.");
+		return false;
+	}
+
+	// TODO: Initializes the renderer
 
 	// Game loop
 	timeBeginPeriod(1);
 	int State = Loop();
 	timeBeginPeriod(1);
 
+	// Returns game loop's state
 	return State;
 }
 
@@ -73,11 +81,11 @@ int owl::Application::Loop()
 				Time::GetInstance().DeltaTimeMonitor();
 				Game->OnUpdate();
 
-				// TODO: Clears back framebuffer
+				Graphics::GetInstance().ClearBuffers();
 				Game->OnDraw();
 				// TODO: Renderer::Render()
 
-				// TODO: Swaps framebuffers
+				Graphics::GetInstance().SwapBuffers();
 			}
 
 			else
