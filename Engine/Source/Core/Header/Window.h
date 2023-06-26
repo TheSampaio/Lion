@@ -1,5 +1,6 @@
 #pragma once
 
+// Enumerates possible display modes
 enum EDisplayMode
 {
 	Borderless = 0,
