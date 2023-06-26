@@ -17,42 +17,6 @@ owl::Graphics::Graphics()
 	m_BackgroundColour[3] = 0.0f;
 }
 
-owl::Graphics::~Graphics()
-{
-    if (m_D3D11BlendState)
-    {
-        m_D3D11BlendState->Release();
-        m_D3D11BlendState = nullptr;
-    }
-
-    if (m_D3D11RenderTargetView)
-    {
-        m_D3D11RenderTargetView->Release();
-        m_D3D11RenderTargetView = nullptr;
-    }
-
-    // Direct3D can't close when in fullscreen mode
-    if (m_DXGISwapChain)
-    {
-        m_DXGISwapChain->SetFullscreenState(false, nullptr);
-        m_DXGISwapChain->Release();
-        m_DXGISwapChain = nullptr;
-    }
-
-    if (m_D3D11Context)
-    {
-        m_D3D11Context->ClearState();
-        m_D3D11Context->Release();
-        m_D3D11Context = nullptr;
-    }
-
-    if (m_D3D11Device)
-    {
-        m_D3D11Device->Release();
-        m_D3D11Device = nullptr;
-    }
-}
-
 bool owl::Graphics::Initialize()
 {
     // -------------------------------
@@ -69,7 +33,7 @@ bool owl::Graphics::Initialize()
     // cria objeto para acessar dispositivo Direct3D
     if FAILED(
         D3D11CreateDevice(
-            0,                              // adaptador de vídeo (NULL = adaptador padrão)
+            nullptr,                              // adaptador de vídeo (NULL = adaptador padrão)
             D3D_DRIVER_TYPE_HARDWARE,       // tipo de driver D3D (Hardware, Reference ou Software)
             nullptr,                        // ponteiro para rasterizador em software
             CreateDeviceFlags,              // modo de depuração ou modo normal
@@ -88,7 +52,7 @@ bool owl::Graphics::Initialize()
         Debug::Message(Error, "Failed to create HAL device.");
 
         if FAILED(
-            D3D11CreateDevice(0, D3D_DRIVER_TYPE_WARP, nullptr, CreateDeviceFlags, nullptr, 0, D3D11_SDK_VERSION, &m_D3D11Device, &m_D3DFeatureLevel, &m_D3D11Context))
+            D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_WARP, nullptr, CreateDeviceFlags, nullptr, 0, D3D11_SDK_VERSION, &m_D3D11Device, &m_D3DFeatureLevel, &m_D3D11Context))
             return false;
 
         Debug::Message(Warning, "There is no support for D3D11. Now you are using the WARP adapter.");
@@ -268,4 +232,40 @@ bool owl::Graphics::Initialize()
 
     // inicialização bem sucedida
     return true;
+}
+
+void owl::Graphics::Finalize()
+{
+    if (m_D3D11BlendState)
+    {
+        m_D3D11BlendState->Release();
+        m_D3D11BlendState = nullptr;
+    }
+
+    if (m_D3D11RenderTargetView)
+    {
+        m_D3D11RenderTargetView->Release();
+        m_D3D11RenderTargetView = nullptr;
+    }
+
+    // Direct3D can't close when in fullscreen mode
+    if (m_DXGISwapChain)
+    {
+        m_DXGISwapChain->SetFullscreenState(false, nullptr);
+        m_DXGISwapChain->Release();
+        m_DXGISwapChain = nullptr;
+    }
+
+    if (m_D3D11Context)
+    {
+        m_D3D11Context->ClearState();
+        m_D3D11Context->Release();
+        m_D3D11Context = nullptr;
+    }
+
+    if (m_D3D11Device)
+    {
+        m_D3D11Device->Release();
+        m_D3D11Device = nullptr;
+    }
 }

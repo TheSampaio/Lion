@@ -10,6 +10,7 @@ namespace owl
 		static float GetDeltaTime() { return GetInstance().m_DeltaTime; }
 
 		// === Friends ======
+
 		friend class Application;
 
 	protected:

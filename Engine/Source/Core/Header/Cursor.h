@@ -13,6 +13,7 @@ namespace owl
 		static void SetVisibility(bool bShow) { ShowCursor(bShow); }
 
 		// === Friends ======
+
 		friend class Window;
 
 	protected:

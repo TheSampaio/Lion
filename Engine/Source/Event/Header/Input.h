@@ -1,7 +1,7 @@
 #pragma once
 
 // Enumerates all keyboard keys
-enum OWL_API EKeyCode
+enum EKeyCode
 {
 	// Letters keys
 	A = 0x41,

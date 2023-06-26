@@ -97,6 +97,7 @@ int owl::Application::Loop()
 	} while (Messages.message != WM_QUIT);
 
 	Game->OnFinish();
+	Graphics::GetInstance().Finalize();
 
 	return static_cast<int>(Messages.wParam);
 }

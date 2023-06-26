@@ -22,7 +22,6 @@ namespace owl
 
 	protected:
 		Graphics();
-		~Graphics();
 
 		// Deletes copy constructor and assigment operator
 		Graphics(const Graphics&) = delete;
@@ -36,7 +35,6 @@ namespace owl
 		ID3D11Device* m_D3D11Device;
 		ID3D11DeviceContext* m_D3D11Context;
 		D3D11_VIEWPORT m_D3D11Viewport;
-
 		IDXGISwapChain* m_DXGISwapChain;
 		ID3D11RenderTargetView* m_D3D11RenderTargetView;
 		ID3D11BlendState* m_D3D11BlendState;
@@ -46,6 +44,7 @@ namespace owl
 
 		// MAIN methods
 		bool Initialize();
+		void Finalize();
 
 		void ClearBuffers() { m_D3D11Context->ClearRenderTargetView(m_D3D11RenderTargetView, m_BackgroundColour); }
 		void SwapBuffers() { m_DXGISwapChain->Present(m_VSyncMode, 0); m_D3D11Context->OMSetRenderTargets(1, &m_D3D11RenderTargetView, nullptr); }

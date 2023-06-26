@@ -52,6 +52,7 @@ namespace owl
 		static void SetDisplayMode(const EDisplayMode Mode) { GetInstance().m_DisplayMode = Mode; }
 
 		// === Friends ======
+
 		friend class Application;
 		friend class Cursor;
 		friend class Debug;
