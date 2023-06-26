@@ -1,17 +1,13 @@
-# === Directories ===
+# === Directories ======
+
 .vs/
 .vscode/
 _Output/
 
-_Dependencies/Include/
-_Dependencies/Lib/
-_Dependencies/Source/
+# === Files ======
 
-# === Files ===
-*.user
 *.sln
+*.aps
+*.user
 *.vcxproj
 *.vcxproj.filters
-
-Makefile
-glad.c
