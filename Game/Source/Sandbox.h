@@ -1,11 +1,12 @@
 #pragma once
 
 #include <Owl.h>
+#include "Resources.h"
 
 class Sandbox : public owl::Game
 {
 public:
-	Sandbox() {};
+	Sandbox();
 
 	void OnStart();
 	void OnUpdate();
