@@ -7,6 +7,7 @@ namespace owl
 	public:
 		// === GET methods ======
 
+		// Gets the time passed in real life of a frame to another
 		static float GetDeltaTime() { return GetInstance().m_DeltaTime; }
 
 		// === Friends ======
@@ -25,7 +26,7 @@ namespace owl
 		static Time& GetInstance() { static Time s_Instance; return s_Instance; }
 
 	private:
-		// Attribute
+		// Attributes
 		class Timer* Timer;
 		float m_DeltaTime;
 

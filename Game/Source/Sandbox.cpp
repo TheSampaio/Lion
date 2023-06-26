@@ -1,4 +1,5 @@
 #include "Sandbox.h"
+#include "Resources.h"
 
 using namespace owl;
 
@@ -25,11 +26,7 @@ void Sandbox::OnStart()
 
 void Sandbox::OnUpdate()
 {
-#ifdef WL_DEBUG
 	if (Input::GetKeyTap(F5)) Window::Close();
-#endif // WL_DEBUG
-
-
 }
 
 void Sandbox::OnDraw()

@@ -1,5 +1,6 @@
 #pragma once
 
+// Enumerates the v-sync mode
 enum ESynchronizationMode
 {
 	Disabled = 0,
@@ -14,6 +15,7 @@ namespace owl
 	public:
 		// === SET methods ======
 
+		// Sets the v-sync mode
 		static void SetVerticalSynchronization(ESynchronizationMode Mode) { GetInstance().m_VSyncMode = Mode; }
 
 		// === Friends ======
@@ -45,7 +47,6 @@ namespace owl
 		// MAIN methods
 		bool Initialize();
 		void Finalize();
-
 		void ClearBuffers() { m_D3D11Context->ClearRenderTargetView(m_D3D11RenderTargetView, m_BackgroundColour); }
 		void SwapBuffers() { m_DXGISwapChain->Present(m_VSyncMode, 0); m_D3D11Context->OMSetRenderTargets(1, &m_D3D11RenderTargetView, nullptr); }
 	};

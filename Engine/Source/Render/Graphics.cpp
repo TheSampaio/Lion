@@ -19,10 +19,7 @@ owl::Graphics::Graphics()
 
 bool owl::Graphics::Initialize()
 {
-    // -------------------------------
-    // Dispositivo Direct3D
-    // -------------------------------
-
+    // Default D3D11 Device's flag
     uint CreateDeviceFlags = 0;
 
 #ifdef WL_DEBUG
@@ -30,25 +27,22 @@ bool owl::Graphics::Initialize()
     CreateDeviceFlags |= D3D11_CREATE_DEVICE_DEBUG;
 #endif
 
-    // cria objeto para acessar dispositivo Direct3D
+    // Creates a device to access the D3D11 Device
     if FAILED(
         D3D11CreateDevice(
-            nullptr,                              // adaptador de vídeo (NULL = adaptador padrão)
-            D3D_DRIVER_TYPE_HARDWARE,       // tipo de driver D3D (Hardware, Reference ou Software)
-            nullptr,                        // ponteiro para rasterizador em software
-            CreateDeviceFlags,              // modo de depuração ou modo normal
-            nullptr,                        // featureLevels do Direct3D (NULL = maior suportada)
-            0,                              // tamanho do vetor featureLevels
-            D3D11_SDK_VERSION,              // versão do SDK do Direct3D
-            &m_D3D11Device,                 // guarda o dispositivo D3D criado
-            &m_D3DFeatureLevel,             // versão do Direct3D utilizada
-            &m_D3D11Context))               // contexto do dispositivo D3D
+            nullptr,                        // Graphics device slot (nullptr = Default graphics device)
+            D3D_DRIVER_TYPE_HARDWARE,       // D3D driver's type (Hardware, Reference or Software)
+            nullptr,                        // Pointer to a software rasterizer
+            CreateDeviceFlags,              // D3D device's flags (Debug or Release)
+            nullptr,                        // D3D's version (nullptr = Greater supported)
+            0,                              // Features level's vector
+            D3D11_SDK_VERSION,              // D3D's SDK's version
+            &m_D3D11Device,                 // Stores the D3D's device
+            &m_D3DFeatureLevel,             // Stores the D3D's version
+            &m_D3D11Context))               // Stores the D3D's context
 
     {
-        // sistema não suporta dispositivo D3D11
-        // fazendo a criação de um WARP Device que 
-        // implementa um rasterizador em software
-
+        // Failed to creates a hardware graphics device reference
         Debug::Message(Error, "Failed to create HAL device.");
 
         if FAILED(
@@ -58,12 +52,7 @@ bool owl::Graphics::Initialize()
         Debug::Message(Warning, "There is no support for D3D11. Now you are using the WARP adapter.");
     }
 
-    // -------------------------------
-    // Cor de Fundo do Direct3D
-    // -------------------------------
-
-    // ajusta a cor de fundo do backbuffer
-    // para a mesma cor de fundo da janela
+    // Adjusts the background's colour
     COLORREF Colour = Window::GetBackgroundColour();
 
     m_BackgroundColour[0] = GetRValue(Colour) / 255.0f; // Red
@@ -71,11 +60,7 @@ bool owl::Graphics::Initialize()
     m_BackgroundColour[2] = GetBValue(Colour) / 255.0f; // Blue
     m_BackgroundColour[3] = 1.0f;                       // Alpha (1 = cor sólida)
 
-    // -------------------------------
-    // Interfaces DXGI
-    // -------------------------------
-
-    // cria objeto para a infraestrutura gráfica
+    // Creates a DXGI's device
     IDXGIDevice* DXGIDevice = nullptr;
     if FAILED(m_D3D11Device->QueryInterface(UID(IDXGIDevice), reinterpret_cast<void**>(&DXGIDevice)))
     {
@@ -83,7 +68,7 @@ bool owl::Graphics::Initialize()
         return false;
     }
 
-    // cria objeto para adaptador de vídeo (placa gráfica)
+    // Creates a DXGI's adapter
     IDXGIAdapter* DXGIAdapter = nullptr;
     if FAILED(DXGIDevice->GetParent(UID(IDXGIAdapter), reinterpret_cast<void**>(&DXGIAdapter)))
     {
@@ -91,7 +76,7 @@ bool owl::Graphics::Initialize()
         return false;
     }
 
-    // cria objeto para a fábrica DXGI
+    // Creates a DXGI's factory
     IDXGIFactory* DXGIFactory = nullptr;
     if FAILED(DXGIAdapter->GetParent(UID(IDXGIFactory), reinterpret_cast<void**>(&DXGIFactory)))
     {
@@ -99,45 +84,37 @@ bool owl::Graphics::Initialize()
         return false;
     }
 
-    // -------------------------------
-    // Swap Chain 
-    // -------------------------------
-
-    // descrição de uma swap chain
+    // Set-up a swap chain
     DXGI_SWAP_CHAIN_DESC SwapChainDesc = { 0 };
-    SwapChainDesc.BufferDesc.Width = static_cast<uint>(Window::GetSize()[0]);  // largura do backbuffer
-    SwapChainDesc.BufferDesc.Height = static_cast<uint>(Window::GetSize()[1]); // altura do backbuffer
-    SwapChainDesc.BufferDesc.RefreshRate.Numerator = 60;                       // taxa de atualização em hertz 
-    SwapChainDesc.BufferDesc.RefreshRate.Denominator = 1;                      // numerador é um inteiro e não um racional
-    SwapChainDesc.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;              // formato de cores RGBA 8 bits
-    SwapChainDesc.SampleDesc.Count = 1;                                        // amostras por pixel (antialiasing)
-    SwapChainDesc.SampleDesc.Quality = 0;                                      // nível de qualidade da imagem
-    SwapChainDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;               // utilize superfície como RENDER-TARGET
-    SwapChainDesc.BufferCount = 2;                                             // número de buffers (front + back)
-    SwapChainDesc.OutputWindow = Window::GetInstance().m_hWindow;              // identificador da janela
-    SwapChainDesc.Windowed = (Window::GetDisplayMode() != Fullscreen);         // modo janela ou tela cheia
-    SwapChainDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;                  // descarta superfície após apresentação
-    SwapChainDesc.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;              // muda a resolução do monitor em tela cheia
+    SwapChainDesc.BufferDesc.Width = static_cast<uint>(Window::GetSize()[0]);  // Backbuffer's width
+    SwapChainDesc.BufferDesc.Height = static_cast<uint>(Window::GetSize()[1]); // Backbuffer's height
+    SwapChainDesc.BufferDesc.RefreshRate.Numerator = 60;                       // Refresh rate in hertz
+    SwapChainDesc.BufferDesc.RefreshRate.Denominator = 1;                      // Numerator is an integer and not a rational
+    SwapChainDesc.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;              // RGBA 8 bits for colour's format
+    SwapChainDesc.SampleDesc.Count = 1;                                        // Antialiasing's samples
+    SwapChainDesc.SampleDesc.Quality = 0;                                      // Possible image's quality
+    SwapChainDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;               // Specify backbuffer's usage
+    SwapChainDesc.BufferCount = 2;                                             // Numbers of buffers (front + back)
+    SwapChainDesc.OutputWindow = Window::GetInstance().m_hWindow;              // Window's id
+    SwapChainDesc.Windowed = (Window::GetDisplayMode() != Fullscreen);         // Window's display mode
+    SwapChainDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;                  // Discards the framebuffer's content after swaps
+    SwapChainDesc.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;              // Changes the monitor's resolution when in fullscreen mode
 
-    // cria uma swap chain
+    // Creates a DXGI's swap chain
     if FAILED(DXGIFactory->CreateSwapChain(m_D3D11Device, &SwapChainDesc, &m_DXGISwapChain))
     {
         Debug::Message(Error, "Failed to create the swap chain.");
         return false;
     }
 
-    // impede a DXGI de monitorar ALT-ENTER e alternar entre windowed/fullscreen
+    // Blocks "Alt + Enter" hotkey (Fullscreen)
     if FAILED(DXGIFactory->MakeWindowAssociation(Window::GetInstance().m_hWindow, DXGI_MWA_NO_ALT_ENTER))
     {
         Debug::Message(Error, "Failed to associate the swap chain to the window.");
         return false;
     }
 
-    // -------------------------------
-    // Render Target
-    // -------------------------------
-
-    // pega a superfície backbuffer de uma swapchain
+    // Gets the D3D11's backbuffer's surface of a swap chain
     ID3D11Texture2D* D3D11BackBuffer = nullptr;
     if FAILED(m_DXGISwapChain->GetBuffer(0, UID(D3D11BackBuffer), reinterpret_cast<void**>(&D3D11BackBuffer)))
     {
@@ -145,21 +122,17 @@ bool owl::Graphics::Initialize()
         return false;
     }
 
-    // cria uma render-target view do backbuffer
+    // Creates a render target view for the backbuffer
     if FAILED(m_D3D11Device->CreateRenderTargetView(D3D11BackBuffer, nullptr, &m_D3D11RenderTargetView))
     {
         Debug::Message(Error, "Failed to create the render target view.");
         return false;
     }
 
-    // liga uma render-target ao estágio output-merger
+    // Links a D3D11's render target view to the output merger's state
     m_D3D11Context->OMSetRenderTargets(1, &m_D3D11RenderTargetView, nullptr);
 
-    // -------------------------------
-    // Viewport / Rasterizer
-    // -------------------------------
-
-    // configura uma viewport
+    // Set-up the viewport
     m_D3D11Viewport.TopLeftX = 0;
     m_D3D11Viewport.TopLeftY = 0;
     m_D3D11Viewport.Width = static_cast<float>(Window::GetSize()[0]);
@@ -167,105 +140,61 @@ bool owl::Graphics::Initialize()
     m_D3D11Viewport.MinDepth = 0.0f;
     m_D3D11Viewport.MaxDepth = 1.0f;
 
-    // liga a viewport ao estágio de rasterização
+    // Links the viewport to the rasterizer's state
     m_D3D11Context->RSSetViewports(1, &m_D3D11Viewport);
 
-    // ---------------------------------------------
-    // Blend State
-    // ---------------------------------------------
-
-    // Equação de mistura de cores (blending):
-    // finalColor = SrcColor * SrcBlend <OP> DestColor * DestBlend
-
-    // Combinando superfícies transparentes (Alpha Blending)
-    // finalColor = SrcColor * ScrAlpha + DestColor * (1-SrcAlpha)
-
+    // Set-up the blend between transparent objects
     D3D11_BLEND_DESC BlendDesc = { 0 };
-    BlendDesc.AlphaToCoverageEnable = false;                                // destaca a silhueta dos sprites
-    BlendDesc.IndependentBlendEnable = false;                               // usa mesma mistura para todos os render targets
-    BlendDesc.RenderTarget[0].BlendEnable = true;                           // habilita o blending
-    BlendDesc.RenderTarget[0].SrcBlend = D3D11_BLEND_SRC_ALPHA;             // fator de mistura da fonte 
-    BlendDesc.RenderTarget[0].DestBlend = D3D11_BLEND_INV_SRC_ALPHA;        // destino da mistura RGB é o alpha invertido 
-    BlendDesc.RenderTarget[0].BlendOp = D3D11_BLEND_OP_ADD;                 // operação de adição na mistura de cores
-    BlendDesc.RenderTarget[0].SrcBlendAlpha = D3D11_BLEND_ONE;              // fonte da mistura Alpha é o alpha do pixel shader
-    BlendDesc.RenderTarget[0].DestBlendAlpha = D3D11_BLEND_ZERO;            // destino da mistura Alpha é o alpha invertido
-    BlendDesc.RenderTarget[0].BlendOpAlpha = D3D11_BLEND_OP_ADD;            // operação de adição na mistura de cores
-    BlendDesc.RenderTarget[0].RenderTargetWriteMask = 0x0F;                 // componentes de cada pixel que podem ser sobrescritos
+    BlendDesc.AlphaToCoverageEnable = false;                                // Discards sprite's border
+    BlendDesc.IndependentBlendEnable = false;                               // Uniform blend for all render targets
+    BlendDesc.RenderTarget[0].BlendEnable = true;                           // Enables blending
+    BlendDesc.RenderTarget[0].SrcBlend = D3D11_BLEND_SRC_ALPHA;             // Source blending factor
+    BlendDesc.RenderTarget[0].DestBlend = D3D11_BLEND_INV_SRC_ALPHA;        // RGB mix destination is alpha inverted
+    BlendDesc.RenderTarget[0].BlendOp = D3D11_BLEND_OP_ADD;                 // Addition operation in color mixing
+    BlendDesc.RenderTarget[0].SrcBlendAlpha = D3D11_BLEND_ONE;              // Alpha blend font is the pixel shader's alpha
+    BlendDesc.RenderTarget[0].DestBlendAlpha = D3D11_BLEND_ZERO;            // Alpha mix destination is the inverted alpha
+    BlendDesc.RenderTarget[0].BlendOpAlpha = D3D11_BLEND_OP_ADD;            // Addition operation in color mixing
+    BlendDesc.RenderTarget[0].RenderTargetWriteMask = 0x0F;                 // Components of each pixel that can be overwritten
 
-    // cria a blend state
+    // Creates a D3D11's blend state
     if FAILED(m_D3D11Device->CreateBlendState(&BlendDesc, &m_D3D11BlendState))
     {
         Debug::Message(Error, "Failed to create the render state.");
         return false;
     }
 
-    // liga a blend state ao estágio Output-Merger
+    // Links a blend state to the output merger's state
     m_D3D11Context->OMSetBlendState(m_D3D11BlendState, nullptr, 0xffffffff);
 
-    // -------------------------------
-    // Libera interfaces DXGI
-    // -------------------------------
+    // Release everything got
+    ReleaseCOM(DXGIDevice);
+    ReleaseCOM(DXGIAdapter);
+    ReleaseCOM(DXGIFactory);
+    ReleaseCOM(D3D11BackBuffer);
 
-    if (DXGIDevice)
-    {
-        DXGIDevice->Release();
-        DXGIDevice = nullptr;
-    }
-
-    if (DXGIAdapter)
-    {
-        DXGIAdapter->Release();
-        DXGIAdapter = nullptr;
-    }
-
-    if (DXGIFactory)
-    {
-        DXGIFactory->Release();
-        DXGIFactory = nullptr;
-    }
-
-    if (D3D11BackBuffer)
-    {
-        D3D11BackBuffer->Release();
-        D3D11BackBuffer = nullptr;
-    }
-
-    // inicialização bem sucedida
+    // Returns true if succeed
     return true;
 }
 
 void owl::Graphics::Finalize()
 {
-    if (m_D3D11BlendState)
-    {
-        m_D3D11BlendState->Release();
-        m_D3D11BlendState = nullptr;
-    }
+    // Release everything got
+    ReleaseCOM(m_D3D11BlendState);
+    ReleaseCOM(m_D3D11RenderTargetView);
 
-    if (m_D3D11RenderTargetView)
-    {
-        m_D3D11RenderTargetView->Release();
-        m_D3D11RenderTargetView = nullptr;
-    }
-
-    // Direct3D can't close when in fullscreen mode
     if (m_DXGISwapChain)
     {
+        // D3D can't close when in fullscreen mode
         m_DXGISwapChain->SetFullscreenState(false, nullptr);
-        m_DXGISwapChain->Release();
-        m_DXGISwapChain = nullptr;
+        ReleaseCOM(m_DXGISwapChain);
     }
 
     if (m_D3D11Context)
     {
+        // Restores to original state
         m_D3D11Context->ClearState();
-        m_D3D11Context->Release();
-        m_D3D11Context = nullptr;
+        ReleaseCOM(m_D3D11Context);
     }
 
-    if (m_D3D11Device)
-    {
-        m_D3D11Device->Release();
-        m_D3D11Device = nullptr;
-    }
+    ReleaseCOM(m_D3D11Device);
 }

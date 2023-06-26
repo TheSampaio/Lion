@@ -1,7 +1,6 @@
 #pragma once
 
 #include <Owl.h>
-#include "Resources.h"
 
 class Sandbox : public owl::Game
 {

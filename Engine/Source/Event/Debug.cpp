@@ -5,6 +5,7 @@
 
 owl::Debug::Debug()
 {
+	// Gets the console
 	m_hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
 }
 

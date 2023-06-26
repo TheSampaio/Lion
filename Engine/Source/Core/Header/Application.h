@@ -5,6 +5,9 @@ namespace owl
 	class OWL_API Application
 	{
 	public:
+		// === MAIN methods ======
+
+		// Runs a game
 		static int Run(class Game* Level) { return GetInstance().IRun(Level); }
 
 	protected:
@@ -18,7 +21,8 @@ namespace owl
 		// Gets the class's static reference
 		static Application& GetInstance() { static Application s_Instance; return s_Instance; }
 
-		// Friends
+		// === Friends ======
+
 		friend class Input;
 
 	private:

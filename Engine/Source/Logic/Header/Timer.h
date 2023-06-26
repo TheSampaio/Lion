@@ -9,12 +9,18 @@ namespace owl
 
 		// === MAIN methods ======
 
+		// Starts the timer
 		void Start();
+
+		// Stops the timer
 		void Stop();
+
+		// Resets the timer
 		float Reset();
 
 		// === GET methods ======
 
+		// Gets the elapsed time since the timer's start
 		float GetElapsedTime();
 
 	private:

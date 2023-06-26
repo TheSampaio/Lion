@@ -7,9 +7,10 @@ namespace owl
 	public:
 		// === SET methods ======
 
-		// Sets the window's icon
+		// Sets the cursor's icon
 		static void SetCursor(const uint Cursor);
 
+		// Sets the cursor's visibility
 		static void SetVisibility(bool bShow) { ShowCursor(bShow); }
 
 		// === Friends ======
@@ -27,6 +28,7 @@ namespace owl
 		static Cursor& GetInstance() { static Cursor s_Instance; return s_Instance; }
 
 	private:
+		// Attributes
 		HCURSOR m_hCursor;
 	};
 }

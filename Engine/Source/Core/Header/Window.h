@@ -84,8 +84,7 @@ namespace owl
 
 		EDisplayMode m_DisplayMode;
 
-		// === MAIN methods ======
-
+		// MAIN methods
 		bool Create();
 	};
 }

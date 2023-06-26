@@ -45,8 +45,10 @@ bool owl::Window::Create()
 	if (m_DisplayMode != Windowed)
 	{
 		m_Position = { 0, 0 };
-		m_Size = { static_cast<ushort>(GetSystemMetrics(SM_CXSCREEN)), static_cast<ushort>(GetSystemMetrics(SM_CYSCREEN)) };
 		m_Style = WS_POPUP | WS_VISIBLE | WS_EX_TOPMOST;
+
+		if (m_DisplayMode == Borderless)
+			m_Size = { static_cast<ushort>(GetSystemMetrics(SM_CXSCREEN)), static_cast<ushort>(GetSystemMetrics(SM_CYSCREEN)) };
 	}
 
 	// Creates the window

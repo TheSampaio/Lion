@@ -14,6 +14,7 @@ bool owl::Application::s_bPaused = false;
 owl::Application::Application()
 	: Game(nullptr)
 {
+	// Changes console's title (Only in debug mode)
 #ifdef WL_DEBUG
 	std::system("TITLE Owl Engine");
 #endif // WL_DEBUG
@@ -21,11 +22,13 @@ owl::Application::Application()
 
 owl::Application::~Application()
 {
+	// Deletes the hame
 	delete Game;
 }
 
 int owl::Application::IRun(class Game* Level)
 {
+	// Creates the game
 	Game = Level;
 
 	// Creates the window
@@ -45,9 +48,9 @@ int owl::Application::IRun(class Game* Level)
 	// TODO: Initializes the renderer
 
 	// Game loop
-	timeBeginPeriod(1);
-	int State = Loop();
-	timeBeginPeriod(1);
+	timeBeginPeriod(1); // Changes the default "Sleep()" functions' precision
+	int State = Loop(); // Runs the engine's game loop
+	timeBeginPeriod(1); // Restores the default "Sleep()" functions' precision
 
 	// Returns game loop's state
 	return State;
@@ -55,13 +58,16 @@ int owl::Application::IRun(class Game* Level)
 
 int owl::Application::Loop()
 {
+	// Starts the Time's timer and initializes the game
 	Time::GetInstance().Timer->Start();
 	Game->OnStart();
 
+	// Store all window's events
 	MSG Messages = { 0 };
 
 	do
 	{
+		// Process all window's events per frame (Real time function)
 		if (PeekMessage(&Messages, nullptr, 0, 0, PM_REMOVE))
 		{
 			TranslateMessage(&Messages);
@@ -70,24 +76,30 @@ int owl::Application::Loop()
 
 		else
 		{
+			// Engine's default's pause function
 			if (Input::GetKeyTap(EKeyCode::Pause))
 			{
 				s_bPaused = !s_bPaused;
 				(s_bPaused) ? Time::GetInstance().Timer->Stop() : Time::GetInstance().Timer->Start();
 			}
 
+			// Game loop's core
 			if (!s_bPaused)
 			{
+				// Updates the game and time's delta time
 				Time::GetInstance().DeltaTimeMonitor();
 				Game->OnUpdate();
 
+				// Clears backbuffer and draw everything in the game
 				Graphics::GetInstance().ClearBuffers();
 				Game->OnDraw();
 				// TODO: Renderer::Render()
 
+				// Swaps window's framebuffers
 				Graphics::GetInstance().SwapBuffers();
 			}
 
+			// Pauses the game
 			else
 			{
 				Game->OnPause();
@@ -96,20 +108,24 @@ int owl::Application::Loop()
 
 	} while (Messages.message != WM_QUIT);
 
+	// Finalizes the game and D3D11
 	Game->OnFinish();
 	Graphics::GetInstance().Finalize();
 
+	// Returns a "state code" to the OS
 	return static_cast<int>(Messages.wParam);
 }
 
 void owl::Application::Pause()
 {
+	// Pauses the engine and time's timer
 	s_bPaused = true;
 	Time::GetInstance().Timer->Stop();
 }
 
 void owl::Application::Resume()
 {
+	// Resumes the engine and time's timer
 	s_bPaused = false;
 	Time::GetInstance().Timer->Start();
 }
