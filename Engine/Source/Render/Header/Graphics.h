@@ -33,21 +33,21 @@ namespace owl
 
 	private:
 		// Attributes
-		ID3D11Device* m_Device;
-		ID3D11DeviceContext* m_Context;
-		D3D11_VIEWPORT m_Viewport;
+		ID3D11Device* m_D3D11Device;
+		ID3D11DeviceContext* m_D3D11Context;
+		D3D11_VIEWPORT m_D3D11Viewport;
 
-		IDXGISwapChain* m_SwapChain;
-		ID3D11RenderTargetView* m_RenderTargetView;
-		ID3D11BlendState* m_BlendState;
-		D3D_FEATURE_LEVEL m_FeatureLevel;
+		IDXGISwapChain* m_DXGISwapChain;
+		ID3D11RenderTargetView* m_D3D11RenderTargetView;
+		ID3D11BlendState* m_D3D11BlendState;
+		D3D_FEATURE_LEVEL m_D3DFeatureLevel;
 		ESynchronizationMode m_VSyncMode;
 		float m_BackgroundColour[4];
 
 		// MAIN methods
 		bool Initialize();
 
-		void ClearBuffers() { m_Context->ClearRenderTargetView(m_RenderTargetView, m_BackgroundColour); }
-		void SwapBuffers() { m_SwapChain->Present(m_VSyncMode, 0); m_Context->OMSetRenderTargets(1, &m_RenderTargetView, nullptr); }
+		void ClearBuffers() { m_D3D11Context->ClearRenderTargetView(m_D3D11RenderTargetView, m_BackgroundColour); }
+		void SwapBuffers() { m_DXGISwapChain->Present(m_VSyncMode, 0); m_D3D11Context->OMSetRenderTargets(1, &m_D3D11RenderTargetView, nullptr); }
 	};
 }

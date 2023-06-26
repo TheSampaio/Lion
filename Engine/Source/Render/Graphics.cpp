@@ -5,10 +5,10 @@
 #include "../Event/Header/Debug.h"
 
 owl::Graphics::Graphics()
-	: m_Device(nullptr), m_Context(nullptr), m_SwapChain(nullptr), m_RenderTargetView(nullptr), m_BlendState(nullptr)
+	: m_D3D11Device(nullptr), m_D3D11Context(nullptr), m_DXGISwapChain(nullptr), m_D3D11RenderTargetView(nullptr), m_D3D11BlendState(nullptr)
 {
-    m_Viewport = { 0 };
-	m_FeatureLevel = D3D_FEATURE_LEVEL_11_0;
+    m_D3D11Viewport = { 0 };
+	m_D3DFeatureLevel = D3D_FEATURE_LEVEL_11_0;
 	m_VSyncMode = Disabled;
 
 	m_BackgroundColour[0] = 0.0f;
@@ -19,37 +19,37 @@ owl::Graphics::Graphics()
 
 owl::Graphics::~Graphics()
 {
-    if (m_BlendState)
+    if (m_D3D11BlendState)
     {
-        m_BlendState->Release();
-        m_BlendState = nullptr;
+        m_D3D11BlendState->Release();
+        m_D3D11BlendState = nullptr;
     }
 
-    if (m_RenderTargetView)
+    if (m_D3D11RenderTargetView)
     {
-        m_RenderTargetView->Release();
-        m_RenderTargetView = nullptr;
+        m_D3D11RenderTargetView->Release();
+        m_D3D11RenderTargetView = nullptr;
     }
 
     // Direct3D can't close when in fullscreen mode
-    if (m_SwapChain)
+    if (m_DXGISwapChain)
     {
-        m_SwapChain->SetFullscreenState(false, nullptr);
-        m_SwapChain->Release();
-        m_SwapChain = nullptr;
+        m_DXGISwapChain->SetFullscreenState(false, nullptr);
+        m_DXGISwapChain->Release();
+        m_DXGISwapChain = nullptr;
     }
 
-    if (m_Context)
+    if (m_D3D11Context)
     {
-        m_Context->ClearState();
-        m_Context->Release();
-        m_Context = nullptr;
+        m_D3D11Context->ClearState();
+        m_D3D11Context->Release();
+        m_D3D11Context = nullptr;
     }
 
-    if (m_Device)
+    if (m_D3D11Device)
     {
-        m_Device->Release();
-        m_Device = nullptr;
+        m_D3D11Device->Release();
+        m_D3D11Device = nullptr;
     }
 }
 
@@ -69,16 +69,16 @@ bool owl::Graphics::Initialize()
     // cria objeto para acessar dispositivo Direct3D
     if FAILED(
         D3D11CreateDevice(
-            0,                        // adaptador de vídeo (NULL = adaptador padrão)
+            0,                              // adaptador de vídeo (NULL = adaptador padrão)
             D3D_DRIVER_TYPE_HARDWARE,       // tipo de driver D3D (Hardware, Reference ou Software)
             nullptr,                        // ponteiro para rasterizador em software
             CreateDeviceFlags,              // modo de depuração ou modo normal
             nullptr,                        // featureLevels do Direct3D (NULL = maior suportada)
             0,                              // tamanho do vetor featureLevels
             D3D11_SDK_VERSION,              // versão do SDK do Direct3D
-            &m_Device,                      // guarda o dispositivo D3D criado
-            &m_FeatureLevel,                // versão do Direct3D utilizada
-            &m_Context))                    // contexto do dispositivo D3D
+            &m_D3D11Device,                 // guarda o dispositivo D3D criado
+            &m_D3DFeatureLevel,             // versão do Direct3D utilizada
+            &m_D3D11Context))               // contexto do dispositivo D3D
 
     {
         // sistema não suporta dispositivo D3D11
@@ -88,7 +88,7 @@ bool owl::Graphics::Initialize()
         Debug::Message(Error, "Failed to create HAL device.");
 
         if FAILED(
-            D3D11CreateDevice(0, D3D_DRIVER_TYPE_WARP, nullptr, CreateDeviceFlags, nullptr, 0, D3D11_SDK_VERSION, &m_Device, &m_FeatureLevel, &m_Context))
+            D3D11CreateDevice(0, D3D_DRIVER_TYPE_WARP, nullptr, CreateDeviceFlags, nullptr, 0, D3D11_SDK_VERSION, &m_D3D11Device, &m_D3DFeatureLevel, &m_D3D11Context))
             return false;
 
         Debug::Message(Warning, "There is no support for D3D11. Now you are using the WARP adapter.");
@@ -113,7 +113,7 @@ bool owl::Graphics::Initialize()
 
     // cria objeto para a infraestrutura gráfica
     IDXGIDevice* DXGIDevice = nullptr;
-    if FAILED(m_Device->QueryInterface(__uuidof(IDXGIDevice), (void**)&DXGIDevice))
+    if FAILED(m_D3D11Device->QueryInterface(UID(IDXGIDevice), reinterpret_cast<void**>(&DXGIDevice)))
     {
         Debug::Message(Error, "Failed to create the DXGI device.");
         return false;
@@ -121,7 +121,7 @@ bool owl::Graphics::Initialize()
 
     // cria objeto para adaptador de vídeo (placa gráfica)
     IDXGIAdapter* DXGIAdapter = nullptr;
-    if FAILED(DXGIDevice->GetParent(__uuidof(IDXGIAdapter), (void**)&DXGIAdapter))
+    if FAILED(DXGIDevice->GetParent(UID(IDXGIAdapter), reinterpret_cast<void**>(&DXGIAdapter)))
     {
         Debug::Message(Error, "Failed to create the DXGI adapter.");
         return false;
@@ -129,7 +129,7 @@ bool owl::Graphics::Initialize()
 
     // cria objeto para a fábrica DXGI
     IDXGIFactory* DXGIFactory = nullptr;
-    if FAILED(DXGIAdapter->GetParent(__uuidof(IDXGIFactory), (void**)&DXGIFactory))
+    if FAILED(DXGIAdapter->GetParent(UID(IDXGIFactory), reinterpret_cast<void**>(&DXGIFactory)))
     {
         Debug::Message(Error, "Failed to create the DXGI factory.");
         return false;
@@ -156,7 +156,7 @@ bool owl::Graphics::Initialize()
     SwapChainDesc.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;              // muda a resolução do monitor em tela cheia
 
     // cria uma swap chain
-    if FAILED(DXGIFactory->CreateSwapChain(m_Device, &SwapChainDesc, &m_SwapChain))
+    if FAILED(DXGIFactory->CreateSwapChain(m_D3D11Device, &SwapChainDesc, &m_DXGISwapChain))
     {
         Debug::Message(Error, "Failed to create the swap chain.");
         return false;
@@ -174,37 +174,37 @@ bool owl::Graphics::Initialize()
     // -------------------------------
 
     // pega a superfície backbuffer de uma swapchain
-    ID3D11Texture2D* BackBuffer = nullptr;
-    if FAILED(m_SwapChain->GetBuffer(0, __uuidof(BackBuffer), (void**)(&BackBuffer)))
+    ID3D11Texture2D* D3D11BackBuffer = nullptr;
+    if FAILED(m_DXGISwapChain->GetBuffer(0, UID(D3D11BackBuffer), reinterpret_cast<void**>(&D3D11BackBuffer)))
     {
         Debug::Message(Error, "Failed to get the backbuffer.");
         return false;
     }
 
     // cria uma render-target view do backbuffer
-    if FAILED(m_Device->CreateRenderTargetView(BackBuffer, nullptr, &m_RenderTargetView))
+    if FAILED(m_D3D11Device->CreateRenderTargetView(D3D11BackBuffer, nullptr, &m_D3D11RenderTargetView))
     {
         Debug::Message(Error, "Failed to create the render target view.");
         return false;
     }
 
     // liga uma render-target ao estágio output-merger
-    m_Context->OMSetRenderTargets(1, &m_RenderTargetView, nullptr);
+    m_D3D11Context->OMSetRenderTargets(1, &m_D3D11RenderTargetView, nullptr);
 
     // -------------------------------
     // Viewport / Rasterizer
     // -------------------------------
 
     // configura uma viewport
-    m_Viewport.TopLeftX = 0;
-    m_Viewport.TopLeftY = 0;
-    m_Viewport.Width = static_cast<float>(Window::GetSize()[0]);
-    m_Viewport.Height = static_cast<float>(Window::GetSize()[1]);
-    m_Viewport.MinDepth = 0.0f;
-    m_Viewport.MaxDepth = 1.0f;
+    m_D3D11Viewport.TopLeftX = 0;
+    m_D3D11Viewport.TopLeftY = 0;
+    m_D3D11Viewport.Width = static_cast<float>(Window::GetSize()[0]);
+    m_D3D11Viewport.Height = static_cast<float>(Window::GetSize()[1]);
+    m_D3D11Viewport.MinDepth = 0.0f;
+    m_D3D11Viewport.MaxDepth = 1.0f;
 
     // liga a viewport ao estágio de rasterização
-    m_Context->RSSetViewports(1, &m_Viewport);
+    m_D3D11Context->RSSetViewports(1, &m_D3D11Viewport);
 
     // ---------------------------------------------
     // Blend State
@@ -229,14 +229,14 @@ bool owl::Graphics::Initialize()
     BlendDesc.RenderTarget[0].RenderTargetWriteMask = 0x0F;                 // componentes de cada pixel que podem ser sobrescritos
 
     // cria a blend state
-    if FAILED(m_Device->CreateBlendState(&BlendDesc, &m_BlendState))
+    if FAILED(m_D3D11Device->CreateBlendState(&BlendDesc, &m_D3D11BlendState))
     {
         Debug::Message(Error, "Failed to create the render state.");
         return false;
     }
 
     // liga a blend state ao estágio Output-Merger
-    m_Context->OMSetBlendState(m_BlendState, nullptr, 0xffffffff);
+    m_D3D11Context->OMSetBlendState(m_D3D11BlendState, nullptr, 0xffffffff);
 
     // -------------------------------
     // Libera interfaces DXGI
@@ -260,10 +260,10 @@ bool owl::Graphics::Initialize()
         DXGIFactory = nullptr;
     }
 
-    if (BackBuffer)
+    if (D3D11BackBuffer)
     {
-        BackBuffer->Release();
-        BackBuffer = nullptr;
+        D3D11BackBuffer->Release();
+        D3D11BackBuffer = nullptr;
     }
 
     // inicialização bem sucedida

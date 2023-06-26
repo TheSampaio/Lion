@@ -1,3 +1,5 @@
+#pragma warning (disable : 4251)
+
 #include "Sandbox.h"
 #include "Resources.h"
 
@@ -23,19 +25,17 @@ int Main()
 }
 
 #pragma region Entry Point
-
 #ifdef WL_DEBUG
 int main()
 {
 	return Main();
 }
 #endif // !WL_DEBUG
-
 #ifdef WL_RELEASE
+#pragma comment(linker,"/SUBSYSTEM:Windows")
 int WINAPI WinMain(_In_ HINSTANCE hInsance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPSTR lpCmdLine, _In_ int nShowCmd)
 {
 	return Main();
 }
 #endif // !WL_RELEASE
-
 #pragma endregion

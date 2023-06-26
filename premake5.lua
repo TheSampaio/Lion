@@ -34,7 +34,7 @@ project "Owl"
     files {
         "%{prj.location}/**.h",
         "%{prj.location}/**.cpp",
-        "%{prj.location}/**.glsl",
+        "%{prj.location}/**.hlsl",
     }
 
     includedirs {
@@ -67,6 +67,7 @@ project "Sandbox"
     files {
         "%{prj.location}/**.h",
         "%{prj.location}/**.cpp",
+        "%{prj.location}/**.rc",
     }
 
     includedirs {
