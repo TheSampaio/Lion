@@ -113,19 +113,19 @@ enum EKeyCode
 
 namespace owl
 {
-	class OWL_API Input
+	class Input
 	{
 	public:
 		// == GET methods ======
 
 		// Verifies if the key is pressed every frame
-		static bool GetKeyPress(EKeyCode KeyCode) { return s_Keys[KeyCode]; }
+		static bool OWL_API GetKeyPress(EKeyCode KeyCode) { return s_Keys[KeyCode]; }
 
 		// Verifies if the key is released every frame
-		static bool GetKeyRelease(EKeyCode KeyCode) { return !s_Keys[KeyCode]; }
+		static bool OWL_API GetKeyRelease(EKeyCode KeyCode) { return !s_Keys[KeyCode]; }
 
 		// Verifies if the key was pressed in the last frame
-		static bool GetKeyTap(EKeyCode KeyCode) { return GetInstance().IGetKeyTap(KeyCode); }
+		static bool OWL_API GetKeyTap(EKeyCode KeyCode) { return GetInstance().IGetKeyTap(KeyCode); }
 
 		// === Friends ======
 

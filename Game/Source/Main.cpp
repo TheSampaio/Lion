@@ -1,7 +1,6 @@
 #include "Sandbox.h"
 
 #pragma region Entry Point
-#pragma warning (disable : 4251)
 
 #ifdef WL_DEBUG
 

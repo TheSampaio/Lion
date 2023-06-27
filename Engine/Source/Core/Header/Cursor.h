@@ -2,16 +2,16 @@
 
 namespace owl
 {
-	class OWL_API Cursor
+	class Cursor
 	{
 	public:
 		// === SET methods ======
 
 		// Sets the cursor's icon
-		static void SetCursor(const uint Cursor);
+		static void OWL_API SetCursor(const uint Cursor);
 
 		// Sets the cursor's visibility
-		static void SetVisibility(bool bShow) { ShowCursor(bShow); }
+		static void OWL_API SetVisibility(bool bShow) { ShowCursor(bShow); }
 
 		// === Friends ======
 

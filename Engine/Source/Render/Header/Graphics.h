@@ -10,13 +10,13 @@ enum ESynchronizationMode
 
 namespace owl
 {
-	class OWL_API Graphics
+	class Graphics
 	{
 	public:
 		// === SET methods ======
 
 		// Sets the v-sync mode
-		static void SetVerticalSynchronization(ESynchronizationMode Mode) { GetInstance().m_VSyncMode = Mode; }
+		static void OWL_API SetVerticalSynchronization(ESynchronizationMode Mode) { GetInstance().m_VSyncMode = Mode; }
 
 		// === Friends ======
 

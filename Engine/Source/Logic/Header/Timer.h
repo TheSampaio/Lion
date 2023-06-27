@@ -2,7 +2,7 @@
 
 namespace owl
 {
-	class OWL_API Timer
+	class Timer
 	{
 	public:
 		Timer();
@@ -10,18 +10,18 @@ namespace owl
 		// === MAIN methods ======
 
 		// Starts the timer
-		void Start();
+		void OWL_API Start();
 
 		// Stops the timer
-		void Stop();
+		void OWL_API Stop();
 
 		// Resets the timer
-		float Reset();
+		float OWL_API Reset();
 
 		// === GET methods ======
 
 		// Gets the elapsed time since the timer's start
-		float GetElapsedTime();
+		float OWL_API GetElapsedTime();
 
 	private:
 		// Attributes

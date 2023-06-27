@@ -11,16 +11,16 @@ enum EDebugMode
 
 namespace owl
 {
-	class OWL_API Debug
+	class Debug
 	{
 	public:
 		// === MAIN methods ======
 
 		// Displays a text in a message box
-		static void Message(EDebugMode Mode, const char* Text) { GetInstance().IMessage(Mode, Text); }
+		static void OWL_API Message(EDebugMode Mode, const char* Text) { GetInstance().IMessage(Mode, Text); }
 
 		// Displays a text in the application's console
-		static void Console(EDebugMode Mode, const char* Text, bool bBreakLine = true) { GetInstance().IConsole(Mode, Text, bBreakLine); }
+		static void OWL_API Console(EDebugMode Mode, const char* Text, bool bBreakLine = true) { GetInstance().IConsole(Mode, Text, bBreakLine); }
 
 	protected:
 		Debug();

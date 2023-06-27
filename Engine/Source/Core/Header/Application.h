@@ -2,13 +2,13 @@
 
 namespace owl
 {
-	class OWL_API Application
+	class Application
 	{
 	public:
 		// === MAIN methods ======
 
 		// Runs a game
-		static int Run(class Game* Level) { return GetInstance().IRun(Level); }
+		static int OWL_API Run(class Game* Level) { return GetInstance().IRun(Level); }
 
 	protected:
 		Application();
