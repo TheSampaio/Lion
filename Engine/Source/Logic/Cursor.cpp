@@ -1,7 +1,7 @@
 #include "Engine.h"
 #include "Header/Cursor.h"
 
-#include "Header/Window.h"
+#include "../Core/Header/Window.h"
 
 owl::Cursor::Cursor()
 	: m_hCursor(nullptr)

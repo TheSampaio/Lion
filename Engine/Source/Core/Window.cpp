@@ -3,7 +3,7 @@
 
 #include "../Event/Header/Debug.h"
 #include "../Event/Header/Input.h"
-#include "../Core/Header/Cursor.h"
+#include "../Logic/Header/Cursor.h"
 
 owl::Window::Window()
 	: m_hInstance(nullptr), m_hWindow(nullptr), m_hIcon(nullptr)
@@ -53,7 +53,7 @@ bool owl::Window::Create()
 
 	// Creates the window
 	m_hWindow = CreateWindowEx(
-		NULL,                                                 // Extras styles
+		0,                                                    // Extras styles
 		WndName,                                              // Window class's name
 		std::wstring(m_Title.begin(), m_Title.end()).data(),  // Window's title
 		m_Style,                                              // Window's style
@@ -82,7 +82,7 @@ bool owl::Window::Create()
 			m_Position[1],           // Y position
 			Rect.right - Rect.left,  // Width
 			Rect.bottom - Rect.top,  // Height
-			TRUE);                   // Redraw
+			true);                   // Redraw
 	}
 
 	// Returns the window's initialization state
