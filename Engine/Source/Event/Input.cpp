@@ -62,7 +62,7 @@ LRESULT owl::Input::Procedure(HWND Window, UINT Message, WPARAM wParam, LPARAM l
 		return 0;
 
 	case WM_DESTROY:
-		PostQuitMessage(WM_QUIT);
+		PostQuitMessage(0);
 		return 0;
 
 	default:
