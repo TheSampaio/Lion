@@ -43,7 +43,7 @@ bool owl::Graphics::Initialize()
 
     {
         // Failed to creates a hardware graphics device reference
-        Debug::Message(Error, "Failed to create HAL device.");
+        Debug::Message(Error, "Failed to create the HAL device.");
 
         if FAILED(
             D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_WARP, nullptr, CreateDeviceFlags, nullptr, 0, D3D11_SDK_VERSION, &m_D3D11Device, &m_D3DFeatureLevel, &m_D3D11Context))
@@ -62,25 +62,25 @@ bool owl::Graphics::Initialize()
 
     // Creates a DXGI's device
     IDXGIDevice* DXGIDevice = nullptr;
-    if FAILED(m_D3D11Device->QueryInterface(UID(IDXGIDevice), reinterpret_cast<void**>(&DXGIDevice)))
+    if FAILED(m_D3D11Device->QueryInterface(UUID(IDXGIDevice), reinterpret_cast<void**>(&DXGIDevice)))
     {
-        Debug::Message(Error, "Failed to create the DXGI device.");
+        Debug::Message(Error, "Failed to create the DXGI's device.");
         return false;
     }
 
     // Creates a DXGI's adapter
     IDXGIAdapter* DXGIAdapter = nullptr;
-    if FAILED(DXGIDevice->GetParent(UID(IDXGIAdapter), reinterpret_cast<void**>(&DXGIAdapter)))
+    if FAILED(DXGIDevice->GetParent(UUID(IDXGIAdapter), reinterpret_cast<void**>(&DXGIAdapter)))
     {
-        Debug::Message(Error, "Failed to create the DXGI adapter.");
+        Debug::Message(Error, "Failed to create the DXGI's adapter.");
         return false;
     }
 
     // Creates a DXGI's factory
     IDXGIFactory* DXGIFactory = nullptr;
-    if FAILED(DXGIAdapter->GetParent(UID(IDXGIFactory), reinterpret_cast<void**>(&DXGIFactory)))
+    if FAILED(DXGIAdapter->GetParent(UUID(IDXGIFactory), reinterpret_cast<void**>(&DXGIFactory)))
     {
-        Debug::Message(Error, "Failed to create the DXGI factory.");
+        Debug::Message(Error, "Failed to create the DXGI's factory.");
         return false;
     }
 
@@ -103,7 +103,7 @@ bool owl::Graphics::Initialize()
     // Creates a DXGI's swap chain
     if FAILED(DXGIFactory->CreateSwapChain(m_D3D11Device, &SwapChainDesc, &m_DXGISwapChain))
     {
-        Debug::Message(Error, "Failed to create the swap chain.");
+        Debug::Message(Error, "Failed to create the DXGI's swap chain.");
         return false;
     }
 
@@ -116,16 +116,16 @@ bool owl::Graphics::Initialize()
 
     // Gets the D3D11's backbuffer's surface of a swap chain
     ID3D11Texture2D* D3D11BackBuffer = nullptr;
-    if FAILED(m_DXGISwapChain->GetBuffer(0, UID(D3D11BackBuffer), reinterpret_cast<void**>(&D3D11BackBuffer)))
+    if FAILED(m_DXGISwapChain->GetBuffer(0, UUID(D3D11BackBuffer), reinterpret_cast<void**>(&D3D11BackBuffer)))
     {
-        Debug::Message(Error, "Failed to get the backbuffer.");
+        Debug::Message(Error, "Failed to get the D3D11's backbuffer.");
         return false;
     }
 
     // Creates a render target view for the backbuffer
     if FAILED(m_D3D11Device->CreateRenderTargetView(D3D11BackBuffer, nullptr, &m_D3D11RenderTargetView))
     {
-        Debug::Message(Error, "Failed to create the render target view.");
+        Debug::Message(Error, "Failed to create the D3D11's render target view.");
         return false;
     }
 
@@ -159,7 +159,7 @@ bool owl::Graphics::Initialize()
     // Creates a D3D11's blend state
     if FAILED(m_D3D11Device->CreateBlendState(&BlendDesc, &m_D3D11BlendState))
     {
-        Debug::Message(Error, "Failed to create the render state.");
+        Debug::Message(Error, "Failed to create the D3D11's blend state.");
         return false;
     }
 

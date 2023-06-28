@@ -9,6 +9,13 @@ enum EDebugMode
 	Error
 };
 
+// Enumerates the possible question's modes
+enum EQuestionMode
+{
+	Affirmative = 0,
+	Negative,
+};
+
 namespace owl
 {
 	class Debug
@@ -21,6 +28,8 @@ namespace owl
 
 		// Displays a text in the application's console
 		static void OWL_API Console(EDebugMode Mode, const char* Text, bool bBreakLine = true) { GetInstance().IConsole(Mode, Text, bBreakLine); }
+
+		static bool OWL_API Question(EQuestionMode Mode, const char* Text) { return GetInstance().IQuestion(Mode, Text); }
 
 	protected:
 		Debug();
@@ -37,7 +46,8 @@ namespace owl
 		HANDLE m_hConsole;
 
 		// Internal MAIN methods
-		void IMessage(EDebugMode Mode, std::string_view Text);
 		void IConsole(EDebugMode Mode, const char* Text, bool bBreakLine);
+		void IMessage(EDebugMode Mode, std::string_view Text);
+		bool IQuestion(EQuestionMode Mode, std::string_view Text);
 	};
 }

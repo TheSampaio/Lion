@@ -26,7 +26,6 @@ void Sandbox::OnStart()
 
 void Sandbox::OnUpdate()
 {
-	if (Input::GetKeyTap(F5)) Window::Close();
 }
 
 void Sandbox::OnDraw()

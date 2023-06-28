@@ -22,4 +22,4 @@ void ReleaseCOM(TReturnType Component)
 // === Defines ======
 
 // Gets a unique identification code of a Microsoft's COM class
-#define UID(x) __uuidof(x)
+#define UUID(x) __uuidof(x)

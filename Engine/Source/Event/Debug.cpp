@@ -9,27 +9,34 @@ owl::Debug::Debug()
 	m_hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
 }
 
-void owl::Debug::IMessage(EDebugMode mode, std::string_view text)
+void owl::Debug::IConsole(EDebugMode Mode, const char* Text, bool bBreakLine)
 {
-	if (mode == Information || mode == Specification)
-	{
-		MessageBox(Window::GetInstance().m_hWindow, std::wstring(text.begin(), text.end()).data(), L"Information", MB_ICONINFORMATION | MB_OK);
-	}
-
-	else if (mode == Warning)
-	{
-		MessageBox(Window::GetInstance().m_hWindow, std::wstring(text.begin(), text.end()).data(), L"Warning", MB_ICONWARNING | MB_OK);
-	}
-
-	else
-	{
-		MessageBox(Window::GetInstance().m_hWindow, std::wstring(text.begin(), text.end()).data(), L"Error", MB_ICONERROR | MB_OK);
-	}
+	WORD Colour = (Mode == Information) ? 3 : (Mode == Warning) ? 6 : (Mode == Error) ? 4 : 2;
+	SetConsoleTextAttribute(m_hConsole, Colour);
+	(bBreakLine) ? std::cout << Text << std::endl : std::cout << Text;
 }
 
-void owl::Debug::IConsole(EDebugMode mode, const char* text, bool bBreakLine)
+void owl::Debug::IMessage(EDebugMode Mode, std::string_view Text)
 {
-	WORD Colour = (mode == Information) ? 3 : (mode == Warning) ? 6 : (mode == Error) ? 4 : 2;
-	SetConsoleTextAttribute(m_hConsole, Colour);
-	(bBreakLine) ? std::cout << text << std::endl : std::cout << text;
+	if (Mode == Information || Mode == Specification)
+		MessageBox(Window::GetInstance().m_hWindow, std::wstring(Text.begin(), Text.end()).data(), L"Information", MB_ICONINFORMATION | MB_OK);
+
+	else if (Mode == Warning)
+		MessageBox(Window::GetInstance().m_hWindow, std::wstring(Text.begin(), Text.end()).data(), L"Warning", MB_ICONWARNING | MB_OK);
+
+	else
+		MessageBox(Window::GetInstance().m_hWindow, std::wstring(Text.begin(), Text.end()).data(), L"Error", MB_ICONERROR | MB_OK);
+}
+
+bool owl::Debug::IQuestion(EQuestionMode Mode, std::string_view Text)
+{
+	int Answer = 0;
+
+	if (Mode == Affirmative)
+		Answer = MessageBox(Window::GetInstance().m_hWindow, std::wstring(Text.begin(), Text.end()).data(), L"Question", MB_ICONQUESTION | MB_YESNO | MB_DEFBUTTON1);
+
+	else
+		Answer = MessageBox(Window::GetInstance().m_hWindow, std::wstring(Text.begin(), Text.end()).data(), L"Question", MB_ICONQUESTION | MB_YESNO | MB_DEFBUTTON2);
+
+	return (Answer == IDYES) ? true : false;
 }
