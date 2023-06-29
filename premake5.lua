@@ -45,6 +45,8 @@ project "Owl"
         "dxgi",
         "d3d11",
         "winmm",
+        "dxguid.lib",
+        "d3dcompiler",
     }
 
     postbuildcommands {

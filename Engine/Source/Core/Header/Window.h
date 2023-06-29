@@ -59,6 +59,7 @@ namespace owl
 		friend class Debug;
 		friend class Time;
 		friend class Graphics;
+		friend class Renderer;
 
 	protected:
 		Window();

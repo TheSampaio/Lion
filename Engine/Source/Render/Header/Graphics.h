@@ -21,6 +21,8 @@ namespace owl
 		// === Friends ======
 
 		friend class Application;
+		friend class Renderer;
+		friend class Texture;
 
 	protected:
 		Graphics();

@@ -17,7 +17,8 @@ void ReleaseCOM(TReturnType Component)
 		Component->Release();
 		Component = nullptr;
 	}
-}
+};
+
 
 // === Defines ======
 

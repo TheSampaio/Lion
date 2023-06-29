@@ -18,5 +18,7 @@
 #include "../Source/Logic/Header/Timer.h"
 
 // Render
-//#include "../Source/Render/Header/Renderer.h"
+#include "../Source/Render/Header/Renderer.h"
 #include "../Source/Render/Header/Graphics.h"
+#include "../Source/Render/Header/Texture.h"
+#include "../Source/Render/Header/Sprite.h"

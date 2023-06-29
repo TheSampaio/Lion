@@ -8,6 +8,7 @@
 #include "../Logic/Header/Game.h"
 #include "../Logic/Header/Timer.h"
 #include "../Render/Header/Graphics.h"
+#include "../Render/Header/Renderer.h"
 
 bool owl::Application::s_bPaused = false;
 
@@ -38,14 +39,19 @@ int owl::Application::IRun(class Game* Level)
 		return false;
 	}
 
-	// Initializes graphics
+	// Initializes the D3D11
 	if (!Graphics::GetInstance().Initialize())
 	{
-		Debug::Message(Error, "Failed to initialize graphics.");
+		Debug::Message(Error, "Failed to initialize the DirectX.");
 		return false;
 	}
 
-	// TODO: Initializes the renderer
+	// Initializes the renderer
+	if (!Renderer::GetInstance().Initialize())
+	{
+		Debug::Message(Error, "Failed to initialize the renderer.");
+		return false;
+	}
 
 	// Game loop
 	timeBeginPeriod(1); // Changes the default "Sleep()" functions' precision
@@ -93,7 +99,7 @@ int owl::Application::Loop()
 				// Clears backbuffer and draw everything in the game
 				Graphics::GetInstance().ClearBuffers();
 				Game->OnDraw();
-				// TODO: Renderer::Render()
+				Renderer::GetInstance().Render();
 
 				// Swaps window's framebuffers
 				Graphics::GetInstance().SwapBuffers();
@@ -108,9 +114,12 @@ int owl::Application::Loop()
 
 	} while (Messages.message != WM_QUIT);
 
-	// Finalizes the game and D3D11
+	// Finalizes the game
 	Game->OnFinish();
+
+	// Finalizes the D3D11 and renderer
 	Graphics::GetInstance().Finalize();
+	Renderer::GetInstance().Finalize();
 
 	// Returns a "state code" to the OS
 	return static_cast<int>(Messages.wParam);
