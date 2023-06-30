@@ -1,6 +1,6 @@
 <h1>Owl Engine</h1>
 <section>
-    This is a 3D game engine made in C++ that uses D3D11 to draw on screen. The project is still in progress and because of this does not represent the final result and may contain some bugs depending on your OS's version or hardware. I plan to add support for D3D12 in the future, but only after all the basic features are ready.
+    This is a 2D game engine made in C++ that uses D3D11 to draw on screen. The project is still in progress and because of this does not represent the final result and may contain some bugs depending on your OS's version or hardware. I plan to add support for D3D12 in the future, but only after all the basic features are ready.
 </section><br>
 <img src="Game/Resource/Shank/showcase-shank-demo.png">
 <h2>Credits</h2>
