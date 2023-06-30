@@ -1,8 +1,8 @@
 #include "Sandbox.h"
 #include "Resources.h"
 
-#include "Shank.h"
 #include "Header.h"
+#include "Shank.h"
 
 using namespace owl;
 
