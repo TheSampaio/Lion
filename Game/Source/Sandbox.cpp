@@ -34,7 +34,7 @@ Sandbox::Sandbox()
 
 void Sandbox::OnStart()
 {
-	m_HeaderTexture = new Texture("Resource/Shank/Sprite/header.png");
+	Debug::Console(Information, "The game was initialized.");
 
 	m_Header01 = new Header(m_HeaderTexture);
 	m_Header01->SetPosition(40.0f, 60.0f, Layer::Upper);
@@ -58,6 +58,8 @@ void Sandbox::OnDraw()
 
 	m_Player->OnDraw();
 	m_Background->Draw(0, 0, Layer::Back);
+
+	Debug::Console(Information, "The game was finalized.");
 }
 
 void Sandbox::OnFinish()
