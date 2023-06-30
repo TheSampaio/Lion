@@ -8,6 +8,7 @@ _Output/
 
 *.sln
 *.aps
+*.cso
 *.user
 *.vcxproj
 *.vcxproj.filters
