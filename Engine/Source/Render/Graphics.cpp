@@ -3,6 +3,7 @@
 
 #include "../Core/Header/Window.h"
 #include "../Event/Header/Debug.h"
+#include "../Kind/Header/Tools.h"
 
 owl::Graphics::Graphics()
 	: m_D3D11Device(nullptr), m_D3D11Context(nullptr), m_DXGISwapChain(nullptr), m_D3D11RenderTargetView(nullptr), m_D3D11BlendState(nullptr)

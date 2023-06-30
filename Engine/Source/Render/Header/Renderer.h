@@ -1,7 +1,5 @@
 #pragma once
 
-#include "Sprite.h"
-
 namespace owl
 {
 	class Renderer
@@ -34,17 +32,17 @@ namespace owl
 		uint m_VertexBufferPosition;                   // posição atual do vertex buffer
 
 		// Sprite's vector
-		std::vector<SpriteData*> m_SpriteVector;
+		std::vector<struct Sinfo*> m_SpriteVector;
 
 		// MAIN methods
 		bool Initialize();
 		void Finalize();
 
-		void Draw(SpriteData* Data);
+		void Draw(struct Sinfo* Data);
 		void Render();
 
 		// renderiza um grupo de sprites de mesma textura
-		void RenderBatch(ID3D11ShaderResourceView* Texture, SpriteData** Sprites, uint Amount);
+		void RenderBatch(ID3D11ShaderResourceView* Texture, struct Sinfo** Sprites, uint Amount);
 
 		// Static attributes
 		static const uint m_MinBatchSize = 128;    // tamanho mínimo do lote de sprites

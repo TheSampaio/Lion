@@ -37,7 +37,7 @@
 #endif // !WIN32_WIC
 
 // Types
-#include "Source/Math/Header/Types.h"
+#include "Source/Kind/Header/Basic.h"
 
 // DLL exporter
 #ifdef WL_PLATFORM_WIN

@@ -5,6 +5,8 @@
 #include "Header/Sprite.h"
 #include "../Core/Header/Window.h"
 #include "../Event/Header/Debug.h"
+#include "../Kind/Header/Sinfo.h"
+#include "../Kind/Header/Tools.h"
 
 struct Vertex
 {
@@ -247,7 +249,7 @@ void owl::Renderer::Finalize()
 
 // ---------------------------------------------------------------------------------
 
-void owl::Renderer::RenderBatch(ID3D11ShaderResourceView* Texture, SpriteData** Sprites, uint Cont)
+void owl::Renderer::RenderBatch(ID3D11ShaderResourceView* Texture, Sinfo** Sprites, uint Cont)
 {
     // desenhe usando a seguinte textura
     Graphics::GetInstance().m_D3D11Context->PSSetShaderResources(0, 1, &Texture);
@@ -283,7 +285,7 @@ void owl::Renderer::RenderBatch(ID3D11ShaderResourceView* Texture, SpriteData** 
         Graphics::GetInstance().m_D3D11Context->Map(m_D3D11VertexBuffer, 0, D3D11MapType, 0, &D3D11MappedBuffer);
 
         // se posiciona dentro do vertex buffer
-        Vertex* Vertices = static_cast<Vertex*>(D3D11MappedBuffer.pData) + m_VertexBufferPosition * m_VerticesPerSprite;
+        Vertex* Vertices = static_cast<Vertex*>(D3D11MappedBuffer.pData) + (static_cast<ullong>(m_VertexBufferPosition) * static_cast<ullong>(m_VerticesPerSprite));
 
         // gera posições dos vértices de cada sprite que será desenhado nesse lote
         for (uint i = 0; i < BatchSize; ++i)
@@ -412,7 +414,7 @@ void owl::Renderer::Render()
 {
     // ordena sprites por profundidade
     std::sort(m_SpriteVector.begin(), m_SpriteVector.end(),
-        [](SpriteData* a, SpriteData* b) -> bool
+        [](Sinfo* a, Sinfo* b) -> bool
         { return a->Depth > b->Depth; });
 
     // quantidades de sprites a serem renderizados
@@ -450,7 +452,7 @@ void owl::Renderer::Render()
 
 // ---------------------------------------------------------------------------------
 
-void owl::Renderer::Draw(SpriteData* Sprite)
+void owl::Renderer::Draw(Sinfo* Sprite)
 {
     m_SpriteVector.push_back(Sprite);
 }

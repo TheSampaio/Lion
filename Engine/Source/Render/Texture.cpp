@@ -3,6 +3,7 @@
 
 #include "Header/DXTK.h"
 #include "Header/Graphics.h"
+#include "../Kind/Header/Tools.h"
 
 owl::Texture::Texture(std::string FilePath)
 	: m_TextureView(nullptr)

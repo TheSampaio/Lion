@@ -2,39 +2,19 @@
 
 namespace owl
 {
-    struct OWL_API SpriteData
-    {
-        float X, Y;
-        float Scale;
-        float Depth;
-        float Rotation;
-        uint  Width;
-        uint  Height;
-        ID3D11ShaderResourceView* Texture;
-    };
-
-    struct OWL_API Layer
-    {
-        static const float Front;
-        static const float Upper;
-        static const float Middle;
-        static const float Lower;
-        static const float Back;
-    };
-
-	class OWL_API Sprite
+	class Sprite
 	{
     public:
-        Sprite(std::string FilePath);
-        Sprite(const class Texture* Texture);
-        ~Sprite();
+        OWL_API Sprite(std::string FilePath);
+        OWL_API Sprite(const class Texture* Texture);
+        OWL_API ~Sprite();
 
-        void Draw(float X, float Y, float Z = Layer::Middle);
+        void OWL_API Draw(float X, float Y, float Z = 0.50f);
 
-        std::array<uint, 2> GetSize();
+        std::array<uint, 2> OWL_API GetSize();
 
     private:
-        SpriteData m_Sprite;
+        struct Sinfo* m_Sinfo;
         bool m_bLocalImage;
         const class Texture* m_Texture;
 	};
