@@ -1,6 +1,8 @@
 #pragma once
 
 //--------------------------------------------------------------------------------------
+// 
+// Project: DirectXTK (https://github.com/microsoft/DirectXTK)
 // File: WICTextureLoader.h
 //
 // Function for loading a WIC image and creating a Direct3D 11 runtime texture for it

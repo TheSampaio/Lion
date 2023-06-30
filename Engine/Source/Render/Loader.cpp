@@ -1,7 +1,9 @@
 #include "Engine.h"
-#include "Header/DXTK.h"
+#include "Header/Loader.h"
 
 //--------------------------------------------------------------------------------------
+// 
+// Project: DirectXTK (https://github.com/microsoft/DirectXTK)
 // File: WICTextureLoader.cpp
 //
 // Function for loading a WIC image and creating a Direct3D 11 runtime texture for it
