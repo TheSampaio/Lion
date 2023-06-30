@@ -32,7 +32,7 @@ bool owl::Renderer::Initialize()
 
     // carrega bytecode do vertex shader (HLSL)
     ID3DBlob* D3DVertexShader = nullptr;
-    if FAILED(D3DReadFileToBlob(L"Shader/DefaultVertex.cso", &D3DVertexShader))
+    if FAILED(D3DReadFileToBlob(L"Bin/DefaultVertex.cso", &D3DVertexShader))
     {
         Debug::Message(Error, "Failed to read the vertex shader.");
         return false;
@@ -73,7 +73,7 @@ bool owl::Renderer::Initialize()
 
     // carrega bytecode do pixel shader (HLSL)
     ID3DBlob* D3DPixelShader = nullptr;
-    if FAILED(D3DReadFileToBlob(L"Shader/DefaultPixel.cso", &D3DPixelShader))
+    if FAILED(D3DReadFileToBlob(L"Bin/DefaultPixel.cso", &D3DPixelShader))
     {
         Debug::Message(Error, "Failed to read the pixel shader.");
         return false;

@@ -57,6 +57,16 @@ project "Owl"
         defines "WL_PLATFORM_WIN"
         systemversion "latest"
 
+    filter "files:Engine/Shader/DefaultVertex.hlsl"
+        shadermodel "5.0"
+        shadertype "Vertex"
+        shaderobjectfileoutput "%{wks.location}/Game/Bin/%%(Filename).cso"
+
+    filter "files:Engine/Shader/DefaultPixel.hlsl"
+        shadermodel "5.0"
+        shadertype "Pixel"
+        shaderobjectfileoutput "%{wks.location}/Game/Bin/%%(Filename).cso"
+
 -- ========== Sandbox ========== --
 project "Sandbox"
     location "Game"
