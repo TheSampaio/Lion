@@ -15,13 +15,9 @@ Sandbox::Sandbox()
 		Window::SetSize(800, 600);
 		Window::SetTitle("Frogger Demo");
 		Window::SetDisplayMode(Windowed);
-		//Window::SetBackgroudColour(100, 0, 150);
 
 		// Set-up the window's cursor
 		Cursor::SetCursor(IDC_CURSOR);
-
-		// Set-up graphics
-		//Graphics::SetVerticalSynchronization(Full);
 	}
 
 	// Initializes all pointers
