@@ -10,6 +10,7 @@ public:
 
 	void OnUpdate();
 	void OnDraw();
+
 private:
 	owl::Sprite* m_SpriteUp;
 	owl::Sprite* m_SpriteDown;

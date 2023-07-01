@@ -48,3 +48,9 @@ std::array<uint, 2> owl::Sprite::GetSize()
     std::array<uint, 2> Size = { m_Texture->GetSize()[0], m_Texture->GetSize()[1] };
     return Size;
 }
+
+std::array<uint, 2>OWL_API owl::Sprite::GetCenter()
+{
+    std::array<uint, 2> Size = { m_Texture->GetCenter()[0], m_Texture->GetCenter()[1] };
+    return Size;
+}

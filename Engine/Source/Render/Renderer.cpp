@@ -15,8 +15,6 @@ struct Vertex
     DirectX::XMFLOAT2 Texture;
 };
 
-// ---------------------------------------------------------------------------------
-
 owl::Renderer::Renderer()
     : m_D3D11InputLayout(nullptr), m_D3D11VertexShader(nullptr), m_D3D11PixelShader(nullptr), m_D3D11RasterizerState(nullptr), m_D3D11SamplerState(nullptr),
       m_D3D11VertexBuffer(nullptr), m_D3D11IndexBuffer(nullptr), m_D3D11ConstantBuffer(nullptr)
@@ -26,30 +24,22 @@ owl::Renderer::Renderer()
 
 bool owl::Renderer::Initialize()
 {
-    //-------------------------------
-    // Vertex Shader
-    //-------------------------------
-
-    // carrega bytecode do vertex shader (HLSL)
+    // Loads vertex shader's bytecode (HLSL)
     ID3DBlob* D3DVertexShader = nullptr;
     if FAILED(D3DReadFileToBlob(L"Bin/DefaultVertex.cso", &D3DVertexShader))
     {
-        Debug::Message(Error, "Failed to read the vertex shader.");
+        Debug::Message(Warning, "Failed to read \"Bin/DefaultVertex.cso\".");
         return false;
     }
 
-    // cria o vertex shader
+    // Creates the vertex shader
     if FAILED(Graphics::GetInstance().m_D3D11Device->CreateVertexShader(D3DVertexShader->GetBufferPointer(), D3DVertexShader->GetBufferSize(), nullptr, &m_D3D11VertexShader))
     {
         Debug::Message(Error, "Failed to compile the vertex shader.");
         return false;
     }
 
-    //-------------------------------
-    // Input Layout
-    //-------------------------------
-
-    // descreve o input layout dos vértices
+    // Input layout's setup
     D3D11_INPUT_ELEMENT_DESC InputElementDesc[] =
     {
         { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT,    0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0 },
@@ -57,81 +47,69 @@ bool owl::Renderer::Initialize()
         { "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT,       0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0 }
     };
 
-    // cria o input layout
+    // Creates the input layout
     if FAILED(Graphics::GetInstance().m_D3D11Device->CreateInputLayout(InputElementDesc, 3, D3DVertexShader->GetBufferPointer(), D3DVertexShader->GetBufferSize(), &m_D3D11InputLayout))
     {
         Debug::Message(Error, "Failed to create the input layout.");
         return false;
     }
 
-    // libera bytecode
+    // Releases bytecode
     D3DVertexShader->Release();
 
-    //-------------------------------
-    // Pixel Shader
-    //-------------------------------
-
-    // carrega bytecode do pixel shader (HLSL)
+    // // Loads pixel shader's bytecode (HLSL)
     ID3DBlob* D3DPixelShader = nullptr;
     if FAILED(D3DReadFileToBlob(L"Bin/DefaultPixel.cso", &D3DPixelShader))
     {
-        Debug::Message(Error, "Failed to read the pixel shader.");
+        Debug::Message(Error, "Failed to read \"Bin/DefaultPixel.cso\".");
         return false;
     }
 
-    // cria o pixel shader
+    // Creates the pixel shader
     if FAILED(Graphics::GetInstance().m_D3D11Device->CreatePixelShader(D3DPixelShader->GetBufferPointer(), D3DPixelShader->GetBufferSize(), nullptr, &m_D3D11PixelShader))
     {
         Debug::Message(Error, "Failed to compile the pixel shader.");
         return false;
     }
 
-    // libera bytecode
+    // Releases bytecode
     D3DPixelShader->Release();
 
-    //-------------------------------
-    // Rasterizador
-    //-------------------------------
-
+    // Rasterizer's setup
     D3D11_RASTERIZER_DESC D3D11RasterizerDesc = {};
     D3D11RasterizerDesc.FillMode = D3D11_FILL_SOLID;
     //rasterDesc.FillMode = D3D11_FILL_WIREFRAME;
     D3D11RasterizerDesc.CullMode = D3D11_CULL_NONE;
     D3D11RasterizerDesc.DepthClipEnable = true;
 
-    // cria estado do rasterizador
+    // Creates the rasterizer
     if FAILED(Graphics::GetInstance().m_D3D11Device->CreateRasterizerState(&D3D11RasterizerDesc, &m_D3D11RasterizerState))
     {
         Debug::Message(Error, "Failed to create the rasterizer shader.");
         return false;
     }
 
-    //-------------------------------
-    // Vertex Buffer
-    //-------------------------------
-
+    // Vertex buffer's setup
     D3D11_BUFFER_DESC D3D11VertexBufferDesc = {};
     D3D11VertexBufferDesc.ByteWidth = sizeof(Vertex) * m_VerticesPerSprite * m_MaxBatchSize;
     D3D11VertexBufferDesc.Usage = D3D11_USAGE_DYNAMIC;
     D3D11VertexBufferDesc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
     D3D11VertexBufferDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
 
+    // Creates the vertex buffer
     if FAILED(Graphics::GetInstance().m_D3D11Device->CreateBuffer(&D3D11VertexBufferDesc, nullptr, &m_D3D11VertexBuffer))
     {
         Debug::Message(Error, "Failed to create the vertex buffer.");
         return false;
     }
 
-    //-------------------------------
-    // Index Buffer
-    //-------------------------------
-
+    // Index buffer's setup
     D3D11_BUFFER_DESC D3D11IndexBufferDesc = { 0 };
     D3D11IndexBufferDesc.ByteWidth = sizeof(short) * m_IndicesPerSprite * m_MaxBatchSize;
     D3D11IndexBufferDesc.Usage = D3D11_USAGE_DEFAULT;
     D3D11IndexBufferDesc.BindFlags = D3D11_BIND_INDEX_BUFFER;
 
-    // gera índices para o número máximo de sprites suportados
+    // Generate indexes for the maximum number of supported sprites
     std::vector<short> Indices;
     Indices.reserve(static_cast<std::vector<short, std::allocator<short>>::size_type>(m_MaxBatchSize)* m_IndicesPerSprite);
 
@@ -148,27 +126,25 @@ bool owl::Renderer::Initialize()
     D3D11_SUBRESOURCE_DATA D3D11IndexData = { 0 };
     D3D11IndexData.pSysMem = &Indices.front();
 
+    // Creates the index buffer
     if FAILED(Graphics::GetInstance().m_D3D11Device->CreateBuffer(&D3D11IndexBufferDesc, &D3D11IndexData, &m_D3D11IndexBuffer))
     {
         Debug::Message(Error, "Failed to create the index buffer.");
         return false;
     }
 
-    //-------------------------------
-    // Constant Buffer
-    //-------------------------------
-
+    // Constant buffer's setup
     D3D11_BUFFER_DESC D3D11ConstantBufferDesc = { 0 };
     D3D11ConstantBufferDesc.ByteWidth = sizeof(DirectX::XMMATRIX);
     D3D11ConstantBufferDesc.Usage = D3D11_USAGE_DYNAMIC;
     D3D11ConstantBufferDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
     D3D11ConstantBufferDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
 
-    // calcula a matriz de transformação
+    // Calculates the matrix transformation
     float xScale = (Graphics::GetInstance().m_D3D11Viewport.Width > 0) ? 2.0f / Graphics::GetInstance().m_D3D11Viewport.Width : 0.0f;
     float yScale = (Graphics::GetInstance().m_D3D11Viewport.Height > 0) ? 2.0f / Graphics::GetInstance().m_D3D11Viewport.Height : 0.0f;
 
-    // transforma para coordenadas da tela
+    // Transforms to screen's coordinates
     DirectX::XMMATRIX TransformMatrix
     (
         xScale, 0, 0, 0,
@@ -181,16 +157,14 @@ bool owl::Renderer::Initialize()
     DirectX::XMMATRIX WorldViewProjection = DirectX::XMMatrixTranspose(TransformMatrix);
     D3D11ConstantData.pSysMem = &WorldViewProjection;
 
+    // Creates the constant buffer
     if FAILED(Graphics::GetInstance().m_D3D11Device->CreateBuffer(&D3D11ConstantBufferDesc, &D3D11ConstantData, &m_D3D11ConstantBuffer))
     {
         Debug::Message(Error, "Failed to create the constant buffer.");
         return false;
     }
 
-    //-------------------------------
-    // Texture Sampler
-    //-------------------------------
-
+    // Texture sampler's setup
     D3D11_SAMPLER_DESC D3D11SamplerStateDesc = {};
     D3D11SamplerStateDesc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
     D3D11SamplerStateDesc.AddressU = D3D11_TEXTURE_ADDRESS_WRAP;
@@ -206,17 +180,14 @@ bool owl::Renderer::Initialize()
     D3D11SamplerStateDesc.MinLOD = 0;
     D3D11SamplerStateDesc.MaxLOD = D3D11_FLOAT32_MAX;
 
-    // cria o amostrador da textura
+    // Creates the sampler state
     if FAILED(Graphics::GetInstance().m_D3D11Device->CreateSamplerState(&D3D11SamplerStateDesc, &m_D3D11SamplerState))
     {
         Debug::Message(Error, "Failed to create the sampler state.");
         return false;
     }
 
-    //-------------------------------
-    // Configura Pipeline Direct3D 
-    //-------------------------------
-
+    // Set-up D3D11's pipeline
     uint VertexStride = sizeof(Vertex);
     uint VertexOffset = 0;
 
@@ -230,7 +201,7 @@ bool owl::Renderer::Initialize()
     Graphics::GetInstance().m_D3D11Context->PSSetSamplers(0, 1, &m_D3D11SamplerState);
     Graphics::GetInstance().m_D3D11Context->RSSetState(m_D3D11RasterizerState);
 
-    // inicialização bem sucedida
+    // Successfully initialized
     return true;
 }
 
@@ -251,82 +222,82 @@ void owl::Renderer::Finalize()
 
 void owl::Renderer::RenderBatch(ID3D11ShaderResourceView* Texture, Sinfo** Sprites, uint Cont)
 {
-    // desenhe usando a seguinte textura
+    // Draw using the following texture
     Graphics::GetInstance().m_D3D11Context->PSSetShaderResources(0, 1, &Texture);
 
     while (Cont > 0)
     {
-        // quantos sprites vamos desenhar
+        // How many sprites are we going to draw
         uint BatchSize = Cont;
 
-        // quantos sprites cabem no vertex buffer
+        // How many sprites fit in the vertex buffer
         uint RemainingSpace = m_MaxBatchSize - m_VertexBufferPosition;
 
-        // quantidade de sprite é maior do que o espaço disponível
+        // Amount of sprite is greater than available space
         if (BatchSize > RemainingSpace)
         {
-            // se o tamanho disponível é muito pequeno
+            // If the available size is too small
             if (RemainingSpace < m_MinBatchSize)
             {
-                // volte ao ínicio do buffer
+                // Go back to the beginning of the buffer
                 m_VertexBufferPosition = 0;
                 BatchSize = (Cont < m_MaxBatchSize) ? Cont : m_MaxBatchSize;
             }
             else
             {
-                // restrinja a quantidade de sprites pelo espaço sobrando
+                // Restrict the amount of sprites by the space left
                 BatchSize = RemainingSpace;
             }
         }
 
-        // trava o vertex buffer para escrita
+        // Locks vertex buffer for writing
         D3D11_MAP D3D11MapType = (m_VertexBufferPosition == 0) ? D3D11_MAP_WRITE_DISCARD : D3D11_MAP_WRITE_NO_OVERWRITE;
         D3D11_MAPPED_SUBRESOURCE D3D11MappedBuffer;
         Graphics::GetInstance().m_D3D11Context->Map(m_D3D11VertexBuffer, 0, D3D11MapType, 0, &D3D11MappedBuffer);
 
-        // se posiciona dentro do vertex buffer
+        // Positions itself inside the vertex buffer
         Vertex* Vertices = static_cast<Vertex*>(D3D11MappedBuffer.pData) + (static_cast<ullong>(m_VertexBufferPosition) * static_cast<ullong>(m_VerticesPerSprite));
 
-        // gera posições dos vértices de cada sprite que será desenhado nesse lote
+        // Generates vertex positions of each sprite that will be drawn in this batch
         for (uint i = 0; i < BatchSize; ++i)
         {
             using namespace DirectX;
 
-            // pega tamanho da textura
+            // Gets texture's size
             XMVECTOR Size = XMVectorMergeXY(XMLoadInt(&Sprites[i]->Width), XMLoadInt(&Sprites[i]->Height));
             XMVECTOR TextureSize = XMConvertVectorUIntToFloat(Size, 0);
             XMVECTOR InverseTextureSize = XMVectorReciprocal(TextureSize);
 
-            // organiza informações do sprite
+            // Organize sprite's information
             XMFLOAT2 PositionXY(Sprites[i]->X, Sprites[i]->Y);
             float Scale = Sprites[i]->Scale;
             XMFLOAT2 Center(0.0f, 0.0f);
             float Rotation = Sprites[i]->Rotation;
             float LayerDepth = Sprites[i]->Depth;
 
-            // carrega informações do sprite em registros SIMD
+            // Loads sprite information into SIMD registers
             XMVECTOR Source = XMVectorSet(0, 0, 1, 1);
             XMVECTOR Destination = XMVectorPermute<0, 1, 4, 4>(XMLoadFloat2(&PositionXY), XMLoadFloat(&Scale));
             XMVECTOR Colour = XMVectorSet(1, 1, 1, 1);
             XMVECTOR OriginRotationDepth = XMVectorSet(Center.x, Center.y, Rotation, LayerDepth);
 
-            // extrai os tamanhos de origem e destino em vetores separados
+            // Extracts source and destination sizes into separate vectors
             XMVECTOR SourceSize = XMVectorSwizzle<2, 3, 2, 3>(Source);
             XMVECTOR DestinationSize = XMVectorSwizzle<2, 3, 2, 3>(Destination);
 
-            // altera a escala do offset de origem pelo tamanho da fonte, tomando cuidado para evitar overflow se a região fonte for zero
+            // Scales the source offset by the font size, taking care to avoid overflow if the font region is zero
             XMVECTOR IsZeroMask = XMVectorEqual(SourceSize, XMVectorZero());
             XMVECTOR NonZeroSourceSize = XMVectorSelect(SourceSize, g_XMEpsilon, IsZeroMask);
 
             XMVECTOR Origin = XMVectorDivide(OriginRotationDepth, NonZeroSourceSize);
 
-            // converte a região fonte de texels para o formato de coordenadas de textura mod-1
+            // Convert source region from texels to mod-1 texture coordinate format
             Origin *= InverseTextureSize;
 
-            // se o tamanho de destino é relativo a região fonte, converte-o para pixels
+            // If target size is relative to source region, convert it to pixels
             DestinationSize *= TextureSize;
 
-            // calcula uma matriz de rotação 2x2
+            // Calculates a 2x2 rotation matrix
             XMVECTOR RotationMatrix1;
             XMVECTOR RotationMatrix2;
 
@@ -348,7 +319,7 @@ void owl::Renderer::RenderBatch(ID3D11ShaderResourceView* Texture, Sinfo** Sprit
                 RotationMatrix2 = g_XMIdentityR1;
             }
 
-            // os quatro vértices do sprite são calculados a partir de transformações dessas posições unitárias
+            // The four vertices of the sprite are calculated from transformations of these unit positions
             static XMVECTORF32 CornerOffsets[m_VerticesPerSprite] =
             {
                 { 0, 0 },
@@ -359,28 +330,28 @@ void owl::Renderer::RenderBatch(ID3D11ShaderResourceView* Texture, Sinfo** Sprit
 
             int MirrorBits = 0;
 
-            // gere os quatro vértices 
+            // Generates the four vertices
             for (int i = 0; i < m_VerticesPerSprite; ++i)
             {
-                // calcula posição
+                // Calculates the position
                 XMVECTOR CornerOffset = (CornerOffsets[i] - Origin) * DestinationSize;
 
-                // aplica matriz de rotação 2x2
+                // Apply 2x2 rotation matrix
                 XMVECTOR Position1 = XMVectorMultiplyAdd(XMVectorSplatX(CornerOffset), RotationMatrix1, Destination);
                 XMVECTOR Position2 = XMVectorMultiplyAdd(XMVectorSplatY(CornerOffset), RotationMatrix2, Position1);
 
-                // insere componente z = depth
+                // Inserts Z component = depth
                 XMVECTOR Position = XMVectorPermute<0, 1, 7, 6>(Position2, OriginRotationDepth);
 
-                // Escreve posição como um Float4, mesmo sendo VertexPositionColor::position um XMFLOAT3.
-                // Isso é mais rápido e inofensivo porque estamos apenas invalidando o primeiro elemento
-                // do campo cor, que será imediatamente sobrescrito com seu valor correto.
+                // Writes position as a Float4, even though VertexPositionColor::position is an XMFLOAT3.
+                // This is faster and harmless because we are only invalidating the first element
+                // of the color field, which will be immediately overwritten with its correct value.
                 XMStoreFloat4(reinterpret_cast<XMFLOAT4*>(&Vertices[i].Position), Position);
 
-                // insere a cor
+                // Inserts the colour
                 XMStoreFloat4(&Vertices[i].Colour, Colour);
 
-                // computa e escreve as coordenadas da textura
+                // Computes and writes texture coordinates
                 XMVECTOR textureCoordinate = XMVectorMultiplyAdd(CornerOffsets[i ^ MirrorBits], SourceSize, Source);
 
                 XMStoreFloat2(&Vertices[i].Texture, textureCoordinate);
@@ -389,35 +360,33 @@ void owl::Renderer::RenderBatch(ID3D11ShaderResourceView* Texture, Sinfo** Sprit
             Vertices += m_VerticesPerSprite;
         }
 
-        // destrava o vertex buffer
+        // Unlocks the vertex buffer
         Graphics::GetInstance().m_D3D11Context->Unmap(m_D3D11VertexBuffer, 0);
 
-        // desenha sprites 
+        // Draws the sprites
         uint StartIndex = static_cast<uint>(m_VertexBufferPosition) * m_IndicesPerSprite;
         uint IndexCount = static_cast<uint>(BatchSize) * m_IndicesPerSprite;
         Graphics::GetInstance().m_D3D11Context->DrawIndexed(IndexCount, StartIndex, 0);
 
-        // avança a posição no vertex buffer
+        // Advance position in vertex buffer
         m_VertexBufferPosition += BatchSize;
 
-        // avança a posição no vetor de sprites
+        // Advances the position in the sprite vector
         Sprites += BatchSize;
 
-        // foram desenhados batchSize sprites nessa passagem
+        // BatchSize's sprites were drawn in this pass
         Cont -= BatchSize;
     }
 }
 
-// ---------------------------------------------------------------------------------
-
 void owl::Renderer::Render()
 {
-    // ordena sprites por profundidade
+    // Sort sprites by depth
     std::sort(m_SpriteVector.begin(), m_SpriteVector.end(),
         [](Sinfo* a, Sinfo* b) -> bool
         { return a->Depth > b->Depth; });
 
-    // quantidades de sprites a serem renderizados
+    // Amounts of sprites to render
     uint SpriteVectorSize = uint(m_SpriteVector.size());
 
     if (SpriteVectorSize == 0)
@@ -426,7 +395,7 @@ void owl::Renderer::Render()
     ID3D11ShaderResourceView* BatchTexture = nullptr;
     uint BatchStart = 0;
 
-    // junta sprites adjacentes que compartilham a mesma textura
+    // Merge adjacent sprites that share the same texture
     for (uint Position = 0; Position < SpriteVectorSize; ++Position)
     {
         ID3D11ShaderResourceView* Texture = m_SpriteVector[Position]->Texture;
@@ -443,10 +412,10 @@ void owl::Renderer::Render()
         }
     }
 
-    // desenha o grupo final de sprites
+    // Draws the final group of sprites
     RenderBatch(BatchTexture, &m_SpriteVector[BatchStart], SpriteVectorSize - BatchStart);
 
-    // limpa a lista de desenho (atualizada a cada frame)
+    // Clears drawing list (updated every frame)
     m_SpriteVector.clear();
 }
 

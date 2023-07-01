@@ -24,6 +24,7 @@ Sandbox::Sandbox()
 		//Graphics::SetVerticalSynchronization(Full);
 	}
 
+	// Initializes all pointers
 	m_Truck = nullptr;
 	m_Car01 = nullptr;
 	m_Car02 = nullptr;
@@ -43,6 +44,7 @@ void Sandbox::OnStart()
 {
 	Debug::Console(Information, "The game was initialized.");
 
+	// Loads all textures
 	m_Truck = new Texture("Data/Frogger/truck.png");
 	m_Car01 = new Texture("Data/Frogger/car-02.png");
 	m_Car02 = new Texture("Data/Frogger/car-03.png");
@@ -53,14 +55,14 @@ void Sandbox::OnStart()
 	m_Wood01 = new Texture("Data/Frogger/wood-small.png");
 	m_Wood02 = new Texture("Data/Frogger/wood-big.png");
 
+	// Loads background and player
 	m_Background = new Sprite("Data/Frogger/background.jpg");
 	m_Player = new Frogger();
 
+	// Add an entity to the "scene"
 	m_Scene.push_back(m_Player);
 
-	// ---------------------------
-	// obstáculos da água
-
+	// Water's obstacles
 	m_Obstacle = new Obstacle(m_Wood01, 80);
 	m_Obstacle->SetPosition(150, 109, Layer::Lower);
 	m_Scene.push_back(m_Obstacle);
@@ -101,8 +103,7 @@ void Sandbox::OnStart()
 	m_Obstacle->SetPosition(750, 262, Layer::Lower);
 	m_Scene.push_back(m_Obstacle);
 
-	// obstáculos da pista
-
+	// Road's obstacles
 	m_Obstacle = new Obstacle(m_Truck, 50);
 	m_Obstacle->SetPosition(300, 344, Layer::Upper);
 	m_Scene.push_back(m_Obstacle);
@@ -134,25 +135,31 @@ void Sandbox::OnStart()
 
 void Sandbox::OnUpdate()
 {
+	// Updates entities
 	for (auto Entity : m_Scene)
 		Entity->OnUpdate();
 }
 
 void Sandbox::OnDraw()
 {
+	// Draws the background
 	m_Background->Draw(0.0f, 0.0f, Layer::Back);
 
+	// Draws entities
 	for (auto Entity : m_Scene)
 		Entity->OnDraw();
 }
 
 void Sandbox::OnFinish()
 {
+	// Deletes entities
 	for (auto Entity : m_Scene)
 		delete Entity;
 
+	// Deletes backround
 	delete m_Background;
 
+	// Deletes all textures
 	delete m_Truck;
 	delete m_Car01;
 	delete m_Car02;

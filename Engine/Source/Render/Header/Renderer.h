@@ -21,15 +21,15 @@ namespace owl
 
 	private:
 		// Attributes
-		ID3D11InputLayout* m_D3D11InputLayout;         // input layout
-		ID3D11VertexShader* m_D3D11VertexShader;       // vertex shader
-		ID3D11PixelShader* m_D3D11PixelShader;         // pixel shader
-		ID3D11RasterizerState* m_D3D11RasterizerState; // estado do rasterizador
-		ID3D11SamplerState* m_D3D11SamplerState;       // estado do amostrador de textura
-		ID3D11Buffer* m_D3D11VertexBuffer;             // buffer de vértices
-		ID3D11Buffer* m_D3D11IndexBuffer;              // buffer de índices
-		ID3D11Buffer* m_D3D11ConstantBuffer;           // buffer para o shader
-		uint m_VertexBufferPosition;                   // posição atual do vertex buffer
+		ID3D11InputLayout* m_D3D11InputLayout;         // Input layout
+		ID3D11VertexShader* m_D3D11VertexShader;       // Vertex shader
+		ID3D11PixelShader* m_D3D11PixelShader;         // Pixel shader
+		ID3D11RasterizerState* m_D3D11RasterizerState; // Rasterizer state
+		ID3D11SamplerState* m_D3D11SamplerState;       // Sampler state
+		ID3D11Buffer* m_D3D11VertexBuffer;             // Vertex buffer
+		ID3D11Buffer* m_D3D11IndexBuffer;              // Index buffer
+		ID3D11Buffer* m_D3D11ConstantBuffer;           // Constant buffer
+		uint m_VertexBufferPosition;                   // Current vertex buffer's position
 
 		// Sprite's vector
 		std::vector<struct Sinfo*> m_SpriteVector;
@@ -41,7 +41,7 @@ namespace owl
 		void Draw(struct Sinfo* Data);
 		void Render();
 
-		// renderiza um grupo de sprites de mesma textura
+		// Renders a group of sprites of the same texture
 		void RenderBatch(ID3D11ShaderResourceView* Texture, struct Sinfo** Sprites, uint Amount);
 
 		// Static attributes

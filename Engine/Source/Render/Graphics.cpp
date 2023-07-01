@@ -24,7 +24,7 @@ bool owl::Graphics::Initialize()
     uint CreateDeviceFlags = 0;
 
 #ifdef WL_DEBUG
-    // exibe mensagens de erro do Direct3D em modo de depuração
+    // Display error messages and warnings when in debug mode
     CreateDeviceFlags |= D3D11_CREATE_DEVICE_DEBUG;
 #endif
 
