@@ -33,25 +33,25 @@ Frogger::~Frogger()
 
 void Frogger::OnUpdate()
 {
-	if (Input::GetKeyTap(W) || Input::GetKeyTap(ArrowUp))
+	if (Input::GetKeyTap(Key_W) || Input::GetKeyTap(Key_Up))
 	{
 		AddMovement(0.0f, -m_Speed, 0.0f);
 		m_State = Up;
 	}
 
-	else if (Input::GetKeyTap(S) || Input::GetKeyTap(ArrowDown))
+	else if (Input::GetKeyTap(Key_S) || Input::GetKeyTap(Key_Down))
 	{
 		AddMovement(0.0f, m_Speed, 0.0f);
 		m_State = Down;
 	}
 
-	if (Input::GetKeyTap(D) || Input::GetKeyTap(ArrowRight))
+	if (Input::GetKeyTap(Key_D) || Input::GetKeyTap(Key_Right))
 	{
 		AddMovement(m_Speed, 0.0f, 0.0f);
 		m_State = Right;
 	}
 
-	else if (Input::GetKeyTap(A) || Input::GetKeyTap(ArrowLeft))
+	else if (Input::GetKeyTap(Key_A) || Input::GetKeyTap(Key_Left))
 	{
 		AddMovement(-m_Speed, 0.0f, 0.0f);
 		m_State = Left;

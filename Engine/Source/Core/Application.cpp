@@ -83,7 +83,7 @@ int owl::Application::Loop()
 		else
 		{
 			// Engine's default's pause function
-			if (Input::GetKeyTap(EKeyCode::Pause))
+			if (Input::GetKeyTap(EKeyCode::Key_Pause))
 			{
 				s_bPaused = !s_bPaused;
 				(s_bPaused) ? Time::GetInstance().Timer->Stop() : Time::GetInstance().Timer->Start();
