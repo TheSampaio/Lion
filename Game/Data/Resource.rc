@@ -1,4 +1,4 @@
-#include "../Script/Resources.h"
+#include "../Source/Resources.h"
 
 IDI_ICON		ICON		IDI_ICON_PATH
 IDC_CURSOR		CURSOR		IDC_CURSOR_PATH
