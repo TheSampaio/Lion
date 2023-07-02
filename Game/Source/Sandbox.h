@@ -2,6 +2,9 @@
 
 #include <Owl.h>
 
+#include "Spaceship.h"
+#include "Alien.h"
+
 class Sandbox : public owl::Game
 {
 public:
@@ -12,22 +15,18 @@ public:
 	void OnDraw();
 	void OnFinish();
 
+	static owl::Scene* s_Scene;
+
 private:
-	std::list<owl::Entity*> m_Scene;
-
-	owl::Texture* m_Truck;
-	owl::Texture* m_Car01;
-	owl::Texture* m_Car02;
-	owl::Texture* m_Car03;
-	owl::Texture* m_Car04;
-	owl::Texture* m_Turtle01;
-	owl::Texture* m_Turtle02;
-	owl::Texture* m_Wood01;
-	owl::Texture* m_Wood02;
-
 	owl::Sprite* m_Background;
+	owl::Sprite* m_Header;
 
-	class Frogger* m_Player;
-	class Obstacle* m_Obstacle;
+	Spaceship* m_Player;
+	Alien* m_Alien;
+
+	owl::Texture* m_Alien01;
+	owl::Texture* m_Alien02;
+	owl::Texture* m_Alien03;
+	owl::Texture* m_Alien04;
 };
 

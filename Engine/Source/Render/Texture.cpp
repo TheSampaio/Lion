@@ -18,7 +18,7 @@ owl::Texture::Texture(std::string FilePath)
         Debug::Message(Warning, Message.c_str());
     }
 
-    m_Center = { m_Size[0], m_Size[1] };
+    m_Center = { m_Size[0] / 2, m_Size[1] / 2 };
 }
 
 owl::Texture::~Texture()

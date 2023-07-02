@@ -19,6 +19,7 @@
 #include "../Source/Logic/Header/Cursor.h"
 #include "../Source/Logic/Header/Entity.h"
 #include "../Source/Logic/Header/Game.h"
+#include "../Source/Logic/Header/Scene.h"
 #include "../Source/Logic/Header/Timer.h"
 
 // Math
