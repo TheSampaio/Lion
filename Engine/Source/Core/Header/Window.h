@@ -16,7 +16,7 @@ namespace owl
 		// === MAIN methods ======
 
 		// Closes the window
-		static void OWL_API Close() { PostMessage(GetInstance().m_hWindow, WM_DESTROY, 0, 0); }
+		static void OWL_API Close() { SendMessage(GetInstance().m_hWindow, WM_CLOSE, 0, 0); }
 
 		// === GET methods ======
 
@@ -57,6 +57,7 @@ namespace owl
 		friend class Application;
 		friend class Cursor;
 		friend class Debug;
+		friend class Input;
 		friend class Time;
 		friend class Graphics;
 		friend class Renderer;

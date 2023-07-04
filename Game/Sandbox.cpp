@@ -14,7 +14,7 @@ Sandbox::Sandbox()
 		Window::SetIcon(IDI_ICON);
 		Window::SetSize(800, 600);
 		Window::SetTitle("Galaga Demo");
-		Window::SetDisplayMode(Windowed);
+		//Window::SetDisplayMode(Windowed);
 
 		// Set-up the window's cursor
 		Cursor::SetCursor(IDC_CURSOR);
@@ -85,7 +85,6 @@ void Sandbox::OnStart()
 	s_Scene->Add(new Alien(m_Alien02, X - Offset * 10, Y));
 	s_Scene->Add(new Alien(m_Alien03, X - Offset * 11, Y));
 	s_Scene->Add(new Alien(m_Alien01, X - Offset * 12, Y));
-	
 }
 
 void Sandbox::OnUpdate()

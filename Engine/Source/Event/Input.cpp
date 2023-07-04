@@ -39,8 +39,8 @@ LRESULT owl::Input::Procedure(HWND Window, UINT Message, WPARAM wParam, LPARAM l
 
         if (s_Keys[Key_F4])
         {
-            if (Debug::Question(Negative, "Are you sure you want to quit? This might cause some problems."))
-                PostQuitMessage(WM_DESTROY);
+			if (Debug::Question(Negative, "Are you sure you want to quit? This might cause some problems."))
+				SendMessage(Window::GetInstance().m_hWindow, WM_DESTROY, 0, 0);
 
             s_Keys[Key_F4] = false;
         }
@@ -64,7 +64,11 @@ LRESULT owl::Input::Procedure(HWND Window, UINT Message, WPARAM wParam, LPARAM l
 		return 0;
 
 	case WM_DESTROY:
-		PostQuitMessage(0);
+		PostQuitMessage(WM_DESTROY);
+		return 0;
+
+	case WM_CLOSE:
+		PostQuitMessage(EXIT_SUCCESS);
 		return 0;
 
 	default:

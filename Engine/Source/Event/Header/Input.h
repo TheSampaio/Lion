@@ -150,6 +150,6 @@ namespace owl
 		static bool s_Ctrl[256];
 
 		// Static methods
-		static LRESULT CALLBACK Procedure(HWND Window, UINT Message, WPARAM wParam, LPARAM lParam);
+		static LRESULT WINAPI Procedure(HWND Window, UINT Message, WPARAM wParam, LPARAM lParam);
 	};
 }
