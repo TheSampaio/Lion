@@ -51,31 +51,41 @@ void Sandbox::OnStart()
 	m_Alien03 = new Texture("Data/Galaga/alien-03.png");
 	m_Alien04 = new Texture("Data/Galaga/alien-04.png");
 
-	float X = 10.0f, Y = 280.0f;
+	float X = 0.0f, Y = 280.0f, Offset = 64.0f;
 
 	// First row
 	s_Scene->Add(new Alien(m_Alien01, X, Y));
-	s_Scene->Add(new Alien(m_Alien02, X + 100, Y));
-	s_Scene->Add(new Alien(m_Alien03, X + 200, Y));
-	s_Scene->Add(new Alien(m_Alien04, X + 300, Y));
-	s_Scene->Add(new Alien(m_Alien01, X + 400, Y));
-	s_Scene->Add(new Alien(m_Alien02, X + 500, Y));
-	s_Scene->Add(new Alien(m_Alien03, X + 600, Y));
-	s_Scene->Add(new Alien(m_Alien04, X + 700, Y));
+	s_Scene->Add(new Alien(m_Alien02, X + Offset, Y));
+	s_Scene->Add(new Alien(m_Alien03, X + Offset * 2, Y));
+	s_Scene->Add(new Alien(m_Alien04, X + Offset * 3, Y));
+	s_Scene->Add(new Alien(m_Alien03, X + Offset * 4, Y));
+	s_Scene->Add(new Alien(m_Alien02, X + Offset * 5, Y));
+	s_Scene->Add(new Alien(m_Alien01, X + Offset * 6, Y));
+	s_Scene->Add(new Alien(m_Alien02, X + Offset * 7, Y));
+	s_Scene->Add(new Alien(m_Alien03, X + Offset * 8, Y));
+	s_Scene->Add(new Alien(m_Alien04, X + Offset * 9, Y));
+	s_Scene->Add(new Alien(m_Alien03, X + Offset * 10, Y));
+	s_Scene->Add(new Alien(m_Alien02, X + Offset * 11, Y));
+	s_Scene->Add(new Alien(m_Alien04, X + Offset * 12, Y));
 
-	X = 20.0f;
-	float OffsetX = 44.0f;
-	float OffsetY = 60.0f;
+	X = Window::GetSize()[0] - 62.0f;
+	Y = 330.0f;
 
 	// Second row
-	s_Scene->Add(new Alien(m_Alien04, X       + OffsetX, Y + OffsetY));
-	s_Scene->Add(new Alien(m_Alien03, X + 100 + OffsetX, Y + OffsetY));
-	s_Scene->Add(new Alien(m_Alien02, X + 200 + OffsetX, Y + OffsetY));
-	s_Scene->Add(new Alien(m_Alien01, X + 300 + OffsetX, Y + OffsetY));
-	s_Scene->Add(new Alien(m_Alien04, X + 400 + OffsetX, Y + OffsetY));
-	s_Scene->Add(new Alien(m_Alien03, X + 500 + OffsetX, Y + OffsetY));
-	s_Scene->Add(new Alien(m_Alien02, X + 600 + OffsetX, Y + OffsetY));
-	s_Scene->Add(new Alien(m_Alien01, X + 700 + OffsetX, Y + OffsetY));
+	s_Scene->Add(new Alien(m_Alien04, X, Y));
+	s_Scene->Add(new Alien(m_Alien03, X - Offset, Y));
+	s_Scene->Add(new Alien(m_Alien02, X - Offset * 2, Y));
+	s_Scene->Add(new Alien(m_Alien01, X - Offset * 3, Y));
+	s_Scene->Add(new Alien(m_Alien02, X - Offset * 4, Y));
+	s_Scene->Add(new Alien(m_Alien03, X - Offset * 5, Y));
+	s_Scene->Add(new Alien(m_Alien04, X - Offset * 6, Y));
+	s_Scene->Add(new Alien(m_Alien03, X - Offset * 7, Y));
+	s_Scene->Add(new Alien(m_Alien02, X - Offset * 8, Y));
+	s_Scene->Add(new Alien(m_Alien01, X - Offset * 9, Y));
+	s_Scene->Add(new Alien(m_Alien02, X - Offset * 10, Y));
+	s_Scene->Add(new Alien(m_Alien03, X - Offset * 11, Y));
+	s_Scene->Add(new Alien(m_Alien01, X - Offset * 12, Y));
+	
 }
 
 void Sandbox::OnUpdate()
