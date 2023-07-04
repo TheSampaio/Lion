@@ -30,34 +30,36 @@ LRESULT owl::Input::Procedure(HWND Window, UINT Message, WPARAM wParam, LPARAM l
 {
 	switch (Message)
 	{
-	case WM_SYSKEYDOWN:
-		s_Keys[wParam] = true;
-		
-		if (s_Keys[Key_F4])
-		{
-			if (Debug::Question(Negative, "Are you sure you want to quit? This might cause some problems.")) PostQuitMessage(WM_DESTROY);
-			s_Keys[Key_F4] = false;
-		}
+    case WM_SYSKEYUP:
+        s_Keys[wParam] = false;
+        return 0;
 
-		return 0;
+    case WM_SYSKEYDOWN:
+        s_Keys[wParam] = true;
 
-	case WM_KEYDOWN:
-		s_Keys[wParam] = true;
-		return 0;
+        if (s_Keys[Key_F4])
+        {
+            if (Debug::Question(Negative, "Are you sure you want to quit? This might cause some problems."))
+                PostQuitMessage(WM_DESTROY);
 
-	case WM_SYSKEYUP:
-		s_Keys[wParam] = false;
-		return 0;
+            s_Keys[Key_F4] = false;
+        }
+
+        return 0;
 
 	case WM_KEYUP:
 		s_Keys[wParam] = false;
 		return 0;
 
+    case WM_KEYDOWN:
+        s_Keys[wParam] = true;
+        return 0;
+
 	case WM_SETFOCUS:
 		Application::Resume();
 		return 0;
 
-	case WM_KILLFOCUS:
+    case WM_KILLFOCUS:
 		Application::Pause();
 		return 0;
 

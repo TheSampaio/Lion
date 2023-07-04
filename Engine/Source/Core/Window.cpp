@@ -24,7 +24,7 @@ bool owl::Window::Create()
 	WNDCLASSEX WndClass = {};
 	LPCWSTR WndName = L"Window";
 
-	WndClass.cbSize = sizeof(WNDCLASSEX);
+	WndClass.cbSize = sizeof(WndClass);
 	WndClass.lpfnWndProc = Input::Procedure;
 	WndClass.cbClsExtra = 0;
 	WndClass.cbWndExtra = 0;
