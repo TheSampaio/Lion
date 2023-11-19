@@ -3,10 +3,6 @@
 
 #include "Header/Entity.h"
 
-owl::Scene::Scene()
-{
-}
-
 owl::Scene::~Scene()
 {
     // Removes entities from memory heap

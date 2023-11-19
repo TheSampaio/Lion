@@ -8,7 +8,7 @@ namespace owl
     class Scene
     {
     public:
-        OWL_API Scene();
+        OWL_API Scene() {};
         OWL_API ~Scene();
 
         // === MAIN methods ======
