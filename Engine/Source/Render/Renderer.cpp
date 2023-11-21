@@ -218,8 +218,6 @@ void Lion::Renderer::Finalize()
     ReleaseCOM(m_D3D11InputLayout);
 }
 
-// ---------------------------------------------------------------------------------
-
 void Lion::Renderer::RenderBatch(ID3D11ShaderResourceView* Texture, Sinfo** Sprites, uint Cont)
 {
     // Draw using the following texture
@@ -418,8 +416,6 @@ void Lion::Renderer::Render()
     // Clears drawing list (updated every frame)
     m_SpriteVector.clear();
 }
-
-// ---------------------------------------------------------------------------------
 
 void Lion::Renderer::Draw(Sinfo* Sprite)
 {
