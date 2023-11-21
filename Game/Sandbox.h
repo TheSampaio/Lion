@@ -2,8 +2,8 @@
 
 #include <Owl.h>
 
-#include "Spaceship.h"
-#include "Alien.h"
+#include "Source/Spaceship.h"
+#include "Source/Alien.h"
 
 class Sandbox : public Lion::Game
 {

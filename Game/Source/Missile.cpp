@@ -1,5 +1,5 @@
 #include "Missile.h"
-#include "Sandbox.h"
+#include "../Sandbox.h"
 
 using namespace Lion;
 
