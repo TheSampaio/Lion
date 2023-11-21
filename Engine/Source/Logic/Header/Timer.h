@@ -1,6 +1,6 @@
 #pragma once
 
-namespace owl
+namespace Lion
 {
 	class Timer
 	{
@@ -10,18 +10,18 @@ namespace owl
 		// === MAIN methods ======
 
 		// Starts the timer
-		void OWL_API Start();
+		void LION_API Start();
 
 		// Stops the timer
-		void OWL_API Stop();
+		void LION_API Stop();
 
 		// Resets the timer
-		float OWL_API Reset();
+		float LION_API Reset();
 
 		// === GET methods ======
 
 		// Gets the elapsed time since the timer's start
-		float OWL_API GetElapsedTime();
+		float LION_API GetElapsedTime();
 
 	private:
 		// Attributes

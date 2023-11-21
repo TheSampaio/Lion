@@ -6,7 +6,7 @@
 #include "../Event/Header/Debug.h"
 #include "../Kind/Header/Tools.h"
 
-owl::Texture::Texture(std::string FilePath)
+Lion::Texture::Texture(std::string FilePath)
 	: m_TextureView(nullptr)
 {
 	m_Size = { 0, 0 };
@@ -21,7 +21,7 @@ owl::Texture::Texture(std::string FilePath)
     m_Center = { m_Size[0] / 2, m_Size[1] / 2 };
 }
 
-owl::Texture::~Texture()
+Lion::Texture::~Texture()
 {
     if (m_TextureView)
     {

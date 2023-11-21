@@ -32,8 +32,8 @@
 #define WIN32_WIC
 	#pragma warning(push)
 	#pragma warning(disable : 4005)
-	#include <stdint.h>
-	#include <wincodec.h>
+		#include <stdint.h>
+		#include <wincodec.h>
 	#pragma warning(pop)
 #endif // !WIN32_WIC
 
@@ -41,12 +41,12 @@
 #include "Source/Kind/Header/Basic.h"
 
 // DLL exporter
-#ifdef WL_PLATFORM_WIN
-	#ifdef WL_DLL
-		#define OWL_API __declspec(dllexport)
+#ifdef LN_PLATFORM_WIN
+	#ifdef LN_DLL
+		#define LION_API __declspec(dllexport)
 	#else
-		#define OWL_API __declspec(dllimport)
+		#define LION_API __declspec(dllimport)
 	#endif
 #else
-	#error Owl engine does not support Unix platforms!
+	#error Lion engine does not support Unix platforms!
 #endif

@@ -1,7 +1,7 @@
 #include "Missile.h"
 #include "Sandbox.h"
 
-using namespace owl;
+using namespace Lion;
 
 Missile::Missile(Texture* Missile)
 {

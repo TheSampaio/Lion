@@ -5,10 +5,10 @@
 #include "../Core/Header/Window.h"
 #include "../Event/Header/Debug.h"
 
-bool owl::Input::s_Keys[256] = { false };
-bool owl::Input::s_Ctrl[256] = { false };
+bool Lion::Input::s_Keys[256] = { false };
+bool Lion::Input::s_Ctrl[256] = { false };
 
-bool owl::Input::IGetKeyTap(EKeyCode keyCode)
+bool Lion::Input::IGetKeyTap(EKeyCode keyCode)
 {
 	if (s_Ctrl[keyCode])
 	{
@@ -26,7 +26,7 @@ bool owl::Input::IGetKeyTap(EKeyCode keyCode)
 	return false;
 }
 
-LRESULT owl::Input::Procedure(HWND Window, UINT Message, WPARAM wParam, LPARAM lParam)
+LRESULT Lion::Input::Procedure(HWND Window, UINT Message, WPARAM wParam, LPARAM lParam)
 {
 	switch (Message)
 	{

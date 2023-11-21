@@ -5,7 +5,7 @@
 #include "Spaceship.h"
 #include "Alien.h"
 
-class Sandbox : public owl::Game
+class Sandbox : public Lion::Game
 {
 public:
 	Sandbox();
@@ -15,18 +15,18 @@ public:
 	void OnDraw();
 	void OnFinish();
 
-	static owl::Scene* s_Scene;
+	static Lion::Scene* s_Scene;
 
 private:
-	owl::Sprite* m_Background;
-	owl::Sprite* m_Header;
+	Lion::Sprite* m_Background;
+	Lion::Sprite* m_Header;
 
 	Spaceship* m_Player;
 	Alien* m_Alien;
 
-	owl::Texture* m_Alien01;
-	owl::Texture* m_Alien02;
-	owl::Texture* m_Alien03;
-	owl::Texture* m_Alien04;
+	Lion::Texture* m_Alien01;
+	Lion::Texture* m_Alien02;
+	Lion::Texture* m_Alien03;
+	Lion::Texture* m_Alien04;
 };
 

@@ -3,20 +3,20 @@
 
 #include "../Core/Header/Window.h"
 
-owl::Debug::Debug()
+Lion::Debug::Debug()
 {
 	// Gets the console
 	m_hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
 }
 
-void owl::Debug::IConsole(EDebugMode Mode, const char* Text, bool bBreakLine)
+void Lion::Debug::IConsole(EDebugMode Mode, const char* Text, bool bBreakLine)
 {
 	WORD Colour = (Mode == Information) ? 3 : (Mode == Warning) ? 6 : (Mode == Error) ? 4 : 2;
 	SetConsoleTextAttribute(m_hConsole, Colour);
 	(bBreakLine) ? std::cout << Text << std::endl : std::cout << Text;
 }
 
-void owl::Debug::IMessage(EDebugMode Mode, std::string_view Text)
+void Lion::Debug::IMessage(EDebugMode Mode, std::string_view Text)
 {
 	if (Mode == Information || Mode == Specification)
 		MessageBox(Window::GetInstance().m_hWindow, std::wstring(Text.begin(), Text.end()).data(), L"Information", MB_ICONINFORMATION | MB_OK);
@@ -28,7 +28,7 @@ void owl::Debug::IMessage(EDebugMode Mode, std::string_view Text)
 		MessageBox(Window::GetInstance().m_hWindow, std::wstring(Text.begin(), Text.end()).data(), L"Error", MB_ICONERROR | MB_OK);
 }
 
-bool owl::Debug::IQuestion(EQuestionMode Mode, std::string_view Text)
+bool Lion::Debug::IQuestion(EQuestionMode Mode, std::string_view Text)
 {
 	int Answer = 0;
 

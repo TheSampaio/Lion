@@ -1,6 +1,6 @@
 #pragma once
 
-namespace owl
+namespace Lion
 {
 	class Application
 	{
@@ -8,7 +8,7 @@ namespace owl
 		// === MAIN methods ======
 
 		// Runs a game
-		static int OWL_API Run(class Game* Level) { return GetInstance().IRun(Level); }
+		static int LION_API Run(class Game* Level) { return GetInstance().IRun(Level); }
 
 	protected:
 		Application();

@@ -2,16 +2,16 @@
 
 #include <Owl.h>
 
-class Alien : public owl::Entity
+class Alien : public Lion::Entity
 {
 public:
-	Alien(owl::Texture* Alien, float X, float Y);
+	Alien(Lion::Texture* Alien, float X, float Y);
 	~Alien();
 
 	void OnDraw();
 	void OnUpdate();
 
 private:
-	owl::Sprite* m_Sprite;
+	Lion::Sprite* m_Sprite;
 	float m_Speed;
 };

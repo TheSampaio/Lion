@@ -1,7 +1,7 @@
 #include "Engine.h"
 #include "Header/Game.h"
 
-void owl::Game::OnPause()
+void Lion::Game::OnPause()
 {
 	Sleep(10);
 }

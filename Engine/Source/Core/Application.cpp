@@ -10,24 +10,24 @@
 #include "../Render/Header/Graphics.h"
 #include "../Render/Header/Renderer.h"
 
-bool owl::Application::s_bPaused = false;
+bool Lion::Application::s_bPaused = false;
 
-owl::Application::Application()
+Lion::Application::Application()
 	: Game(nullptr)
 {
 	// Changes console's title (Only in debug mode)
-#ifdef WL_DEBUG
-	std::system("TITLE Owl Engine");
-#endif // WL_DEBUG
+#ifdef LN_DEBUG
+	std::system("TITLE Lion Engine");
+#endif // LN_DEBUG
 }
 
-owl::Application::~Application()
+Lion::Application::~Application()
 {
 	// Deletes the hame
 	delete Game;
 }
 
-int owl::Application::IRun(class Game* Level)
+int Lion::Application::IRun(class Game* Level)
 {
 	// Creates the game
 	Game = Level;
@@ -62,7 +62,7 @@ int owl::Application::IRun(class Game* Level)
 	return State;
 }
 
-int owl::Application::Loop()
+int Lion::Application::Loop()
 {
 	// Starts the Time's timer and initializes the game
 	Time::GetInstance().Timer->Start();
@@ -99,6 +99,7 @@ int owl::Application::Loop()
 				// Clears backbuffer and draw everything in the game
 				Graphics::GetInstance().ClearBuffers();
 				Game->OnDraw();
+
 				Renderer::GetInstance().Render();
 
 				// Swaps window's framebuffers
@@ -125,14 +126,14 @@ int owl::Application::Loop()
 	return static_cast<int>(Messages.wParam);
 }
 
-void owl::Application::Pause()
+void Lion::Application::Pause()
 {
 	// Pauses the engine and time's timer
 	s_bPaused = true;
 	Time::GetInstance().Timer->Stop();
 }
 
-void owl::Application::Resume()
+void Lion::Application::Resume()
 {
 	// Resumes the engine and time's timer
 	s_bPaused = false;

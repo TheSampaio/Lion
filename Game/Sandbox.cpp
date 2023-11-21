@@ -1,7 +1,7 @@
 #include "Sandbox.h"
 #include "Resources.h"
 
-using namespace owl;
+using namespace Lion;
 
 // Initializes the scene's pointer
 Scene* Sandbox::s_Scene = nullptr;

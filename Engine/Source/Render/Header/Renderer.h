@@ -1,6 +1,6 @@
 #pragma once
 
-namespace owl
+namespace Lion
 {
 	class Renderer
 	{

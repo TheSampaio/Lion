@@ -16,7 +16,7 @@ enum EQuestionMode
 	Negative,
 };
 
-namespace owl
+namespace Lion
 {
 	class Debug
 	{
@@ -24,12 +24,12 @@ namespace owl
 		// === MAIN methods ======
 
 		// Displays a text in a message box
-		static void OWL_API Message(EDebugMode Mode, const char* Text) { GetInstance().IMessage(Mode, Text); }
+		static void LION_API Message(EDebugMode Mode, const char* Text) { GetInstance().IMessage(Mode, Text); }
 
 		// Displays a text in the application's console
-		static void OWL_API Console(EDebugMode Mode, const char* Text, bool bBreakLine = true) { GetInstance().IConsole(Mode, Text, bBreakLine); }
+		static void LION_API Console(EDebugMode Mode, const char* Text, bool bBreakLine = true) { GetInstance().IConsole(Mode, Text, bBreakLine); }
 
-		static bool OWL_API Question(EQuestionMode Mode, const char* Text) { return GetInstance().IQuestion(Mode, Text); }
+		static bool LION_API Question(EQuestionMode Mode, const char* Text) { return GetInstance().IQuestion(Mode, Text); }
 
 	protected:
 		Debug();

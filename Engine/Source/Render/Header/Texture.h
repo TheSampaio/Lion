@@ -1,12 +1,12 @@
 #pragma once
 
-namespace owl
+namespace Lion
 {
 	class Texture
 	{
 	public:
-		OWL_API Texture(std::string FilePath);
-		OWL_API ~Texture();
+		LION_API Texture(std::string FilePath);
+		LION_API ~Texture();
 
 		// === GET methods ======
 

@@ -1,6 +1,6 @@
 #pragma once
 
-namespace owl
+namespace Lion
 {
     // Forward declarations
     class Entity;
@@ -8,29 +8,29 @@ namespace owl
     class Scene
     {
     public:
-        OWL_API Scene() {};
-        OWL_API ~Scene();
+        LION_API Scene() {};
+        LION_API ~Scene();
 
         // === MAIN methods ======
 
         // Adds a entity to the scene
-        void OWL_API Add(Entity* Entity);
+        void LION_API Add(Entity* Entity);
 
         // Updates all entities inside
-        void OWL_API Update();
+        void LION_API Update();
 
         // Draws all entities inside
-        void OWL_API Draw();
+        void LION_API Draw();
 
         // Resets the list for starts at the begining
-        void OWL_API Begin();
+        void LION_API Begin();
 
         // Removes last entity returned by GetNext()
-        void OWL_API Remove();
+        void LION_API Remove();
 
         // === GET methods ======
 
-        OWL_API Entity* GetNext();
+        LION_API Entity* GetNext();
 
     private:
         // Attributes

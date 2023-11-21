@@ -2,7 +2,7 @@
 
 #include <Owl.h>
 
-class Spaceship : public owl::Entity
+class Spaceship : public Lion::Entity
 {
 public:
 	Spaceship();
@@ -11,11 +11,11 @@ public:
 	void OnDraw();
 	void OnUpdate();
 
-	owl::Sprite* GetSprite() const { return m_Sprite; }
+	Lion::Sprite* GetSprite() const { return m_Sprite; }
 
 private:
-	owl::Sprite* m_Sprite;
-	owl::Texture* m_Missile;
+	Lion::Sprite* m_Sprite;
+	Lion::Texture* m_Missile;
 
 	float m_Speed;
 };

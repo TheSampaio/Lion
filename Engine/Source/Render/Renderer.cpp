@@ -15,14 +15,14 @@ struct Vertex
     DirectX::XMFLOAT2 Texture;
 };
 
-owl::Renderer::Renderer()
+Lion::Renderer::Renderer()
     : m_D3D11InputLayout(nullptr), m_D3D11VertexShader(nullptr), m_D3D11PixelShader(nullptr), m_D3D11RasterizerState(nullptr), m_D3D11SamplerState(nullptr),
       m_D3D11VertexBuffer(nullptr), m_D3D11IndexBuffer(nullptr), m_D3D11ConstantBuffer(nullptr)
 {
     m_VertexBufferPosition = 0;
 }
 
-bool owl::Renderer::Initialize()
+bool Lion::Renderer::Initialize()
 {
     // Loads vertex shader's bytecode (HLSL)
     ID3DBlob* D3DVertexShader = nullptr;
@@ -205,7 +205,7 @@ bool owl::Renderer::Initialize()
     return true;
 }
 
-void owl::Renderer::Finalize()
+void Lion::Renderer::Finalize()
 {
     // Releases all got components
     ReleaseCOM(m_D3D11ConstantBuffer);
@@ -220,7 +220,7 @@ void owl::Renderer::Finalize()
 
 // ---------------------------------------------------------------------------------
 
-void owl::Renderer::RenderBatch(ID3D11ShaderResourceView* Texture, Sinfo** Sprites, uint Cont)
+void Lion::Renderer::RenderBatch(ID3D11ShaderResourceView* Texture, Sinfo** Sprites, uint Cont)
 {
     // Draw using the following texture
     Graphics::GetInstance().m_D3D11Context->PSSetShaderResources(0, 1, &Texture);
@@ -379,7 +379,7 @@ void owl::Renderer::RenderBatch(ID3D11ShaderResourceView* Texture, Sinfo** Sprit
     }
 }
 
-void owl::Renderer::Render()
+void Lion::Renderer::Render()
 {
     // Sort sprites by depth
     std::sort(m_SpriteVector.begin(), m_SpriteVector.end(),
@@ -421,7 +421,7 @@ void owl::Renderer::Render()
 
 // ---------------------------------------------------------------------------------
 
-void owl::Renderer::Draw(Sinfo* Sprite)
+void Lion::Renderer::Draw(Sinfo* Sprite)
 {
     m_SpriteVector.push_back(Sprite);
 }

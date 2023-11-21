@@ -3,7 +3,7 @@
 
 #include "Sandbox.h"
 
-using namespace owl;
+using namespace Lion;
 
 Spaceship::Spaceship()
 {

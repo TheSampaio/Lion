@@ -1,4 +1,4 @@
-workspace "Owl"
+workspace "Lion"
     configurations { "Debug", "Release" }
 
     language "C++"
@@ -6,23 +6,23 @@ workspace "Owl"
     architecture "x64"
 
     filter "configurations:Debug"
-        defines "WL_DEBUG"
+        defines "LN_DEBUG"
         symbols "On"
         optimize "Off"
 
     filter "configurations:Release"
-        defines "WL_RELEASE"
+        defines "LN_RELEASE"
         symbols "Off"
         optimize "Speed"
 
     OutputDir = "%{cfg.buildcfg}/"
 
--- ========== Owl ========== --
-project "Owl"
+-- ========== Lion ========== --
+project "Lion"
     location "Engine"
     kind "SharedLib"
 
-    defines "WL_DLL"
+    defines "LN_DLL"
 
     -- Output directories
     targetdir ("_Output/Bin/" .. OutputDir .. "%{prj.name}")
@@ -54,7 +54,7 @@ project "Owl"
     }
 
     filter "system:windows"
-        defines "WL_PLATFORM_WIN"
+        defines "LN_PLATFORM_WIN"
         systemversion "latest"
 
     filter "files:Engine/Shader/DefaultVertex.hlsl"
@@ -87,9 +87,9 @@ project "Sandbox"
     }
 
     links {
-        "Owl",
+        "Lion",
     }
 
     filter "system:windows"
-        defines "WL_PLATFORM_WIN"
+        defines "LN_PLATFORM_WIN"
         systemversion "latest"

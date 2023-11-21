@@ -1,8 +1,8 @@
 #pragma once
 
-namespace owl
+namespace Lion
 {
-	class OWL_API Time
+	class LION_API Time
 	{
 	public:
 		// === GET methods ======

@@ -111,7 +111,7 @@ enum EKeyCode
 	Key_LockScroll = 0x091
 };
 
-namespace owl
+namespace Lion
 {
 	class Input
 	{
@@ -119,13 +119,13 @@ namespace owl
 		// == GET methods ======
 
 		// Verifies if the key is pressed every frame
-		static bool OWL_API GetKeyPress(EKeyCode KeyCode) { return s_Keys[KeyCode]; }
+		static bool LION_API GetKeyPress(EKeyCode KeyCode) { return s_Keys[KeyCode]; }
 
 		// Verifies if the key is released every frame
-		static bool OWL_API GetKeyRelease(EKeyCode KeyCode) { return !s_Keys[KeyCode]; }
+		static bool LION_API GetKeyRelease(EKeyCode KeyCode) { return !s_Keys[KeyCode]; }
 
 		// Verifies if the key was pressed in the last frame
-		static bool OWL_API GetKeyTap(EKeyCode KeyCode) { return GetInstance().IGetKeyTap(KeyCode); }
+		static bool LION_API GetKeyTap(EKeyCode KeyCode) { return GetInstance().IGetKeyTap(KeyCode); }
 
 		// === Friends ======
 

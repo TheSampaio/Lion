@@ -1,8 +1,8 @@
 #pragma once
 
-namespace owl
+namespace Lion
 {
-    struct OWL_API Layer
+    struct LION_API Layer
     {
         // Expands to: 0.00f
         static const float Front;

@@ -1,6 +1,6 @@
 #pragma once
 
-namespace owl
+namespace Lion
 {
 	class Cursor
 	{
@@ -8,10 +8,10 @@ namespace owl
 		// === SET methods ======
 
 		// Sets the cursor's icon
-		static void OWL_API SetCursor(const uint Cursor);
+		static void LION_API SetCursor(const uint Cursor);
 
 		// Sets the cursor's visibility
-		static void OWL_API SetVisibility(bool bShow) { ShowCursor(bShow); }
+		static void LION_API SetVisibility(bool bShow) { ShowCursor(bShow); }
 
 		// === Friends ======
 

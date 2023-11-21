@@ -1,26 +1,26 @@
 #pragma once
 
-namespace owl
+namespace Lion
 {
 	class Sprite
 	{
     public:
-        OWL_API Sprite(std::string FilePath);
-        OWL_API Sprite(const class Texture* Texture);
-        OWL_API ~Sprite();
+        LION_API Sprite(std::string FilePath);
+        LION_API Sprite(const class Texture* Texture);
+        LION_API ~Sprite();
 
         // === MAIN methods ======
 
         // Draws the sprite
-        void OWL_API Draw(float X, float Y, float Z = 0.50f);
+        void LION_API Draw(float X, float Y, float Z = 0.50f);
 
         // === GET methods ======
 
         // Gets sprites's size
-        std::array<uint, 2> OWL_API GetSize();
+        std::array<uint, 2> LION_API GetSize();
 
         // Gets sprites's center
-        std::array<uint, 2> OWL_API GetCenter();
+        std::array<uint, 2> LION_API GetCenter();
 
     private:
         // Attributes

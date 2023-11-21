@@ -6,7 +6,7 @@
 
 #include "../Kind/Header/Sinfo.h"
 
-owl::Sprite::Sprite(std::string FilePath)
+Lion::Sprite::Sprite(std::string FilePath)
 {
     m_Texture = new Texture(FilePath);
     m_bLocalImage = true;
@@ -15,7 +15,7 @@ owl::Sprite::Sprite(std::string FilePath)
     m_Sinfo->Texture = m_Texture->GetResourceView();
 }
 
-owl::Sprite::Sprite(const Texture* Texture)
+Lion::Sprite::Sprite(const Texture* Texture)
 {
     m_Texture = Texture;
     m_bLocalImage = false;
@@ -24,13 +24,13 @@ owl::Sprite::Sprite(const Texture* Texture)
     m_Sinfo->Texture = m_Texture->GetResourceView();
 }
 
-owl::Sprite::~Sprite()
+Lion::Sprite::~Sprite()
 {
     if (m_bLocalImage) delete m_Texture;
     delete m_Sinfo;
 }
 
-void owl::Sprite::Draw(float X, float Y, float Z)
+void Lion::Sprite::Draw(float X, float Y, float Z)
 {
     m_Sinfo->X = X;
     m_Sinfo->Y = Y;
@@ -43,13 +43,13 @@ void owl::Sprite::Draw(float X, float Y, float Z)
     Renderer::GetInstance().Draw(m_Sinfo);
 }
 
-std::array<uint, 2> owl::Sprite::GetSize()
+std::array<uint, 2> Lion::Sprite::GetSize()
 {
     std::array<uint, 2> Size = { m_Texture->GetSize()[0], m_Texture->GetSize()[1] };
     return Size;
 }
 
-std::array<uint, 2>OWL_API owl::Sprite::GetCenter()
+std::array<uint, 2>LION_API Lion::Sprite::GetCenter()
 {
     std::array<uint, 2> Size = { m_Texture->GetCenter()[0], m_Texture->GetCenter()[1] };
     return Size;

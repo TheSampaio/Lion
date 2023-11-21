@@ -8,7 +8,7 @@ enum ESynchronizationMode
 	Half
 };
 
-namespace owl
+namespace Lion
 {
 	class Graphics
 	{
@@ -16,7 +16,7 @@ namespace owl
 		// === SET methods ======
 
 		// Sets the v-sync mode
-		static void OWL_API SetVerticalSynchronization(ESynchronizationMode Mode) { GetInstance().m_VSyncMode = Mode; }
+		static void LION_API SetVerticalSynchronization(ESynchronizationMode Mode) { GetInstance().m_VSyncMode = Mode; }
 
 		// === Friends ======
 

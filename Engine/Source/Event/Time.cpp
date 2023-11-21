@@ -4,28 +4,28 @@
 #include "../Core/Header/Window.h"
 #include "../Logic/Header/Timer.h"
 
-owl::Time::Time()
+Lion::Time::Time()
     : Timer(nullptr)
 {
-    Timer = new owl::Timer();
+    Timer = new Lion::Timer();
 	m_DeltaTime = 0.0f;
 }
 
-owl::Time::~Time()
+Lion::Time::~Time()
 {
     delete Timer;
 }
 
-void owl::Time::DeltaTimeMonitor()
+void Lion::Time::DeltaTimeMonitor()
 {
-#ifdef WL_DEBUG
+#ifdef LN_DEBUG
     static float TotalTime = 0.0f;
     static uint  FrameCount = 0;
-#endif
+#endif !LN_DEBUG
  
     m_DeltaTime = Timer->Reset();
 
-#ifdef WL_DEBUG
+#ifdef LN_DEBUG
     TotalTime += m_DeltaTime;
     FrameCount++;
 
@@ -43,5 +43,5 @@ void owl::Time::DeltaTimeMonitor()
         FrameCount = 0;
         TotalTime -= 1.0f;
     }
-#endif
+#endif !LN_DEBUG
 }

@@ -3,7 +3,7 @@
 
 using namespace std::chrono;
 
-owl::Timer::Timer()
+Lion::Timer::Timer()
 {
 	// Initializes all class's attributes
 	m_Start = steady_clock::time_point();
@@ -12,7 +12,7 @@ owl::Timer::Timer()
 	m_bPaused = false;
 }
 
-void owl::Timer::Start()
+void Lion::Timer::Start()
 {
 	if (m_bPaused)
 	{
@@ -32,7 +32,7 @@ void owl::Timer::Start()
 	}
 }
 
-void owl::Timer::Stop()
+void Lion::Timer::Stop()
 {
 	if (!m_bPaused)
 	{
@@ -42,7 +42,7 @@ void owl::Timer::Stop()
 	}
 }
 
-float owl::Timer::Reset()
+float Lion::Timer::Reset()
 {
 	duration ElapsedTime = nanoseconds(0);
 
@@ -70,7 +70,7 @@ float owl::Timer::Reset()
 	return static_cast<float>(duration<double>(ElapsedTime).count());
 }
 
-float owl::Timer::GetElapsedTime()
+float Lion::Timer::GetElapsedTime()
 {
 	duration ElapsedTime = nanoseconds(0);
 

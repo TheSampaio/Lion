@@ -5,7 +5,7 @@
 #include "../Event/Header/Debug.h"
 #include "../Kind/Header/Tools.h"
 
-owl::Graphics::Graphics()
+Lion::Graphics::Graphics()
 	: m_D3D11Device(nullptr), m_D3D11Context(nullptr), m_DXGISwapChain(nullptr), m_D3D11RenderTargetView(nullptr), m_D3D11BlendState(nullptr)
 {
     m_D3D11Viewport = { 0 };
@@ -18,7 +18,7 @@ owl::Graphics::Graphics()
 	m_BackgroundColour[3] = 0.0f;
 }
 
-bool owl::Graphics::Initialize()
+bool Lion::Graphics::Initialize()
 {
     // Default D3D11 Device's flag
     uint CreateDeviceFlags = 0;
@@ -177,7 +177,7 @@ bool owl::Graphics::Initialize()
     return true;
 }
 
-void owl::Graphics::Finalize()
+void Lion::Graphics::Finalize()
 {
     // Release everything got
     ReleaseCOM(m_D3D11BlendState);

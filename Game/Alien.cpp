@@ -1,8 +1,8 @@
 #include "Alien.h"
 
-using namespace owl;
+using namespace Lion;
 
-Alien::Alien(owl::Texture* Alien, float X, float Y)
+Alien::Alien(Lion::Texture* Alien, float X, float Y)
 {
 	m_Sprite = new Sprite(Alien);
 	m_Speed = 150.0f;

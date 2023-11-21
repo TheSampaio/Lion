@@ -3,12 +3,12 @@
 
 #include "../Core/Header/Window.h"
 
-owl::Cursor::Cursor()
+Lion::Cursor::Cursor()
 	: m_hCursor(nullptr)
 {
 }
 
-void owl::Cursor::SetCursor(const uint Cursor)
+void Lion::Cursor::SetCursor(const uint Cursor)
 {
 	GetInstance().m_hCursor = LoadCursor(Window::GetInstance().m_hInstance, MAKEINTRESOURCE(Cursor));
 }

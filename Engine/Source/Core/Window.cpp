@@ -5,7 +5,7 @@
 #include "../Event/Header/Input.h"
 #include "../Logic/Header/Cursor.h"
 
-owl::Window::Window()
+Lion::Window::Window()
 	: m_hInstance(nullptr), m_hWindow(nullptr), m_hIcon(nullptr)
 {
 	m_hInstance = GetModuleHandle(0);
@@ -18,7 +18,7 @@ owl::Window::Window()
 	m_DisplayMode = Windowed;
 }
 
-bool owl::Window::Create()
+bool Lion::Window::Create()
 {
 	// Set-up the window
 	WNDCLASSEX WndClass = {};
