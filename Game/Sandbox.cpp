@@ -125,6 +125,8 @@ void Sandbox::OnFinish()
 	Debug::Console(Information, "The game was finalized.");
 }
 
+// === ENTRY POINT ===
+
 #pragma region Entry Point
 
 #ifdef LN_DEBUG
