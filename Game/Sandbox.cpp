@@ -14,7 +14,7 @@ Sandbox::Sandbox()
 		Window::SetIcon(IDI_ICON);
 		Window::SetSize(800, 600);
 		Window::SetTitle("Galaga Demo");
-		//Window::SetDisplayMode(Windowed);
+		Window::SetDisplayMode(Windowed);
 
 		// Set-up the window's cursor
 		Cursor::SetCursor(IDC_CURSOR);
@@ -89,6 +89,9 @@ void Sandbox::OnStart()
 
 void Sandbox::OnUpdate()
 {
+	if (Input::GetKeyTap(Key_Esc))
+		Window::Close();
+
 	// Updates entities
 	s_Scene->Update();
 }

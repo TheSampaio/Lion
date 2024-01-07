@@ -81,6 +81,7 @@ namespace Lion
 		DWORD m_Style;
 
 		std::string m_Title;
+		std::array<ushort, 2> m_Screen;
 		std::array<ushort, 2> m_Size;
 		std::array<ushort, 2> m_Center;
 		std::array<ushort, 2> m_Position;
