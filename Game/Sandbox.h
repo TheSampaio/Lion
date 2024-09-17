@@ -1,32 +1,15 @@
 #pragma once
 
-#include <Lion.h>
+#include <Lion/Core.h>
+#include <Lion/EntryPoint.h>
 
-#include "Source/Spaceship.h"
-#include "Source/Alien.h"
+#include "Source/ExampleLayer.h"
 
-class Sandbox : public Lion::Game
+class Sandbox : public Lion::Application
 {
 public:
-	Sandbox();
-
-	void OnStart();
-	void OnUpdate();
-	void OnDraw();
-	void OnFinish();
-
-	static Lion::Scene* s_Scene;
-
-private:
-	Lion::Sprite* m_Background;
-	Lion::Sprite* m_Header;
-
-	Spaceship* m_Player;
-	Alien* m_Alien;
-
-	Lion::Texture* m_Alien01;
-	Lion::Texture* m_Alien02;
-	Lion::Texture* m_Alien03;
-	Lion::Texture* m_Alien04;
+	Sandbox()
+	{
+		Push(new ExampleLayer());
+	}
 };
-

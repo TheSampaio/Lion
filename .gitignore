@@ -4,11 +4,12 @@
 .vscode/
 _Output/
 
+Vendor/glad
+Vendor/glfw
+
 # === Files ======
 
 *.sln
-*.aps
-*.cso
 *.user
 *.vcxproj
-*.vcxproj.filters
+*.filters
