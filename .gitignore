@@ -3,9 +3,7 @@
 .vs/
 .vscode/
 _Output/
-
-Vendor/glad
-Vendor/glfw
+Vendor/
 
 # === Files ======
 
