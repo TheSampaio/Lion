@@ -1,141 +1,40 @@
 #include "Engine.h"
-#include "Header/Application.h"
+#include "Application.h"
 
-#include "Header/Window.h"
-#include "../Event/Header/Debug.h"
-#include "../Event/Header/Input.h"
-#include "../Event/Header/Time.h"
-#include "../Logic/Header/Game.h"
-#include "../Logic/Header/Timer.h"
-#include "../Render/Header/Graphics.h"
-#include "../Render/Header/Renderer.h"
+#include "Debug.h"
+#include "Layer.h"
 
-bool Lion::Application::s_bPaused = false;
-
-Lion::Application::Application()
-	: Game(nullptr)
+namespace Lion
 {
-	// Changes console's title (Only in debug mode)
-#ifdef LN_DEBUG
-	std::system("TITLE Lion Engine");
-#endif // LN_DEBUG
-}
-
-Lion::Application::~Application()
-{
-	// Deletes the hame
-	delete Game;
-}
-
-int Lion::Application::IRun(class Game* Level)
-{
-	// Creates the game
-	Game = Level;
-
-	// Creates the window
-	if (!Window::GetInstance().Create())
+	void Application::Push(Layer* layer)
 	{
-		Debug::Message(Error, "Failed to create the window.");
-		return false;
+		m_Layer = layer;
+		layer->OnAttach();
 	}
 
-	// Initializes the D3D11
-	if (!Graphics::GetInstance().Initialize())
+	Application::Application()
+		: m_Layer(nullptr)
 	{
-		Debug::Message(Error, "Failed to initialize the DirectX.");
-		return false;
+		Debug::New();
 	}
 
-	// Initializes the renderer
-	if (!Renderer::GetInstance().Initialize())
+	Application::~Application()
 	{
-		Debug::Message(Error, "Failed to initialize the renderer.");
-		return false;
+		Debug::Delete();
+
+		// Deletes the pushed layer (Temporary)
+		m_Layer->OnDetach();
+		delete m_Layer;
 	}
 
-	// Game loop
-	timeBeginPeriod(1); // Changes the default "Sleep()" functions' precision
-	int State = Loop(); // Runs the engine's game loop
-	timeBeginPeriod(1); // Restores the default "Sleep()" functions' precision
-
-	// Returns game loop's state
-	return State;
-}
-
-int Lion::Application::Loop()
-{
-	// Starts the Time's timer and initializes the game
-	Time::GetInstance().Timer->Start();
-	Game->OnStart();
-
-	// Store all window's events
-	MSG Messages = { 0 };
-
-	do
+	void Application::Run()
 	{
-		// Process all window's events per frame (Real time function)
-		if (PeekMessage(&Messages, nullptr, 0, 0, PM_REMOVE))
+		do
 		{
-			TranslateMessage(&Messages);
-			DispatchMessage(&Messages);
-		}
+			// Call layer events (Temporary)
+			m_Layer->OnUpdate();
+			m_Layer->OnRender();
 
-		else
-		{
-			// Engine's default's pause function
-			if (Input::GetKeyTap(EKeyCode::Key_Pause))
-			{
-				s_bPaused = !s_bPaused;
-				(s_bPaused) ? Time::GetInstance().Timer->Stop() : Time::GetInstance().Timer->Start();
-			}
-
-			// Game loop's core
-			if (!s_bPaused)
-			{
-				// Updates the game and time's delta time
-				Time::GetInstance().DeltaTimeMonitor();
-				Game->OnUpdate();
-
-				// Clears backbuffer and draw everything in the game
-				Graphics::GetInstance().ClearBuffers();
-				Game->OnDraw();
-
-				Renderer::GetInstance().Render();
-
-				// Swaps window's framebuffers
-				Graphics::GetInstance().SwapBuffers();
-			}
-
-			// Pauses the game
-			else
-			{
-				Game->OnPause();
-			}
-		}
-
-	} while (Messages.message != WM_QUIT);
-
-	// Finalizes the game
-	Game->OnFinish();
-
-	// Finalizes the D3D11 and renderer
-	Graphics::GetInstance().Finalize();
-	Renderer::GetInstance().Finalize();
-
-	// Returns a "state code" to the OS
-	return static_cast<int>(Messages.wParam);
-}
-
-void Lion::Application::Pause()
-{
-	// Pauses the engine and time's timer
-	s_bPaused = true;
-	Time::GetInstance().Timer->Stop();
-}
-
-void Lion::Application::Resume()
-{
-	// Resumes the engine and time's timer
-	s_bPaused = false;
-	Time::GetInstance().Timer->Start();
+		} while (true);
+	}
 }

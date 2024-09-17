@@ -1,5 +1,5 @@
 workspace "Lion"
-    configurations { "Debug", "Release" }
+    configurations { "Debug", "Release", "Distribution" }
 
     language "C++"
     cppdialect "C++20"
@@ -12,6 +12,11 @@ workspace "Lion"
 
     filter "configurations:Release"
         defines "LN_RELEASE"
+        symbols "Off"
+        optimize "Speed"
+
+    filter "configurations:Distribution"
+        defines "LN_DISTRIBUTION"
         symbols "Off"
         optimize "Speed"
 
@@ -34,19 +39,17 @@ project "Lion"
     files {
         "%{prj.location}/**.h",
         "%{prj.location}/**.cpp",
-        "%{prj.location}/**.hlsl",
     }
 
     includedirs {
         "%{prj.location}",
+        "Vendor/spdlog/include",
+    }
+
+    libdirs {
     }
 
     links {
-        "dxgi",
-        "d3d11",
-        "winmm",
-        "dxguid.lib",
-        "d3dcompiler",
     }
 
     postbuildcommands {
@@ -56,16 +59,6 @@ project "Lion"
     filter "system:windows"
         defines "LN_PLATFORM_WIN"
         systemversion "latest"
-
-    filter "files:Engine/Shader/DefaultVertex.hlsl"
-        shadermodel "5.0"
-        shadertype "Vertex"
-        shaderobjectfileoutput "%{wks.location}/Game/Bin/%%(Filename).cso"
-
-    filter "files:Engine/Shader/DefaultPixel.hlsl"
-        shadermodel "5.0"
-        shadertype "Pixel"
-        shaderobjectfileoutput "%{wks.location}/Game/Bin/%%(Filename).cso"
 
 -- ========== Sandbox ========== --
 project "Sandbox"
@@ -79,15 +72,19 @@ project "Sandbox"
     files {
         "%{prj.location}/**.h",
         "%{prj.location}/**.cpp",
-        "%{prj.location}/**.rc",
     }
 
     includedirs {
         "Engine/Include",
+        
+        "Vendor/spdlog/include",
+    }
+
+    libdirs {
     }
 
     links {
-        "Lion",
+        "Lion"
     }
 
     filter "system:windows"
