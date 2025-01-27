@@ -1,5 +1,5 @@
 workspace "Lion"
-    configurations { "Debug", "Release", "Distribution" }
+    configurations { "Debug", "Release", "Shipping" }
 
     language "C++"
     cppdialect "C++20"
@@ -15,8 +15,8 @@ workspace "Lion"
         symbols "Off"
         optimize "Speed"
 
-    filter "configurations:Distribution"
-        defines "LN_DISTRIBUTION"
+    filter "configurations:Shipping"
+        defines "LN_SHIPPING"
         symbols "Off"
         optimize "Speed"
 
