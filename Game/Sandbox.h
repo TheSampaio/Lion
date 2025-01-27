@@ -4,12 +4,14 @@
 #include <Lion/EntryPoint.h>
 
 #include "Source/ExampleLayer.h"
+#include "Source/GameplayLayer.h"
 
 class Sandbox : public Lion::Application
 {
 public:
 	Sandbox()
 	{
-		Push(new ExampleLayer());
+		PushLayer(new ExampleLayer());
+		PushLayer(new GameplayLayer());
 	}
 };
