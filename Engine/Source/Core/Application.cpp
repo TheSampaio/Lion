@@ -3,17 +3,23 @@
 
 #include "Debug.h"
 #include "Layer.h"
+#include "Stack.h"
 
 namespace Lion
 {
-	void Application::Push(Layer* layer)
+	void Application::PushLayer(Layer* layer)
 	{
-		m_Layer = layer;
+		m_Stack.PushLayer(layer);
 		layer->OnAttach();
 	}
 
+	void Application::PushOverlay(Layer* overlay)
+	{
+		m_Stack.PushOverlay(overlay);
+		overlay->OnAttach();
+	}
+
 	Application::Application()
-		: m_Layer(nullptr)
 	{
 		Debug::New();
 	}
@@ -21,19 +27,18 @@ namespace Lion
 	Application::~Application()
 	{
 		Debug::Delete();
-
-		// Deletes the pushed layer (Temporary)
-		m_Layer->OnDetach();
-		delete m_Layer;
 	}
 
 	void Application::Run()
 	{
 		do
 		{
-			// Call layer events (Temporary)
-			m_Layer->OnUpdate();
-			m_Layer->OnRender();
+			// Call layer events
+			for (Layer* layer : m_Stack)
+				layer->OnUpdate();
+
+			for (Layer* layer : m_Stack)
+				layer->OnRender();
 
 		} while (true);
 	}

@@ -1,10 +1,13 @@
 #pragma once
 
+#include "Stack.h"
+
 int main(int argc, const char* argv[]);
 
 namespace Lion
 {
 	class Layer;
+	class Stack;
 
 	class LION_API Application
 	{
@@ -12,10 +15,11 @@ namespace Lion
 		Application();
 		virtual ~Application();
 
-		void Push(Layer* layer);
+		void PushLayer(Layer* layer);
+		void PushOverlay(Layer* overlay);
 
 	private:
-		Layer* m_Layer; // Stores the pushed layer (Temporary)
+		Stack m_Stack;
 
 		void Run();
 
