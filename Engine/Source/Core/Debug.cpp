@@ -23,7 +23,7 @@ namespace Lion
 
 	void Debug::Console(EDebugMode mode, const std::string& message)
 	{
-#ifndef LN_DISTRIBUTION
+#ifndef LN_SHIPPING
 
 		switch (mode)
 		{
@@ -48,12 +48,12 @@ namespace Lion
 #endif // !LN_RELEASE
 		}
 
-#endif // !LN_DISTRIBUTION
+#endif // !LN_SHIPPING
 	}
 
 	Debug::Debug()
 	{
-#ifndef LN_DISTRIBUTION
+#ifndef LN_SHIPPING
 		spdlog::set_pattern("%^[%T] %v%$");
 
 #ifndef LN_RELEASE
@@ -61,6 +61,6 @@ namespace Lion
 
 #endif // !LN_RELEASE
 
-#endif // !LN_DISTRIBUTION
+#endif // !LN_SHIPPING
 	}
 }
