@@ -4,20 +4,23 @@ using namespace Lion;
 
 void ExampleLayer::OnAttach()
 {
-	Debug& debug = Debug::Get();
-
-	debug.Console(Trace, "Hello World!");
-	debug.Console(Information, "Welcome to Lion Engine!");
-	debug.Console(Warning, "This is an example layer.");
-	debug.Console(Error, "Using the \"OnAttach()\" method.");
+	Log::Console(ELogMode::Trace, "This is a 'Trace' message.");
+	Log::Console(ELogMode::Success, "This is a 'Success' message.");
+	Log::Console(ELogMode::Information, "This is an 'Information' message.");
+	Log::Console(ELogMode::Warning, "This is a 'Warning' message.");
+	Log::Console(ELogMode::Error, "This is an 'Error' message.");
 }
 
-void ExampleLayer::OnUpdate()
+void ExampleLayer::OnEvent(Event& event)
 {
-	Debug::Get().Console(Trace, "Updating...");
+	EventDispatcher dispatcher(event);
+
+	// Bind the member methods to engine events
+	dispatcher.Bind<Lion::EventInputMouseMove>(LN_EVENT_BIND(ExampleLayer::OnEventInputMouseMove));
 }
 
-void ExampleLayer::OnRender()
+bool ExampleLayer::OnEventInputMouseMove(const EventInputMouseMove& event)
 {
-	Debug::Get().Console(Information, "Drawing...");
+	Log::Console(ELogMode::Trace, LN_LOG_FORMAT("Mouse postion: {}x{}.", event.GetX(), event.GetY()));
+	return true;
 }
