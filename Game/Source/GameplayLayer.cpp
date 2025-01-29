@@ -4,5 +4,5 @@ using namespace Lion;
 
 void GameplayLayer::OnUpdate()
 {
-	Debug::Get().Console(Warning, "Gameplay layer is updating...");
+	Log::Console(ELogMode::Trace, "Gameplay layer is updating...");
 }

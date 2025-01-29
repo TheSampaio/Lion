@@ -1,62 +1,62 @@
 #include "Engine.h"
-#include "Debug.h"
+#include "Log.h"
 
 namespace Lion
 {
-	Debug* Debug::sInstance = nullptr;
+	Log* Log::sInstance = nullptr;
 
-	void Debug::New()
+	void Log::New()
 	{
-		sInstance = new Debug();
+		sInstance = new Log();
 	}
 
-	Debug& Debug::Get()
-	{
-		return *sInstance;
-	}
-
-	void Debug::Delete()
+	void Log::Delete()
 	{
 		delete sInstance;
 		sInstance = nullptr;
 	}
 
-	void Debug::Console(EDebugMode mode, const std::string& message)
+	void Log::Console(ELogMode mode, const std::string& message)
 	{
 #ifndef LN_SHIPPING
 
 		switch (mode)
 		{
-		case Error:
+		case ELogMode::Error:
 			spdlog::error(message);
 			break;
 
-		case Warning:
-			spdlog::warn(message);
-			break;
-
-#ifndef LN_RELEASE
-
-		case Information:
+		case ELogMode::Success:
 			spdlog::info(message);
 			break;
 
-		case Trace:
+		case ELogMode::Warning:
+			spdlog::warn(message);
+			break;
+
+	#ifndef LN_RELEASE
+
+		case ELogMode::Information:
+			spdlog::debug(message);
+			break;
+
+		case ELogMode::Trace:
 			spdlog::trace(message);
 			break;
 
-#endif // !LN_RELEASE
+	#endif // !LN_RELEASE
 		}
 
 #endif // !LN_SHIPPING
 	}
 
-	Debug::Debug()
+	Log::Log()
 	{
 #ifndef LN_SHIPPING
 		spdlog::set_pattern("%^[%T] %v%$");
 
 #ifndef LN_RELEASE
+		spdlog::set_level(spdlog::level::debug);
 		spdlog::set_level(spdlog::level::trace);
 
 #endif // !LN_RELEASE
