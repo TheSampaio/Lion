@@ -1,25 +1,27 @@
 #pragma once
 
 #define LN_EVENT_CLASS_TYPE(type) static EventType GetStaticType() { return EventType::type; }\
-                                  virtual EventType GetEventType() const override { return GetStaticType(); }
+                                  virtual EventType GetEventType() const override { return GetStaticType(); }\
+                                  virtual const char* GetName() const override { return #type; }
 
 namespace Lion
 {
-	enum class EventType
-	{
-		None = 0,
-		EventInputKeyPress, EventInputKeyRelease, EventInputKeyRepeat,
-		EventInputMousePress, EventInputMouseRelease, EventInputMouseMove, EventInputMouseScroll,
-		EventWindowClose, EventWindowFocusEnter, EventWindowFocusExit, EventWindowResize
-	};
+    enum class EventType
+    {
+        None = 0,
+        EventInputKeyboardPress, EventInputKeyboardRelease, EventInputKeyboardRepeat,
+        EventInputMouseMove, EventInputMousePress, EventInputMouseRelease, EventInputMouseScroll,
+        EventWindowClose, EventWindowFocusEnter, EventWindowFocusExit, EventWindowResize
+    };
 
-    // Base class for all events
     class Event
     {
     public:
         bool Handled = false;
 
         virtual ~Event() = default;
+        virtual const char* GetName() const = 0;
         virtual EventType GetEventType() const = 0;
+        virtual std::string ToString() const { return GetName(); }
     };
 }

@@ -6,6 +6,7 @@
 	#ifndef LN_SHIPPING
 		int main(int argc, const char* argv[])
 		{
+			SetConsoleTitle(L"Lion Engine");
 			auto application = Lion::Main();
 			application->Run();
 			delete application;
