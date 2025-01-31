@@ -39,17 +39,22 @@ project "Lion"
     files {
         "%{prj.location}/**.h",
         "%{prj.location}/**.cpp",
+        "%{prj.location}/**.hint",
     }
 
     includedirs {
         "%{prj.location}",
+
+        "Vendor/glfw/include",
         "Vendor/spdlog/include",
     }
 
     libdirs {
+        "Vendor/glfw/src/Release",
     }
 
     links {
+        "glfw3"
     }
 
     postbuildcommands {
@@ -77,6 +82,7 @@ project "Sandbox"
     includedirs {
         "Engine/Include",
         
+        "Vendor/glfw/include",
         "Vendor/spdlog/include",
     }
 

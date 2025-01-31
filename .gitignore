@@ -1,13 +1,10 @@
-# === Directories ======
+# Directories
 
 .vs/
 .vscode/
 _Output/
 
-Vendor/glad
-Vendor/glfw
-
-# === Files ======
+# Files
 
 *.sln
 *.user

@@ -4,50 +4,101 @@
 #include "Layer.h"
 #include "Log.h"
 #include "Stack.h"
+#include "Window.h"
+
+#include "../Events/Event.h"
+#include "../Events/EventDispatcher.h"
+#include "../Events/EventWindow.h"
 
 namespace Lion
 {
 	void Application::PushLayer(Layer* layer)
 	{
-		m_Stack->PushLayer(layer);
+		mStack->PushLayer(layer);
 		layer->OnAttach();
 	}
 
 	void Application::PushOverlay(Layer* overlay)
 	{
-		m_Stack->PushOverlay(overlay);
+		mStack->PushOverlay(overlay);
 		overlay->OnAttach();
 	}
 
+	void Application::OnEvent(Event& event)
+	{
+		EventDispatcher dispatcher(event);
+
+		// Event window resize
+		dispatcher.Bind<EventWindowResize>([this](const EventWindowResize& e)
+			{
+				if (e.GetWidth() == 0 || e.GetHeight() == 0)
+				{
+					mMinimized = true;
+					return false;
+				}
+
+				mMinimized = false;
+				//Renderer::OnWindowResize(e.GetWidth(), e.GetHeight());
+				return false;
+			});
+
+		for (auto it = mStack->rbegin(); it != mStack->rend(); ++it)
+		{
+			if (event.Handled)
+				break;
+
+			(*it)->OnEvent(event);
+		}
+	}
+
 	Application::Application()
-		: m_Stack(nullptr)
+		: mStack(nullptr), mMinimized(false)
 	{
 #ifndef LN_SHIPPING
 		Log::New();
+#endif 
 
-#endif // !LN_SHIPPING
+		mStack = new Stack();
 
-		m_Stack = new Stack();
+		Window::New();
 	}
 
 	Application::~Application()
 	{
-		delete m_Stack;
+		Window::Delete();
 
+		delete mStack;
+
+#ifndef LN_SHIPPING
 		Log::Delete();
+#endif 
 	}
 
 	void Application::Run()
 	{
+		if (!Window::Create())
+		{
+			Lion::Log::Console(Lion::ELogMode::Error, "Failed to create window.");
+			return;
+		}
+
+		Window::SetEventCallback(LN_EVENT_BIND(Application::OnEvent));
+
 		do
 		{
-			// Call layer events
-			for (Layer* layer : *m_Stack)
-				layer->OnUpdate();
+			Window::PollEvents();
 
-			for (Layer* layer : *m_Stack)
-				layer->OnRender();
+			if (!mMinimized)
+			{
+				for (Layer* layer : *mStack)
+					layer->OnUpdate();
 
-		} while (true);
+				for (Layer* layer : *mStack)
+					layer->OnRender();
+
+				Window::SwapBuffers();
+			}
+
+		} while (!Window::Close());
 	}
 }
