@@ -13,8 +13,6 @@
 		}
 
 	#else
-		#pragma comment(linker, "/SUBSYSTEM:WINDOWS")
-
 		int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hInstancePrev, _In_ PSTR cmdLine, _In_ int cmdShow)
 		{
 			auto application = Lion::Main();

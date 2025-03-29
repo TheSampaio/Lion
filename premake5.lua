@@ -19,6 +19,7 @@ workspace "Lion"
         defines "LN_SHIPPING"
         symbols "Off"
         optimize "Speed"
+        linkoptions { "/SUBSYSTEM:WINDOWS" }
 
     OutputDir = "%{cfg.buildcfg}/"
 
@@ -57,13 +58,13 @@ project "Lion"
         "glfw3"
     }
 
-    postbuildcommands {
-        "{COPY} %{cfg.buildtarget.relpath} ../_Output/Bin/" .. OutputDir .. "/Sandbox"
-    }
-
     filter "system:windows"
         defines "LN_PLATFORM_WIN"
         systemversion "latest"
+
+    postbuildcommands {
+        "{COPY} %{cfg.buildtarget.relpath} ../_Output/Bin/" .. OutputDir .. "/Sandbox"
+    }
 
 -- ========== Sandbox ========== --
 project "Sandbox"
@@ -86,12 +87,12 @@ project "Sandbox"
         "Vendor/spdlog/include",
     }
 
-    libdirs {
-    }
-
     links {
         "Lion"
     }
+
+    filter "configurations:Shipping"
+        kind "WindowedApp"
 
     filter "system:windows"
         defines "LN_PLATFORM_WIN"
