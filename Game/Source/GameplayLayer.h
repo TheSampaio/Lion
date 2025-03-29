@@ -7,4 +7,3 @@ class GameplayLayer : public Lion::Layer
 public:
 	void OnUpdate() override;
 };
-
