@@ -30,24 +30,21 @@ namespace Lion
         {
             if (m_Event.GetEventType() == T::GetStaticType())
             {
-                // Se a função retornar void
                 if constexpr (std::is_void_v<std::invoke_result_t<Func, T&>>)
-                {
                     func(static_cast<T&>(m_Event));
-                }
-                else // Se a função retornar bool
-                {
+
+                else
                     m_Event.Handled = func(static_cast<T&>(m_Event));
-                }
+
                 return true;
             }
+
             return false;
         }
 
     private:
         Event& m_Event;
 
-        // Usado para obter callbacks de um tipo de evento específico
         template<typename EventType>
         std::vector<std::function<void(const EventType&)>>& GetEventCallbacks()
         {
