@@ -21,7 +21,28 @@ workspace "Lion"
         optimize "Speed"
         linkoptions { "/SUBSYSTEM:WINDOWS" }
 
-    OutputDir = "%{cfg.buildcfg}/"
+    output_dir = "%{cfg.buildcfg}/"
+
+    dependencies = {}
+
+    dependencies["glad"] = {
+        include = "%{wks.location}/Vendor/glad/include",
+        lib = "glad",
+    }
+
+    dependencies["glfw"] = {
+        include = "%{wks.location}/Vendor/glfw/include",
+        lib = "glfw",
+    }
+
+    dependencies["spdlog"] = {
+        include = "%{wks.location}/Vendor/spdlog/include",
+    }
+
+    dependencies["stb"] = {
+        include = "%{wks.location}/Vendor/stb/include",
+        lib = "stb",
+    }
 
 -- ========== Lion ========== --
 project "Lion"
@@ -31,8 +52,8 @@ project "Lion"
     defines "LN_DLL"
 
     -- Output directories
-    targetdir ("_Output/Bin/" .. OutputDir .. "%{prj.name}")
-    objdir    ("_Output/Obj/" .. OutputDir .. "%{prj.name}")
+    targetdir (".Output/Bin/" .. output_dir .. "%{prj.name}")
+    objdir    (".Output/Obj/" .. output_dir .. "%{prj.name}")
 
     pchheader("Engine.h")
     pchsource("%{prj.location}/Engine.cpp")
@@ -46,24 +67,25 @@ project "Lion"
     includedirs {
         "%{prj.location}",
 
-        "Vendor/glfw/include",
-        "Vendor/spdlog/include",
-    }
-
-    libdirs {
-        "Vendor/glfw/src/Release",
+        "%{dependencies.glad.include}",
+        "%{dependencies.glfw.include}",
+        "%{dependencies.spdlog.include}",
+        "%{dependencies.stb.include}",
     }
 
     links {
-        "glfw3"
+        "%{dependencies.glad.lib}",
+        "%{dependencies.glfw.lib}",
+        "%{dependencies.stb.lib}",
     }
 
     filter "system:windows"
+        buildoptions { "/utf-8" }
         defines "LN_PLATFORM_WIN"
         systemversion "latest"
 
     postbuildcommands {
-        "{COPY} %{cfg.buildtarget.relpath} ../_Output/Bin/" .. OutputDir .. "/Sandbox"
+        "{COPY} %{cfg.buildtarget.relpath} ../.Output/Bin/" .. output_dir .. "/Sandbox"
     }
 
 -- ========== Sandbox ========== --
@@ -72,8 +94,8 @@ project "Sandbox"
     kind "ConsoleApp"
 
     -- Output directories
-    targetdir ("_Output/Bin/" .. OutputDir .. "%{prj.name}")
-    objdir    ("_Output/Obj/" .. OutputDir .. "%{prj.name}")
+    targetdir (".Output/Bin/" .. output_dir .. "%{prj.name}")
+    objdir    (".Output/Obj/" .. output_dir .. "%{prj.name}")
 
     files {
         "%{prj.location}/**.h",
@@ -83,8 +105,10 @@ project "Sandbox"
     includedirs {
         "Engine/Include",
         
-        "Vendor/glfw/include",
-        "Vendor/spdlog/include",
+        "%{dependencies.glad.include}",
+        "%{dependencies.glfw.include}",
+        "%{dependencies.spdlog.include}",
+        "%{dependencies.stb.include}",
     }
 
     links {
@@ -95,5 +119,13 @@ project "Sandbox"
         kind "WindowedApp"
 
     filter "system:windows"
+        buildoptions { "/utf-8" }
         defines "LN_PLATFORM_WIN"
         systemversion "latest"
+
+group "External Dependencies"
+    include "Vendor/glad"
+    include "Vendor/glfw"
+    include "Vendor/spdlog"
+    include "Vendor/stb"
+group ""
