@@ -19,9 +19,7 @@ namespace Lion
         void Bind(const EventType& event)
         {
             for (auto& callback : GetEventCallbacks<EventType>())
-            {
                 callback(event);
-            }
         }
 
         // Bind for normal functions
