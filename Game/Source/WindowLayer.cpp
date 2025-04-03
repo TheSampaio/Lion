@@ -11,10 +11,10 @@ void WindowLayer::OnAttach()
 void WindowLayer::OnEvent(Event& event)
 {
 	EventDispatcher dispatcher(event);
-	dispatcher.Bind<Lion::EventWindowClose>(LN_EVENT_BIND(WindowLayer::OnEventWindowClose));
+	dispatcher.Bind<EventWindowClose>(LN_EVENT_BIND(WindowLayer::OnEventWindowClose));
 }
 
-bool WindowLayer::OnEventWindowClose(const Lion::EventWindowClose& event)
+bool WindowLayer::OnEventWindowClose(const EventWindowClose& event)
 {
     Log::Console(ELogMode::Error, "[WINDOW] Closing...");
     Window::Close();
