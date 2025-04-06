@@ -4,13 +4,13 @@ namespace Lion
 {
 	class Event;
 
-	class LION_API Layer
+	class Layer
 	{
 	public:
-		virtual void OnAttach() {};
-		virtual void OnUpdate() {};
-		virtual void OnRender() {};
-		virtual void OnDetach() {};
+		virtual LION_API void OnAttach() {};
+		virtual LION_API void OnUpdate() {};
+		virtual LION_API void OnRender() {};
+		virtual LION_API void OnDetach() {};
 
 		virtual void OnEvent(Event& event) {};
 	};

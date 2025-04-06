@@ -1,7 +1,5 @@
 #pragma once
 
-//#include "../Events/Event.h"
-
 namespace Lion
 {
     class Application;
@@ -11,10 +9,12 @@ namespace Lion
     class Window
     {
     public:
-        static void LION_API SetSize(uint width, uint height);
-        static void LION_API SetTitle(const std::string& title);
+        static LION_API GLFWwindow* GetId() { return sInstance->mId; }
 
-        static bool LION_API Close();
+        static LION_API void SetSize(uint width, uint height);
+        static LION_API void SetTitle(const std::string& title);
+
+        static LION_API bool Close();
 
         friend class Application;
 

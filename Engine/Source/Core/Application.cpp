@@ -10,6 +10,8 @@
 #include "../Events/EventDispatcher.h"
 #include "../Events/EventWindow.h"
 
+#include "../Render/Graphics.h"
+
 namespace Lion
 {
 	void Application::PushLayer(Layer* layer)
@@ -82,6 +84,12 @@ namespace Lion
 			return;
 		}
 
+		if (!Graphics::Initialize())
+		{
+			Lion::Log::Console(Lion::ELogMode::Error, "Failed to initialize graphics.");
+			return;
+		}
+
 		Window::SetEventCallback(LN_EVENT_BIND(Application::OnEvent));
 
 		do
@@ -92,6 +100,8 @@ namespace Lion
 			{
 				for (Layer* layer : *mStack)
 					layer->OnUpdate();
+
+				Graphics::ClearBuffers();
 
 				for (Layer* layer : *mStack)
 					layer->OnRender();
