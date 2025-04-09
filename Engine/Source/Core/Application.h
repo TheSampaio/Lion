@@ -3,9 +3,9 @@
 #include "Window.h"
 
 #ifndef LN_SHIPPING
-int main(int argc, const char* argv[]);
+	int main(int argc, const char* argv[]);
 #else
-int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hInstancePrev, _In_ PSTR cmdLine, _In_ int cmdShow);
+	int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hInstancePrev, _In_ PSTR cmdLine, _In_ int cmdShow);
 #endif 
 
 namespace Lion
@@ -14,22 +14,25 @@ namespace Lion
 	class Stack;
 	class Event;
 
-	class LION_API Application
+	class Application
 	{
 	public:
-		Application();
-		virtual ~Application();
+		LION_API Application();
+		LION_API virtual ~Application();
 
-		void PushLayer(Layer* layer);
-		void PushOverlay(Layer* overlay);
+		LION_API void PushLayer(Layer* layer);
+		LION_API void PushOverlay(Layer* overlay);
 
-		void OnEvent(Event& event);
+		LION_API void OnEvent(Event& event);
 
 	private:
 		Stack* mStack;
 		bool mMinimized;
 
-		void Run();
+		LION_API void Run();
+
+		static Graphics* sGraphics;
+		static Window* sWindow;
 
 #ifndef LN_SHIPPING
 		friend int ::main(int argc, const char* argv[]);
@@ -41,4 +44,3 @@ namespace Lion
 	// To be defined in client
 	Application* Main();
 }
-

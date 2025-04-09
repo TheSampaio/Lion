@@ -1,22 +1,26 @@
 #pragma once
 
-//#include "../Events/Event.h"
-
 namespace Lion
 {
     class Application;
     class Event;
     class EventCallback;
+    class Graphics;
 
     class Window
     {
     public:
-        static void LION_API SetSize(uint width, uint height);
-        static void LION_API SetTitle(const std::string& title);
+        static LION_API GLFWwindow* GetId() { return sInstance->mId; }
+        static LION_API std::array<float, 4> GetBackgroundColor() { return sInstance->mBackgroundColor; }
 
-        static bool LION_API Close();
+        static LION_API void SetSize(uint width, uint height);
+        static LION_API void SetBackgroundColor(float red, float green, float blue, float alpha);
+        static LION_API void SetTitle(const std::string& title);
 
-        friend class Application;
+        static LION_API bool Close();
+
+        friend Application;
+        friend Graphics;
 
     protected:
         static Window* sInstance;
@@ -39,6 +43,7 @@ namespace Lion
 
         GLFWwindow* mId;
         WindowData mData;
+        std::array<float, 4> mBackgroundColor;
 
         Window();
         ~Window();
@@ -46,7 +51,6 @@ namespace Lion
         static void SetEventCallback(const EventCallback& callback) { sInstance->mData.mEventCallback = callback; }
 
         static bool Create();
-        static void SwapBuffers();
         static void PollEvents();
     };
 }

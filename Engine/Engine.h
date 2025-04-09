@@ -15,6 +15,7 @@
 	#error Lion engine does not support Unix platforms!
 #endif
 
+#include <array>
 #include <format>
 #include <functional>
 #include <memory>

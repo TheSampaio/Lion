@@ -15,10 +15,10 @@ namespace Lion
 		Warning,
 	};
 
-	class LION_API Log
+	class Log
 	{
 	public:
-		static void Console(ELogMode mode, const std::string& message);
+		static LION_API void Console(ELogMode mode, const std::string& message);
 
 		friend Application;
 

@@ -56,7 +56,6 @@ namespace Lion
 		spdlog::set_pattern("%^[%T] %v%$");
 
 #ifndef LN_RELEASE
-		spdlog::set_level(spdlog::level::debug);
 		spdlog::set_level(spdlog::level::trace);
 
 #endif // !LN_RELEASE

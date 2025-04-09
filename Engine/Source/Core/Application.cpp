@@ -10,8 +10,13 @@
 #include "../Events/EventDispatcher.h"
 #include "../Events/EventWindow.h"
 
+#include "../Render/Graphics.h"
+
 namespace Lion
 {
+	Graphics* Application::sGraphics = nullptr;
+	Window* Application::sWindow = nullptr;
+
 	void Application::PushLayer(Layer* layer)
 	{
 		mStack->PushLayer(layer);
@@ -61,10 +66,18 @@ namespace Lion
 		mStack = new Stack();
 
 		Window::New();
+		sWindow = Window::sInstance;
+
+		Graphics::New();
+		sGraphics = Graphics::sInstance;
 	}
 
 	Application::~Application()
 	{
+		sGraphics = nullptr;
+		Graphics::Delete();
+
+		sWindow = nullptr;
 		Window::Delete();
 
 		delete mStack;
@@ -76,29 +89,41 @@ namespace Lion
 
 	void Application::Run()
 	{
-		if (!Window::Create())
+		if (!sWindow->Create())
 		{
-			Lion::Log::Console(Lion::ELogMode::Error, "Failed to create window.");
+			Lion::Log::Console(Lion::ELogMode::Error, "[Application] Window creation failed.");
 			return;
 		}
 
-		Window::SetEventCallback(LN_EVENT_BIND(Application::OnEvent));
+		Log::Console(ELogMode::Success, "[Application] Window created successfully.");
+
+		if (!sGraphics->Initialize())
+		{
+			Lion::Log::Console(Lion::ELogMode::Error, "[Application] Graphics initialization failed.");
+			return;
+		}
+
+		Log::Console(ELogMode::Success, "[Application] Graphics initialized successfully.");
+
+		sWindow->SetEventCallback(LN_EVENT_BIND(Application::OnEvent));
 
 		do
 		{
-			Window::PollEvents();
+			sWindow->PollEvents();
 
 			if (!mMinimized)
 			{
 				for (Layer* layer : *mStack)
 					layer->OnUpdate();
 
+				sGraphics->ClearBuffers();
+
 				for (Layer* layer : *mStack)
 					layer->OnRender();
 
-				Window::SwapBuffers();
+				sGraphics->SwapBuffers();
 			}
 
-		} while (!Window::Close());
+		} while (!sWindow->Close());
 	}
 }
