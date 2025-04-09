@@ -22,7 +22,10 @@ namespace Lion
     private:
         Graphics() = default;
 
-        static void ClearBuffers();
         static bool Initialize();
+        static void ClearBuffers();
+        static void SwapBuffers();
+
+        static Window* sWindow;
 	};
 }

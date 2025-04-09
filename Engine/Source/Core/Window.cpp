@@ -22,12 +22,15 @@ namespace Lion
     }
 
     Window::Window()
-        : mId(nullptr), mData{ "Lion Engine", 800, 600, nullptr }
+        : mId(nullptr), mData{ "Lion Engine", 800, 600, nullptr }, mBackgroundColor(0.0f, 0.0f, 0.0f, 1.0f)
     {
         if (glfwInit() != GLFW_TRUE)
-            Log::Console(ELogMode::Error, "Failed to initialize GLFW.");
-        else
-            Log::Console(ELogMode::Success, "Successfully initialized GLFW.");
+        {
+            Log::Console(ELogMode::Error, "[Window] Failed to initialize GLFW.");
+            return;
+        }
+
+        Log::Console(ELogMode::Success, "[Window] Successfully initialized GLFW.");
     }
 
     Window::~Window()
@@ -42,8 +45,6 @@ namespace Lion
 
         if (!sInstance->mId)
             return false;
-
-        Log::Console(ELogMode::Success, "Successfully created window.");
 
         // Window events
         glfwSetWindowUserPointer(sInstance->mId, &sInstance->mData);
@@ -158,11 +159,6 @@ namespace Lion
         return true;
     }
 
-    void Window::SwapBuffers()
-    {
-        glfwSwapBuffers(sInstance->mId);
-    }
-
     void Window::PollEvents()
     {
         glfwPollEvents();
@@ -172,6 +168,11 @@ namespace Lion
     {
         sInstance->mData.Width = width;
         sInstance->mData.Height = height;
+    }
+
+    void Window::SetBackgroundColor(float red, float green, float blue, float alpha)
+    {
+        sInstance->mBackgroundColor = {red, green, blue, alpha};
     }
 
     void Window::SetTitle(const std::string& title)

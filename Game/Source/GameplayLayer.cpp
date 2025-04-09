@@ -2,7 +2,10 @@
 
 using namespace Lion;
 
+void GameplayLayer::OnAttach()
+{
+}
+
 void GameplayLayer::OnUpdate()
 {
-	//Log::Console(ELogMode::Trace, "Gameplay layer is updating...");
 }

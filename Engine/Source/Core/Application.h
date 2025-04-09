@@ -31,6 +31,9 @@ namespace Lion
 
 		LION_API void Run();
 
+		static Graphics* sGraphics;
+		static Window* sWindow;
+
 #ifndef LN_SHIPPING
 		friend int ::main(int argc, const char* argv[]);
 #else

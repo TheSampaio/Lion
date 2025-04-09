@@ -6,6 +6,7 @@ void WindowLayer::OnAttach()
 {
 	Window::SetSize(1280, 720);
 	Window::SetTitle("Sandbox");
+	Window::SetBackgroundColor(0.2f, 0.2f, 0.2f, 1.0f);
 }
 
 void WindowLayer::OnEvent(Event& event)
@@ -16,7 +17,6 @@ void WindowLayer::OnEvent(Event& event)
 
 bool WindowLayer::OnEventWindowClose(const EventWindowClose& event)
 {
-    Log::Console(ELogMode::Error, "[WINDOW] Closing...");
     Window::Close();
     return false;
 }

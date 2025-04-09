@@ -66,7 +66,9 @@ project "Lion"
 
     includedirs {
         "%{prj.location}",
+    }
 
+    externalincludedirs {
         "%{dependencies.glad.include}",
         "%{dependencies.glfw.include}",
         "%{dependencies.spdlog.include}",
@@ -104,7 +106,9 @@ project "Sandbox"
 
     includedirs {
         "Engine/Include",
-        
+    }
+
+    externalincludedirs {
         "%{dependencies.glad.include}",
         "%{dependencies.glfw.include}",
         "%{dependencies.spdlog.include}",

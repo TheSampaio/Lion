@@ -26,60 +26,60 @@ void ExampleLayer::OnEvent(Event& event)
 
 bool ExampleLayer::OnEventInputKeyboardPress(const EventInputKeyboardPress& event)
 {
-    Log::Console(ELogMode::Success, LN_LOG_FORMAT("[KEYBOARD] Key Pressed: {}.", event.GetKeyCode()));
+    Log::Console(ELogMode::Success, LN_LOG_FORMAT("[Keyboard] Key Pressed: {}.", event.GetKeyCode()));
     return false;
 }
 
 bool ExampleLayer::OnEventInputKeyboardRelease(const EventInputKeyboardRelease& event)
 {
-    Log::Console(ELogMode::Information, LN_LOG_FORMAT("[KEYBOARD] Key Released: {}.", event.GetKeyCode()));
+    Log::Console(ELogMode::Information, LN_LOG_FORMAT("[Keyboard] Key Released: {}.", event.GetKeyCode()));
     return false;
 }
 
 bool ExampleLayer::OnEventInputKeyboardRepeat(const EventInputKeyboardRepeat& event)
 {
-    Log::Console(ELogMode::Warning, LN_LOG_FORMAT("[KEYBOARD] Key Repeated: {}.", event.GetKeyCode()));
+    Log::Console(ELogMode::Warning, LN_LOG_FORMAT("[Keyboard] Key Repeated: {}.", event.GetKeyCode()));
     return false;
 }
 
 bool ExampleLayer::OnEventInputMouseMove(const EventInputMouseMove& event)
 {
-    Log::Console(ELogMode::Trace, LN_LOG_FORMAT("[MOUSE] Moved To: {}x{}.", event.GetX(), event.GetY()));
+    Log::Console(ELogMode::Trace, LN_LOG_FORMAT("[Mouse] Moved To: {}x{}.", event.GetX(), event.GetY()));
     return false;
 }
 
 bool ExampleLayer::OnEventInputMousePress(const EventInputMousePress& event)
 {
-    Log::Console(ELogMode::Success, LN_LOG_FORMAT("[MOUSE] Button Pressed: {}.", event.GetButton()));
+    Log::Console(ELogMode::Success, LN_LOG_FORMAT("[Mouse] Button Pressed: {}.", event.GetButton()));
     return false;
 }
 
 bool ExampleLayer::OnEventInputMouseRelease(const EventInputMouseRelease& event)
 {
-    Log::Console(ELogMode::Information, LN_LOG_FORMAT("[MOUSE] Button Released: {}.", event.GetButton()));
+    Log::Console(ELogMode::Information, LN_LOG_FORMAT("[Mouse] Button Released: {}.", event.GetButton()));
     return false;
 }
 
 bool ExampleLayer::OnEventInputMouseScroll(const EventInputMouseScroll& event)
 {
-    Log::Console(ELogMode::Warning, LN_LOG_FORMAT("[MOUSE] Scrolled: OffsetX={} OffsetY={}.", event.GetOffsetX(), event.GetOffsetY()));
+    Log::Console(ELogMode::Warning, LN_LOG_FORMAT("[Mouse] Scrolled: OffsetX={} OffsetY={}.", event.GetOffsetX(), event.GetOffsetY()));
     return false;
 }
 
 bool ExampleLayer::OnEventWindowFocusEnter(const EventWindowFocusEnter& event)
 {
-    Log::Console(ELogMode::Warning, "[WINDOW] Focus Entered.");
+    Log::Console(ELogMode::Warning, "[Window] Focus Entered.");
     return false;
 }
 
 bool ExampleLayer::OnEventWindowFocusExit(const EventWindowFocusExit& event)
 {
-    Log::Console(ELogMode::Warning, "[WINDOW] Focus Exited.");
+    Log::Console(ELogMode::Warning, "[Window] Focus Exited.");
     return false;
 }
 
 bool ExampleLayer::OnEventWindowResize(const EventWindowResize& event)
 {
-    Log::Console(ELogMode::Information, LN_LOG_FORMAT("[WINDOW] Resized: {}x{}.", event.GetWidth(), event.GetHeight()));
+    Log::Console(ELogMode::Information, LN_LOG_FORMAT("[Window] Resized: {}x{}.", event.GetWidth(), event.GetHeight()));
     return false;
 }

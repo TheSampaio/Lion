@@ -10,11 +10,11 @@ namespace Lion
 		Stack() = default;
 		~Stack();
 
-		void PushLayer(Layer* layer);
-		void PushOverlay(Layer* overlay);
+		LION_API void PushLayer(Layer* layer);
+		LION_API void PushOverlay(Layer* overlay);
 
-		void PopLayer(Layer* layer);
-		void PopOverlay(Layer* overlay);
+		LION_API void PopLayer(Layer* layer);
+		LION_API void PopOverlay(Layer* overlay);
 
 		std::vector<Layer*>::iterator begin() { return m_Layers.begin(); }
 		std::vector<Layer*>::iterator end() { return m_Layers.end(); }
