@@ -11,12 +11,10 @@
 #include "../Events/EventWindow.h"
 
 #include "../Render/Graphics.h"
+#include "../Render/Renderer.h"
 
 namespace Lion
 {
-	Graphics* Application::sGraphics = nullptr;
-	Window* Application::sWindow = nullptr;
-
 	void Application::PushLayer(Layer* layer)
 	{
 		mStack->PushLayer(layer);
@@ -43,7 +41,7 @@ namespace Lion
 				}
 
 				mMinimized = false;
-				//Renderer::OnWindowResize(e.GetWidth(), e.GetHeight());
+				Renderer::OnWindowResize(e.GetWidth(), e.GetHeight());
 				return false;
 			});
 
@@ -66,18 +64,14 @@ namespace Lion
 		mStack = new Stack();
 
 		Window::New();
-		sWindow = Window::sInstance;
-
 		Graphics::New();
-		sGraphics = Graphics::sInstance;
+		Renderer::New();
 	}
 
 	Application::~Application()
 	{
-		sGraphics = nullptr;
+		Renderer::Delete();
 		Graphics::Delete();
-
-		sWindow = nullptr;
 		Window::Delete();
 
 		delete mStack;
@@ -89,41 +83,71 @@ namespace Lion
 
 	void Application::Run()
 	{
-		if (!sWindow->Create())
+		Initialize();
+
+		// Load resources
+		for (Layer* layer : *mStack)
+			layer->OnCreate();
+
+		do
 		{
-			Lion::Log::Console(Lion::ELogMode::Error, "[Application] Window creation failed.");
+			Window::PollEvents();
+
+			if (!mMinimized)
+			{
+				// Update
+				for (Layer* layer : *mStack)
+					layer->OnUpdateBegin();
+
+				for (Layer* layer : *mStack)
+					layer->OnUpdate();
+
+				for (Layer* layer : *mStack)
+					layer->OnUpdateEnd();
+
+				// Clear
+				Graphics::ClearBuffers();
+
+				// Render
+				for (Layer* layer : *mStack)
+					layer->OnRender();
+
+				Graphics::SwapBuffers();
+			}
+
+		} while (!Window::Close());
+	}
+
+	void Application::Initialize()
+	{
+		// Window creation
+		if (!Window::Create())
+		{
+			Lion::Log::Console(Lion::ELogMode::Fatal, "[Application] Window initialization failed.");
 			return;
 		}
 
-		Log::Console(ELogMode::Success, "[Application] Window created successfully.");
+		Log::Console(ELogMode::Success, "[Application] Window initialized successfully.");
 
-		if (!sGraphics->Initialize())
+		// Graphics initialization
+		if (!Graphics::Initialize())
 		{
-			Lion::Log::Console(Lion::ELogMode::Error, "[Application] Graphics initialization failed.");
+			Lion::Log::Console(Lion::ELogMode::Fatal, "[Application] Graphics initialization failed.");
 			return;
 		}
 
 		Log::Console(ELogMode::Success, "[Application] Graphics initialized successfully.");
 
-		sWindow->SetEventCallback(LN_EVENT_BIND(Application::OnEvent));
-
-		do
+		// Renderer initialization
+		if (!Renderer::Initialize())
 		{
-			sWindow->PollEvents();
+			Lion::Log::Console(Lion::ELogMode::Fatal, "[Application] Renderer initialization failed.");
+			return;
+		}
 
-			if (!mMinimized)
-			{
-				for (Layer* layer : *mStack)
-					layer->OnUpdate();
+		Log::Console(ELogMode::Success, "[Application] Renderer initialized successfully.");
 
-				sGraphics->ClearBuffers();
-
-				for (Layer* layer : *mStack)
-					layer->OnRender();
-
-				sGraphics->SwapBuffers();
-			}
-
-		} while (!sWindow->Close());
+		// Window's events sign up
+		Window::SetEventCallback(LN_EVENT_BIND(Application::OnEvent));
 	}
 }

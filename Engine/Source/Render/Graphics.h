@@ -3,7 +3,6 @@
 namespace Lion
 {
     class Application;
-    class Window;
 
 	class Graphics
 	{
@@ -25,7 +24,5 @@ namespace Lion
         static bool Initialize();
         static void ClearBuffers();
         static void SwapBuffers();
-
-        static Window* sWindow;
 	};
 }

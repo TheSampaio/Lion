@@ -12,9 +12,11 @@ namespace Lion
     public:
         static LION_API GLFWwindow* GetId() { return sInstance->mId; }
         static LION_API std::array<float, 4> GetBackgroundColor() { return sInstance->mBackgroundColor; }
+        static LION_API std::array<uint, 2> GetSize() { return { sInstance->mData.Width, sInstance->mData.Height }; }
+        static LION_API std::string GetTitle() { return sInstance->mData.Title; }
 
-        static LION_API void SetSize(uint width, uint height);
         static LION_API void SetBackgroundColor(float red, float green, float blue, float alpha);
+        static LION_API void SetSize(uint width, uint height);
         static LION_API void SetTitle(const std::string& title);
 
         static LION_API bool Close();

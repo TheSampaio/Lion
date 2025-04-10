@@ -23,3 +23,6 @@
 
 // Render
 #include "../Source/Render/Graphics.h"
+#include "../Source/Render/Renderer.h"
+#include "../Source/Render/Sprite.h"
+#include "../Source/Render/Texture.h"

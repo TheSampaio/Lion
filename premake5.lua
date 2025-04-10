@@ -9,16 +9,19 @@ workspace "Lion"
         defines "LN_DEBUG"
         symbols "On"
         optimize "Off"
+        runtime "Debug"
 
     filter "configurations:Release"
         defines "LN_RELEASE"
         symbols "Off"
         optimize "Speed"
+        runtime "Release"
 
     filter "configurations:Shipping"
         defines "LN_SHIPPING"
         symbols "Off"
         optimize "Speed"
+        runtime "Release"
         linkoptions { "/SUBSYSTEM:WINDOWS" }
 
     output_dir = "%{cfg.buildcfg}/"
@@ -28,6 +31,7 @@ workspace "Lion"
     dependencies["glad"] = {
         include = "%{wks.location}/Vendor/glad/include",
         lib = "glad",
+        source = "Vendor/glad/source/glad.c",
     }
 
     dependencies["glfw"] = {
@@ -62,6 +66,8 @@ project "Lion"
         "%{prj.location}/**.h",
         "%{prj.location}/**.cpp",
         "%{prj.location}/**.hint",
+
+        "%{dependencies.glad.source}",
     }
 
     includedirs {
@@ -81,14 +87,17 @@ project "Lion"
         "%{dependencies.stb.lib}",
     }
 
+    postbuildcommands {
+        "{COPY} %{cfg.buildtarget.relpath} ../.Output/Bin/" .. output_dir .. "/Sandbox"
+    }
+
+    filter { "files:vendor/glad/source/glad.c" }
+        flags { "NoPCH" }
+
     filter "system:windows"
         buildoptions { "/utf-8" }
         defines "LN_PLATFORM_WIN"
         systemversion "latest"
-
-    postbuildcommands {
-        "{COPY} %{cfg.buildtarget.relpath} ../.Output/Bin/" .. output_dir .. "/Sandbox"
-    }
 
 -- ========== Sandbox ========== --
 project "Sandbox"
@@ -102,6 +111,8 @@ project "Sandbox"
     files {
         "%{prj.location}/**.h",
         "%{prj.location}/**.cpp",
+
+        "%{dependencies.glad.source}",
     }
 
     includedirs {
@@ -127,6 +138,7 @@ project "Sandbox"
         defines "LN_PLATFORM_WIN"
         systemversion "latest"
 
+-- ========== Dependencies ========== --
 group "External Dependencies"
     include "Vendor/glad"
     include "Vendor/glfw"

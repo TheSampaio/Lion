@@ -10,9 +10,12 @@
 
 namespace Lion
 {
-	class Layer;
-	class Stack;
 	class Event;
+	class Graphics;
+	class Layer;
+	class Renderer;
+	class Stack;
+	class Window;
 
 	class Application
 	{
@@ -31,8 +34,7 @@ namespace Lion
 
 		LION_API void Run();
 
-		static Graphics* sGraphics;
-		static Window* sWindow;
+		void Initialize();
 
 #ifndef LN_SHIPPING
 		friend int ::main(int argc, const char* argv[]);
