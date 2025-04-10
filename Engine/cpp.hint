@@ -7,3 +7,6 @@
 #define LN_LOG_FORMAT(message, ...) std::format(message, __VA_ARGS__)
 #define LN_EVENT_BIND(callable) std::bind(&callable, this, std::placeholders::_1)
 #define LN_EVENT_CLASS_TYPE(type) static EventType GetStaticType() { return EventType::type; } virtual EventType GetEventType() const override { return GetStaticType(); }
+#define LN_CORE_SUPER() using Super = Lion::Layer
+#define LN_RENDER_OPENGL() gladLoadGL()
+

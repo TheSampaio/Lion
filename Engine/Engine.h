@@ -15,18 +15,23 @@
 	#error Lion engine does not support Unix platforms!
 #endif
 
-#include <array>
-#include <format>
-#include <functional>
-#include <memory>
-#include <sstream>
-#include <string>
-#include <unordered_map>
-#include <vector>
+#pragma warning(push)
+#pragma warning(disable : 6294 26495 26498 26800)
+	#include <array>
+	#include <format>
+	#include <fstream>
+	#include <functional>
+	#include <memory>
+	#include <sstream>
+	#include <string>
+	#include <unordered_map>
+	#include <vector>
 
-#include <stb_image/stb_image.h>
-#include <glad/glad.h>
-#include <glfw/glfw3.h>
-#include <spdlog/spdlog.h>
+	#include <stb_image/stb_image.h>
+	#include <glad/glad.h>
+	#include <glfw/glfw3.h>
+	#include <spdlog/spdlog.h>
+#pragma warning(pop)
 
+#include "Source/Kind/Macros.h"
 #include "Source/Kind/Primitive.h"

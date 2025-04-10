@@ -9,6 +9,11 @@ void WindowLayer::OnAttach()
 	Window::SetBackgroundColor(0.2f, 0.2f, 0.2f, 1.0f);
 }
 
+void WindowLayer::OnCreate()
+{
+	LN_CREATE_OPENGL_CONTEXT();
+}
+
 void WindowLayer::OnEvent(Event& event)
 {
 	EventDispatcher dispatcher(event);

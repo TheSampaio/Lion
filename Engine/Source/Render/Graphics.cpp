@@ -7,25 +7,21 @@
 namespace Lion
 {
     Graphics* Graphics::sInstance = nullptr;
-    Window* Graphics::sWindow = nullptr;
 
     void Graphics::New()
     {
         sInstance = new Graphics();
-        sWindow = Window::sInstance;
     }
 
     void Graphics::Delete()
     {
-        sWindow = nullptr;
-
         delete sInstance;
         sInstance = nullptr;
     }
 
     void Graphics::ClearBuffers()
     {
-        const auto& backgroundColor = sWindow->GetBackgroundColor();
+        const auto& backgroundColor = Window::GetBackgroundColor();
 
         glClearColor(
             static_cast<GLfloat>(backgroundColor[0]),
@@ -39,22 +35,23 @@ namespace Lion
     void Graphics::SwapBuffers()
     {
         glfwSwapInterval(0); // TODO: Remove hard code
-        glfwSwapBuffers(sWindow->mId);
+        glfwSwapBuffers(Window::GetId());
     }
 
     bool Graphics::Initialize()
     {
-        if (!sWindow)
+        if (!Window::GetId())
         {
             Log::Console(ELogMode::Error, "[Graphics] No valid window reference. Initialization aborted.");
             return false;
         }
 
-        glfwMakeContextCurrent(sWindow->mId);
-
+        // Load OpenGL with GLAD
+        glfwMakeContextCurrent(Window::GetId());
+        
         if (!gladLoadGL())
         {
-            Log::Console(ELogMode::Error, "[Graphics] Failed to initialize OpenGL context with GLAD.");
+            Log::Console(ELogMode::Error, "[Graphics] GLAD initialization failed on engine side. Check if OpenGL context is correctly bound.");
             return false;
         }
 

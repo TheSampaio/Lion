@@ -6,6 +6,7 @@ class WindowLayer : public Lion::Layer
 {
 public:
 	void OnAttach() override;
+	void OnCreate() override;
 	void OnEvent(Lion::Event& event) override;
 
 private:

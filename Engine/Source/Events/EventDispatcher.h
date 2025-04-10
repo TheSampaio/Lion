@@ -2,8 +2,6 @@
 
 #include "Event.h"
 
-#define LN_EVENT_BIND(callable) std::bind(&callable, this, std::placeholders::_1)
-
 namespace Lion
 {
     class EventDispatcher

@@ -1,7 +1,5 @@
 #pragma once
 
-#define LN_LOG_FORMAT(message, ...) std::format(message, __VA_ARGS__)
-
 namespace Lion
 {
 	class Application;
@@ -9,6 +7,7 @@ namespace Lion
 	enum class ELogMode
 	{
 		Error = 0,
+		Fatal,
 		Information,
 		Success,
 		Trace,

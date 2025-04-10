@@ -26,6 +26,17 @@ namespace Lion
 			spdlog::error(message);
 			break;
 
+		case ELogMode::Fatal:
+			spdlog::critical(message);
+			
+#if LN_PLATFORM_WIN
+			system("PAUSE");
+#else
+			std::puts("Press Enter to continue . . .");
+			std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+#endif
+			break;
+
 		case ELogMode::Success:
 			spdlog::info(message);
 			break;
