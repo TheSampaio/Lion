@@ -7,7 +7,7 @@
         static bool __glad_initialized = false; \
         if (!__glad_initialized) { \
             if (!gladLoadGL()) { \
-                Log::Console(ELogMode::Error, "[Graphics] GLAD initialization failed on client side. Check OpenGL context setup."); \
+                Log::Console(ELogMode::Fatal, "[Graphics] GLAD initialization failed on client side. Check OpenGL context setup."); \
                 break; \
             } \
             __glad_initialized = true; \
@@ -16,8 +16,8 @@
                 static_cast<GLsizei>(Window::GetSize()[0]), \
                 static_cast<GLsizei>(Window::GetSize()[1]) \
             ); \
-            Log::Console(ELogMode::Information, LN_LOG_FORMAT("[Graphics] Renderer : {}", reinterpret_cast<const char*>(glGetString(GL_RENDERER)))); \
-            Log::Console(ELogMode::Information, LN_LOG_FORMAT("[Graphics] Vendor   : {}", reinterpret_cast<const char*>(glGetString(GL_VENDOR)))); \
-            Log::Console(ELogMode::Information, LN_LOG_FORMAT("[Graphics] OpenGL   : {}", reinterpret_cast<const char*>(glGetString(GL_VERSION)))); \
+            Log::Console(ELogMode::Information, LN_LOG_FORMAT("[Graphics] Renderer: {}", reinterpret_cast<const char*>(glGetString(GL_RENDERER)))); \
+            Log::Console(ELogMode::Information, LN_LOG_FORMAT("[Graphics] Vendor: {}", reinterpret_cast<const char*>(glGetString(GL_VENDOR)))); \
+            Log::Console(ELogMode::Information, LN_LOG_FORMAT("[Graphics] OpenGL: {}", reinterpret_cast<const char*>(glGetString(GL_VERSION)))); \
         } \
     } while (0)

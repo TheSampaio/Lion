@@ -1,8 +1,10 @@
 #include "Engine.h"
 #include "Renderer.h"
 
+#include "Camera.h"
+#include "SpriteInfo.h"
+
 #include "../Core/Log.h"
-#include "../Kind/SpriteInfo.h"
 
 namespace Lion
 {
@@ -42,7 +44,7 @@ namespace Lion
         return Linker(sInstance->mShaderProgram);
     }
 
-    void Renderer::RenderBegin()
+    void Renderer::RenderBegin(const Camera& camera)
     {
     }
 

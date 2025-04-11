@@ -26,7 +26,7 @@ namespace Lion
     {
         if (glfwInit() != GLFW_TRUE)
         {
-            Log::Console(ELogMode::Error, "[Application] GLFW initialization failed.");
+            Log::Console(ELogMode::Fatal, "[Application] GLFW initialization failed.");
             return;
         }
 

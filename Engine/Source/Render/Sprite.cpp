@@ -2,9 +2,9 @@
 #include "Sprite.h"
 
 #include "Renderer.h"
+#include "SpriteInfo.h"
 #include "Texture.h"
 
-#include "../Kind/SpriteInfo.h"
 
 namespace Lion
 {

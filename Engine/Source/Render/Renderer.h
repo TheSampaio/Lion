@@ -3,6 +3,7 @@
 namespace Lion
 {
     class Application;
+    class Camera;
     class Sprite;
 
     struct ShaderSource;
@@ -33,7 +34,7 @@ namespace Lion
         Renderer() = default;
 
         static bool Initialize();
-        static void RenderBegin();
+        static void RenderBegin(const Camera& camera);
         static void RenderEnd();
         static void Submit(const SpriteInfo& spriteInfo);
 
