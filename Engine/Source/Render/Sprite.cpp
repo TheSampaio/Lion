@@ -28,7 +28,9 @@ namespace Lion
 
     Sprite::~Sprite()
     {
-        if (mLocalImage) delete mTexture;
+        if (mLocalImage)
+            delete mTexture;
+
         delete mSpriteInfo;
     }
 
@@ -41,8 +43,9 @@ namespace Lion
         mSpriteInfo->rotation = 0.0f;
         mSpriteInfo->width = mTexture->GetSize()[0];
         mSpriteInfo->height = mTexture->GetSize()[1];
+        mSpriteInfo->texture = mTexture->GetId();
 
-        Renderer::Submit(*mSpriteInfo);
+        Renderer::Submit(mSpriteInfo);
     }
 
     std::array<int, 2> Sprite::GetSize()

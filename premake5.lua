@@ -39,6 +39,10 @@ workspace "Lion"
         lib = "glfw",
     }
 
+    dependencies["glm"] = {
+        include = "%{wks.location}/Vendor/glm/include",
+    }
+
     dependencies["spdlog"] = {
         include = "%{wks.location}/Vendor/spdlog/include",
     }
@@ -77,6 +81,7 @@ project "Lion"
     externalincludedirs {
         "%{dependencies.glad.include}",
         "%{dependencies.glfw.include}",
+        "%{dependencies.glm.include}",
         "%{dependencies.spdlog.include}",
         "%{dependencies.stb.include}",
     }
@@ -122,6 +127,7 @@ project "Sandbox"
     externalincludedirs {
         "%{dependencies.glad.include}",
         "%{dependencies.glfw.include}",
+        "%{dependencies.glm.include}",
         "%{dependencies.spdlog.include}",
         "%{dependencies.stb.include}",
     }
@@ -142,6 +148,7 @@ project "Sandbox"
 group "External Dependencies"
     include "Vendor/glad"
     include "Vendor/glfw"
+    include "Vendor/glm"
     include "Vendor/spdlog"
     include "Vendor/stb"
 group ""

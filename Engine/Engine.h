@@ -17,6 +17,8 @@
 
 #pragma warning(push)
 #pragma warning(disable : 6294 26495 26498 26800)
+
+	// Standard
 	#include <array>
 	#include <format>
 	#include <fstream>
@@ -27,10 +29,19 @@
 	#include <unordered_map>
 	#include <vector>
 
-	#include <stb_image/stb_image.h>
+	// External
 	#include <glad/glad.h>
 	#include <glfw/glfw3.h>
 	#include <spdlog/spdlog.h>
+	#include <stb_image/stb_image.h>
+
+	#include <glm/glm.hpp>
+	#include <glm/gtc/type_ptr.hpp>
+	#include <glm/gtc/matrix_transform.hpp>
+
+	#define GLM_ENABLE_EXPERIMENTAL
+	#include <glm/gtx/euler_angles.hpp>
+
 #pragma warning(pop)
 
 #include "Source/Kind/Macros.h"

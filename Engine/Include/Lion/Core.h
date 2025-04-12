@@ -22,6 +22,7 @@
 // Math
 
 // Render
+#include "../Source/Render/CameraOrthographic.h"
 #include "../Source/Render/Graphics.h"
 #include "../Source/Render/Renderer.h"
 #include "../Source/Render/Sprite.h"
