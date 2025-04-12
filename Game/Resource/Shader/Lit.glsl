@@ -8,11 +8,15 @@ layout(location = 2) in vec2 iTex;
 out vec3 vColor;
 out vec2 vTex;
 
+uniform mat4 uView;
+uniform mat4 uModel;
+uniform mat4 uProjection;
+
 void main()
 {
 	vColor = iColor;
 	vTex = iTex;
-	gl_Position = vec4(iPosition, 1.0);
+	gl_Position = uProjection * uProjection * uModel * vec4(iPosition, 1.0);
 }
 
 #shader fragment

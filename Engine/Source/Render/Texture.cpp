@@ -8,6 +8,7 @@ namespace Lion
         // Attributes
         mFilterMin = GL_LINEAR_MIPMAP_LINEAR;
         mFilterMag = GL_LINEAR;
+
         mFormatInternal = GL_RGB;
         mFormatExternal = GL_RGB;
 

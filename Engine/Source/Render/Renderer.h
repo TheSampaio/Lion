@@ -3,6 +3,7 @@
 namespace Lion
 {
     class Application;
+    class Camera;
     class Sprite;
 
     struct ShaderSource;
@@ -13,7 +14,9 @@ namespace Lion
     public:
         static LION_API GLuint GetShaderProgram() { return sInstance->mShaderProgram; }
 
-        static void OnWindowResize(uint width, uint height);
+        static LION_API void RenderBegin(Camera& camera);
+
+        static LION_API void RenderEnd();
 
         friend Application;
         friend Sprite;
@@ -29,17 +32,22 @@ namespace Lion
 
     private:
         GLuint mShaderProgram;
+        GLuint mVAO;
+        GLuint mVBO;
+        GLuint mEBO;
 
-        Renderer() = default;
+        std::vector<SpriteInfo*> mSpriteBuffer;
+
+        Renderer();
 
         static bool Initialize();
-        static void RenderBegin();
-        static void RenderEnd();
-        static void Submit(const SpriteInfo& spriteInfo);
+        static void Submit(SpriteInfo* spriteInfo);
 
         static ShaderSource Parse(const std::string& filepath);
         static GLuint Compile(GLuint type, const std::string& source);
         static GLuint Attacher(GLuint vertexShader, GLuint fragmentShader);
         static bool Linker(GLuint program);
+
+        static void OnWindowResize(uint width, uint height);
     };
 }
