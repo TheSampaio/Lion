@@ -8,23 +8,27 @@ namespace Lion
 		LION_API Texture(const std::string& filePath);
 		LION_API ~Texture();
 
-		LION_API uint GetId() const { return mId; }
-		LION_API std::array<int, 2> GetSize() const { return mSize; }
-		LION_API std::array<int, 2> GetCenter() const { return mCenter; }
+		LION_API uint32 GetId() const { return mId; }
+		LION_API std::array<uint32, 2> GetSize() const { return mSize; }
+		LION_API std::array<uint32, 2> GetCenter() const { return mCenter; }
 
-		LION_API void Bind(uint slot = 0) const;
+		LION_API void Bind(uint32 slot = 0) const;
 
 	private:
-		uint mId;
-		int mFilterMin;
-		int mFilterMag;
+		uint32 mId;
+		int32 mFilterMin;
+		int32 mFilterMag;
 
-		int mFormatInternal;
-		uint mFormatExternal;
+		int32 mFormatInternal;
+		uint32 mFormatExternal;
 
-		int mColumn;
+		int32 mColumn;
 
-		std::array<int, 2> mSize;
-		std::array<int, 2> mCenter;
+		std::array<uint32, 2> mSize;
+		std::array<uint32, 2> mCenter;
+
+#if LN_DEBUG
+		static uint32 sAllocationCount;
+#endif
 	};
 }

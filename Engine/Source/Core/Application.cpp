@@ -89,6 +89,9 @@ namespace Lion
 		for (Layer* layer : *mStack)
 			layer->OnCreate();
 
+		// Show window
+		Window::Show();
+
 		do
 		{
 			Window::PollEvents();

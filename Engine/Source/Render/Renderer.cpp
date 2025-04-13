@@ -10,20 +10,20 @@
 namespace Lion
 {
     // Vertices's dynamic array
-    const std::array<GLfloat, 32> mVertices
+    const std::array<float32, 32> mVertices
     {
-        // === Position        // === Color           // === UV
-        -0.8f, -0.8f,  0.0f,    1.0f,  1.0f,  1.0f,    0.0f,  0.0f,
-         0.8f, -0.8f,  0.0f,    1.0f,  1.0f,  1.0f,    1.0f,  0.0f,
-        -0.8f,  0.8f,  0.0f,    1.0f,  1.0f,  1.0f,    0.0f,  1.0f,
-         0.8f,  0.8f,  0.0f,    1.0f,  1.0f,  1.0f,    1.0f,  1.0f
+        // === Position         // === Color         // === UV
+        -0.5f, -0.5f, 0.0f,     1.0f, 1.0f, 1.0f,    0.0f, 0.0f,  // P0
+         0.5f, -0.5f, 0.0f,     1.0f, 1.0f, 1.0f,    1.0f, 0.0f,  // P1
+        -0.5f,  0.5f, 0.0f,     1.0f, 1.0f, 1.0f,    0.0f, 1.0f,  // P2
+         0.5f,  0.5f, 0.0f,     1.0f, 1.0f, 1.0f,    1.0f, 1.0f   // P3
     };
 
     // Indices's array
-    const std::array<GLuint, 6> mIndices
+    const std::array<uint32, 6> mIndices
     {
-        0, 1, 2,
-        2, 1, 3
+        0, 2, 1,
+        2, 3, 1
     };
 
     Renderer* Renderer::sInstance = nullptr;
@@ -34,7 +34,7 @@ namespace Lion
         std::string fragment;
     };
 
-    void Renderer::OnWindowResize(uint width, uint height)
+    void Renderer::OnWindowResize(uint32 width, uint32 height)
     {
         glViewport(0, 0, width, height);
     }
@@ -62,8 +62,8 @@ namespace Lion
     {
         // Parse & Compile
         ShaderSource source = Parse("Resource/Shader/Lit.glsl");
-        GLuint vertexShader = Compile(GL_VERTEX_SHADER, source.vertex);
-        GLuint fragmentShader = Compile(GL_FRAGMENT_SHADER, source.fragment);
+        uint32 vertexShader = Compile(GL_VERTEX_SHADER, source.vertex);
+        uint32 fragmentShader = Compile(GL_FRAGMENT_SHADER, source.fragment);
 
         // Attach & Link
         Attacher(vertexShader, fragmentShader);
@@ -81,17 +81,17 @@ namespace Lion
         // Generates a VBO and set-ups it
         glGenBuffers(1, &sInstance->mVBO);
         glBindBuffer(GL_ARRAY_BUFFER, sInstance->mVBO);
-        glBufferData(GL_ARRAY_BUFFER, mVertices.size() * sizeof(GLfloat), mVertices.data(), GL_STATIC_DRAW);
+        glBufferData(GL_ARRAY_BUFFER, mVertices.size() * sizeof(float32), mVertices.data(), GL_STATIC_DRAW);
 
         // Generates a EBO and set-ups it
         glGenBuffers(1, &sInstance->mEBO);
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, sInstance->mEBO);
-        glBufferData(GL_ELEMENT_ARRAY_BUFFER, mIndices.size() * sizeof(GLuint), mIndices.data(), GL_STATIC_DRAW);
+        glBufferData(GL_ELEMENT_ARRAY_BUFFER, mIndices.size() * sizeof(uint32), mIndices.data(), GL_STATIC_DRAW);
 
         // Set-ups the VAO's layouts
-        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(GLfloat), nullptr);
-        glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(GLfloat), reinterpret_cast<void*>(3 * sizeof(GLfloat)));
-        glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(GLfloat), reinterpret_cast<void*>(6 * sizeof(GLfloat)));
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float32), nullptr);
+        glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float32), reinterpret_cast<void*>(3 * sizeof(float32)));
+        glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(float32), reinterpret_cast<void*>(6 * sizeof(float32)));
 
         // Enables the VAO's layouts
         glEnableVertexAttribArray(0);
@@ -103,18 +103,22 @@ namespace Lion
         glBindVertexArray(0);
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 
+        // Enable transparency
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
         return true;
     }
 
-    void Renderer::RenderBegin(Camera& camera)
+    void Renderer::RenderBegin(const Reference<Camera> camera)
     {
         glUseProgram(Renderer::sInstance->mShaderProgram);
         glBindVertexArray(sInstance->mVAO);
 
-        camera.OnUsage();
+        camera->OnUsage();
 
-        RenderCommand::SetUniformMatrix4fv(sInstance->mShaderProgram, "uView", camera.GetViewMatrix());
-        RenderCommand::SetUniformMatrix4fv(sInstance->mShaderProgram, "uProjection", camera.GetProjectionMatrix());
+        RenderCommand::SetUniformMatrix4fv(sInstance->mShaderProgram, "uView", camera->GetViewMatrix());
+        RenderCommand::SetUniformMatrix4fv(sInstance->mShaderProgram, "uProjection", camera->GetProjectionMatrix());
     }
 
     void Renderer::RenderEnd()
@@ -123,20 +127,20 @@ namespace Lion
         {
             // Define and send model matrix
             glm::mat4 model = glm::mat4(1.0f);
-            model = glm::translate(model, glm::vec3(sprite->x, sprite->y, sprite->depth));            // Apply sprite's translation
-            model = glm::rotate(model, glm::radians(sprite->rotation), glm::vec3(0.0f, 0.0f, 1.0f));  // Apply sprite's rotation
-            model = glm::scale(model, glm::vec3(sprite->scale));                                      // Apply sprite's scale
+            model = glm::translate(model, glm::vec3(sprite->x, sprite->y, sprite->depth));
+            model = glm::rotate(model, glm::radians(sprite->rotation), glm::vec3(0.0f, 0.0f, 1.0f));
+            model = glm::scale(model, glm::vec3(sprite->width * sprite->scale, sprite->height * sprite->scale, 1.0f));
 
-            // Enviar a matriz de modelo para o shader
+            // Send the matrix to the shader
             RenderCommand::SetUniformMatrix4fv(sInstance->mShaderProgram, "uModel", model);
 
             // Creates a uniform sampler and binds the generated texture
             RenderCommand::SetUniform1i(sInstance->mShaderProgram, "uDiffuseSampler", 0);
             glBindTexture(GL_TEXTURE_2D, sprite->texture);
-        }
 
-        // Draw a triangle using the EBO set-up
-        glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(sInstance->mSpriteBuffer.size() * 6), GL_UNSIGNED_INT, nullptr);
+            // Draw a triangle using the EBO set-up
+            glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(sInstance->mSpriteBuffer.size() * 6), GL_UNSIGNED_INT, nullptr);
+        }
 
         sInstance->mSpriteBuffer.clear();
 
@@ -150,21 +154,21 @@ namespace Lion
         Renderer::sInstance->mSpriteBuffer.push_back(spriteInfo);
     }
 
-    GLuint Renderer::Compile(GLuint type, const std::string& source)
+    uint32 Renderer::Compile(uint32 type, const std::string& source)
     {
-        GLuint id = glCreateShader(type);
+        uint32 id = glCreateShader(type);
         const GLchar* const content = source.c_str();
 
         glShaderSource(id, 1, &content, nullptr);
         glCompileShader(id);
 
         // Log errors
-        GLint result;
+        int32 result;
         glGetShaderiv(id, GL_COMPILE_STATUS, &result);
 
         if (result == GL_FALSE)
         {
-            GLint length;
+            int32 length;
             glGetShaderiv(id, GL_INFO_LOG_LENGTH, &length);
 
             std::vector<GLchar> message(length);
@@ -180,7 +184,7 @@ namespace Lion
         return id;
     }
 
-    GLuint Renderer::Attacher(GLuint vertexShader, GLuint fragmentShader)
+    uint32 Renderer::Attacher(uint32 vertexShader, uint32 fragmentShader)
     {
         sInstance->mShaderProgram = glCreateProgram();
         glAttachShader(sInstance->mShaderProgram, vertexShader);
@@ -228,24 +232,22 @@ namespace Lion
         return { source[0].str(), source[1].str() };
     }
 
-    bool Renderer::Linker(GLuint program)
+    bool Renderer::Linker(uint32 program)
     {
         glLinkProgram(program);
 
-        GLint isLinked;
+        int32 isLinked;
         glGetProgramiv(program, GL_LINK_STATUS, &isLinked);
 
         if (isLinked == GL_FALSE)
         {
-            GLint length;
+            int32 length;
             glGetProgramiv(program, GL_INFO_LOG_LENGTH, &length);
 
             std::vector<GLchar> message(length);
             glGetProgramInfoLog(program, length, &length, message.data());
 
-            Log::Console(ELogMode::Error, "[Renderer] Failed to link shader program.");
-            Log::Console(ELogMode::Error, message.data());
-
+            Log::Console(ELogMode::Error, LN_LOG_FORMAT("[Renderer] Failed to link shader program: {}", message.data()));
             glDeleteProgram(program);
             return false;
         }

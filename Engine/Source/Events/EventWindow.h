@@ -32,17 +32,17 @@ namespace Lion
     class EventWindowResize : public Event
     {
     public:
-        EventWindowResize(int width, int height)
+        EventWindowResize(int32 width, int32 height)
             : mWidth(width), mHeight(height)
         {
         }
 
-        int GetWidth() const { return mWidth; }
-        int GetHeight() const { return mHeight; }
+        int32 GetWidth() const { return mWidth; }
+        int32 GetHeight() const { return mHeight; }
 
         LN_EVENT_CLASS_TYPE(EventWindowResize)
 
     private:
-        int mWidth, mHeight;
+        int32 mWidth, mHeight;
     };
 }

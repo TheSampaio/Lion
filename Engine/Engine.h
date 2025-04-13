@@ -20,6 +20,8 @@
 
 	// Standard
 	#include <array>
+	#include <cstdint>   // For fixed size integer types
+	#include <cstddef>   // For std::size_t
 	#include <format>
 	#include <fstream>
 	#include <functional>
@@ -44,5 +46,6 @@
 
 #pragma warning(pop)
 
+#include "Source/Kind/Allocators.h"
 #include "Source/Kind/Macros.h"
-#include "Source/Kind/Primitive.h"
+#include "Source/Kind/Primitives.h"

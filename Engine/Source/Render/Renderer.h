@@ -12,9 +12,9 @@ namespace Lion
     class Renderer
     {
     public:
-        static LION_API GLuint GetShaderProgram() { return sInstance->mShaderProgram; }
+        static LION_API uint32 GetShaderProgram() { return sInstance->mShaderProgram; }
 
-        static LION_API void RenderBegin(Camera& camera);
+        static LION_API void RenderBegin(const Reference<Camera> camera);
 
         static LION_API void RenderEnd();
 
@@ -31,10 +31,10 @@ namespace Lion
         Renderer& operator=(const Renderer&) = delete;
 
     private:
-        GLuint mShaderProgram;
-        GLuint mVAO;
-        GLuint mVBO;
-        GLuint mEBO;
+        uint32 mShaderProgram;
+        uint32 mVAO;
+        uint32 mVBO;
+        uint32 mEBO;
 
         std::vector<SpriteInfo*> mSpriteBuffer;
 
@@ -44,10 +44,10 @@ namespace Lion
         static void Submit(SpriteInfo* spriteInfo);
 
         static ShaderSource Parse(const std::string& filepath);
-        static GLuint Compile(GLuint type, const std::string& source);
-        static GLuint Attacher(GLuint vertexShader, GLuint fragmentShader);
-        static bool Linker(GLuint program);
+        static uint32 Compile(uint32 type, const std::string& source);
+        static uint32 Attacher(uint32 vertexShader, uint32 fragmentShader);
+        static bool Linker(uint32 program);
 
-        static void OnWindowResize(uint width, uint height);
+        static void OnWindowResize(uint32 width, uint32 height);
     };
 }
