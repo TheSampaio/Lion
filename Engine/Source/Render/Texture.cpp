@@ -87,7 +87,7 @@ namespace Lion
 
 #if LN_DEBUG
         sAllocationCount++;
-        Log::Console(ELogMode::Trace, LN_LOG_FORMAT("Texture allocations: {}", sAllocationCount));
+        Log::Console(ELogMode::Trace, LN_LOG_FORMAT("[Texture] Allocated: 1 (Total: {})", sAllocationCount));
 #endif
 	}
 
@@ -97,7 +97,7 @@ namespace Lion
 
 #if LN_DEBUG
         sAllocationCount--;
-        Log::Console(ELogMode::Trace, LN_LOG_FORMAT("Texture allocations: {}", sAllocationCount));
+        Log::Console(ELogMode::Trace, LN_LOG_FORMAT("[Texture] Released:  1 (Remaining: {})", sAllocationCount));
 #endif
 	}
 
