@@ -16,7 +16,7 @@ void main()
 {
 	vColor = iColor;
 	vTex = iTex;
-	gl_Position = uProjection * uProjection * uModel * vec4(iPosition, 1.0);
+	gl_Position = uProjection * uView * uModel * vec4(iPosition, 1.0);
 }
 
 #shader fragment

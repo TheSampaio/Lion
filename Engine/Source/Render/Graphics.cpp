@@ -24,10 +24,10 @@ namespace Lion
         const auto& backgroundColor = Window::GetBackgroundColor();
 
         glClearColor(
-            static_cast<GLfloat>(backgroundColor[0]),
-            static_cast<GLfloat>(backgroundColor[1]),
-            static_cast<GLfloat>(backgroundColor[2]),
-            static_cast<GLfloat>(backgroundColor[3])
+            static_cast<float32>(backgroundColor[0]),
+            static_cast<float32>(backgroundColor[1]),
+            static_cast<float32>(backgroundColor[2]),
+            static_cast<float32>(backgroundColor[3])
         );
         glClear(GL_COLOR_BUFFER_BIT);
     }

@@ -1,23 +1,63 @@
 #include "Engine.h"
 #include "Texture.h"
 
+#include "../Core/Log.h"
+
 namespace Lion
 {
+#if LN_DEBUG
+    uint32 Texture::sAllocationCount = 0;
+#endif
+
 	Texture::Texture(const std::string& filePath)
+        : mId(0),
+        mFilterMin(GL_NEAREST),
+        mFilterMag(GL_NEAREST),
+        mSize{ 0, 0 },
+        mCenter{ 0, 0 },
+        mFormatInternal(0),
+        mFormatExternal(0),
+        mColumn(0)
 	{
-        // Attributes
-        mFilterMin = GL_LINEAR_MIPMAP_LINEAR;
-        mFilterMag = GL_LINEAR;
-
-        mFormatInternal = GL_RGB;
-        mFormatExternal = GL_RGB;
-
         // Flips image on load
         stbi_set_flip_vertically_on_load(true);
 
         // Loads a image from disk
-        uchar* bytes = stbi_load(filePath.c_str(), &mSize[0], &mSize[1], &mColumn, 0);
+        const char8* filename = filePath.c_str();
+        int32 width = 0, height = 0;
+        byte* bytes = stbi_load(filename, &width, &height, &mColumn, 0);
+
+        if (!bytes)
+        {
+            Log::Console(ELogMode::Warning, LN_LOG_FORMAT("[Texture] Failed to load image: '{}'.", filename));
+            return;
+        }
+
+        mSize = { static_cast<uint32>(width), static_cast<uint32>(height) };
         mCenter = { mSize[0] / 2, mSize[1] / 2 };
+
+        // Set texture formats based on number of channels
+        switch (mColumn)
+        {
+        case 4:
+            mFormatInternal = GL_RGBA;
+            mFormatExternal = GL_RGBA;
+            break;
+
+        case 3:
+            mFormatInternal = GL_RGB;
+            mFormatExternal = GL_RGB;
+            break;
+
+        case 1:
+            mFormatInternal = GL_RED;
+            mFormatExternal = GL_RED;
+            break;
+
+        default:
+            Log::Console(ELogMode::Error, LN_LOG_FORMAT("[Texture] Unsupported image format: '{}'.", filename));
+            return;
+        }
 
         // Generates a texture
         glGenTextures(1, &mId);
@@ -44,14 +84,24 @@ namespace Lion
 
         // Unbinds the 2D texture to avoid bugs
         glBindTexture(GL_TEXTURE_2D, 0);
+
+#if LN_DEBUG
+        sAllocationCount++;
+        Log::Console(ELogMode::Trace, LN_LOG_FORMAT("Texture allocations: {}", sAllocationCount));
+#endif
 	}
 
 	Texture::~Texture()
 	{
         glDeleteTextures(1, &mId);
+
+#if LN_DEBUG
+        sAllocationCount--;
+        Log::Console(ELogMode::Trace, LN_LOG_FORMAT("Texture allocations: {}", sAllocationCount));
+#endif
 	}
 
-	void Texture::Bind(uint slot) const
+	void Texture::Bind(uint32 slot) const
 	{
 		glActiveTexture(GL_TEXTURE0 + slot);
 		glBindTexture(GL_TEXTURE_2D, mId);

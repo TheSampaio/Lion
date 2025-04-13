@@ -16,6 +16,10 @@
 #include "../Source/Events/EventWindow.h"
 
 // Kind
+#include "../Source/Kind/Allocators.h"
+#include "../Source/Kind/Depth.h"
+#include "../Source/Kind/Macros.h"
+#include "../Source/Kind/Primitives.h"
 
 // Logic
 

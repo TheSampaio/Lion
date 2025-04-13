@@ -41,6 +41,8 @@ namespace Lion
 
     bool Window::Create()
     {
+        glfwWindowHint(GLFW_VISIBLE, false);
+
         sInstance->mId = glfwCreateWindow(sInstance->mData.Width, sInstance->mData.Height, sInstance->mData.Title.c_str(), nullptr, nullptr);
 
         if (!sInstance->mId)
@@ -58,7 +60,7 @@ namespace Lion
             });
 
         // Window focus callback
-        glfwSetWindowFocusCallback(sInstance->mId, [](GLFWwindow* window, int focused)
+        glfwSetWindowFocusCallback(sInstance->mId, [](GLFWwindow* window, int32 focused)
             {
                 WindowData& data = *(WindowData*)glfwGetWindowUserPointer(window);
 
@@ -76,7 +78,7 @@ namespace Lion
             });
 
         // Resize callback
-        glfwSetWindowSizeCallback(sInstance->mId, [](GLFWwindow* window, int width, int height)
+        glfwSetWindowSizeCallback(sInstance->mId, [](GLFWwindow* window, int32 width, int32 height)
             {
                 WindowData& data = *(WindowData*)glfwGetWindowUserPointer(window);
                 data.Width = width;
@@ -89,74 +91,82 @@ namespace Lion
             });
 
         // Keyboard callback
-        glfwSetKeyCallback(sInstance->mId, [](GLFWwindow* window, int key, int scancode, int action, int mods)
+        glfwSetKeyCallback(sInstance->mId, [](GLFWwindow* window, int32 key, int32 scancode, int32 action, int32 mods)
             {
                 WindowData& data = *(WindowData*)glfwGetWindowUserPointer(window);
 
                 switch (action)
                 {
-                case GLFW_PRESS:
-                {
-                    EventInputKeyboardPress event(key);
-                    data.mEventCallback(event);
-                    break;
-                }
-                case GLFW_RELEASE:
-                {
-                    EventInputKeyboardRelease event(key);
-                    data.mEventCallback(event);
-                    break;
-                }
-                case GLFW_REPEAT:
-                {
-                    EventInputKeyboardRepeat event(key);
-                    data.mEventCallback(event);
-                    break;
-                }
+                    case GLFW_PRESS:
+                    {
+                        EventInputKeyboardPress event(key);
+                        data.mEventCallback(event);
+                        break;
+                    }
+
+                    case GLFW_RELEASE:
+                    {
+                        EventInputKeyboardRelease event(key);
+                        data.mEventCallback(event);
+                        break;
+                    }
+
+                    case GLFW_REPEAT:
+                    {
+                        EventInputKeyboardRepeat event(key);
+                        data.mEventCallback(event);
+                        break;
+                    }
                 }
             });
 
         // Mouse button callback
-        glfwSetMouseButtonCallback(sInstance->mId, [](GLFWwindow* window, int button, int action, int mods)
+        glfwSetMouseButtonCallback(sInstance->mId, [](GLFWwindow* window, int32 button, int32 action, int32 mods)
             {
                 WindowData& data = *(WindowData*)glfwGetWindowUserPointer(window);
 
                 switch (action)
                 {
-                case GLFW_PRESS:
-                {
-                    EventInputMousePress event(button);
-                    data.mEventCallback(event);
-                    break;
-                }
-                case GLFW_RELEASE:
-                {
-                    EventInputMouseRelease event(button);
-                    data.mEventCallback(event);
-                    break;
-                }
+                    case GLFW_PRESS:
+                    {
+                        EventInputMousePress event(button);
+                        data.mEventCallback(event);
+                        break;
+                    }
+
+                    case GLFW_RELEASE:
+                    {
+                        EventInputMouseRelease event(button);
+                        data.mEventCallback(event);
+                        break;
+                    }
                 }
             });
 
         // Mouse scroll callback
-        glfwSetScrollCallback(sInstance->mId, [](GLFWwindow* window, double xOffset, double yOffset)
+        glfwSetScrollCallback(sInstance->mId, [](GLFWwindow* window, float64 xOffset, float64 yOffset)
             {
                 WindowData& data = *(WindowData*)glfwGetWindowUserPointer(window);
 
-                EventInputMouseScroll event((float)xOffset, (float)yOffset);
+                EventInputMouseScroll event((float32)xOffset, (float32)yOffset);
                 data.mEventCallback(event);
             });
 
         // Mouse move callback
-        glfwSetCursorPosCallback(sInstance->mId, [](GLFWwindow* window, double xPos, double yPos)
+        glfwSetCursorPosCallback(sInstance->mId, [](GLFWwindow* window, float64 xPos, float64 yPos)
             {
                 WindowData& data = *(WindowData*)glfwGetWindowUserPointer(window);
 
-                EventInputMouseMove event((float)xPos, (float)yPos);
+                EventInputMouseMove event((float32)xPos, (float32)yPos);
                 data.mEventCallback(event);
             });
 
         return true;
+    }
+
+    void Window::Show()
+    {
+        glfwShowWindow(sInstance->mId);
     }
 
     void Window::PollEvents()
@@ -164,13 +174,13 @@ namespace Lion
         glfwPollEvents();
     }
 
-    void Window::SetSize(uint width, uint height)
+    void Window::SetSize(uint32 width, uint32 height)
     {
         sInstance->mData.Width = width;
         sInstance->mData.Height = height;
     }
 
-    void Window::SetBackgroundColor(float red, float green, float blue, float alpha)
+    void Window::SetBackgroundColor(float32 red, float32 green, float32 blue, float32 alpha)
     {
         sInstance->mBackgroundColor = {red, green, blue, alpha};
     }

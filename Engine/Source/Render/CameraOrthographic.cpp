@@ -6,48 +6,64 @@
 
 namespace Lion
 {
-	CameraOrthographic::CameraOrthographic()
-	{
-		mBounds = { -1.0f, 1.0f, -1.0f, 1.0f };
-		mZoomLevel = 1.0f;
-	}
+    CameraOrthographic::CameraOrthographic()
+    {
+        const auto& size = Window::GetSize();
 
-	void CameraOrthographic::SetViewMatrix(const glm::vec3& position, const glm::vec3& target, const glm::vec3& up)
-	{
-		mView = glm::lookAt(position, target, up);
-	}
+        mViewport.Width = static_cast<float32>(size[0]);
+        mViewport.Height = static_cast<float32>(size[1]);
+        mViewport.Zoom = 1.0f;
+        mAspectRatio = mViewport.Width / mViewport.Height;
 
-	void CameraOrthographic::SetProjectionMatrix(float left, float right, float bottom, float top)
-	{
-		mBounds.Left = left;
-		mBounds.Right = right;
-		mBounds.Bottom = bottom;
-		mBounds.Top = top;
+        RecalculateBounds();
+    }
 
-		mProjection = glm::ortho(left, right, bottom, top, -1.0f, 1.0f);
-	}
+    void CameraOrthographic::SetViewMatrix(const glm::vec3& position, const glm::vec3& target, const glm::vec3& up)
+    {
+        mView = glm::lookAt(position, target, up);
+    }
 
-	void CameraOrthographic::OnResize(int width, int height)
-	{
-		mAspectRatio = static_cast<float>(width) / static_cast<float>(height);
+    void CameraOrthographic::SetProjectionMatrix(float32 left, float32 right, float32 bottom, float32 top)
+    {
+        mBounds.Left = left;
+        mBounds.Right = right;
+        mBounds.Bottom = bottom;
+        mBounds.Top = top;
 
-		mBounds.Left = -mAspectRatio * mZoomLevel;
-		mBounds.Right = mAspectRatio * mZoomLevel;
-		mBounds.Bottom = -mZoomLevel;
-		mBounds.Top = mZoomLevel;
+        mProjection = glm::ortho(left, right, bottom, top, -1.0f, 0.0f);
+    }
 
-		SetProjectionMatrix(mBounds.Left, mBounds.Right, mBounds.Bottom, mBounds.Top);
-	}
+    void CameraOrthographic::SetZoomLevel(float32 zoomLevel)
+    {
+        mViewport.Zoom = zoomLevel;
+        RecalculateBounds();
+    }
 
-	void CameraOrthographic::OnUsage()
-	{
-		SetViewMatrix(mPosition, mPosition + mRotation, mUp);
+    void CameraOrthographic::OnResize(float32 width, float32 height)
+    {
+        mViewport.Width = width;
+        mViewport.Height = height;
+        mAspectRatio = width / height;
 
-		mBounds.Left = -mAspectRatio * mZoomLevel;
-		mBounds.Right = mAspectRatio * mZoomLevel;
-		mBounds.Bottom = -mZoomLevel;
-		mBounds.Top = mZoomLevel;
+        RecalculateBounds();
+    }
 
-		SetProjectionMatrix(mBounds.Left, mBounds.Right, mBounds.Bottom, mBounds.Top);
-	}
+    void CameraOrthographic::OnUsage()
+    {
+        SetViewMatrix(mPosition, mPosition + mFront, mUp);
+        SetProjectionMatrix(mBounds.Left, mBounds.Right, mBounds.Bottom, mBounds.Top);
+    }
+
+    void CameraOrthographic::RecalculateBounds()
+    {
+        float32 halfWidth = (mViewport.Width / 2.0f) * mViewport.Zoom;
+        float32 halfHeight = (mViewport.Height / 2.0f) * mViewport.Zoom;
+
+        mBounds.Left = -halfWidth;
+        mBounds.Right = halfWidth;
+        mBounds.Bottom = -halfHeight;
+        mBounds.Top = halfHeight;
+
+        SetProjectionMatrix(mBounds.Left, mBounds.Right, mBounds.Bottom, mBounds.Top);
+    }
 }

@@ -37,9 +37,9 @@ namespace Lion
 		void Initialize();
 
 #ifndef LN_SHIPPING
-		friend int ::main(int argc, const char* argv[]);
+		friend int ::main(int32 argc, const char8* argv[]);
 #else
-		friend int WINAPI::WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hInstancePrev, _In_ PSTR cmdLine, _In_ int cmdShow);
+		friend int WINAPI::WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hInstancePrev, _In_ PSTR cmdLine, _In_ INT cmdShow);
 #endif 
 	};
 
