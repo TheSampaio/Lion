@@ -6,6 +6,7 @@ class GameplayLayer : public Lion::Layer
 {
 public:
 	void OnCreate() override;
+	void OnUpdate() override;
 	void OnRender() override;
 
 protected:
@@ -13,6 +14,15 @@ protected:
 	bool OnEventWindowResize(const Lion::EventWindowResize& event);
 
 private:
+	struct
+	{
+		Lion::float32 x = 400.0f;
+		Lion::float32 y = 400.0f;
+
+	} mBallVelocity;
+
+	glm::vec3 mBallPosition = glm::vec3(0.0f, -258.0f, Lion::Depth::Upper);
+
 	Lion::Reference<Lion::CameraOrthographic> mCamera;
 
 	Lion::Scope<Lion::Sprite> mSpriteBackground;

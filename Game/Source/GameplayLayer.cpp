@@ -53,52 +53,87 @@ void GameplayLayer::OnCreate()
 	mSpriteBrickPurple06 = MakeReference<Sprite>(mTextureBrickPurple);
 }
 
+void GameplayLayer::OnUpdate()
+{
+	mBallPosition.x += mBallVelocity.x * Clock::GetDeltaTime();
+	mBallPosition.y += mBallVelocity.y * Clock::GetDeltaTime();
+
+	const auto& windowSize = Window::GetSize();
+
+	// Width
+	if (mBallPosition.x >= windowSize[0] / 2.0f)
+	{
+		mBallPosition.x = windowSize[0] / 2.0f;
+		mBallVelocity.x *= -1.0;
+	}
+
+	else if (mBallPosition.x <= -(windowSize[0] / 2.0f))
+	{
+		mBallPosition.x = -(windowSize[0] / 2.0f);
+		mBallVelocity.x *= -1.0;
+	}
+
+	// Height
+	if (mBallPosition.y >= windowSize[1] / 2.0f)
+	{
+		mBallPosition.y = windowSize[1] / 2.0f;
+		mBallVelocity.y *= -1.0;
+	}
+
+	else if (mBallPosition.y <= -(windowSize[1] / 2.0f))
+	{
+		mBallPosition.y = -(windowSize[1] / 2.0f);
+		mBallVelocity.y *= -1.0;
+	}
+}
+
 void GameplayLayer::OnRender()
 {
 	Renderer::RenderBegin(mCamera);
 
 	mSpriteBackground->Draw(0.0f, 0.0f, Depth::Back);
-	mSpriteBall->Draw(0.0f, -258.0f, Depth::Upper);
 	mSpritePlayer->Draw(0.0f, -275.0f, Depth::Front);
+
+	mSpriteBall->Draw(mBallPosition.x, mBallPosition.y, Depth::Middle);
 
 	const float32 spacingX = 80.0f;
 	const float32 spacingY = 40.0f;
 
-	mSpriteBrickRed01    -> Draw(-228.0f + (spacingX * 1.0f), 150.0f - (spacingY * 1.0f), Depth::Middle);
-	mSpriteBrickGreen01  -> Draw(-228.0f + (spacingX * 2.0f), 150.0f - (spacingY * 1.0f), Depth::Middle);
-	mSpriteBrickBlue01   -> Draw(-228.0f + (spacingX * 3.0f), 150.0f - (spacingY * 1.0f), Depth::Middle);
-	mSpriteBrickYellow01 -> Draw(-228.0f + (spacingX * 4.0f), 150.0f - (spacingY * 1.0f), Depth::Middle);
-	mSpriteBrickPurple01 -> Draw(-228.0f + (spacingX * 5.0f), 150.0f - (spacingY * 1.0f), Depth::Middle);
+	mSpriteBrickRed01    -> Draw(-228.0f + (spacingX * 1.0f), 150.0f - (spacingY * 1.0f), Depth::Upper);
+	mSpriteBrickGreen01  -> Draw(-228.0f + (spacingX * 2.0f), 150.0f - (spacingY * 1.0f), Depth::Upper);
+	mSpriteBrickBlue01   -> Draw(-228.0f + (spacingX * 3.0f), 150.0f - (spacingY * 1.0f), Depth::Upper);
+	mSpriteBrickYellow01 -> Draw(-228.0f + (spacingX * 4.0f), 150.0f - (spacingY * 1.0f), Depth::Upper);
+	mSpriteBrickPurple01 -> Draw(-228.0f + (spacingX * 5.0f), 150.0f - (spacingY * 1.0f), Depth::Upper);
 
-	mSpriteBrickRed02    -> Draw(-228.0f + (spacingX * 1.0f), 150.0f - (spacingY * 2.0f), Depth::Middle);
-	mSpriteBrickGreen02  -> Draw(-228.0f + (spacingX * 2.0f), 150.0f - (spacingY * 2.0f), Depth::Middle);
-	mSpriteBrickBlue02   -> Draw(-228.0f + (spacingX * 3.0f), 150.0f - (spacingY * 2.0f), Depth::Middle);
-	mSpriteBrickYellow02 -> Draw(-228.0f + (spacingX * 4.0f), 150.0f - (spacingY * 2.0f), Depth::Middle);
-	mSpriteBrickPurple02 -> Draw(-228.0f + (spacingX * 5.0f), 150.0f - (spacingY * 2.0f), Depth::Middle);
+	mSpriteBrickRed02    -> Draw(-228.0f + (spacingX * 1.0f), 150.0f - (spacingY * 2.0f), Depth::Upper);
+	mSpriteBrickGreen02  -> Draw(-228.0f + (spacingX * 2.0f), 150.0f - (spacingY * 2.0f), Depth::Upper);
+	mSpriteBrickBlue02   -> Draw(-228.0f + (spacingX * 3.0f), 150.0f - (spacingY * 2.0f), Depth::Upper);
+	mSpriteBrickYellow02 -> Draw(-228.0f + (spacingX * 4.0f), 150.0f - (spacingY * 2.0f), Depth::Upper);
+	mSpriteBrickPurple02 -> Draw(-228.0f + (spacingX * 5.0f), 150.0f - (spacingY * 2.0f), Depth::Upper);
 
-	mSpriteBrickRed03    -> Draw(-228.0f + (spacingX * 1.0f), 150.0f - (spacingY * 3.0f), Depth::Middle);
-	mSpriteBrickGreen03  -> Draw(-228.0f + (spacingX * 2.0f), 150.0f - (spacingY * 3.0f), Depth::Middle);
-	mSpriteBrickBlue03   -> Draw(-228.0f + (spacingX * 3.0f), 150.0f - (spacingY * 3.0f), Depth::Middle);
-	mSpriteBrickYellow03 -> Draw(-228.0f + (spacingX * 4.0f), 150.0f - (spacingY * 3.0f), Depth::Middle);
-	mSpriteBrickPurple03 -> Draw(-228.0f + (spacingX * 5.0f), 150.0f - (spacingY * 3.0f), Depth::Middle);
+	mSpriteBrickRed03    -> Draw(-228.0f + (spacingX * 1.0f), 150.0f - (spacingY * 3.0f), Depth::Upper);
+	mSpriteBrickGreen03  -> Draw(-228.0f + (spacingX * 2.0f), 150.0f - (spacingY * 3.0f), Depth::Upper);
+	mSpriteBrickBlue03   -> Draw(-228.0f + (spacingX * 3.0f), 150.0f - (spacingY * 3.0f), Depth::Upper);
+	mSpriteBrickYellow03 -> Draw(-228.0f + (spacingX * 4.0f), 150.0f - (spacingY * 3.0f), Depth::Upper);
+	mSpriteBrickPurple03 -> Draw(-228.0f + (spacingX * 5.0f), 150.0f - (spacingY * 3.0f), Depth::Upper);
 
-	mSpriteBrickRed04    -> Draw(-228.0f + (spacingX * 1.0f), 150.0f - (spacingY * 4.0f), Depth::Middle);
-	mSpriteBrickGreen04  -> Draw(-228.0f + (spacingX * 2.0f), 150.0f - (spacingY * 4.0f), Depth::Middle);
-	mSpriteBrickBlue04   -> Draw(-228.0f + (spacingX * 3.0f), 150.0f - (spacingY * 4.0f), Depth::Middle);
-	mSpriteBrickYellow04 -> Draw(-228.0f + (spacingX * 4.0f), 150.0f - (spacingY * 4.0f), Depth::Middle);
-	mSpriteBrickPurple04 -> Draw(-228.0f + (spacingX * 5.0f), 150.0f - (spacingY * 4.0f), Depth::Middle);
+	mSpriteBrickRed04    -> Draw(-228.0f + (spacingX * 1.0f), 150.0f - (spacingY * 4.0f), Depth::Upper);
+	mSpriteBrickGreen04  -> Draw(-228.0f + (spacingX * 2.0f), 150.0f - (spacingY * 4.0f), Depth::Upper);
+	mSpriteBrickBlue04   -> Draw(-228.0f + (spacingX * 3.0f), 150.0f - (spacingY * 4.0f), Depth::Upper);
+	mSpriteBrickYellow04 -> Draw(-228.0f + (spacingX * 4.0f), 150.0f - (spacingY * 4.0f), Depth::Upper);
+	mSpriteBrickPurple04 -> Draw(-228.0f + (spacingX * 5.0f), 150.0f - (spacingY * 4.0f), Depth::Upper);
 
-	mSpriteBrickRed05    -> Draw(-228.0f + (spacingX * 1.0f), 150.0f - (spacingY * 5.0f), Depth::Middle);
-	mSpriteBrickGreen05  -> Draw(-228.0f + (spacingX * 2.0f), 150.0f - (spacingY * 5.0f), Depth::Middle);
-	mSpriteBrickBlue05   -> Draw(-228.0f + (spacingX * 3.0f), 150.0f - (spacingY * 5.0f), Depth::Middle);
-	mSpriteBrickYellow05 -> Draw(-228.0f + (spacingX * 4.0f), 150.0f - (spacingY * 5.0f), Depth::Middle);
-	mSpriteBrickPurple05 -> Draw(-228.0f + (spacingX * 5.0f), 150.0f - (spacingY * 5.0f), Depth::Middle);
+	mSpriteBrickRed05    -> Draw(-228.0f + (spacingX * 1.0f), 150.0f - (spacingY * 5.0f), Depth::Upper);
+	mSpriteBrickGreen05  -> Draw(-228.0f + (spacingX * 2.0f), 150.0f - (spacingY * 5.0f), Depth::Upper);
+	mSpriteBrickBlue05   -> Draw(-228.0f + (spacingX * 3.0f), 150.0f - (spacingY * 5.0f), Depth::Upper);
+	mSpriteBrickYellow05 -> Draw(-228.0f + (spacingX * 4.0f), 150.0f - (spacingY * 5.0f), Depth::Upper);
+	mSpriteBrickPurple05 -> Draw(-228.0f + (spacingX * 5.0f), 150.0f - (spacingY * 5.0f), Depth::Upper);
 
-	mSpriteBrickRed06    -> Draw(-228.0f + (spacingX * 1.0f), 150.0f - (spacingY * 6.0f), Depth::Middle);
-	mSpriteBrickGreen06  -> Draw(-228.0f + (spacingX * 2.0f), 150.0f - (spacingY * 6.0f), Depth::Middle);
-	mSpriteBrickBlue06   -> Draw(-228.0f + (spacingX * 3.0f), 150.0f - (spacingY * 6.0f), Depth::Middle);
-	mSpriteBrickYellow06 -> Draw(-228.0f + (spacingX * 4.0f), 150.0f - (spacingY * 6.0f), Depth::Middle);
-	mSpriteBrickPurple06 -> Draw(-228.0f + (spacingX * 5.0f), 150.0f - (spacingY * 6.0f), Depth::Middle);
+	mSpriteBrickRed06    -> Draw(-228.0f + (spacingX * 1.0f), 150.0f - (spacingY * 6.0f), Depth::Upper);
+	mSpriteBrickGreen06  -> Draw(-228.0f + (spacingX * 2.0f), 150.0f - (spacingY * 6.0f), Depth::Upper);
+	mSpriteBrickBlue06   -> Draw(-228.0f + (spacingX * 3.0f), 150.0f - (spacingY * 6.0f), Depth::Upper);
+	mSpriteBrickYellow06 -> Draw(-228.0f + (spacingX * 4.0f), 150.0f - (spacingY * 6.0f), Depth::Upper);
+	mSpriteBrickPurple06 -> Draw(-228.0f + (spacingX * 5.0f), 150.0f - (spacingY * 6.0f), Depth::Upper);
 
 	Renderer::RenderEnd();
 }

@@ -2,7 +2,7 @@
 
 #include <Lion/Core.h>
 
-class WindowLayer : public Lion::Layer
+class CoreLayer : public Lion::Layer
 {
 public:
 	void OnAttach() override;

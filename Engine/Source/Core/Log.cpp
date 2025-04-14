@@ -19,7 +19,6 @@ namespace Lion
 	void Log::Console(ELogMode mode, const std::string& message)
 	{
 #ifndef LN_SHIPPING
-
 		switch (mode)
 		{
 		case ELogMode::Error:
@@ -31,10 +30,13 @@ namespace Lion
 			
 #if LN_PLATFORM_WIN
 			system("PAUSE");
+
 #else
 			std::puts("Press Enter to continue . . .");
 			std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+
 #endif
+
 			break;
 
 		case ELogMode::Success:
@@ -46,7 +48,6 @@ namespace Lion
 			break;
 
 	#ifndef LN_RELEASE
-
 		case ELogMode::Information:
 			spdlog::debug(message);
 			break;
@@ -66,10 +67,10 @@ namespace Lion
 #ifndef LN_SHIPPING
 		spdlog::set_pattern("%^[%T] %v%$");
 
-#ifndef LN_RELEASE
+	#ifndef LN_RELEASE
 		spdlog::set_level(spdlog::level::trace);
 
-#endif // !LN_RELEASE
+	#endif // !LN_RELEASE
 
 #endif // !LN_SHIPPING
 	}

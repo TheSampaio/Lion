@@ -3,6 +3,7 @@
 
 #include "../Core/Log.h"
 #include "../Core/Window.h"
+#include "../Render/RenderCommand.h"
 
 namespace Lion
 {
@@ -19,23 +20,9 @@ namespace Lion
         sInstance = nullptr;
     }
 
-    void Graphics::ClearBuffers()
+    Graphics::Graphics()
     {
-        const auto& backgroundColor = Window::GetBackgroundColor();
-
-        glClearColor(
-            static_cast<float32>(backgroundColor[0]),
-            static_cast<float32>(backgroundColor[1]),
-            static_cast<float32>(backgroundColor[2]),
-            static_cast<float32>(backgroundColor[3])
-        );
-        glClear(GL_COLOR_BUFFER_BIT);
-    }
-
-    void Graphics::SwapBuffers()
-    {
-        glfwSwapInterval(0); // TODO: Remove hard code
-        glfwSwapBuffers(Window::GetId());
+        mIsVerticalSynchronizedEnabled = false;
     }
 
     bool Graphics::Initialize()
@@ -56,5 +43,25 @@ namespace Lion
         }
 
         return true;
+    }
+
+    void Graphics::ClearBuffers()
+    {
+        const auto& backgroundColor = Window::GetBackgroundColor();
+
+        RenderCommand::ClearColor(
+            static_cast<float32>(backgroundColor[0]),
+            static_cast<float32>(backgroundColor[1]),
+            static_cast<float32>(backgroundColor[2]),
+            1.0f
+        );
+
+        RenderCommand::Clear(GL_COLOR_BUFFER_BIT);
+    }
+
+    void Graphics::SwapBuffers()
+    {
+        glfwSwapInterval(sInstance->mIsVerticalSynchronizedEnabled);
+        glfwSwapBuffers(Window::GetId());
     }
 }

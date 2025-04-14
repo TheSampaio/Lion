@@ -1,12 +1,13 @@
 #pragma once
 
 #include "SpriteInfo.h"
-#include "../Kind/Depth.h"
 
 namespace Lion
 {
     class Texture;
+
     struct Depth;
+    struct SpriteInfo;
 
     class Sprite
     {
@@ -21,7 +22,8 @@ namespace Lion
         std::array<uint32, 2> LION_API GetCenter();
 
         // Draws the sprite
-        void LION_API Draw(float32 x, float32 y, float32 z = Depth::Middle);
+        void LION_API Draw(float32 x, float32 y);
+        void LION_API Draw(float32 x, float32 y, float32 z);
 
     private:
         // Attributes
