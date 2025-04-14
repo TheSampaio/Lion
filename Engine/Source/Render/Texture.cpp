@@ -85,20 +85,21 @@ namespace Lion
         // Unbinds the 2D texture to avoid bugs
         glBindTexture(GL_TEXTURE_2D, 0);
 
-#if LN_DEBUG
+#ifdef LN_DEBUG
         sAllocationCount++;
         Log::Console(ELogMode::Trace, LN_LOG_FORMAT("[Texture] Allocated: 1 (Total: {})", sAllocationCount));
-#endif
+#endif // LN_DEBUG
 	}
 
 	Texture::~Texture()
 	{
         glDeleteTextures(1, &mId);
 
-#if LN_DEBUG
+#ifdef LN_DEBUG
         sAllocationCount--;
         Log::Console(ELogMode::Trace, LN_LOG_FORMAT("[Texture] Released:  1 (Remaining: {})", sAllocationCount));
-#endif
+
+#endif // LN_DEBUG
 	}
 
 	void Texture::Bind(uint32 slot) const

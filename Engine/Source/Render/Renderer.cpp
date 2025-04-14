@@ -9,7 +9,12 @@
 
 namespace Lion
 {
-    // Vertices's dynamic array
+    const uint32 MaxQuads = 1000;
+    const uint32 MaxVertices = MaxQuads * 4;
+    const uint32 MaxIndices = MaxQuads * 6;
+    const uint32 VertexSize = 8;
+
+    // Vertices's array
     const std::array<float32, 32> mVertices
     {
         // === Position         // === Color         // === UV
@@ -36,7 +41,7 @@ namespace Lion
 
     void Renderer::OnWindowResize(uint32 width, uint32 height)
     {
-        glViewport(0, 0, width, height);
+        RenderCommand::CreateViewport(0, 0, width, height);
     }
 
     void Renderer::New()
@@ -98,10 +103,13 @@ namespace Lion
         glEnableVertexAttribArray(1);
         glEnableVertexAttribArray(2);
 
+#ifdef LN_DEBUG
         // Unbind VAO and VBO to avoid bugs
         glBindBuffer(GL_ARRAY_BUFFER, 0);
         glBindVertexArray(0);
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+
+#endif // LN_DEBUG
 
         // Enable transparency
         glEnable(GL_BLEND);
@@ -117,36 +125,50 @@ namespace Lion
 
         camera->OnUsage();
 
-        RenderCommand::SetUniformMatrix4fv(sInstance->mShaderProgram, "uView", camera->GetViewMatrix());
-        RenderCommand::SetUniformMatrix4fv(sInstance->mShaderProgram, "uProjection", camera->GetProjectionMatrix());
+        RenderCommand::SetShaderMatrix4(sInstance->mShaderProgram, "uView", camera->GetViewMatrix());
+        RenderCommand::SetShaderMatrix4(sInstance->mShaderProgram, "uProjection", camera->GetProjectionMatrix());
     }
 
     void Renderer::RenderEnd()
     {
+        if (sInstance->mSpriteBuffer.empty())
+            return;
+
+        // Sort the sprites by depth
+        std::sort(sInstance->mSpriteBuffer.begin(), sInstance->mSpriteBuffer.end(),
+            [](const auto& a, const auto& b)
+            {
+                //Sort from furthest (largest) to closest (smallest)
+                return a->depth > b->depth;
+            });
+
         for (const auto& sprite : sInstance->mSpriteBuffer)
         {
-            // Define and send model matrix
+            // Define and setup the model matrix
             glm::mat4 model = glm::mat4(1.0f);
             model = glm::translate(model, glm::vec3(sprite->x, sprite->y, sprite->depth));
             model = glm::rotate(model, glm::radians(sprite->rotation), glm::vec3(0.0f, 0.0f, 1.0f));
             model = glm::scale(model, glm::vec3(sprite->width * sprite->scale, sprite->height * sprite->scale, 1.0f));
 
             // Send the matrix to the shader
-            RenderCommand::SetUniformMatrix4fv(sInstance->mShaderProgram, "uModel", model);
+            RenderCommand::SetShaderMatrix4(sInstance->mShaderProgram, "uModel", model);
 
             // Creates a uniform sampler and binds the generated texture
-            RenderCommand::SetUniform1i(sInstance->mShaderProgram, "uDiffuseSampler", 0);
-            glBindTexture(GL_TEXTURE_2D, sprite->texture);
+            RenderCommand::SetShaderInt(sInstance->mShaderProgram, "uDiffuseSampler", 0);
+            RenderCommand::BindTexture2D(sprite->texture);
 
             // Draw a triangle using the EBO set-up
-            glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(sInstance->mSpriteBuffer.size() * 6), GL_UNSIGNED_INT, nullptr);
+            RenderCommand::DrawIndexedQuads(static_cast<int32>(sInstance->mSpriteBuffer.size()));
         }
 
         sInstance->mSpriteBuffer.clear();
 
-        glBindTexture(GL_TEXTURE_2D, 0);
+#ifdef LN_DEBUG
+        RenderCommand::BindTexture2D(0);
         glBindVertexArray(0);
         glUseProgram(0);
+
+#endif // LN_DEBUG
     }
 
     void Renderer::Submit(SpriteInfo* spriteInfo)

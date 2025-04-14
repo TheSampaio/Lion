@@ -7,6 +7,8 @@ namespace Lion
 	class Graphics
 	{
     public:
+        static LION_API void SetVerticalSynchronization(bool enable) { sInstance->mIsVerticalSynchronizedEnabled = enable; }
+
         friend Application;
 
     protected:
@@ -19,7 +21,9 @@ namespace Lion
         Graphics& operator=(const Graphics&) = delete;
 
     private:
-        Graphics() = default;
+        bool mIsVerticalSynchronizedEnabled;
+
+        Graphics();
 
         static bool Initialize();
         static void ClearBuffers();

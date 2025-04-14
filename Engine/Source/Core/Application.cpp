@@ -1,6 +1,7 @@
 #include "Engine.h"
 #include "Application.h"
 
+#include "Clock.h"
 #include "Layer.h"
 #include "Log.h"
 #include "Stack.h"
@@ -61,20 +62,20 @@ namespace Lion
 		Log::New();
 #endif 
 
-		mStack = new Stack();
+		mStack = MakeScope<Stack>();
 
 		Window::New();
 		Graphics::New();
 		Renderer::New();
+		Clock::New();
 	}
 
 	Application::~Application()
 	{
+		Clock::Delete();
 		Renderer::Delete();
 		Graphics::Delete();
 		Window::Delete();
-
-		delete mStack;
 
 #ifndef LN_SHIPPING
 		Log::Delete();
@@ -83,7 +84,11 @@ namespace Lion
 
 	void Application::Run()
 	{
+		// Initializes Window, Graphics and Renderer
 		Initialize();
+
+		// Starts engine's clock
+		Clock::GetTimer().Start();
 
 		// Load resources
 		for (Layer* layer : *mStack)
@@ -95,6 +100,7 @@ namespace Lion
 		do
 		{
 			Window::PollEvents();
+			Clock::UpdateFrameTime();
 
 			if (!mMinimized)
 			{

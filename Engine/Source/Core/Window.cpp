@@ -22,7 +22,7 @@ namespace Lion
     }
 
     Window::Window()
-        : mId(nullptr), mData{ "Lion Engine", 800, 600, nullptr }, mBackgroundColor(0.0f, 0.0f, 0.0f, 1.0f)
+        : mId(nullptr), mData{ "Lion Engine", 800, 600, nullptr }, mBackgroundColor(0.0f, 0.0f, 0.0f )
     {
         if (glfwInit() != GLFW_TRUE)
         {
@@ -180,9 +180,9 @@ namespace Lion
         sInstance->mData.Height = height;
     }
 
-    void Window::SetBackgroundColor(float32 red, float32 green, float32 blue, float32 alpha)
+    void Window::SetBackgroundColor(float32 red, float32 green, float32 blue)
     {
-        sInstance->mBackgroundColor = {red, green, blue, alpha};
+        sInstance->mBackgroundColor = { red, green, blue };
     }
 
     void Window::SetTitle(const std::string& title)

@@ -1,7 +1,5 @@
 #pragma once
 
-#include "Window.h"
-
 #ifndef LN_SHIPPING
 	int main(int argc, const char* argv[]);
 #else
@@ -11,11 +9,8 @@
 namespace Lion
 {
 	class Event;
-	class Graphics;
 	class Layer;
-	class Renderer;
 	class Stack;
-	class Window;
 
 	class Application
 	{
@@ -29,7 +24,7 @@ namespace Lion
 		LION_API void OnEvent(Event& event);
 
 	private:
-		Stack* mStack;
+		Scope<Stack> mStack;
 		bool mMinimized;
 
 		LION_API void Run();

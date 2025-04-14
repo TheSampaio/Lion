@@ -13,15 +13,16 @@
 	#endif
 #else
 	#error Lion engine does not support Unix platforms!
+
 #endif
 
-#pragma warning(push)
+#pragma warning(push, 0)
 #pragma warning(disable : 6294 26495 26498 26800)
 
 	// Standard
 	#include <array>
-	#include <cstdint>   // For fixed size integer types
-	#include <cstddef>   // For std::size_t
+	#include <cstdint>        // For fixed size integer types
+	#include <cstddef>        // For std::size_t
 	#include <format>
 	#include <fstream>
 	#include <functional>
