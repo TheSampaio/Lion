@@ -7,7 +7,8 @@ namespace Lion
 {
 #if LN_DEBUG
     uint32 Texture::sAllocationCount = 0;
-#endif
+
+#endif // !LN_DEBUG
 
 	Texture::Texture(const std::string& filePath)
         : mId(0),
@@ -88,6 +89,7 @@ namespace Lion
 #ifdef LN_DEBUG
         sAllocationCount++;
         Log::Console(LogLevel::Trace, LN_LOG_FORMAT("[Texture] Allocated: 1 (Total: {})", sAllocationCount));
+
 #endif // LN_DEBUG
 	}
 

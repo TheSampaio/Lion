@@ -15,10 +15,9 @@ namespace Lion
     static const size_t maxTextureCount = 32;
 
 #ifdef LN_DEBUG
-    static uint32_t sDrawCallCount = 0;
+    static uint32 sDrawCallCount = 0;
 
 #endif // LN_DEBUG
-
 
     struct Vertex
     {
@@ -62,20 +61,22 @@ namespace Lion
 
     bool Renderer::Initialize()
     {
-        // Parse & Compile
-        ShaderSource source = Parse("Resource/Shader/Lit.glsl");
-        uint32 vertexShader = Compile(GL_VERTEX_SHADER, source.vertex);
-        uint32 fragmentShader = Compile(GL_FRAGMENT_SHADER, source.fragment);
-
-        // Attach & Link
-        Attacher(vertexShader, fragmentShader);
-
-        if (!Linker(sInstance->mShaderProgram))
         {
-            Log::Console(LogLevel::Error, "[Renderer] Failed to link shader program.");
-            return false;
-        }
+            // Parse & Compile
+            ShaderSource source = Parse("Resource/Shader/Lit.glsl");
+            uint32 vertexShader = Compile(GL_VERTEX_SHADER, source.vertex);
+            uint32 fragmentShader = Compile(GL_FRAGMENT_SHADER, source.fragment);
 
+            // Attach & Link
+            Attacher(vertexShader, fragmentShader);
+
+            if (!Linker(sInstance->mShaderProgram))
+            {
+                Log::Console(LogLevel::Error, "[Renderer] Failed to link shader program.");
+                return false;
+            }
+        }
+       
         // Generates a VAO
         glGenVertexArrays(1, &sInstance->mVAO);
         glBindVertexArray(sInstance->mVAO);
@@ -97,26 +98,28 @@ namespace Lion
         glEnableVertexAttribArray(2);
         glEnableVertexAttribArray(3);
 
-        // Generates an EBO and set-ups it
-        uint32 indices[maxIndexCount];
-        uint32 offset = 0;
-
-        for (size_t i = 0; i < maxIndexCount; i += 6)
         {
-            indices[i + 0] = 0 + offset;
-            indices[i + 1] = 1 + offset;
-            indices[i + 2] = 2 + offset;
+            // Generates an EBO and set-ups it
+            std::vector<uint32> indices(maxIndexCount);
+            uint32 offset = 0;
 
-            indices[i + 3] = 0 + offset;
-            indices[i + 4] = 2 + offset;
-            indices[i + 5] = 3 + offset;
+            for (size_t i = 0; i < maxIndexCount; i += 6)
+            {
+                indices[i + 0] = 0 + offset;
+                indices[i + 1] = 1 + offset;
+                indices[i + 2] = 2 + offset;
 
-            offset += 4;
+                indices[i + 3] = 0 + offset;
+                indices[i + 4] = 2 + offset;
+                indices[i + 5] = 3 + offset;
+
+                offset += 4;
+            }
+
+            glGenBuffers(1, &sInstance->mEBO);
+            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, sInstance->mEBO);
+            glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(uint32) * indices.size(), indices.data(), GL_STATIC_DRAW);
         }
-
-        glGenBuffers(1, &sInstance->mEBO);
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, sInstance->mEBO);
-        glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
 
 #ifdef LN_DEBUG
         // Unbind VAO and VBO to avoid bugs
@@ -149,43 +152,6 @@ namespace Lion
         RenderCommand::SetShaderMatrix4(sInstance->mShaderProgram, "uProjection", camera->GetProjectionMatrix());
     }
 
-    static Vertex* CreateQuad(Vertex* target, SpriteInfo& spriteInfo)
-    {
-        const float32 halfWidth = spriteInfo.width * 0.5f;
-        const float32 halfHeight = spriteInfo.height * 0.5f;
-
-        // Top-Left
-        target->position = { spriteInfo.x - halfWidth, spriteInfo.y + halfHeight, spriteInfo.depth };
-        target->color = { 1.0f, 1.0f, 1.0f, 1.0f };
-        target->textureCoord = { 0.0f, 1.0f };
-        target->texture = static_cast<float32>(spriteInfo.texture);
-        target++;
-
-        // Bottom-Left
-        target->position = { spriteInfo.x - halfWidth, spriteInfo.y - halfHeight, spriteInfo.depth };
-        target->color = { 1.0f, 1.0f, 1.0f, 1.0f };
-        target->textureCoord = { 0.0f, 0.0f };
-        target->texture = static_cast<float32>(spriteInfo.texture);
-        target++;
-
-        // Bottom-Right
-        target->position = { spriteInfo.x + halfWidth, spriteInfo.y - halfHeight, spriteInfo.depth };
-        target->color = { 1.0f, 1.0f, 1.0f, 1.0f };
-        target->textureCoord = { 1.0f, 0.0f };
-        target->texture = static_cast<float32>(spriteInfo.texture);
-        target++;
-
-        // Top-Right
-        target->position = { spriteInfo.x + halfWidth, spriteInfo.y + halfHeight, spriteInfo.depth };
-        target->color = { 1.0f, 1.0f, 1.0f, 1.0f };
-        target->textureCoord = { 1.0f, 1.0f };
-        target->texture = static_cast<float32>(spriteInfo.texture);
-        target++;
-
-        return target;
-    }
-
-
     void Renderer::RenderEnd()
     {
         if (sInstance->mSpriteBuffer.empty())
@@ -198,53 +164,61 @@ namespace Lion
                 return a->depth > b->depth;
             });
 
-        // Unique texture map
-        std::unordered_map<uint32, int32> textureSlotMap;
-        std::vector<uint32> boundTextures;
-
-        // Start from 1 (0 is usually reserved)
-        int32 nextSlot = 1;
         uint32 indexCount = 0;
 
-        std::array<Vertex, maxQuadCount> vertices;
-        Vertex* buffer = vertices.data();
-
-        for (const auto& sprite : sInstance->mSpriteBuffer)
         {
-            uint32 textureId = sprite->texture;
+            // Unique texture map
+            std::vector<int32> textureSlotMap(maxTextureCount, -1);
+            std::vector<uint32> boundTextures;
+            boundTextures.reserve(static_cast<uint32>(sInstance->mSpriteBuffer.size()));
 
-            if (textureSlotMap.find(textureId) == textureSlotMap.end())
+            std::vector<Vertex> vertices(maxQuadCount);
+            Vertex* buffer = vertices.data();
+
             {
-                if (nextSlot >= maxTextureCount)
-                    continue; // Texture limit reached
+                // Start from 1 (0 is usually reserved)
+                uint64 nextSlot = 1;
 
-                textureSlotMap[textureId] = nextSlot++;
-                boundTextures.push_back(textureId);
+                for (const auto& sprite : sInstance->mSpriteBuffer)
+                {
+                    uint32 textureId = sprite->texture;
+
+                    if (textureSlotMap[textureId] == -1)
+                    {
+                        if (nextSlot >= maxTextureCount)
+                            continue;
+
+                        textureSlotMap[textureId] = static_cast<int32>(nextSlot++);
+                        boundTextures.push_back(textureId);
+                    }
+
+                    // Assign texIndex to sprite
+                    sprite->texture = textureSlotMap[textureId];
+
+                    // Create new quads dynamically
+                    buffer = CreateQuad(buffer, sprite);
+                    indexCount += 6;
+                }
             }
 
-            // Assign texIndex to sprite
-            sprite->texture = textureSlotMap[textureId];
+            // Bind vertex buffer
+            glBindBuffer(GL_ARRAY_BUFFER, sInstance->mVBO);
+            glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(Vertex) * vertices.size(), vertices.data());
 
-            // Create new quads dynamically
-            buffer = CreateQuad(buffer, *sprite);
-            indexCount += 6;
+            {
+                // Setup texture array uniforms
+                int samplers[maxTextureCount] = { 0 };
+
+                for (int i = 0; i < maxTextureCount; ++i)
+                    samplers[i] = i;
+
+                glUniform1iv(glGetUniformLocation(sInstance->mShaderProgram, "uDiffuseTextureArray"), maxTextureCount, samplers);
+            }
+
+            // Bind the unique textures
+            for (uint32 i = 0; i < boundTextures.size(); ++i)
+                glBindTextureUnit(i + 1, boundTextures[i]);
         }
-
-        // Bind vertex buffer
-        glBindBuffer(GL_ARRAY_BUFFER, sInstance->mVBO);
-        glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(Vertex) * vertices.size(), vertices.data());
-
-        // Setup texture array uniforms
-        int samplers[maxTextureCount];
-
-        for (int i = 0; i < maxTextureCount; ++i)
-            samplers[i] = i;
-
-        glUniform1iv(glGetUniformLocation(sInstance->mShaderProgram, "uDiffuseTextureArray"), maxTextureCount, samplers);
-
-        // Bind the unique textures
-        for (uint32 i = 0; i < boundTextures.size(); ++i)
-            glBindTextureUnit(i + 1, boundTextures[i]);
 
         // Draw
         RenderCommand::DrawIndexedQuads(indexCount);
@@ -263,6 +237,43 @@ namespace Lion
     {
         Renderer::sInstance->mSpriteBuffer.push_back(spriteInfo);
     }
+
+    Vertex* Renderer::CreateQuad(Vertex* target, SpriteInfo* spriteInfo)
+    {
+        const float32 halfWidth = spriteInfo->width * 0.5f;
+        const float32 halfHeight = spriteInfo->height * 0.5f;
+
+        // Top-Left
+        target->position = { spriteInfo->x - halfWidth, spriteInfo->y + halfHeight, spriteInfo->depth };
+        target->color = { 1.0f, 1.0f, 1.0f, 1.0f };
+        target->textureCoord = { 0.0f, 1.0f };
+        target->texture = static_cast<float32>(spriteInfo->texture);
+        target++;
+
+        // Bottom-Left
+        target->position = { spriteInfo->x - halfWidth, spriteInfo->y - halfHeight, spriteInfo->depth };
+        target->color = { 1.0f, 1.0f, 1.0f, 1.0f };
+        target->textureCoord = { 0.0f, 0.0f };
+        target->texture = static_cast<float32>(spriteInfo->texture);
+        target++;
+
+        // Bottom-Right
+        target->position = { spriteInfo->x + halfWidth, spriteInfo->y - halfHeight, spriteInfo->depth };
+        target->color = { 1.0f, 1.0f, 1.0f, 1.0f };
+        target->textureCoord = { 1.0f, 0.0f };
+        target->texture = static_cast<float32>(spriteInfo->texture);
+        target++;
+
+        // Top-Right
+        target->position = { spriteInfo->x + halfWidth, spriteInfo->y + halfHeight, spriteInfo->depth };
+        target->color = { 1.0f, 1.0f, 1.0f, 1.0f };
+        target->textureCoord = { 1.0f, 1.0f };
+        target->texture = static_cast<float32>(spriteInfo->texture);
+        target++;
+
+        return target;
+    }
+
 
     uint32 Renderer::Compile(uint32 type, const std::string& source)
     {

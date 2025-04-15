@@ -26,7 +26,6 @@ private:
 	Lion::float32 mPlayerVelocity = 500.0f;
 
 	Lion::Reference<Lion::CameraOrthographic> mCamera;
-
 	Lion::Scope<Lion::Sprite> mSpriteBackground;
 	Lion::Scope<Lion::Sprite> mSpritePlayer;
 	Lion::Scope<Lion::Sprite> mSpriteBall;

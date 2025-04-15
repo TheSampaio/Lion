@@ -5,7 +5,6 @@ using namespace Lion;
 void GameplayLayer::OnCreate()
 {
 	mCamera = MakeReference<CameraOrthographic>();
-
 	mSpriteBackground = MakeScope<Sprite>("Resource/Sprite/Brickout/Background.jpg");
 	mSpritePlayer = MakeScope<Sprite>("Resource/Sprite/Brickout/Player.png");
 	mSpriteBall = MakeScope<Sprite>("Resource/Sprite/Brickout/Ball.png");
@@ -72,34 +71,34 @@ void GameplayLayer::OnUpdate()
 	const float32 maxHeight = (windowSize[1] / 2.0f);
 
 	// Player (X)
-	if (mPlayerPosition.x + (mSpritePlayer->GetSize()[0] / 2) >= maxWidth)
-		mPlayerPosition.x = maxWidth - (mSpritePlayer->GetSize()[0] / 2);
+	if (mPlayerPosition.x + static_cast<float32>(mSpritePlayer->GetSize()[0] / 2) >= maxWidth)
+		mPlayerPosition.x = maxWidth - static_cast<float32>(mSpritePlayer->GetSize()[0] / 2);
 
-	else if (mPlayerPosition.x - (mSpritePlayer->GetSize()[0] / 2) <= -maxWidth)
-		mPlayerPosition.x = -maxWidth + (mSpritePlayer->GetSize()[0] / 2);
+	else if (mPlayerPosition.x - static_cast<float32>(mSpritePlayer->GetSize()[0] / 2) <= -maxWidth)
+		mPlayerPosition.x = -maxWidth + static_cast<float32>(mSpritePlayer->GetSize()[0] / 2);
 
 	// Ball (X / Y)
-	if (mBallPosition.x + (mSpriteBall->GetSize()[0] / 2) >= maxWidth)
+	if (mBallPosition.x + static_cast<float32>(mSpriteBall->GetSize()[0] / 2) >= maxWidth)
 	{
-		mBallPosition.x = maxWidth - (mSpriteBall->GetSize()[0] / 2);
+		mBallPosition.x = maxWidth - static_cast<float32>(mSpriteBall->GetSize()[0] / 2);
 		mBallVelocity.x *= -1.0;
 	}
 
-	else if (mBallPosition.x - (mSpriteBall->GetSize()[0] / 2) <= -maxWidth)
+	else if (mBallPosition.x - static_cast<float32>(mSpriteBall->GetSize()[0] / 2) <= -maxWidth)
 	{
-		mBallPosition.x = -maxWidth + (mSpriteBall->GetSize()[0] / 2);
+		mBallPosition.x = -maxWidth + static_cast<float32>(mSpriteBall->GetSize()[0] / 2);
 		mBallVelocity.x *= -1.0;
 	}
 
-	if (mBallPosition.y + (mSpriteBall->GetSize()[1] / 2) >= maxHeight)
+	if (mBallPosition.y + static_cast<float32>(mSpriteBall->GetSize()[1] / 2) >= maxHeight)
 	{
-		mBallPosition.y = maxHeight - (mSpriteBall->GetSize()[1] / 2);
+		mBallPosition.y = maxHeight - static_cast<float32>(mSpriteBall->GetSize()[1] / 2);
 		mBallVelocity.y *= -1.0;
 	}
 
-	else if (mBallPosition.y - (mSpriteBall->GetSize()[1] / 2) <= -maxHeight)
+	else if (mBallPosition.y - static_cast<float32>(mSpriteBall->GetSize()[1] / 2) <= -maxHeight)
 	{
-		mBallPosition.y = -maxHeight + (mSpriteBall->GetSize()[1] / 2);
+		mBallPosition.y = -maxHeight + static_cast<float32>(mSpriteBall->GetSize()[1] / 2);
 		mBallVelocity.y *= -1.0;
 	}
 }
