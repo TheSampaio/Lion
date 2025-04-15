@@ -135,7 +135,10 @@ namespace Lion
 
     void Renderer::RenderBegin(const Reference<Camera> camera)
     {
+#ifdef LN_DEBUG
         sDrawCallCount = 0;
+
+#endif // LN_DEBUG
 
         glUseProgram(Renderer::sInstance->mShaderProgram);
         glBindVertexArray(sInstance->mVAO);
