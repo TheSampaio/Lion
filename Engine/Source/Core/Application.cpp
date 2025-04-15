@@ -18,7 +18,7 @@
 namespace Lion
 {
 	template<typename T>
-	T TryInitialize(T result, const char8* name)
+	static T TryInitialize(T result, const char8* name)
 	{
 		if (!result)
 		{

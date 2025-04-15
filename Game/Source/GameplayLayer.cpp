@@ -56,10 +56,10 @@ void GameplayLayer::OnCreate()
 void GameplayLayer::OnUpdate()
 {
 	// Player
-	if (Input::GetKeyPress(D))
+	if (Input::GetKeyPress(KeyCode::D))
 		mPlayerPosition.x += mPlayerVelocity * Clock::GetDeltaTime();
 
-	else if (Input::GetKeyPress(A))
+	else if (Input::GetKeyPress(KeyCode::A))
 		mPlayerPosition.x -= mPlayerVelocity * Clock::GetDeltaTime();
 
 	// Ball
@@ -110,7 +110,6 @@ void GameplayLayer::OnRender()
 
 	mSpriteBackground->Draw(0.0f, 0.0f, Depth::Back);
 	mSpritePlayer->Draw(mPlayerPosition.x, mPlayerPosition.y, Depth::Front);
-
 	mSpriteBall->Draw(mBallPosition.x, mBallPosition.y, Depth::Middle);
 
 	const float32 spacingX = 80.0f;

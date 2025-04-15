@@ -9,21 +9,23 @@
 
 namespace Lion
 {
-    // Vertices's array
-    const std::array<float32, 32> mVertices
-    {
-        // === Position         // === Color         // === UV
-        -0.5f, -0.5f, 0.0f,     1.0f, 1.0f, 1.0f,    0.0f, 0.0f,  // P0
-         0.5f, -0.5f, 0.0f,     1.0f, 1.0f, 1.0f,    1.0f, 0.0f,  // P1
-        -0.5f,  0.5f, 0.0f,     1.0f, 1.0f, 1.0f,    0.0f, 1.0f,  // P2
-         0.5f,  0.5f, 0.0f,     1.0f, 1.0f, 1.0f,    1.0f, 1.0f   // P3
-    };
+    static const size_t maxQuadCount = 1000;
+    static const size_t maxVertexCount = maxQuadCount * 4;
+    static const size_t maxIndexCount = maxQuadCount * 6;
+    static const size_t maxTextureCount = 32;
 
-    // Indices's array
-    const std::array<uint32, 6> mIndices
+#ifdef LN_DEBUG
+    static uint32_t sDrawCallCount = 0;
+
+#endif // LN_DEBUG
+
+
+    struct Vertex
     {
-        0, 2, 1,
-        2, 3, 1
+        glm::vec3 position;
+        glm::vec4 color;
+        glm::vec2 textureCoord;
+        float32 texture;
     };
 
     Renderer* Renderer::sInstance = nullptr;
@@ -81,22 +83,40 @@ namespace Lion
         // Generates a VBO and set-ups it
         glGenBuffers(1, &sInstance->mVBO);
         glBindBuffer(GL_ARRAY_BUFFER, sInstance->mVBO);
-        glBufferData(GL_ARRAY_BUFFER, mVertices.size() * sizeof(float32), mVertices.data(), GL_STATIC_DRAW);
-
-        // Generates a EBO and set-ups it
-        glGenBuffers(1, &sInstance->mEBO);
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, sInstance->mEBO);
-        glBufferData(GL_ELEMENT_ARRAY_BUFFER, mIndices.size() * sizeof(uint32), mIndices.data(), GL_STATIC_DRAW);
+        glBufferData(GL_ARRAY_BUFFER, sizeof(Vertex) * maxVertexCount, nullptr, GL_DYNAMIC_DRAW);
 
         // Set-ups the VAO's layouts
-        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float32), nullptr);
-        glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float32), reinterpret_cast<void*>(3 * sizeof(float32)));
-        glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(float32), reinterpret_cast<void*>(6 * sizeof(float32)));
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), reinterpret_cast<void*>(offsetof(Vertex, Vertex::position)));
+        glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, sizeof(Vertex), reinterpret_cast<void*>(offsetof(Vertex, Vertex::color)));
+        glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), reinterpret_cast<void*>(offsetof(Vertex, Vertex::textureCoord)));
+        glVertexAttribPointer(3, 1, GL_FLOAT, GL_FALSE, sizeof(Vertex), reinterpret_cast<void*>(offsetof(Vertex, Vertex::texture)));
 
         // Enables the VAO's layouts
         glEnableVertexAttribArray(0);
         glEnableVertexAttribArray(1);
         glEnableVertexAttribArray(2);
+        glEnableVertexAttribArray(3);
+
+        // Generates an EBO and set-ups it
+        uint32 indices[maxIndexCount];
+        uint32 offset = 0;
+
+        for (size_t i = 0; i < maxIndexCount; i += 6)
+        {
+            indices[i + 0] = 0 + offset;
+            indices[i + 1] = 1 + offset;
+            indices[i + 2] = 2 + offset;
+
+            indices[i + 3] = 0 + offset;
+            indices[i + 4] = 2 + offset;
+            indices[i + 5] = 3 + offset;
+
+            offset += 4;
+        }
+
+        glGenBuffers(1, &sInstance->mEBO);
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, sInstance->mEBO);
+        glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
 
 #ifdef LN_DEBUG
         // Unbind VAO and VBO to avoid bugs
@@ -115,6 +135,8 @@ namespace Lion
 
     void Renderer::RenderBegin(const Reference<Camera> camera)
     {
+        sDrawCallCount = 0;
+
         glUseProgram(Renderer::sInstance->mShaderProgram);
         glBindVertexArray(sInstance->mVAO);
 
@@ -124,46 +146,114 @@ namespace Lion
         RenderCommand::SetShaderMatrix4(sInstance->mShaderProgram, "uProjection", camera->GetProjectionMatrix());
     }
 
+    static Vertex* CreateQuad(Vertex* target, SpriteInfo& spriteInfo)
+    {
+        const float32 halfWidth = spriteInfo.width * 0.5f;
+        const float32 halfHeight = spriteInfo.height * 0.5f;
+
+        // Top-Left
+        target->position = { spriteInfo.x - halfWidth, spriteInfo.y + halfHeight, spriteInfo.depth };
+        target->color = { 1.0f, 1.0f, 1.0f, 1.0f };
+        target->textureCoord = { 0.0f, 1.0f };
+        target->texture = static_cast<float32>(spriteInfo.texture);
+        target++;
+
+        // Bottom-Left
+        target->position = { spriteInfo.x - halfWidth, spriteInfo.y - halfHeight, spriteInfo.depth };
+        target->color = { 1.0f, 1.0f, 1.0f, 1.0f };
+        target->textureCoord = { 0.0f, 0.0f };
+        target->texture = static_cast<float32>(spriteInfo.texture);
+        target++;
+
+        // Bottom-Right
+        target->position = { spriteInfo.x + halfWidth, spriteInfo.y - halfHeight, spriteInfo.depth };
+        target->color = { 1.0f, 1.0f, 1.0f, 1.0f };
+        target->textureCoord = { 1.0f, 0.0f };
+        target->texture = static_cast<float32>(spriteInfo.texture);
+        target++;
+
+        // Top-Right
+        target->position = { spriteInfo.x + halfWidth, spriteInfo.y + halfHeight, spriteInfo.depth };
+        target->color = { 1.0f, 1.0f, 1.0f, 1.0f };
+        target->textureCoord = { 1.0f, 1.0f };
+        target->texture = static_cast<float32>(spriteInfo.texture);
+        target++;
+
+        return target;
+    }
+
+
     void Renderer::RenderEnd()
     {
         if (sInstance->mSpriteBuffer.empty())
             return;
 
-        // Sort the sprites by depth
+        // Sort sprites by depth (back to front)
         std::sort(sInstance->mSpriteBuffer.begin(), sInstance->mSpriteBuffer.end(),
             [](const auto& a, const auto& b)
             {
-                //Sort from furthest (largest) to closest (smallest)
                 return a->depth > b->depth;
             });
 
+        // Unique texture map
+        std::unordered_map<uint32, int32> textureSlotMap;
+        std::vector<uint32> boundTextures;
+
+        // Start from 1 (0 is usually reserved)
+        int32 nextSlot = 1;
+        uint32 indexCount = 0;
+
+        std::array<Vertex, maxQuadCount> vertices;
+        Vertex* buffer = vertices.data();
+
         for (const auto& sprite : sInstance->mSpriteBuffer)
         {
-            // Define and setup the model matrix
-            glm::mat4 model = glm::mat4(1.0f);
-            model = glm::translate(model, glm::vec3(sprite->x, sprite->y, sprite->depth));
-            model = glm::rotate(model, glm::radians(sprite->rotation), glm::vec3(0.0f, 0.0f, 1.0f));
-            model = glm::scale(model, glm::vec3(sprite->width * sprite->scale, sprite->height * sprite->scale, 1.0f));
+            uint32 textureId = sprite->texture;
 
-            // Send the matrix to the shader
-            RenderCommand::SetShaderMatrix4(sInstance->mShaderProgram, "uModel", model);
+            if (textureSlotMap.find(textureId) == textureSlotMap.end())
+            {
+                if (nextSlot >= maxTextureCount)
+                    continue; // Texture limit reached
 
-            // Creates a uniform sampler and binds the generated texture
-            RenderCommand::SetShaderInt(sInstance->mShaderProgram, "uDiffuseSampler", 0);
-            RenderCommand::BindTexture2D(sprite->texture);
+                textureSlotMap[textureId] = nextSlot++;
+                boundTextures.push_back(textureId);
+            }
 
-            // Draw a triangle using the EBO set-up
-            RenderCommand::DrawIndexedQuads(static_cast<int32>(sInstance->mSpriteBuffer.size()));
+            // Assign texIndex to sprite
+            sprite->texture = textureSlotMap[textureId];
+
+            // Create new quads dynamically
+            buffer = CreateQuad(buffer, *sprite);
+            indexCount += 6;
         }
+
+        // Bind vertex buffer
+        glBindBuffer(GL_ARRAY_BUFFER, sInstance->mVBO);
+        glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(Vertex) * vertices.size(), vertices.data());
+
+        // Setup texture array uniforms
+        int samplers[maxTextureCount];
+
+        for (int i = 0; i < maxTextureCount; ++i)
+            samplers[i] = i;
+
+        glUniform1iv(glGetUniformLocation(sInstance->mShaderProgram, "uDiffuseTextureArray"), maxTextureCount, samplers);
+
+        // Bind the unique textures
+        for (uint32 i = 0; i < boundTextures.size(); ++i)
+            glBindTextureUnit(i + 1, boundTextures[i]);
+
+        // Draw
+        RenderCommand::DrawIndexedQuads(indexCount);
 
         sInstance->mSpriteBuffer.clear();
 
 #ifdef LN_DEBUG
-        RenderCommand::BindTexture2D(0);
+        sDrawCallCount++;
+
         glBindVertexArray(0);
         glUseProgram(0);
-
-#endif // LN_DEBUG
+#endif
     }
 
     void Renderer::Submit(SpriteInfo* spriteInfo)
@@ -191,8 +281,7 @@ namespace Lion
             std::vector<GLchar> message(length);
             glGetShaderInfoLog(id, length, &length, message.data());
 
-            Log::Console(LogLevel::Error, LN_LOG_FORMAT("[Renderer] Failed to compile {} shader.", (type == GL_VERTEX_SHADER) ? "vertex" : "fragment"));
-            Log::Console(LogLevel::Error, message.data());
+            Log::Console(LogLevel::Error, LN_LOG_FORMAT("[Renderer] Failed to compile {} shader:\n{}", (type == GL_VERTEX_SHADER) ? "vertex" : "fragment", message.data()));
 
             glDeleteShader(id);
             return 0;

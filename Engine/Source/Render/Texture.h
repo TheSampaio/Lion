@@ -12,8 +12,6 @@ namespace Lion
 		LION_API std::array<uint32, 2> GetSize() const { return mSize; }
 		LION_API std::array<uint32, 2> GetCenter() const { return mCenter; }
 
-		LION_API void Bind(uint32 slot = 0) const;
-
 	private:
 		uint32 mId;
 		int32 mFilterMin;
