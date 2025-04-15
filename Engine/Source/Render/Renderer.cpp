@@ -9,11 +9,6 @@
 
 namespace Lion
 {
-    const uint32 MaxQuads = 1000;
-    const uint32 MaxVertices = MaxQuads * 4;
-    const uint32 MaxIndices = MaxQuads * 6;
-    const uint32 VertexSize = 8;
-
     // Vertices's array
     const std::array<float32, 32> mVertices
     {
