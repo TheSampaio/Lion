@@ -16,16 +16,16 @@ namespace Lion
 		sInstance = nullptr;
 	}
 
-	void Log::Console(ELogMode mode, const std::string& message)
+	void Log::Console(LogLevel mode, const std::string& message)
 	{
 #ifndef LN_SHIPPING
 		switch (mode)
 		{
-		case ELogMode::Error:
+		case LogLevel::Error:
 			spdlog::error(message);
 			break;
 
-		case ELogMode::Fatal:
+		case LogLevel::Fatal:
 			spdlog::critical(message);
 			
 #if LN_PLATFORM_WIN
@@ -39,20 +39,20 @@ namespace Lion
 
 			break;
 
-		case ELogMode::Success:
+		case LogLevel::Success:
 			spdlog::info(message);
 			break;
 
-		case ELogMode::Warning:
+		case LogLevel::Warning:
 			spdlog::warn(message);
 			break;
 
 	#ifndef LN_RELEASE
-		case ELogMode::Information:
+		case LogLevel::Information:
 			spdlog::debug(message);
 			break;
 
-		case ELogMode::Trace:
+		case LogLevel::Trace:
 			spdlog::trace(message);
 			break;
 

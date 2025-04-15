@@ -55,34 +55,51 @@ void GameplayLayer::OnCreate()
 
 void GameplayLayer::OnUpdate()
 {
+	// Player
+	if (Input::GetKeyPress(D))
+		mPlayerPosition.x += mPlayerVelocity * Clock::GetDeltaTime();
+
+	else if (Input::GetKeyPress(A))
+		mPlayerPosition.x -= mPlayerVelocity * Clock::GetDeltaTime();
+
+	// Ball
 	mBallPosition.x += mBallVelocity.x * Clock::GetDeltaTime();
 	mBallPosition.y += mBallVelocity.y * Clock::GetDeltaTime();
 
+	// Limits
 	const auto& windowSize = Window::GetSize();
+	const float32 maxWidth = (windowSize[0] / 2.0f);
+	const float32 maxHeight = (windowSize[1] / 2.0f);
 
-	// Width
-	if (mBallPosition.x >= windowSize[0] / 2.0f)
+	// Player (X)
+	if (mPlayerPosition.x + (mSpritePlayer->GetSize()[0] / 2) >= maxWidth)
+		mPlayerPosition.x = maxWidth - (mSpritePlayer->GetSize()[0] / 2);
+
+	else if (mPlayerPosition.x - (mSpritePlayer->GetSize()[0] / 2) <= -maxWidth)
+		mPlayerPosition.x = -maxWidth + (mSpritePlayer->GetSize()[0] / 2);
+
+	// Ball (X / Y)
+	if (mBallPosition.x + (mSpriteBall->GetSize()[0] / 2) >= maxWidth)
 	{
-		mBallPosition.x = windowSize[0] / 2.0f;
+		mBallPosition.x = maxWidth - (mSpriteBall->GetSize()[0] / 2);
 		mBallVelocity.x *= -1.0;
 	}
 
-	else if (mBallPosition.x <= -(windowSize[0] / 2.0f))
+	else if (mBallPosition.x - (mSpriteBall->GetSize()[0] / 2) <= -maxWidth)
 	{
-		mBallPosition.x = -(windowSize[0] / 2.0f);
+		mBallPosition.x = -maxWidth + (mSpriteBall->GetSize()[0] / 2);
 		mBallVelocity.x *= -1.0;
 	}
 
-	// Height
-	if (mBallPosition.y >= windowSize[1] / 2.0f)
+	if (mBallPosition.y + (mSpriteBall->GetSize()[1] / 2) >= maxHeight)
 	{
-		mBallPosition.y = windowSize[1] / 2.0f;
+		mBallPosition.y = maxHeight - (mSpriteBall->GetSize()[1] / 2);
 		mBallVelocity.y *= -1.0;
 	}
 
-	else if (mBallPosition.y <= -(windowSize[1] / 2.0f))
+	else if (mBallPosition.y - (mSpriteBall->GetSize()[1] / 2) <= -maxHeight)
 	{
-		mBallPosition.y = -(windowSize[1] / 2.0f);
+		mBallPosition.y = -maxHeight + (mSpriteBall->GetSize()[1] / 2);
 		mBallVelocity.y *= -1.0;
 	}
 }
@@ -92,7 +109,7 @@ void GameplayLayer::OnRender()
 	Renderer::RenderBegin(mCamera);
 
 	mSpriteBackground->Draw(0.0f, 0.0f, Depth::Back);
-	mSpritePlayer->Draw(0.0f, -275.0f, Depth::Front);
+	mSpritePlayer->Draw(mPlayerPosition.x, mPlayerPosition.y, Depth::Front);
 
 	mSpriteBall->Draw(mBallPosition.x, mBallPosition.y, Depth::Middle);
 

@@ -21,7 +21,9 @@ private:
 
 	} mBallVelocity;
 
-	glm::vec3 mBallPosition = glm::vec3(0.0f, -258.0f, Lion::Depth::Upper);
+	glm::vec2 mBallPosition = glm::vec2(0.0f, -258.0f);
+	glm::vec2 mPlayerPosition = glm::vec2(0.0f, -275.0f);
+	Lion::float32 mPlayerVelocity = 500.0f;
 
 	Lion::Reference<Lion::CameraOrthographic> mCamera;
 

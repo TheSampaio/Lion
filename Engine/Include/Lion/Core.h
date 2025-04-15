@@ -6,6 +6,7 @@
 // Core
 #include "../Source/Core/Application.h"
 #include "../Source/Core/Clock.h"
+#include "../Source/Core/Input.h"
 #include "../Source/Core/Layer.h"
 #include "../Source/Core/Log.h"
 #include "../Source/Core/Window.h"
