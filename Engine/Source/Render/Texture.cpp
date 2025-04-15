@@ -29,7 +29,7 @@ namespace Lion
 
         if (!bytes)
         {
-            Log::Console(ELogMode::Warning, LN_LOG_FORMAT("[Texture] Failed to load image: '{}'.", filename));
+            Log::Console(LogLevel::Warning, LN_LOG_FORMAT("[Texture] Failed to load image: '{}'.", filename));
             return;
         }
 
@@ -55,7 +55,7 @@ namespace Lion
             break;
 
         default:
-            Log::Console(ELogMode::Error, LN_LOG_FORMAT("[Texture] Unsupported image format: '{}'.", filename));
+            Log::Console(LogLevel::Error, LN_LOG_FORMAT("[Texture] Unsupported image format: '{}'.", filename));
             return;
         }
 
@@ -87,7 +87,7 @@ namespace Lion
 
 #ifdef LN_DEBUG
         sAllocationCount++;
-        Log::Console(ELogMode::Trace, LN_LOG_FORMAT("[Texture] Allocated: 1 (Total: {})", sAllocationCount));
+        Log::Console(LogLevel::Trace, LN_LOG_FORMAT("[Texture] Allocated: 1 (Total: {})", sAllocationCount));
 #endif // LN_DEBUG
 	}
 
@@ -97,7 +97,7 @@ namespace Lion
 
 #ifdef LN_DEBUG
         sAllocationCount--;
-        Log::Console(ELogMode::Trace, LN_LOG_FORMAT("[Texture] Released:  1 (Remaining: {})", sAllocationCount));
+        Log::Console(LogLevel::Trace, LN_LOG_FORMAT("[Texture] Released:  1 (Remaining: {})", sAllocationCount));
 
 #endif // LN_DEBUG
 	}

@@ -52,7 +52,7 @@ namespace Lion
 
         static void SetEventCallback(const EventCallback& callback) { sInstance->mData.mEventCallback = callback; }
 
-        static bool Create();
+        static bool Initialize();
         static void Show();
         static void PollEvents();
     };

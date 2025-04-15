@@ -4,7 +4,7 @@ namespace Lion
 {
 	class Application;
 
-	enum class ELogMode
+	enum class LogLevel
 	{
 		Error = 0,
 		Fatal,
@@ -17,7 +17,7 @@ namespace Lion
 	class Log
 	{
 	public:
-		static LION_API void Console(ELogMode mode, const std::string& message);
+		static LION_API void Console(LogLevel mode, const std::string& message);
 
 		friend Application;
 

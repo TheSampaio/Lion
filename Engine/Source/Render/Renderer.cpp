@@ -9,11 +9,6 @@
 
 namespace Lion
 {
-    const uint32 MaxQuads = 1000;
-    const uint32 MaxVertices = MaxQuads * 4;
-    const uint32 MaxIndices = MaxQuads * 6;
-    const uint32 VertexSize = 8;
-
     // Vertices's array
     const std::array<float32, 32> mVertices
     {
@@ -75,7 +70,7 @@ namespace Lion
 
         if (!Linker(sInstance->mShaderProgram))
         {
-            Log::Console(ELogMode::Error, "[Renderer] Failed to link shader program.");
+            Log::Console(LogLevel::Error, "[Renderer] Failed to link shader program.");
             return false;
         }
 
@@ -196,8 +191,8 @@ namespace Lion
             std::vector<GLchar> message(length);
             glGetShaderInfoLog(id, length, &length, message.data());
 
-            Log::Console(ELogMode::Error, LN_LOG_FORMAT("[Renderer] Failed to compile {} shader.", (type == GL_VERTEX_SHADER) ? "vertex" : "fragment"));
-            Log::Console(ELogMode::Error, message.data());
+            Log::Console(LogLevel::Error, LN_LOG_FORMAT("[Renderer] Failed to compile {} shader.", (type == GL_VERTEX_SHADER) ? "vertex" : "fragment"));
+            Log::Console(LogLevel::Error, message.data());
 
             glDeleteShader(id);
             return 0;
@@ -249,7 +244,7 @@ namespace Lion
         }
 
         else
-            Log::Console(ELogMode::Warning, "[Renderer] Failed to locate shader file.");
+            Log::Console(LogLevel::Warning, "[Renderer] Failed to locate shader file.");
 
         return { source[0].str(), source[1].str() };
     }
@@ -269,7 +264,7 @@ namespace Lion
             std::vector<GLchar> message(length);
             glGetProgramInfoLog(program, length, &length, message.data());
 
-            Log::Console(ELogMode::Error, LN_LOG_FORMAT("[Renderer] Failed to link shader program: {}", message.data()));
+            Log::Console(LogLevel::Error, LN_LOG_FORMAT("[Renderer] Failed to link shader program: {}", message.data()));
             glDeleteProgram(program);
             return false;
         }

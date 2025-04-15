@@ -24,13 +24,6 @@ namespace Lion
     Window::Window()
         : mId(nullptr), mData{ "Lion Engine", 800, 600, nullptr }, mBackgroundColor(0.0f, 0.0f, 0.0f )
     {
-        if (glfwInit() != GLFW_TRUE)
-        {
-            Log::Console(ELogMode::Fatal, "[Application] GLFW initialization failed.");
-            return;
-        }
-
-        Log::Console(ELogMode::Success, "[Application] GLFW initialized successfully.");
     }
 
     Window::~Window()
@@ -39,7 +32,7 @@ namespace Lion
         glfwTerminate();
     }
 
-    bool Window::Create()
+    bool Window::Initialize()
     {
         glfwWindowHint(GLFW_VISIBLE, false);
 

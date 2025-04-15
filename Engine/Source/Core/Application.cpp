@@ -2,6 +2,7 @@
 #include "Application.h"
 
 #include "Clock.h"
+#include "Input.h"
 #include "Layer.h"
 #include "Log.h"
 #include "Stack.h"
@@ -16,6 +17,19 @@
 
 namespace Lion
 {
+	template<typename T>
+	T TryInitialize(T result, const char8* name)
+	{
+		if (!result)
+		{
+			Lion::Log::Console(Lion::LogLevel::Fatal, LN_LOG_FORMAT("[Application] {} initialization failed.", name));
+			return result;
+		}
+
+		Log::Console(LogLevel::Success, LN_LOG_FORMAT("[Application] {} initialized successfully.", name));
+		return result;
+	}
+
 	void Application::PushLayer(Layer* layer)
 	{
 		mStack->PushLayer(layer);
@@ -65,6 +79,7 @@ namespace Lion
 		mStack = MakeScope<Stack>();
 
 		Window::New();
+		Input::New();
 		Graphics::New();
 		Renderer::New();
 		Clock::New();
@@ -75,6 +90,7 @@ namespace Lion
 		Clock::Delete();
 		Renderer::Delete();
 		Graphics::Delete();
+		Input::Delete();
 		Window::Delete();
 
 #ifndef LN_SHIPPING
@@ -86,6 +102,9 @@ namespace Lion
 	{
 		// Initializes Window, Graphics and Renderer
 		Initialize();
+
+		// Window's events sign up
+		Window::SetEventCallback(LN_EVENT_BIND(Application::OnEvent));
 
 		// Starts engine's clock
 		Clock::GetTimer().Start();
@@ -129,34 +148,16 @@ namespace Lion
 
 	void Application::Initialize()
 	{
-		// Window creation
-		if (!Window::Create())
-		{
-			Lion::Log::Console(Lion::ELogMode::Fatal, "[Application] Window initialization failed.");
+		if (!TryInitialize(glfwInit(), "GLFW"))
 			return;
-		}
 
-		Log::Console(ELogMode::Success, "[Application] Window initialized successfully.");
-
-		// Graphics initialization
-		if (!Graphics::Initialize())
-		{
-			Lion::Log::Console(Lion::ELogMode::Fatal, "[Application] Graphics initialization failed.");
+		if(!TryInitialize(Window::Initialize(), "Window"))
 			return;
-		}
 
-		Log::Console(ELogMode::Success, "[Application] Graphics initialized successfully.");
-
-		// Renderer initialization
-		if (!Renderer::Initialize())
-		{
-			Lion::Log::Console(Lion::ELogMode::Fatal, "[Application] Renderer initialization failed.");
+		if(!TryInitialize(Graphics::Initialize(), "Graphics"))
 			return;
-		}
 
-		Log::Console(ELogMode::Success, "[Application] Renderer initialized successfully.");
-
-		// Window's events sign up
-		Window::SetEventCallback(LN_EVENT_BIND(Application::OnEvent));
+		if (!TryInitialize(Renderer::Initialize(), "Renderer"))
+			return;
 	}
 }

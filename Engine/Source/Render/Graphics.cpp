@@ -29,7 +29,7 @@ namespace Lion
     {
         if (!Window::GetId())
         {
-            Log::Console(ELogMode::Error, "[Graphics] No valid window reference. Initialization aborted.");
+            Log::Console(LogLevel::Error, "[Graphics] No valid window reference. Initialization aborted.");
             return false;
         }
 
@@ -38,7 +38,7 @@ namespace Lion
         
         if (!gladLoadGL())
         {
-            Log::Console(ELogMode::Error, "[Graphics] GLAD initialization failed on engine side. Check if OpenGL context is correctly bound.");
+            Log::Console(LogLevel::Error, "[Graphics] GLAD initialization failed on engine side. Check if OpenGL context is correctly bound.");
             return false;
         }
 
