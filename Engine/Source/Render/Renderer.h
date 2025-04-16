@@ -8,6 +8,7 @@ namespace Lion
 
     struct ShaderSource;
     struct SpriteInfo;
+    struct Vertex;
 
     class Renderer
     {
@@ -42,6 +43,8 @@ namespace Lion
 
         static bool Initialize();
         static void Submit(SpriteInfo* spriteInfo);
+
+        static Vertex* CreateQuad(Vertex* target, SpriteInfo* spriteInfo);
 
         static ShaderSource Parse(const std::string& filepath);
         static uint32 Compile(uint32 type, const std::string& source);
