@@ -7,6 +7,6 @@
 [submodule "glad"]
 	path = Vendor/glad
 	url = https://github.com/TheSampaio/GLAD
-[submodule "Vendor/stb"]
-	path = Vendor/stb
-	url = https://github.com/TheSampaio/STB
+[submodule "glm"]
+	path = Vendor/glm
+	url = https://github.com/TheSampaio/GLM
