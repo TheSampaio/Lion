@@ -3,8 +3,8 @@
 #include <Lion/Core.h>
 #include <Lion/EntryPoint.h>
 
-#include "Source/CoreLayer.h"
-#include "Source/GameplayLayer.h"
+#include "Source/Layer/CoreLayer.h"
+#include "Source/Layer/GameplayLayer.h"
 
 class Sandbox : public Lion::Application
 {

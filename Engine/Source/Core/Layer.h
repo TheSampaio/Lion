@@ -10,21 +10,21 @@ namespace Lion
 		virtual ~Layer() = default;
 
 		// Lifetime
-		virtual LION_API void OnAttach() {};
-		virtual LION_API void OnDetach() {};
+		virtual void OnAttach() {};
+		virtual void OnDetach() {};
 
 		// Resource
-		virtual LION_API void OnCreate() {}
+		virtual void OnCreate() {}
 
 		// Update
-		virtual LION_API void OnUpdateBegin() {};
-		virtual LION_API void OnUpdate() {};
-		virtual LION_API void OnUpdateEnd() {};
+		virtual void OnUpdateBegin() {};
+		virtual void OnUpdate() {};
+		virtual void OnUpdateEnd() {};
 
 		// OnRender
-		virtual LION_API void OnRender() {}
+		virtual void OnRender() {}
 
 		// OnEvent
-		virtual LION_API void OnEvent(Event& event) {};
+		virtual void OnEvent(Event& event) {};
 	};
 }

@@ -8,6 +8,7 @@
 
 namespace Lion
 {
+	class Asset;
 	class Event;
 	class Layer;
 	class Stack;
@@ -24,6 +25,7 @@ namespace Lion
 		LION_API void OnEvent(Event& event);
 
 	private:
+		Scope<Asset> mAsset;
 		Scope<Stack> mStack;
 		bool mMinimized;
 
