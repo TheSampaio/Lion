@@ -11,8 +11,8 @@ void GameplayLayer::OnCreate()
 	mCamera = MakeReference<CameraOrthographic>();
 	mScene = MakeReference<Scene>();
 
-	mScene->Add(MakeReference<GameManager>());
 	mScene->Add(MakeReference<Ball>());
+	mScene->Add(MakeReference<GameManager>());
 	mScene->Add(MakeReference<Paddle>());
 }
 
