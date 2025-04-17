@@ -17,7 +17,7 @@
 #endif
 
 #pragma warning(push, 0)
-#pragma warning(disable : 6294 26495 26498 26800)
+#pragma warning(disable : 900 1694 2567 6294 26495 26498 26800)
 
 	// Standard
 	#include <array>

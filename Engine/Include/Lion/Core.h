@@ -5,6 +5,7 @@
 
 // Core
 #include "../Source/Core/Application.h"
+#include "../Source/Core/Asset.h"
 #include "../Source/Core/Clock.h"
 #include "../Source/Core/Input.h"
 #include "../Source/Core/Layer.h"
@@ -24,6 +25,10 @@
 #include "../Source/Kind/Primitives.h"
 
 // Logic
+#include "../Source/Logic/Actor.h"
+#include "../Source/Logic/Entity.h"
+#include "../Source/Logic/Scene.h"
+#include "../Source/Logic/Timer.h"
 
 // Math
 

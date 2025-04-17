@@ -1,6 +1,7 @@
 #include "Engine.h"
 #include "Application.h"
 
+#include "Asset.h"
 #include "Clock.h"
 #include "Input.h"
 #include "Layer.h"
@@ -74,8 +75,10 @@ namespace Lion
 	{
 #ifndef LN_SHIPPING
 		Log::New();
-#endif 
 
+#endif // !LN_SHIPPING
+
+		mAsset = MakeScope<Asset>();
 		mStack = MakeScope<Stack>();
 
 		Window::New();
@@ -92,6 +95,7 @@ namespace Lion
 		Graphics::Delete();
 		Input::Delete();
 		Window::Delete();
+
 
 #ifndef LN_SHIPPING
 		Log::Delete();
