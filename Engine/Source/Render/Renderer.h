@@ -38,6 +38,8 @@ namespace Lion
         uint32 mEBO;
 
         std::vector<SpriteInfo*> mSpriteBuffer;
+        std::vector<int32> mTextureBuffer;
+        std::vector<Vertex> mVertexBuffer;
 
         Renderer();
 

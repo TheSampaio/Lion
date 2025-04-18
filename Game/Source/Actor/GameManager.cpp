@@ -5,6 +5,9 @@ using namespace Lion;
 
 void GameManager::OnAwake()
 {
+	mTransformBackground = MakeReference<Transform>();
+	mTransformBackground->SetPosition(Vector(0.0, 0.0f, Depth::Back));
+
 	mSpriteBackground = MakeScope<Sprite>("Resource/Sprite/Brickout/background.jpg");
 
 	const float32 spacingX = 80.0f;
@@ -35,12 +38,12 @@ void GameManager::OnAwake()
 			float32 x = positionX + col * spacingX;
 			float32 y = positionY - row * spacingY;
 
-			GetScene()->Add(MakeReference<Brick>(texture, glm::vec3(x, y, Depth::Middle)));
+			GetScene()->Add(MakeReference<Brick>(texture, Vector(x, y, Depth::Middle)));
 		}
 	}
 }
 
 void GameManager::OnRender()
 {
-	mSpriteBackground->Draw(0.0, 0.0f, Depth::Back);
+	mSpriteBackground->Draw(mTransformBackground);
 }

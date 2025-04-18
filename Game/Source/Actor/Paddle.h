@@ -6,6 +6,7 @@ class Paddle : public Lion::Actor
 {
 public:
 	void OnAwake() override;
+	void OnUpdate() override;
 	void OnRender() override;
 
 private:

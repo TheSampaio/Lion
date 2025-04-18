@@ -2,13 +2,13 @@
 
 using namespace Lion;
 
-Brick::Brick(Reference<Texture> texture, const glm::vec3 position)
+Brick::Brick(Reference<Texture> texture, const Vector position)
 {
-	mPosition = position;
+	GetTransform()->SetPosition(position);
 	mSprite = MakeScope<Sprite>(texture);
 }
 
 void Brick::OnRender()
 {
-	mSprite->Draw(mPosition.x, mPosition.y, mPosition.z);
+	mSprite->Draw(GetTransform());
 }

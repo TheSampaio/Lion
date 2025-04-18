@@ -1,13 +1,14 @@
 #pragma once
 
+#include "../Math/Vector.h"
+
 namespace Lion
 {
     struct SpriteInfo
     {
-        float32 x, y;
-        float32 depth;
-        float32 scale;
-        float32 rotation;
+        Vector position;
+        Vector rotation;
+        Vector scale;
         uint32 width;
         uint32 height;
         uint32 texture;

@@ -9,5 +9,6 @@ public:
 	void OnRender() override;
 
 private:
+	Lion::Reference<Lion::Transform> mTransformBackground;
 	Lion::Scope<Lion::Sprite> mSpriteBackground;
 };

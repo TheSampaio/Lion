@@ -10,17 +10,27 @@ namespace Lion
 		sTextures.clear();
 	}
 
-	Reference<Texture> Asset::LoadTexture(const std::string& name, const std::string& filepath)
+	Reference<Texture> Asset::LoadTexture(const std::string& name)
 	{
 		auto it = sTextures.find(name);
 
 		if (it != sTextures.end())
 			return it->second;
 
-		// Load and cache it
-		auto texture = MakeReference<Texture>(filepath);
-		sTextures[name] = texture;
+		Log::Console(LogLevel::Error, LN_LOG_FORMAT("[Asset] Texture '{}' not found in cache.", name));
+		return nullptr;
+	}
 
-		return texture;
+	Reference<Texture> Asset::LoadTexture(const std::string& name, const std::string& filepath)
+	{
+		auto it = sTextures.emplace(name, MakeReference<Texture>(filepath));
+
+		if (!it.first->second->GetId())
+		{
+			Log::Console(LogLevel::Error, LN_LOG_FORMAT("[Asset] Failed to load texture '{}', path: '{}'.", name, filepath));
+			return nullptr;
+		}
+
+		return it.first->second;
 	}
 }
