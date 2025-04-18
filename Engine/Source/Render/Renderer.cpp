@@ -171,7 +171,7 @@ namespace Lion
         std::sort(self->mSpriteBuffer.begin(), self->mSpriteBuffer.end(),
             [](const auto& a, const auto& b)
             {
-                return a->position.mData.z > b->position.mData.z;
+                return a->position.z > b->position.z;
             });
 
         uint32 indexCount = 0;
@@ -247,9 +247,9 @@ namespace Lion
 
     Vertex* Renderer::CreateQuad(Vertex* target, SpriteInfo* spriteInfo)
     {
-        const float32 x = spriteInfo->position.mData.x;
-        const float32 y = spriteInfo->position.mData.y;
-        const float32 z = spriteInfo->position.mData.z;
+        const float32 x = spriteInfo->position.x;
+        const float32 y = spriteInfo->position.y;
+        const float32 z = spriteInfo->position.z;
         const float32 halfWidth = spriteInfo->width * 0.5f;
         const float32 halfHeight = spriteInfo->height * 0.5f;
 

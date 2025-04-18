@@ -15,27 +15,27 @@ void Ball::OnUpdate()
 
 	transform->Translate(Vector(mSpeed.x, mSpeed.y) * Clock::GetDeltaTime());
 
-	if (transform->GetPosition().GetX() >= (field[0] / 2.0f))
+	if (transform->GetPosition().x >= (field[0] / 2.0f))
 	{
-		transform->SetPosition(Vector((field[0] / 2.0f) - (mSprite->GetSize()[0] / 2.0f), transform->GetPosition().GetY(), transform->GetPosition().GetZ()));
+		transform->SetPosition(Vector((field[0] / 2.0f) - (mSprite->GetSize()[0] / 2.0f), transform->GetPosition().y, transform->GetPosition().z));
 		mSpeed.x *= -1.0f;
 	}
 
-	else if (transform->GetPosition().GetX() <= -(field[0] / 2.0f))
+	else if (transform->GetPosition().x <= -(field[0] / 2.0f))
 	{
-		transform->SetPosition(Vector(-(field[0] / 2.0f) + (mSprite->GetSize()[0] / 2.0f), transform->GetPosition().GetY(), transform->GetPosition().GetZ()));
+		transform->SetPosition(Vector(-(field[0] / 2.0f) + (mSprite->GetSize()[0] / 2.0f), transform->GetPosition().y, transform->GetPosition().z));
 		mSpeed.x *= -1.0f;
 	}
 
-	if (transform->GetPosition().GetY() >=  (field[1] / 2.0f))
+	if (transform->GetPosition().y >=  (field[1] / 2.0f))
 	{
-		transform->SetPosition(Vector(transform->GetPosition().GetX(), (field[1] / 2.0f) - (mSprite->GetSize()[1] / 2.0f), transform->GetPosition().GetZ()));
+		transform->SetPosition(Vector(transform->GetPosition().x, (field[1] / 2.0f) - (mSprite->GetSize()[1] / 2.0f), transform->GetPosition().z));
 		mSpeed.y *= -1.0f;
 	}
 
-	else if (transform->GetPosition().GetY() <= -(field[1] / 2.0f))
+	else if (transform->GetPosition().y <= -(field[1] / 2.0f))
 	{
-		transform->SetPosition(Vector(transform->GetPosition().GetX(), -(field[1] / 2.0f) + (mSprite->GetSize()[1] / 2.0f), transform->GetPosition().GetZ()));
+		transform->SetPosition(Vector(transform->GetPosition().x, -(field[1] / 2.0f) + (mSprite->GetSize()[1] / 2.0f), transform->GetPosition().z));
 		mSpeed.y *= -1.0f;
 	}
 }

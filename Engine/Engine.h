@@ -21,6 +21,7 @@
 
 	// Standard
 	#include <array>
+	#include <cmath>
 	#include <cstdint>        // For fixed size integer types
 	#include <cstddef>        // For std::size_t
 	#include <format>

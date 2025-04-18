@@ -56,9 +56,9 @@ namespace Lion {
 	void Transform::Scale(const Vector& scale)
 	{
 		mScale = Vector(
-			mScale.GetX() * scale.GetX(),
-			mScale.GetY() * scale.GetY(),
-			mScale.GetZ() * scale.GetZ()
+			mScale.x * scale.x,
+			mScale.y * scale.y,
+			mScale.z * scale.z
 		);
 	}
 }
