@@ -16,6 +16,7 @@ namespace Lion
         static LION_API std::string GetTitle() { return sInstance->mData.Title; }
 
         static LION_API void SetBackgroundColor(float32 red, float32 green, float32 blue);
+        static LION_API void SetIcon(const std::string& icon);
         static LION_API void SetSize(uint32 width, uint32 height);
         static LION_API void SetTitle(const std::string& title);
 
@@ -44,6 +45,7 @@ namespace Lion
         };
 
         GLFWwindow* mId;
+        GLFWimage* mIcon;
         WindowData mData;
         std::array<float32, 3> mBackgroundColor;
 

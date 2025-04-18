@@ -22,12 +22,18 @@ namespace Lion
     }
 
     Window::Window()
-        : mId(nullptr), mData{ "Lion Engine", 800, 600, nullptr }, mBackgroundColor(0.0f, 0.0f, 0.0f )
+        : mId(nullptr), mIcon(nullptr), mData{ "Lion Engine", 800, 600, nullptr }, mBackgroundColor(0.0f, 0.0f, 0.0f )
     {
     }
 
     Window::~Window()
     {
+        if (sInstance->mIcon)
+        {
+            stbi_image_free(sInstance->mIcon->pixels);
+            delete sInstance->mIcon;
+        }
+
         glfwDestroyWindow(mId);
         glfwTerminate();
     }
@@ -40,6 +46,9 @@ namespace Lion
 
         if (!sInstance->mId)
             return false;
+
+        if (sInstance->mIcon)
+            glfwSetWindowIcon(sInstance->mId, 1, sInstance->mIcon);
 
         // Window events
         glfwSetWindowUserPointer(sInstance->mId, &sInstance->mData);
@@ -176,6 +185,24 @@ namespace Lion
     void Window::SetBackgroundColor(float32 red, float32 green, float32 blue)
     {
         sInstance->mBackgroundColor = { red, green, blue };
+    }
+
+    void Window::SetIcon(const std::string& icon)
+    {
+        // Load icon image using stb_image
+        int32 width, height, channels;
+        byte* pixels = stbi_load(icon.c_str(), &width, &height, &channels, 4); // Force 4 channels (RGBA)
+
+        if (!pixels)
+            Log::Console(LogLevel::Error, "[Window] Failed to load icon image.");
+
+        else
+        {
+            sInstance->mIcon = new GLFWimage();
+            sInstance->mIcon->width = width;
+            sInstance->mIcon->height = height;
+            sInstance->mIcon->pixels = pixels;
+        }
     }
 
     void Window::SetTitle(const std::string& title)

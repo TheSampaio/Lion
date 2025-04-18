@@ -2,7 +2,7 @@
 
 #include <Lion/Core.h>
 
-class GameplayLayer : public Lion::Layer
+class GameLayer : public Lion::Layer
 {
 public:
 	void OnCreate() override;
