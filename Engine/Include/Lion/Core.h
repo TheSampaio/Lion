@@ -31,6 +31,8 @@
 #include "../Source/Logic/Timer.h"
 
 // Math
+#include "../Source/Math/Transform.h"
+#include "../Source/Math/Vector.h"
 
 // Render
 #include "../Source/Render/CameraOrthographic.h"

@@ -13,6 +13,8 @@ namespace Lion
 		Asset(const Asset&) = delete;
 		Asset& operator=(const Asset&) = delete;
 
+		static LION_API Reference<Texture> LoadTexture(const std::string& name);
+
 		static LION_API Reference<Texture> LoadTexture(const std::string& name, const std::string& filepath);
 
 		// TODO: LoadSound(), GetShader(), LoadFont() etc.

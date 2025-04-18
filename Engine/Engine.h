@@ -40,9 +40,11 @@
 
 	#include <glm/glm.hpp>
 	#include <glm/gtc/type_ptr.hpp>
+	#include <glm/gtc/constants.hpp>
 	#include <glm/gtc/matrix_transform.hpp>
 
 	#define GLM_ENABLE_EXPERIMENTAL
+	#include <glm/gtx/norm.hpp>              // Optional for fast normalization
 	#include <glm/gtx/euler_angles.hpp>
 
 #pragma warning(pop)

@@ -3,5 +3,8 @@
 
 namespace Lion
 {
-
+	Actor::Actor()
+	{
+		mTransform = MakeReference<Transform>();
+	}
 }

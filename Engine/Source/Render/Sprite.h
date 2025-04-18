@@ -5,6 +5,7 @@
 namespace Lion
 {
     class Texture;
+    class Transform;
 
     struct Depth;
     struct SpriteInfo;
@@ -22,8 +23,7 @@ namespace Lion
         std::array<uint32, 2> LION_API GetCenter();
 
         // Draws the sprite
-        void LION_API Draw(float32 x, float32 y);
-        void LION_API Draw(float32 x, float32 y, float32 z);
+        void LION_API Draw(const Reference<Transform> transform);
 
     private:
         // Attributes

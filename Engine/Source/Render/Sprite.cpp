@@ -6,6 +6,7 @@
 
 #include "../Core/Log.h"
 #include "../Kind/Depth.h"
+#include "../Math/Transform.h"
 
 namespace Lion
 {
@@ -23,31 +24,13 @@ namespace Lion
         mSpriteInfo->texture = mTexture->GetId();
     }
 
-    void Sprite::Draw(float32 x, float32 y)
+    void Sprite::Draw(const Reference<Transform> transform)
     {
         const auto& size = mTexture->GetSize();
 
-        mSpriteInfo->x = x;
-        mSpriteInfo->y = y;
-        mSpriteInfo->scale = 1.0;
-        mSpriteInfo->depth = Depth::Middle;
-        mSpriteInfo->rotation = 0.0f;
-        mSpriteInfo->width = size[0];
-        mSpriteInfo->height = size[1];
-        mSpriteInfo->texture = mTexture->GetId();
-
-        Renderer::Submit(mSpriteInfo.get());
-    }
-
-    void Sprite::Draw(float32 x, float32 y, float32 z)
-    {
-        const auto& size = mTexture->GetSize();
-
-        mSpriteInfo->x = x;
-        mSpriteInfo->y = y;
-        mSpriteInfo->scale = 1.0;
-        mSpriteInfo->depth = z;
-        mSpriteInfo->rotation = 0.0f;
+        mSpriteInfo->position = transform->mPosition;
+        mSpriteInfo->rotation = transform->mRotation;
+        mSpriteInfo->scale = transform->mScale;
         mSpriteInfo->width = size[0];
         mSpriteInfo->height = size[1];
         mSpriteInfo->texture = mTexture->GetId();
