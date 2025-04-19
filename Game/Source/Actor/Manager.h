@@ -2,7 +2,7 @@
 
 #include <Lion/Core.h>
 
-class GameManager : public Lion::Entity
+class Manager : public Lion::Entity
 {
 public:
 	void OnAwake() override;

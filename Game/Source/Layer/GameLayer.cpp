@@ -1,7 +1,7 @@
 #include "GameLayer.h"
 
 #include "../Actor/Ball.h"
-#include "../Actor/GameManager.h"
+#include "../Actor/Manager.h"
 #include "../Actor/Paddle.h"
 
 using namespace Lion;
@@ -12,7 +12,7 @@ void GameLayer::OnCreate()
 	mScene = MakeReference<Scene>();
 
 	mScene->Add(MakeReference<Ball>());
-	mScene->Add(MakeReference<GameManager>());
+	mScene->Add(MakeReference<Manager>());
 	mScene->Add(MakeReference<Paddle>());
 }
 
