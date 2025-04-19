@@ -34,8 +34,8 @@ namespace Lion
             return;
         }
 
-        mSize = { static_cast<uint32>(width), static_cast<uint32>(height) };
-        mCenter = { mSize[0] / 2, mSize[1] / 2 };
+        mSize = { width, height };
+        mCenter = { mSize.width / 2, mSize.height / 2 };
 
         // Set texture formats based on number of channels
         switch (mColumn)
@@ -75,7 +75,7 @@ namespace Lion
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
 
         // Set-ups the texture data
-        glTexImage2D(GL_TEXTURE_2D, 0, mFormatInternal, mSize[0], mSize[1], 0, mFormatExternal, GL_UNSIGNED_BYTE, bytes);
+        glTexImage2D(GL_TEXTURE_2D, 0, mFormatInternal, static_cast<int32>(mSize.width), static_cast<int32>(mSize.height), 0, mFormatExternal, GL_UNSIGNED_BYTE, bytes);
 
         // Generates a mipmap for the 2D texture
         glGenerateMipmap(GL_TEXTURE_2D);

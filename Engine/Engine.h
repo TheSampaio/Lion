@@ -20,6 +20,7 @@
 #pragma warning(disable : 900 1694 2567 6294 26495 26498 26800)
 
 	// Standard
+	#include <algorithm>	  // For std::swap
 	#include <array>
 	#include <cmath>
 	#include <cstdint>        // For fixed size integer types

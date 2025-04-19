@@ -10,5 +10,8 @@ public:
 	void OnRender() override;
 
 private:
+	Lion::Reference<Lion::Transform> mTransform;
 	Lion::Scope<Lion::Sprite> mSprite;
+
+	const Lion::float32 mSpeed = 500.0f;
 };

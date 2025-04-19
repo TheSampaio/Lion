@@ -3,7 +3,7 @@
 
 #include "Camera.h"
 #include "RenderCommand.h"
-#include "SpriteInfo.h"
+#include "Sprite.h"
 
 #include "../Core/Log.h"
 
@@ -250,32 +250,31 @@ namespace Lion
         const float32 x = spriteInfo->position.x;
         const float32 y = spriteInfo->position.y;
         const float32 z = spriteInfo->position.z;
-        const float32 halfWidth = spriteInfo->width * 0.5f;
-        const float32 halfHeight = spriteInfo->height * 0.5f;
+        const Size halfSize = spriteInfo->size * 0.5f;
 
         // Top-Left
-        target->position = { x - halfWidth, y + halfHeight, z };
+        target->position = { x - halfSize.width, y + halfSize.height, z };
         target->color = { 1.0f, 1.0f, 1.0f, 1.0f };
         target->textureCoord = { 0.0f, 1.0f };
         target->texture = static_cast<float32>(spriteInfo->texture);
         target++;
 
         // Bottom-Left
-        target->position = { x - halfWidth, y - halfHeight, z };
+        target->position = { x - halfSize.width, y - halfSize.height, z };
         target->color = { 1.0f, 1.0f, 1.0f, 1.0f };
         target->textureCoord = { 0.0f, 0.0f };
         target->texture = static_cast<float32>(spriteInfo->texture);
         target++;
 
         // Bottom-Right
-        target->position = { x + halfWidth, y - halfHeight, z };
+        target->position = { x + halfSize.width, y - halfSize.height, z };
         target->color = { 1.0f, 1.0f, 1.0f, 1.0f };
         target->textureCoord = { 1.0f, 0.0f };
         target->texture = static_cast<float32>(spriteInfo->texture);
         target++;
 
         // Top-Right
-        target->position = { x + halfWidth, y + halfHeight, z };
+        target->position = { x + halfSize.width, y + halfSize.height, z };
         target->color = { 1.0f, 1.0f, 1.0f, 1.0f };
         target->textureCoord = { 1.0f, 1.0f };
         target->texture = static_cast<float32>(spriteInfo->texture);

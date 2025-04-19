@@ -10,6 +10,7 @@ public:
 	void OnRender() override;
 
 private:
+	Lion::Reference<Lion::Transform> mTransform;
 	Lion::Scope<Lion::Sprite> mSprite;
 
 	struct

@@ -10,8 +10,8 @@ namespace Lion
     {
         const auto& size = Window::GetSize();
 
-        mViewport.Width = static_cast<float32>(size[0]);
-        mViewport.Height = static_cast<float32>(size[1]);
+        mViewport.Width = static_cast<float32>(size.width);
+        mViewport.Height = static_cast<float32>(size.height);
         mViewport.Zoom = 1.0f;
         mAspectRatio = mViewport.Width / mViewport.Height;
 

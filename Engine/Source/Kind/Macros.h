@@ -13,8 +13,8 @@
             __glad_initialized = true; \
             Log::Console(LogLevel::Success, "[Graphics] GLAD initialized successfully."); \
             glViewport(0, 0, \
-                static_cast<int32>(Window::GetSize()[0]), \
-                static_cast<int32>(Window::GetSize()[1]) \
+                static_cast<int32>(Window::GetSize().width), \
+                static_cast<int32>(Window::GetSize().height) \
             ); \
             Log::Console(LogLevel::Information, LN_LOG_FORMAT("[Graphics] Renderer: {}", reinterpret_cast<const char*>(glGetString(GL_RENDERER)))); \
             Log::Console(LogLevel::Information, LN_LOG_FORMAT("[Graphics] Vendor: {}", reinterpret_cast<const char*>(glGetString(GL_VENDOR)))); \
