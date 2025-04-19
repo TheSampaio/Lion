@@ -12,7 +12,7 @@ void Paddle::OnAwake()
 void Paddle::OnUpdate()
 {
 	const auto& field = Window::GetSize();
-	const float32 maxWidth = (field[0] / 2.0f);
+	const float32 maxWidth = (field.width / 2.0f);
 
 	if (Input::GetKeyPress(KeyCode::D))
 		mTransform->Translate(Vector(1.0f, 0.0f, 0.0f) * mSpeed * Clock::GetDeltaTime());
@@ -21,22 +21,22 @@ void Paddle::OnUpdate()
 		mTransform->Translate(-Vector(1.0f, 0.0f, 0.0f) * mSpeed * Clock::GetDeltaTime());
 
 	// Limits player position to the window client's area
-	if (mTransform->GetPosition().x + (mSprite->GetSize()[0] / 2.0f) >= maxWidth)
+	if (mTransform->GetPosition().x + (mSprite->GetSize().width / 2.0f) >= maxWidth)
 	{
 		mTransform->SetPosition(
 			Vector(
-				maxWidth - (mSprite->GetSize()[0] / 2),
+				maxWidth - (mSprite->GetSize().width / 2),
 				mTransform->GetPosition().y,
 				mTransform->GetPosition().z
 			)
 		);
 	}
 
-	else if (mTransform->GetPosition().x - (mSprite->GetSize()[0] / 2.0f) <= -maxWidth)
+	else if (mTransform->GetPosition().x - (mSprite->GetSize().width / 2.0f) <= -maxWidth)
 	{
 		mTransform->SetPosition(
 			Vector(
-				-maxWidth + (mSprite->GetSize()[0] / 2),
+				-maxWidth + (mSprite->GetSize().width / 2),
 				mTransform->GetPosition().y,
 				mTransform->GetPosition().z
 			)

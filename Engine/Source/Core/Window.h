@@ -1,5 +1,7 @@
 #pragma once
 
+#include "../Kind/Size.h"
+
 namespace Lion
 {
     class Application;
@@ -12,7 +14,7 @@ namespace Lion
     public:
         static LION_API GLFWwindow* GetId() { return sInstance->mId; }
         static LION_API std::array<float32, 3> GetBackgroundColor() { return sInstance->mBackgroundColor; }
-        static LION_API std::array<uint32, 2> GetSize() { return { sInstance->mData.Width, sInstance->mData.Height }; }
+        static LION_API Size GetSize() { return { sInstance->mData.Width, sInstance->mData.Height }; }
         static LION_API std::string GetTitle() { return sInstance->mData.Title; }
 
         static LION_API void SetBackgroundColor(float32 red, float32 green, float32 blue);

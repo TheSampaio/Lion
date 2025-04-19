@@ -31,19 +31,18 @@ namespace Lion
         mSpriteInfo->position = transform->mPosition;
         mSpriteInfo->rotation = transform->mRotation;
         mSpriteInfo->scale = transform->mScale;
-        mSpriteInfo->width = size[0];
-        mSpriteInfo->height = size[1];
+        mSpriteInfo->size = size;
         mSpriteInfo->texture = mTexture->GetId();
 
         Renderer::Submit(mSpriteInfo.get());
     }
 
-    std::array<uint32, 2> Sprite::GetSize()
+    Size Sprite::GetSize()
     {
         return mTexture->GetSize();
     }
 
-    std::array<uint32, 2> Sprite::GetCenter()
+    Size Sprite::GetCenter()
     {
         return mTexture->GetCenter();
     }

@@ -1,5 +1,7 @@
 #pragma once
 
+#include "../Kind/Size.h"
+
 namespace Lion
 {
 	class Texture
@@ -9,8 +11,8 @@ namespace Lion
 		LION_API ~Texture();
 
 		LION_API uint32 GetId() const { return mId; }
-		LION_API std::array<uint32, 2> GetSize() const { return mSize; }
-		LION_API std::array<uint32, 2> GetCenter() const { return mCenter; }
+		LION_API Size GetSize() const { return mSize; }
+		LION_API Size GetCenter() const { return mCenter; }
 
 	private:
 		uint32 mId;
@@ -22,8 +24,8 @@ namespace Lion
 
 		int32 mColumn;
 
-		std::array<uint32, 2> mSize;
-		std::array<uint32, 2> mCenter;
+		Size mSize;
+		Size mCenter;
 
 #if LN_DEBUG
 		static uint32 sAllocationCount;
