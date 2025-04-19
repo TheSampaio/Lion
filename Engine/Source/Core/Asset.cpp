@@ -23,14 +23,15 @@ namespace Lion
 
 	Reference<Texture> Asset::LoadTexture(const std::string& name, const std::string& filepath)
 	{
-		auto it = sTextures.emplace(name, MakeReference<Texture>(filepath));
+		auto it = sTextures.find(name);
 
-		if (!it.first->second->GetId())
-		{
-			Log::Console(LogLevel::Error, LN_LOG_FORMAT("[Asset] Failed to load texture '{}', path: '{}'.", name, filepath));
-			return nullptr;
-		}
+		if (it != sTextures.end())
+			return it->second;
 
-		return it.first->second;
+		// Load and cache it
+		auto texture = MakeReference<Texture>(filepath);
+		sTextures[name] = texture;
+
+		return texture;
 	}
 }

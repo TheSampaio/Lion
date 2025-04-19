@@ -1,9 +1,9 @@
-#include "GameManager.h"
+#include "Manager.h"
 #include "Brick.h"
 
 using namespace Lion;
 
-void GameManager::OnAwake()
+void Manager::OnAwake()
 {
 	mTransformBackground = MakeReference<Transform>();
 	mTransformBackground->SetPosition(Vector(0.0, 0.0f, Depth::Back));
@@ -43,7 +43,7 @@ void GameManager::OnAwake()
 	}
 }
 
-void GameManager::OnRender()
+void Manager::OnRender()
 {
 	mSpriteBackground->Draw(mTransformBackground);
 }

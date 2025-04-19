@@ -13,13 +13,18 @@ namespace Lion
     {
         float32 x, y, z; ///< X, Y, and Z components of the vector.
 
+        /**
+         * @brief Constructs a vector with the zero value for all components.
+         * @param value The value for all components.
+         */
         LION_API Vector() : x(0.0f), y(0.0f), z(0.0f) {}
 
         /**
          * @brief Constructs a vector with the same value for all components.
-         * @param value The value for all components.
+         * @param Same value for all components.
          */
-        explicit LION_API Vector(float32 value) : x(value), y(value), z(value) {}
+        LION_API Vector(float32 value) : x(value), y(value), z(value) {}
+        LION_API Vector(int32 value) : x(static_cast<float32>(value)), y(static_cast<float32>(value)), z(static_cast<float32>(value)) {}
 
         /**
          * @brief Constructs a 2D vector with Z set to 0.
@@ -27,6 +32,7 @@ namespace Lion
          * @param y Y component.
          */
         LION_API Vector(float32 x, float32 y) : x(x), y(y), z(0.0f) {}
+        LION_API Vector(int32 x, int32 y) : x(static_cast<float32>(x)), y(static_cast<float32>(y)), z(0.0f) {}
 
         /**
          * @brief Constructs a 3D vector.
@@ -35,12 +41,13 @@ namespace Lion
          * @param z Z component.
          */
         LION_API Vector(float32 x, float32 y, float32 z) : x(x), y(y), z(z) {}
+        LION_API Vector(int32 x, int32 y, int32 z) : x(static_cast<float32>(x)), y(static_cast<float32>(y)), z(static_cast<float32>(z)) {}
 
         /**
          * @brief Computes the magnitude (length) of the vector.
          * @return The magnitude of the vector.
          */
-        LION_API float32 GetMagnitude() const { return Sigma::Sqrt(Sigma::Pow(x, 2) + Sigma::Pow(y, 2) + Sigma::Pow(z, 2)); }
+        LION_API float32 GetMagnitude() const { return Sigma::Sqrt(Sigma::Pow(x, 2.0f) + Sigma::Pow(y, 2.0f) + Sigma::Pow(z, 2.0f)); }
 
         /**
          * @brief Returns a normalized version of the vector.

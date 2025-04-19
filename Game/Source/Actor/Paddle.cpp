@@ -22,7 +22,7 @@ void Paddle::OnUpdate()
 		transform->Translate(-Vector(1.0f, 0.0f, 0.0f) * speed * Clock::GetDeltaTime());
 
 	// Limits player position to the window client's area
-	if (transform->GetPosition().x + (mSprite->GetSize()[0] / 2) >= maxWidth)
+	if (transform->GetPosition().x + (mSprite->GetSize()[0] / 2.0f) >= maxWidth)
 	{
 		transform->SetPosition(
 			Vector(
@@ -33,7 +33,7 @@ void Paddle::OnUpdate()
 		);
 	}
 
-	else if (transform->GetPosition().x - (mSprite->GetSize()[0] / 2) <= -maxWidth)
+	else if (transform->GetPosition().x - (mSprite->GetSize()[0] / 2.0f) <= -maxWidth)
 	{
 		transform->SetPosition(
 			Vector(
