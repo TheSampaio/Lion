@@ -35,6 +35,7 @@
 	#include <vector>
 
 	// External
+	#include <box2d/box2d.h>
 	#include <glad/glad.h>
 	#include <glfw/glfw3.h>
 	#include <spdlog/spdlog.h>

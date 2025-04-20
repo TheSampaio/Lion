@@ -28,6 +28,10 @@ workspace "Lion"
 
     dependencies = {}
 
+    dependencies["box2d"] = {
+        include = "%{wks.location}/Vendor/box2d/include",
+    }
+
     dependencies["glad"] = {
         include = "%{wks.location}/Vendor/glad/include",
         lib = "glad",
@@ -79,6 +83,7 @@ project "Lion"
     }
 
     externalincludedirs {
+        "%{dependencies.box2d.include}",
         "%{dependencies.glad.include}",
         "%{dependencies.glfw.include}",
         "%{dependencies.glm.include}",
@@ -125,6 +130,7 @@ project "Sandbox"
     }
 
     externalincludedirs {
+        "%{dependencies.box2d.include}",
         "%{dependencies.glad.include}",
         "%{dependencies.glfw.include}",
         "%{dependencies.glm.include}",
@@ -146,6 +152,7 @@ project "Sandbox"
 
 -- ========== Dependencies ========== --
 group "External Dependencies"
+    include "Vendor/box2d"
     include "Vendor/glad"
     include "Vendor/glfw"
     include "Vendor/glm"
