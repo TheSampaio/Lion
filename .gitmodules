@@ -13,3 +13,6 @@
 [submodule "stb"]
 	path = Vendor/stb
 	url = https://github.com/TheSampaio/STB
+[submodule "Vendor/box2d"]
+	path = Vendor/box2d
+	url = https://github.com/TheSampaio/Box2D
