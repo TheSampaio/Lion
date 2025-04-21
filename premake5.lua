@@ -47,6 +47,10 @@ workspace "Lion"
         include = "%{wks.location}/Vendor/glm/include",
     }
 
+    dependencies["imgui"] = {
+        include = "%{wks.location}/Vendor/imgui/include",
+    }
+
     dependencies["spdlog"] = {
         include = "%{wks.location}/Vendor/spdlog/include",
     }
@@ -87,6 +91,7 @@ project "Lion"
         "%{dependencies.glad.include}",
         "%{dependencies.glfw.include}",
         "%{dependencies.glm.include}",
+        "%{dependencies.imgui.include}",
         "%{dependencies.spdlog.include}",
         "%{dependencies.stb.include}",
     }
@@ -134,6 +139,7 @@ project "Sandbox"
         "%{dependencies.glad.include}",
         "%{dependencies.glfw.include}",
         "%{dependencies.glm.include}",
+        "%{dependencies.imgui.include}",
         "%{dependencies.spdlog.include}",
         "%{dependencies.stb.include}",
     }
@@ -156,6 +162,7 @@ group "External Dependencies"
     include "Vendor/glad"
     include "Vendor/glfw"
     include "Vendor/glm"
+    include "Vendor/imgui"
     include "Vendor/spdlog"
     include "Vendor/stb"
 group ""

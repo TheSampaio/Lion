@@ -1,0 +1,21 @@
+[submodule "Vendor/box2d"]
+	path = Vendor/box2d
+	url = https://github.com/TheSampaio/Box2D
+[submodule "Vendor/glad"]
+	path = Vendor/glad
+	url = https://github.com/TheSampaio/GLAD
+[submodule "Vendor/glfw"]
+	path = Vendor/glfw
+	url = https://github.com/TheSampaio/GLFW
+[submodule "Vendor/glm"]
+	path = Vendor/glm
+	url = https://github.com/TheSampaio/GLM
+[submodule "Vendor/imgui"]
+	path = Vendor/imgui
+	url = https://github.com/TheSampaio/ImGui
+[submodule "Vendor/spdlog"]
+	path = Vendor/spdlog
+	url = https://github.com/TheSampaio/SPDLOG
+[submodule "Vendor/stb"]
+	path = Vendor/stb
+	url = https://github.com/TheSampaio/STB
