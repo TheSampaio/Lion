@@ -20,11 +20,11 @@
 #pragma warning(disable : 900 1694 2567 6294 26495 26498 26800)
 
 	// Standard
-	#include <algorithm>	  // For std::swap
+	#include <algorithm>	   // For std::swap
 	#include <array>
 	#include <cmath>
-	#include <cstdint>        // For fixed size integer types
-	#include <cstddef>        // For std::size_t
+	#include <cstdint>         // For fixed size integer types
+	#include <cstddef>         // For std::size_t
 	#include <format>
 	#include <fstream>
 	#include <functional>
@@ -36,8 +36,14 @@
 
 	// External
 	#include <box2d/box2d.h>
+
 	#include <glad/glad.h>
 	#include <glfw/glfw3.h>
+
+	//#include <imgui/imgui.h>
+	//#include <imgui/backends/imgui_impl_opengl3.h>
+	//#include <imgui/backends/imgui_impl_glfw.h>
+
 	#include <spdlog/spdlog.h>
 	#include <stb_image/stb_image.h>
 
@@ -47,7 +53,7 @@
 	#include <glm/gtc/matrix_transform.hpp>
 
 	#define GLM_ENABLE_EXPERIMENTAL
-	#include <glm/gtx/norm.hpp>              // Optional for fast normalization
+	#include <glm/gtx/norm.hpp>          // Optional for fast normalization
 	#include <glm/gtx/euler_angles.hpp>
 
 #pragma warning(pop)

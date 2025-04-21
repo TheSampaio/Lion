@@ -12,11 +12,6 @@ void CoreLayer::OnAttach()
 	Graphics::SetVerticalSynchronization(false);
 }
 
-void CoreLayer::OnCreate()
-{
-	LN_CREATE_OPENGL_CONTEXT();
-}
-
 void CoreLayer::OnEvent(Event& event)
 {
 	EventDispatcher dispatcher(event);
