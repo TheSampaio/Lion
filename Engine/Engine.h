@@ -16,8 +16,9 @@
 
 #endif
 
+// Disable ALL Warnings
 #pragma warning(push, 0)
-#pragma warning(disable : 900 1694 2567 6294 26495 26498 26800)
+#pragma warning(disable: 4805 6294 6011 26498 28182 33010)
 
 	// Standard
 	#include <algorithm>	   // For std::swap
