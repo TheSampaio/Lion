@@ -303,7 +303,7 @@ namespace Lion
             std::vector<GLchar> message(length);
             glGetShaderInfoLog(id, length, &length, message.data());
 
-            Log::Console(LogLevel::Error, LN_LOG_FORMAT("[Renderer] Failed to compile {} shader:\n{}", (type == GL_VERTEX_SHADER) ? "vertex" : "fragment", message.data()));
+            Log::Console(LogLevel::Error, LION_FORMAT_TEXT("[Renderer] Failed to compile {} shader:\n{}", (type == GL_VERTEX_SHADER) ? "vertex" : "fragment", message.data()));
 
             glDeleteShader(id);
             return 0;
@@ -377,7 +377,7 @@ namespace Lion
             std::vector<GLchar> message(length);
             glGetProgramInfoLog(program, length, &length, message.data());
 
-            Log::Console(LogLevel::Error, LN_LOG_FORMAT("[Renderer] Failed to link shader program: {}", message.data()));
+            Log::Console(LogLevel::Error, LION_FORMAT_TEXT("[Renderer] Failed to link shader program: {}", message.data()));
             glDeleteProgram(program);
             return false;
         }

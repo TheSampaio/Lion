@@ -9,7 +9,7 @@ namespace Lion
     {
     public:
         EventWindowClose() = default;
-        LN_EVENT_CLASS_TYPE(EventWindowClose)
+        LION_EVENT_TYPE(EventWindowClose)
     };
 
     // Window Enter Focus Event
@@ -17,7 +17,7 @@ namespace Lion
     {
     public:
         EventWindowFocusEnter() = default;
-        LN_EVENT_CLASS_TYPE(EventWindowFocusEnter)
+        LION_EVENT_TYPE(EventWindowFocusEnter)
     };
 
     // Window Exit Focus Event
@@ -25,7 +25,7 @@ namespace Lion
     {
     public:
         EventWindowFocusExit() = default;
-        LN_EVENT_CLASS_TYPE(EventWindowFocusExit)
+        LION_EVENT_TYPE(EventWindowFocusExit)
     };
 
     // Window Resize Event
@@ -40,7 +40,7 @@ namespace Lion
         int32 GetWidth() const { return mWidth; }
         int32 GetHeight() const { return mHeight; }
 
-        LN_EVENT_CLASS_TYPE(EventWindowResize)
+        LION_EVENT_TYPE(EventWindowResize)
 
     private:
         int32 mWidth, mHeight;

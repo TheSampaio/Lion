@@ -15,7 +15,7 @@ namespace Lion
 
         int32 GetKeyCode() const { return m_keyCode; }
 
-        LN_EVENT_CLASS_TYPE(EventInputKeyboardPress);
+        LION_EVENT_TYPE(EventInputKeyboardPress);
 
     private:
         int32 m_keyCode;
@@ -32,7 +32,7 @@ namespace Lion
 
         int32 GetKeyCode() const { return m_keyCode; }
 
-        LN_EVENT_CLASS_TYPE(EventInputKeyboardRelease);
+        LION_EVENT_TYPE(EventInputKeyboardRelease);
 
     private:
         int32 m_keyCode;
@@ -49,7 +49,7 @@ namespace Lion
 
         int32 GetKeyCode() const { return m_keyCode; }
 
-        LN_EVENT_CLASS_TYPE(EventInputKeyboardRepeat);
+        LION_EVENT_TYPE(EventInputKeyboardRepeat);
 
     private:
         int32 m_keyCode;
@@ -67,7 +67,7 @@ namespace Lion
         float32 GetX() const { return m_positionX; }
         float32 GetY() const { return m_positionY; }
 
-        LN_EVENT_CLASS_TYPE(EventInputMouseMove);
+        LION_EVENT_TYPE(EventInputMouseMove);
 
     private:
         float32 m_positionX, m_positionY;
@@ -84,7 +84,7 @@ namespace Lion
 
         int32 GetButton() const { return m_button; }
 
-        LN_EVENT_CLASS_TYPE(EventInputMousePress);
+        LION_EVENT_TYPE(EventInputMousePress);
 
     private:
         int32 m_button;
@@ -101,7 +101,7 @@ namespace Lion
 
         int32 GetButton() const { return m_button; }
 
-        LN_EVENT_CLASS_TYPE(EventInputMouseRelease);
+        LION_EVENT_TYPE(EventInputMouseRelease);
 
     private:
         int32 m_button;
@@ -119,7 +119,7 @@ namespace Lion
         float32 GetOffsetX() const { return m_offsetX; }
         float32 GetOffsetY() const { return m_offsetY; }
 
-        LN_EVENT_CLASS_TYPE(EventInputMouseScroll);
+        LION_EVENT_TYPE(EventInputMouseScroll);
 
     private:
         float32 m_offsetX, m_offsetY;

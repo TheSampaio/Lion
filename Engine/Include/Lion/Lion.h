@@ -1,14 +1,6 @@
 #pragma once
 
-// ----------------------------------- //
-// |     DON'T CHANGE THE ORDER!     | //
-// ----------------------------------- //
-// | 1 |  Platform                   | //
-// | 2 |  Standard                   | //
-// | 3 |  External                   | //
-// | 4 |  Allocator                  | //
-// | 5 |  Primitive                  | //
-// ----------------------------------- //
+// Base (Keep This Order)
 #include <Lion/Base/Platform.h>
 #include <Lion/Base/Standard.h>
 #include <Lion/Base/External.h>

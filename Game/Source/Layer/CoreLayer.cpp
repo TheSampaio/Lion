@@ -15,7 +15,7 @@ void CoreLayer::OnAttach()
 void CoreLayer::OnEvent(Event& event)
 {
 	EventDispatcher dispatcher(event);
-	dispatcher.Bind<EventWindowClose>(LN_EVENT_BIND(CoreLayer::OnEventWindowClose));
+	dispatcher.Bind<EventWindowClose>(LION_BIND_EVENT(CoreLayer::OnEventWindowClose));
 }
 
 bool CoreLayer::OnEventWindowClose(const EventWindowClose& event)

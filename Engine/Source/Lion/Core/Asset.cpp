@@ -17,7 +17,7 @@ namespace Lion
 		if (it != sTextures.end())
 			return it->second;
 
-		Log::Console(LogLevel::Error, LN_LOG_FORMAT("[Asset] Texture '{}' not found in cache.", name));
+		Log::Console(LogLevel::Error, LION_FORMAT_TEXT("[Asset] Texture '{}' not found in cache.", name));
 		return nullptr;
 	}
 

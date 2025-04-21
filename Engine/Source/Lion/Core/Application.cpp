@@ -23,11 +23,11 @@ namespace Lion
 	{
 		if (!result)
 		{
-			Lion::Log::Console(Lion::LogLevel::Fatal, LN_LOG_FORMAT("[Application] {} initialization failed.", name));
+			Lion::Log::Console(Lion::LogLevel::Fatal, LION_FORMAT_TEXT("[Application] {} initialization failed.", name));
 			return result;
 		}
 
-		Log::Console(LogLevel::Success, LN_LOG_FORMAT("[Application] {} initialized successfully.", name));
+		Log::Console(LogLevel::Success, LION_FORMAT_TEXT("[Application] {} initialized successfully.", name));
 		return result;
 	}
 
@@ -108,7 +108,7 @@ namespace Lion
 		Initialize();
 
 		// Window's events sign up
-		Window::SetEventCallback(LN_EVENT_BIND(Application::OnEvent));
+		Window::SetEventCallback(LION_BIND_EVENT(Application::OnEvent));
 
 		// Starts engine's clock
 		Clock::GetTimer().Start();

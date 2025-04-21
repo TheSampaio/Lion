@@ -1,37 +1,27 @@
 #pragma once
 
-#define LN_LOG_FORMAT(message, ...) std::format(message, __VA_ARGS__)
+// -------------------------------------------------------------------------
+// Lion Engine - Macros and Compiler Directives
+//
+// Prefix Convention:
+//   - LN_   : Used for preprocessor-level macros (build, platform, config)
+//   - LION_ : Used for general-purpose engine macros within source code
+// -------------------------------------------------------------------------
 
-#define LN_CREATE_OPENGL_CONTEXT() \
-    do { \
-        static bool __glad_initialized = false; \
-        if (!__glad_initialized) { \
-            if (!gladLoadGL()) { \
-                Log::Console(LogLevel::Fatal, "[Graphics] GLAD initialization failed on client side. Check OpenGL context setup."); \
-                break; \
-            } \
-            __glad_initialized = true; \
-            Log::Console(LogLevel::Success, "[Graphics] GLAD initialized successfully."); \
-            glViewport(0, 0, \
-                static_cast<int32>(Window::GetSize().width), \
-                static_cast<int32>(Window::GetSize().height) \
-            ); \
-            Log::Console(LogLevel::Information, LN_LOG_FORMAT("[Graphics] Renderer: {}", reinterpret_cast<const char*>(glGetString(GL_RENDERER)))); \
-            Log::Console(LogLevel::Information, LN_LOG_FORMAT("[Graphics] Vendor: {}", reinterpret_cast<const char*>(glGetString(GL_VENDOR)))); \
-            Log::Console(LogLevel::Information, LN_LOG_FORMAT("[Graphics] OpenGL: {}", reinterpret_cast<const char*>(glGetString(GL_VERSION)))); \
-        } \
-    } while (0)
+// Formats text using std::format (C++20).
+#define LION_FORMAT_TEXT(message, ...) std::format(message, __VA_ARGS__)
 
 #ifdef LN_DEBUG
-#define LION_ASSERT(condition, message)                                     \
-        do {                                                                    \
-            if (!(condition)) {                                                 \
-                std::cerr << "Assertion failed: " << #condition << "\n"         \
-                          << "Message: " << message << "\n"                     \
-                          << "File: " << __FILE__ << "\n"                       \
-                          << "Line: " << __LINE__ << std::endl;                 \
-                std::abort();                                                   \
-            }                                                                   \
+    // Runtime assertion macro enabled only in debug builds.
+    #define LION_ASSERT(condition, message)                                 \
+        do {                                                                \
+            if (!(condition)) {                                             \
+                std::cerr << "Assertion failed: " << #condition << "\n"     \
+                          << "Message: " << message << "\n"                 \
+                          << "File: " << __FILE__ << "\n"                   \
+                          << "Line: " << __LINE__ << std::endl;             \
+                std::abort();                                               \
+            }                                                               \
         } while (false)
 #else
     #define LION_ASSERT(condition, message) do { (void)sizeof(condition); } while (false)
