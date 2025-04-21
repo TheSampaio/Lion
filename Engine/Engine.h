@@ -1,64 +1,10 @@
 #pragma once
 
-// DLL exporter
-#ifdef LN_PLATFORM_WIN
+#include <Lion/Base/Platform.h>
 
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
+#include <Lion/Base/Standard.h>
+#include <Lion/Base/External.h>
 
-	#ifdef LN_DLL
-		#define LION_API __declspec(dllexport)
-	#else
-		#define LION_API __declspec(dllimport)
-	#endif
-#else
-	#error Lion engine does not support Unix platforms!
-
-#endif
-
-// Disable ALL Warnings
-#pragma warning(push, 0)
-#pragma warning(disable: 4805 6294 6011 26498 28182 33010)
-
-	// Standard
-	#include <algorithm>	   // For std::swap
-	#include <array>
-	#include <cmath>
-	#include <cstdint>         // For fixed size integer types
-	#include <cstddef>         // For std::size_t
-	#include <format>
-	#include <fstream>
-	#include <functional>
-	#include <memory>
-	#include <sstream>
-	#include <string>
-	#include <unordered_map>
-	#include <vector>
-
-	// External
-	#include <box2d/box2d.h>
-
-	#include <glad/glad.h>
-	#include <glfw/glfw3.h>
-
-	#include <imgui/imgui.h>
-	#include <imgui/backends/imgui_impl_glfw.h>
-	#include <imgui/backends/imgui_impl_opengl3.h>
-
-	#include <spdlog/spdlog.h>
-	#include <stb_image/stb_image.h>
-
-	#include <glm/glm.hpp>
-	#include <glm/gtc/type_ptr.hpp>
-	#include <glm/gtc/constants.hpp>
-	#include <glm/gtc/matrix_transform.hpp>
-
-	#define GLM_ENABLE_EXPERIMENTAL
-	#include <glm/gtx/norm.hpp>          // Optional for fast normalization
-	#include <glm/gtx/euler_angles.hpp>
-
-#pragma warning(pop)
-
-#include "Source/Type/Allocators.h"
-#include "Source/Type/Macros.h"
-#include "Source/Type/Primitives.h"
+#include <Lion/Type/Allocator.h>
+#include <Lion/Type/Macro.h>
+#include <Lion/Type/Primitive.h>

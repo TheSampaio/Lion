@@ -12,6 +12,7 @@ project "Sandbox"
 
     includedirs {
         "%{wks.location}/Engine/Include",
+        "%{wks.location}/Engine/Source",
     }
 
     externalincludedirs {
