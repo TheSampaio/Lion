@@ -3,8 +3,8 @@
 
 #include "Log.h"
 
-#include "../Events/EventWindow.h"
-#include "../Events/EventInput.h"
+#include "../Signal/EventWindow.h"
+#include "../Signal/EventInput.h"
 
 namespace Lion
 {

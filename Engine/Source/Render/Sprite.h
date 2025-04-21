@@ -1,7 +1,7 @@
 #pragma once
 
-#include "../Kind/Size.h"
 #include "../Math/Vector.h"
+#include "../Type/Size.h"
 
 namespace Lion
 {

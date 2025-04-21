@@ -9,9 +9,9 @@
 #include "Stack.h"
 #include "Window.h"
 
-#include "../Events/Event.h"
-#include "../Events/EventDispatcher.h"
-#include "../Events/EventWindow.h"
+#include "../Signal/Event.h"
+#include "../Signal/EventDispatcher.h"
+#include "../Signal/EventWindow.h"
 
 #include "../Render/Graphics.h"
 #include "../Render/Renderer.h"

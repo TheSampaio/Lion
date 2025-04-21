@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../Kind/Size.h"
+#include "../Type/Size.h"
 
 namespace Lion
 {

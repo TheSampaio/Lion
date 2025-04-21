@@ -19,7 +19,7 @@ project "Sandbox"
         "%{dependencies.glad.include}",
         "%{dependencies.glfw.include}",
         "%{dependencies.glm.include}",
-        -- "%{dependencies.imgui.include}",
+        "%{dependencies.imgui.include}",
         "%{dependencies.spdlog.include}",
         "%{dependencies.stb.include}",
     }
