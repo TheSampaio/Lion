@@ -1,12 +1,13 @@
 # Directories
 
+.Out/
 .vs/
 .vscode/
-.Out/
 
 # Files
 
+*.filters
+*.ini
 *.sln
 *.user
 *.vcxproj
-*.filters

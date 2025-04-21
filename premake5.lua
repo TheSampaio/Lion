@@ -47,10 +47,10 @@ workspace "Lion"
         include = "%{wks.location}/Vendor/glm/include",
     }
 
-    -- dependencies["imgui"] = {
-    --     include = "%{wks.location}/Vendor/imgui/include",
-    --     lib = "imgui",
-    -- }
+    dependencies["imgui"] = {
+        include = "%{wks.location}/Vendor/imgui/include",
+        lib = "imgui",
+    }
 
     dependencies["spdlog"] = {
         include = "%{wks.location}/Vendor/spdlog/include",
@@ -66,7 +66,7 @@ group ". External Dependencies"
     include "Vendor/glad"
     include "Vendor/glfw"
     include "Vendor/glm"
-    -- include "Vendor/imgui"
+    include "Vendor/imgui"
     include "Vendor/spdlog"
     include "Vendor/stb"
 group ""

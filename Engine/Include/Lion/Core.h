@@ -13,16 +13,16 @@
 #include "../Source/Core/Window.h"
 
 // Event
-#include "../Source/Events/Event.h"
-#include "../Source/Events/EventDispatcher.h"
-#include "../Source/Events/EventInput.h"
-#include "../Source/Events/EventWindow.h"
+#include "../Source/Signal/Event.h"
+#include "../Source/Signal/EventDispatcher.h"
+#include "../Source/Signal/EventInput.h"
+#include "../Source/Signal/EventWindow.h"
 
 // Kind
-#include "../Source/Kind/Allocators.h"
-#include "../Source/Kind/Depth.h"
-#include "../Source/Kind/Macros.h"
-#include "../Source/Kind/Primitives.h"
+#include "../Source/Type/Allocators.h"
+#include "../Source/Type/Depth.h"
+#include "../Source/Type/Macros.h"
+#include "../Source/Type/Primitives.h"
 
 // Logic
 #include "../Source/Logic/Actor.h"

@@ -25,7 +25,7 @@ project "Lion"
         "%{dependencies.glad.include}",
         "%{dependencies.glfw.include}",
         "%{dependencies.glm.include}",
-        -- "%{dependencies.imgui.include}",
+        "%{dependencies.imgui.include}",
         "%{dependencies.spdlog.include}",
         "%{dependencies.stb.include}",
     }
@@ -33,7 +33,7 @@ project "Lion"
     links {
         "%{dependencies.glad.lib}",
         "%{dependencies.glfw.lib}",
-        -- "%{dependencies.imgui.lib}",
+        "%{dependencies.imgui.lib}",
         "%{dependencies.stb.lib}",
     }
 

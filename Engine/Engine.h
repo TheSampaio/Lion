@@ -16,8 +16,9 @@
 
 #endif
 
+// Disable ALL Warnings
 #pragma warning(push, 0)
-#pragma warning(disable : 900 1694 2567 6294 26495 26498 26800)
+#pragma warning(disable: 4805 6294 6011 26498 28182 33010)
 
 	// Standard
 	#include <algorithm>	   // For std::swap
@@ -40,9 +41,9 @@
 	#include <glad/glad.h>
 	#include <glfw/glfw3.h>
 
-	//#include <imgui/imgui.h>
-	//#include <imgui/backends/imgui_impl_opengl3.h>
-	//#include <imgui/backends/imgui_impl_glfw.h>
+	#include <imgui/imgui.h>
+	#include <imgui/backends/imgui_impl_glfw.h>
+	#include <imgui/backends/imgui_impl_opengl3.h>
 
 	#include <spdlog/spdlog.h>
 	#include <stb_image/stb_image.h>
@@ -58,6 +59,6 @@
 
 #pragma warning(pop)
 
-#include "Source/Kind/Allocators.h"
-#include "Source/Kind/Macros.h"
-#include "Source/Kind/Primitives.h"
+#include "Source/Type/Allocators.h"
+#include "Source/Type/Macros.h"
+#include "Source/Type/Primitives.h"

@@ -5,8 +5,8 @@
 #include "Texture.h"
 
 #include "../Core/Log.h"
-#include "../Kind/Depth.h"
 #include "../Math/Transform.h"
+#include "../Type/Depth.h"
 
 namespace Lion
 {
