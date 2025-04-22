@@ -107,6 +107,12 @@ namespace Lion
 		// Initializes Window, Graphics and Renderer
 		Initialize();
 
+#ifdef LN_DEBUG
+		// Show graphics information
+		Graphics::ShowSpecification();
+
+#endif // LN_DEBUG
+
 		// Window's events sign up
 		Window::SetEventCallback(LION_BIND_EVENT(Application::OnEvent));
 

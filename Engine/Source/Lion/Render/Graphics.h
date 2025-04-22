@@ -30,5 +30,6 @@ namespace Lion
         static bool Initialize();
         static void ClearBuffers();
         static void SwapBuffers();
+        static void ShowSpecification();
 	};
 }

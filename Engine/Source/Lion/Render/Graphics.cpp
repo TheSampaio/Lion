@@ -39,7 +39,7 @@ namespace Lion
         
         if (!gladLoadGL())
         {
-            Log::Console(LogLevel::Error, "[Graphics] GLAD initialization failed on engine side. Check if OpenGL context is correctly bound.");
+            Log::Console(LogLevel::Error, "[Graphics] GLAD initialization failed.");
             return false;
         }
 
@@ -64,5 +64,11 @@ namespace Lion
     {
         glfwSwapInterval(sInstance->mIsVerticalSynchronizedEnabled);
         glfwSwapBuffers(Window::GetId());
+    }
+
+    void Graphics::ShowSpecification()
+    {
+        Log::Console(LogLevel::Information, LION_FORMAT_TEXT("[Graphics] Graphics Card:  {}.", reinterpret_cast<const char8*>(glGetString(GL_RENDERER))));
+        Log::Console(LogLevel::Information, LION_FORMAT_TEXT("[Graphics] OpenGL Version: {}.", reinterpret_cast<const char8*>(glGetString(GL_VERSION))));
     }
 }
