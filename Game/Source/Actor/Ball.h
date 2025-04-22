@@ -1,6 +1,6 @@
 #pragma once
 
-#include <Lion/Core.h>
+#include <Lion/Lion.h>
 
 class Ball : public Lion::Actor
 {

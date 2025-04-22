@@ -31,7 +31,7 @@ void GameLayer::OnRender()
 void GameLayer::OnEvent(Event& event)
 {
 	EventDispatcher dispatcher(event);
-	dispatcher.Bind<EventWindowResize>(LN_EVENT_BIND(GameLayer::OnEventWindowResize));
+	dispatcher.Bind<EventWindowResize>(LION_BIND_EVENT(GameLayer::OnEventWindowResize));
 }
 
 bool GameLayer::OnEventWindowResize(const EventWindowResize& event)

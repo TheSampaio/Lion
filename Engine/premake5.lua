@@ -8,7 +8,7 @@ project "Lion"
     objdir    ("%{wks.location}/.Out/Obj/" .. output_dir .. "%{prj.name}")
 
     pchheader("Engine.h")
-    pchsource("%{prj.location}/Engine.cpp")
+    pchsource("Engine.cpp")
 
     files {
         "%{prj.location}/**.h",
@@ -17,7 +17,8 @@ project "Lion"
     }
 
     includedirs {
-        "%{prj.location}",
+        "%{wks.location}/Engine",
+        "%{wks.location}/Engine/Source",
     }
 
     externalincludedirs {

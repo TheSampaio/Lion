@@ -25,6 +25,9 @@ workspace "Lion"
         runtime "Release"
         linkoptions { "/SUBSYSTEM:WINDOWS" }
 
+    filter "action:vs*"
+        defines { "LN_DISABLE_WARNINGS=6294 26495 26498 26800" }
+
     output_dir = "%{cfg.buildcfg}/"
 
     dependencies = {}
