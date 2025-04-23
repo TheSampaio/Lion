@@ -1,10 +1,10 @@
 #include "Engine.h"
 #include "Graphics.h"
 
-#include "Lion/Core/Log.h"
-#include "Lion/Core/Window.h"
-#include "Lion/Render/RenderCommand.h"
-#include "Lion/Type/Macro.h"
+#include <Lion/Core/Log.h>
+#include <Lion/Core/Window.h>
+#include <Lion/Render/RenderCommand.h>
+#include <Lion/Type/Macro.h>
 
 namespace Lion
 {

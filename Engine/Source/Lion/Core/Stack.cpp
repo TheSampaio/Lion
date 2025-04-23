@@ -1,7 +1,7 @@
 #include "Engine.h"
 #include "Stack.h"
 
-#include "Layer.h"
+#include <Lion/Core/Layer.h>
 
 namespace Lion
 {

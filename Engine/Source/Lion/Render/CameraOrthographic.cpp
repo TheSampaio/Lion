@@ -1,8 +1,8 @@
 #include "Engine.h"
 #include "CameraOrthographic.h"
 
-#include "../Core/Window.h"
-#include "../Core/Log.h"
+#include <Lion/Core/Log.h>
+#include <Lion/Core/Window.h>
 
 namespace Lion
 {

@@ -1,7 +1,7 @@
 #include "Engine.h"
 #include "Texture.h"
 
-#include "../Core/Log.h"
+#include <Lion/Core/Log.h>
 
 namespace Lion
 {

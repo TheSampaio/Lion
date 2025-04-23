@@ -1,10 +1,10 @@
 #include "Engine.h"
 #include "Window.h"
 
-#include "Log.h"
+#include <Lion/Core/Log.h>
 
-#include "../Signal/EventWindow.h"
-#include "../Signal/EventInput.h"
+#include <Lion/Signal/EventInput.h>
+#include <Lion/Signal/EventWindow.h>
 
 namespace Lion
 {

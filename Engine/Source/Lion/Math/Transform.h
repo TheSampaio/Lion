@@ -1,6 +1,5 @@
 #pragma once
 
-#include <Lion/Base/Platform.h>
 #include <Lion/Math/Vector.h>
 
 namespace Lion

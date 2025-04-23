@@ -1,7 +1,7 @@
 #include "Engine.h"
 #include "Camera.h"
 
-#include "../Core/Window.h"
+#include <Lion/Core/Window.h>
 
 namespace Lion
 {

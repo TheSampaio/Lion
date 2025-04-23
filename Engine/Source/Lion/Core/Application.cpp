@@ -1,20 +1,20 @@
 #include "Engine.h"
 #include "Application.h"
 
-#include "Asset.h"
-#include "Clock.h"
-#include "Input.h"
-#include "Layer.h"
-#include "Log.h"
-#include "Stack.h"
-#include "Window.h"
+#include <Lion/Core/Asset.h>
+#include <Lion/Core/Clock.h>
+#include <Lion/Core/Input.h>
+#include <Lion/Core/Layer.h>
+#include <Lion/Core/Log.h>
+#include <Lion/Core/Stack.h>
+#include <Lion/Core/Window.h>
 
-#include "../Signal/Event.h"
-#include "../Signal/EventDispatcher.h"
-#include "../Signal/EventWindow.h"
+#include <Lion/Signal/Event.h>
+#include <Lion/Signal/EventDispatcher.h>
+#include <Lion/Signal/EventWindow.h>
 
-#include "../Render/Graphics.h"
-#include "../Render/Renderer.h"
+#include <Lion/Render/Graphics.h>
+#include <Lion/Render/Renderer.h>
 
 namespace Lion
 {
