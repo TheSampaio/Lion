@@ -1,8 +1,8 @@
 #include "Engine.h"
 #include "Scene.h"
 
-#include "Actor.h"
-#include "Entity.h"
+#include <Lion/Logic/Actor.h>
+#include <Lion/Logic/Entity.h>
 
 namespace Lion
 {

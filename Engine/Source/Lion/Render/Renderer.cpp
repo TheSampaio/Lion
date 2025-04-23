@@ -1,11 +1,11 @@
 #include "Engine.h"
 #include "Renderer.h"
 
-#include "Camera.h"
-#include "RenderCommand.h"
-#include "Sprite.h"
+#include <Lion/Core/Log.h>
 
-#include "../Core/Log.h"
+#include <Lion/Render/Camera.h>
+#include <Lion/Render/RenderCommand.h>
+#include <Lion/Render/Sprite.h>
 
 namespace Lion
 {

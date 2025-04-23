@@ -1,7 +1,7 @@
 #include "Engine.h"
 #include "Input.h"
 
-#include "Window.h"
+#include <Lion/Core/Window.h>
 
 namespace Lion
 {

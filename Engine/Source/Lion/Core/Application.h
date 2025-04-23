@@ -1,7 +1,5 @@
 #pragma once
 
-#include <Lion/Base/Platform.h>
-
 #ifndef LN_SHIPPING
 	int main(int argc, const char* argv[]);
 #else

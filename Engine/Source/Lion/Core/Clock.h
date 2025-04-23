@@ -1,6 +1,5 @@
 #pragma once
 
-#include <Lion/Base/Platform.h>
 #include <Lion/Logic/Timer.h>
 
 namespace Lion

@@ -1,7 +1,5 @@
 #pragma once
 
-#include <Lion/Base/Platform.h>
-
 namespace Lion
 {
 	class Application;

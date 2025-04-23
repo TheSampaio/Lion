@@ -1,7 +1,5 @@
 #pragma once
 
-#include <Lion/Base/Platform.h>
-
 // This class was adapted from the "OmegaMath" library to serve as the core math utility in the Lion engine.
 namespace Lion
 {

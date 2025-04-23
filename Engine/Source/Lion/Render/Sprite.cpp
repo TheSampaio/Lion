@@ -1,12 +1,13 @@
 #include "Engine.h"
 #include "Sprite.h"
 
-#include "Renderer.h"
-#include "Texture.h"
+#include <Lion/Core/Log.h>
 
-#include "../Core/Log.h"
-#include "../Math/Transform.h"
-#include "../Type/Depth.h"
+#include <Lion/Render/Renderer.h>
+#include <Lion/Render/Texture.h>
+
+#include <Lion/Math/Transform.h>
+#include <Lion/Type/Depth.h>
 
 namespace Lion
 {

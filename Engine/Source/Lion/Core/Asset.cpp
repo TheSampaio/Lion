@@ -1,7 +1,7 @@
 #include "Engine.h"
 #include "Asset.h"
 
-#include "Log.h"
+#include <Lion/Core/Log.h>
 
 namespace Lion
 {

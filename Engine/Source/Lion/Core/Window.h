@@ -1,6 +1,5 @@
 #pragma once
 
-#include <Lion/Base/Platform.h>
 #include <Lion/Type/Size.h>
 
 namespace Lion
