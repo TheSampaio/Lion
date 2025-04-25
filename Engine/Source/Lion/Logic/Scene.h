@@ -14,8 +14,8 @@ namespace Lion
 		LION_API Scene() = default;
 		virtual LION_API ~Scene() = default;
 
-		virtual void Add(Reference<Entity> entity);
-		virtual void Remove(Reference<Entity> entity);
+		virtual LION_API void Add(Reference<Entity> entity);
+		virtual LION_API void Remove(Reference<Entity> entity);
 
 		LION_API void OnUpdate();
 		LION_API void OnRender();

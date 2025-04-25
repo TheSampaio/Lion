@@ -13,14 +13,20 @@ Want to build and run Lion Engine? Just follow these steps:
 
 2. **Clone the repository with submodules:**  
    Use the following command to clone the project along with its submodules:  
-   `git clone --recursive https://github.com/TheSampaio/Lion`  
+   ``` sh
+   git clone --recursive https://github.com/TheSampaio/Lion
+   ```  
    
    If you cloned the repository without submodules, run:  
-   `git submodule update --init`
+   ``` sh
+   git submodule update --init
+   ```
 
 3. **Generate project files:**  
    From the root folder, run the appropriate [Premake command for your IDE](https://premake.github.io/docs/Using-Premake). For example:  
-   `premake5 vs2022`
+   ``` sh
+   premake5 vs2022
+   ```
 
 4. **Open and build the project:**  
    Open the generated project with your IDE of choice, build it, and you're good to go!
