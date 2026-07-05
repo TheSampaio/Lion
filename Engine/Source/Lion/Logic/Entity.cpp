@@ -1,11 +1,19 @@
 #include "Engine.h"
 #include "Entity.h"
 
+#include <Lion/Logic/Scene.h>
+
 namespace Lion
 {
 	Entity::Entity()
 		: mTransform(MakeReference<Transform>())
 	{
+	}
+
+	void Entity::RemoveFromScene()
+	{
+		if (mScene)
+			mScene->Remove(this);
 	}
 
 	void Entity::RegisterComponent(Scope<Component> component, std::type_index type)

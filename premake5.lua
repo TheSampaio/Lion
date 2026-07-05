@@ -34,6 +34,7 @@ workspace "Lion"
 
     dependencies["box2d"] = {
         include = "%{wks.location}/Vendor/box2d/include",
+        lib = "box2d",
     }
 
     dependencies["glad"] = {

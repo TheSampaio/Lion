@@ -27,6 +27,9 @@ namespace Lion
 		// Returns the entity's Transform, always present and never null.
 		LION_API Reference<Transform> GetTransform() const { return mTransform; }
 
+		// Requests removal of this entity from its scene (deferred to the end of the frame).
+		LION_API void RemoveFromScene();
+
 		// Creates a component of type T, attaches it to this entity and returns it.
 		template<typename T, typename... Args>
 		T* AddComponent(Args&&... args)

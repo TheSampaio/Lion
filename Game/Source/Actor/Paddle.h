@@ -9,6 +9,7 @@ public:
 	void OnUpdate() override;
 
 private:
+	Lion::RigidBody2D* mBody = nullptr;
 	Lion::SpriteRenderer* mRenderer = nullptr;
 
 	const Lion::float32 mSpeed = 500.0f;

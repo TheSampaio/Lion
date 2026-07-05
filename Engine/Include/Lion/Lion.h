@@ -28,6 +28,11 @@
 #include <Lion/Math/Transform.h>
 #include <Lion/Math/Vector.h>
 
+// Physics
+#include <Lion/Physics/BoxCollider2D.h>
+#include <Lion/Physics/PhysicsWorld.h>
+#include <Lion/Physics/RigidBody2D.h>
+
 // Render
 #include <Lion/Render/CameraOrthographic.h>
 #include <Lion/Render/Graphics.h>
