@@ -29,9 +29,6 @@ project "Sandbox"
         "Lion",
     }
 
-    -- Run from the output folder so the game finds its resources the same way it ships.
-    debugdir "%{cfg.targetdir}"
-
     filter "configurations:Shipping"
         kind "WindowedApp"
 

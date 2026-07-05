@@ -1,6 +1,7 @@
 #include "Engine.h"
 #include "OpenGLShader.h"
 
+#include <Lion/Core/Filesystem.h>
 #include <Lion/Core/Log.h>
 
 namespace Lion
@@ -74,7 +75,7 @@ namespace Lion
 			Fragment = 1,
 		};
 
-		std::ifstream file(filePath, std::ios::binary);
+		std::ifstream file(ResolveResourcePath(filePath), std::ios::binary);
 
 		if (!file.is_open())
 		{
@@ -87,9 +88,13 @@ namespace Lion
 		std::string content = buffer.str();
 
 #ifdef LN_SHIPPING
-		// Shaders ship XOR-obfuscated so they cannot be read or edited as plain text on disk.
-		for (char& character : content)
-			character = static_cast<char>(static_cast<byte>(character) ^ kShaderObfuscationKey);
+		// Shipped shaders are XOR-obfuscated. A plaintext fallback (e.g. running from the project
+		// folder) still contains "#shader", so only de-obfuscate when it does not.
+		if (content.find("#shader") == std::string::npos)
+		{
+			for (char& character : content)
+				character = static_cast<char>(static_cast<byte>(character) ^ kShaderObfuscationKey);
+		}
 #endif
 
 		// Normalize line endings so plain and de-obfuscated sources parse identically.

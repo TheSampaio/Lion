@@ -1,6 +1,7 @@
 #include "Engine.h"
 #include "OpenGLTexture.h"
 
+#include <Lion/Core/Filesystem.h>
 #include <Lion/Core/Log.h>
 
 namespace Lion
@@ -18,7 +19,7 @@ namespace Lion
 
 		const char8* filename = filePath.c_str();
 		int32 width = 0, height = 0;
-		byte* bytes = stbi_load(filename, &width, &height, &mChannels, 0);
+		byte* bytes = stbi_load(ResolveResourcePath(filePath).c_str(), &width, &height, &mChannels, 0);
 
 		if (!bytes)
 		{
