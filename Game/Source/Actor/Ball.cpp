@@ -11,7 +11,7 @@ void Ball::OnAwake()
 
 	// Dynamic, frictionless, perfectly elastic ball with a fixed rotation.
 	RigidBody2D* body = AddComponent<RigidBody2D>(BodyType::Dynamic, true);
-	AddComponent<BoxCollider2D>(size.width, size.height, 1.0f, 0.0f, 1.0f);
+	AddComponent<CircleCollider2D>(size.width * 0.5f, 1.0f, 0.0f, 1.0f);
 
 	// Launch the ball (pixels per second). Applied once the body is created.
 	body->SetLinearVelocity(glm::vec2(250.0f, 350.0f));
