@@ -2,9 +2,22 @@
 #include "Clock.h"
 
 #include <Lion/Core/Window.h>
+#include <Lion/Render/RendererAPI.h>
 
 namespace Lion
 {
+#ifndef LN_SHIPPING
+    static const char8* GraphicsApiName()
+    {
+        switch (RendererAPI::GetAPI())
+        {
+            case GraphicsAPI::OpenGL: return "OpenGL";
+            case GraphicsAPI::Vulkan: return "Vulkan";
+            default:                  return "None";
+        }
+    }
+#endif
+
     Clock* Clock::sInstance = nullptr;
     float32 Clock::sFrameTime = 0.0f;
 
@@ -48,9 +61,9 @@ namespace Lion
             text << Window::GetTitle().c_str()
                 << " | FPS: " << sFrameCount
                 << " | MS: " << sFrameTime * 1000.0f
-                << " | API: OpenGL";
+                << " | API: " << GraphicsApiName();
 
-            glfwSetWindowTitle(Window::GetId(), text.str().c_str());
+            Window::SetDisplayTitle(text.str());
 
             sFrameCount = 0;
             sTotalTime -= 1.0f;

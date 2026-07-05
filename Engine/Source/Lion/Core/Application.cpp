@@ -158,10 +158,7 @@ namespace Lion
 
 	void Application::Initialize()
 	{
-		if (!TryInitialize(glfwInit(), "GLFW"))
-			return;
-
-		if(!TryInitialize(Window::Initialize(), "Window"))
+		if (!TryInitialize(Window::Initialize(), "Window"))
 			return;
 
 		if(!TryInitialize(Graphics::Initialize(), "Graphics"))

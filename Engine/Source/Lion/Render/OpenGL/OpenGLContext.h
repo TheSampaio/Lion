@@ -10,7 +10,7 @@ namespace Lion
 	class OpenGLContext : public GraphicsContext
 	{
 	public:
-		explicit OpenGLContext(GLFWwindow* windowHandle);
+		explicit OpenGLContext(void* windowHandle);
 
 		bool Init() override;
 		void SwapBuffers() override;
