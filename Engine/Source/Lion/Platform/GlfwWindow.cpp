@@ -1,6 +1,7 @@
 #include "Engine.h"
 #include "GlfwWindow.h"
 
+#include <Lion/Core/Filesystem.h>
 #include <Lion/Core/Log.h>
 #include <Lion/Render/RendererAPI.h>
 #include <Lion/Signal/EventInput.h>
@@ -177,7 +178,7 @@ namespace Lion
 	void GlfwWindow::SetIcon(const std::string& filePath)
 	{
 		int32 width = 0, height = 0, channels = 0;
-		byte* pixels = stbi_load(filePath.c_str(), &width, &height, &channels, 4); // Force RGBA.
+		byte* pixels = stbi_load(ResolveResourcePath(filePath).c_str(), &width, &height, &channels, 4); // Force RGBA.
 
 		if (!pixels)
 		{

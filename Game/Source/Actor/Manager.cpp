@@ -13,7 +13,7 @@ void Manager::OnAwake()
 {
 	// The manager owns the background sprite through its own transform and component.
 	GetTransform()->SetPosition(Vector(0.0f, 0.0f, Depth::Back));
-	AddComponent<SpriteRenderer>("Resource/Sprite/Brickout/background.jpg");
+	AddComponent<SpriteRenderer>("Sprite/Brickout/background.jpg");
 
 	// Losing happens once the ball falls below the bottom edge of the screen.
 	mLoseThresholdY = -(Window::GetSize().height / 2.0f);
@@ -54,11 +54,11 @@ void Manager::SpawnBricks()
 
 			switch (row)
 			{
-				case 0: texture = Asset::LoadTexture("brick_red",    "Resource/Sprite/Brickout/tile-3.png"); break;
-				case 1: texture = Asset::LoadTexture("brick_green",  "Resource/Sprite/Brickout/tile-1.png"); break;
-				case 2: texture = Asset::LoadTexture("brick_blue",   "Resource/Sprite/Brickout/tile-2.png"); break;
-				case 3: texture = Asset::LoadTexture("brick_yellow", "Resource/Sprite/Brickout/tile-5.png"); break;
-				case 4: texture = Asset::LoadTexture("brick_purple", "Resource/Sprite/Brickout/tile-4.png"); break;
+				case 0: texture = Asset::LoadTexture("brick_red",    "Sprite/Brickout/tile-3.png"); break;
+				case 1: texture = Asset::LoadTexture("brick_green",  "Sprite/Brickout/tile-1.png"); break;
+				case 2: texture = Asset::LoadTexture("brick_blue",   "Sprite/Brickout/tile-2.png"); break;
+				case 3: texture = Asset::LoadTexture("brick_yellow", "Sprite/Brickout/tile-5.png"); break;
+				case 4: texture = Asset::LoadTexture("brick_purple", "Sprite/Brickout/tile-4.png"); break;
 			}
 
 			const float32 x = positionX + col * spacingX;
