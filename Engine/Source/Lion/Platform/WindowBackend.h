@@ -14,8 +14,8 @@ namespace Lion
 		std::string title;
 		uint32 width = 0;
 		uint32 height = 0;
-		bool resizable = true;
 		std::function<void(Event&)> eventCallback;
+		bool resizable = true;
 	};
 
 	// Platform windowing backend.

@@ -61,6 +61,9 @@ namespace Lion
 		glfwSetWindowCloseCallback(mWindow, [](GLFWwindow* window)
 			{
 				WindowData& data = *static_cast<WindowData*>(glfwGetWindowUserPointer(window));
+				if (!data.eventCallback)
+					return;
+
 				EventWindowClose event;
 				data.eventCallback(event);
 			});
@@ -68,6 +71,8 @@ namespace Lion
 		glfwSetWindowFocusCallback(mWindow, [](GLFWwindow* window, int32 focused)
 			{
 				WindowData& data = *static_cast<WindowData*>(glfwGetWindowUserPointer(window));
+				if (!data.eventCallback)
+					return;
 
 				if (focused)
 				{
@@ -87,15 +92,18 @@ namespace Lion
 				data.width = static_cast<uint32>(width);
 				data.height = static_cast<uint32>(height);
 
-				EventWindowResize event(width, height);
+				if (!data.eventCallback)
+					return;
 
-				if (data.eventCallback)
-					data.eventCallback(event);
+				EventWindowResize event(width, height);
+				data.eventCallback(event);
 			});
 
 		glfwSetKeyCallback(mWindow, [](GLFWwindow* window, int32 key, int32 scancode, int32 action, int32 mods)
 			{
 				WindowData& data = *static_cast<WindowData*>(glfwGetWindowUserPointer(window));
+				if (!data.eventCallback)
+					return;
 
 				switch (action)
 				{
@@ -108,6 +116,8 @@ namespace Lion
 		glfwSetMouseButtonCallback(mWindow, [](GLFWwindow* window, int32 button, int32 action, int32 mods)
 			{
 				WindowData& data = *static_cast<WindowData*>(glfwGetWindowUserPointer(window));
+				if (!data.eventCallback)
+					return;
 
 				switch (action)
 				{
@@ -119,6 +129,9 @@ namespace Lion
 		glfwSetScrollCallback(mWindow, [](GLFWwindow* window, float64 xOffset, float64 yOffset)
 			{
 				WindowData& data = *static_cast<WindowData*>(glfwGetWindowUserPointer(window));
+				if (!data.eventCallback)
+					return;
+
 				EventInputMouseScroll event(static_cast<float32>(xOffset), static_cast<float32>(yOffset));
 				data.eventCallback(event);
 			});
@@ -126,6 +139,9 @@ namespace Lion
 		glfwSetCursorPosCallback(mWindow, [](GLFWwindow* window, float64 xPos, float64 yPos)
 			{
 				WindowData& data = *static_cast<WindowData*>(glfwGetWindowUserPointer(window));
+				if (!data.eventCallback)
+					return;
+
 				EventInputMouseMove event(static_cast<float32>(xPos), static_cast<float32>(yPos));
 				data.eventCallback(event);
 			});
