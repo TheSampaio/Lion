@@ -7,11 +7,9 @@ class Paddle : public Lion::Actor
 public:
 	void OnAwake() override;
 	void OnUpdate() override;
-	void OnRender() override;
 
 private:
-	Lion::Reference<Lion::Transform> mTransform;
-	Lion::Scope<Lion::Sprite> mSprite;
+	Lion::SpriteRenderer* mRenderer = nullptr;
 
 	const Lion::float32 mSpeed = 500.0f;
 };

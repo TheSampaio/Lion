@@ -4,47 +4,28 @@ using namespace Lion;
 
 void Paddle::OnAwake()
 {
-	mTransform = GetTransform();
-	mTransform->SetPosition(Vector(0.0f, -278.0f, Depth::Front));
-	mSprite = MakeScope<Sprite>("Resource/Sprite/Brickout/player.png");
+	GetTransform()->SetPosition(Vector(0.0f, -278.0f, Depth::Front));
+	mRenderer = AddComponent<SpriteRenderer>("Resource/Sprite/Brickout/player.png");
 }
 
 void Paddle::OnUpdate()
 {
-	const auto& field = Window::GetSize();
-	const float32 maxWidth = (field.width / 2.0f);
+	const auto& transform = GetTransform();
+	const float32 maxWidth = Window::GetSize().width / 2.0f;
+	const float32 halfSprite = mRenderer->GetSize().width / 2.0f;
 
 	if (Input::GetKeyPress(KeyCode::D))
-		mTransform->Translate(Vector(1.0f, 0.0f, 0.0f) * mSpeed * Clock::GetDeltaTime());
+		transform->Translate(Vector(1.0f, 0.0f, 0.0f) * mSpeed * Clock::GetDeltaTime());
 
 	else if (Input::GetKeyPress(KeyCode::A))
-		mTransform->Translate(-Vector(1.0f, 0.0f, 0.0f) * mSpeed * Clock::GetDeltaTime());
+		transform->Translate(Vector(-1.0f, 0.0f, 0.0f) * mSpeed * Clock::GetDeltaTime());
 
-	// Limits player position to the window client's area
-	if (mTransform->GetPosition().x + (mSprite->GetSize().width / 2.0f) >= maxWidth)
-	{
-		mTransform->SetPosition(
-			Vector(
-				maxWidth - (mSprite->GetSize().width / 2),
-				mTransform->GetPosition().y,
-				mTransform->GetPosition().z
-			)
-		);
-	}
+	// Keep the paddle inside the window client area.
+	const Vector position = transform->GetPosition();
 
-	else if (mTransform->GetPosition().x - (mSprite->GetSize().width / 2.0f) <= -maxWidth)
-	{
-		mTransform->SetPosition(
-			Vector(
-				-maxWidth + (mSprite->GetSize().width / 2),
-				mTransform->GetPosition().y,
-				mTransform->GetPosition().z
-			)
-		);
-	}
-}
+	if (position.x + halfSprite >= maxWidth)
+		transform->SetPosition(Vector(maxWidth - halfSprite, position.y, position.z));
 
-void Paddle::OnRender()
-{
-	mSprite->Draw(mTransform);
+	else if (position.x - halfSprite <= -maxWidth)
+		transform->SetPosition(Vector(-maxWidth + halfSprite, position.y, position.z));
 }

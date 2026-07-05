@@ -14,6 +14,8 @@
 	#include <memory>
 	#include <sstream>
 	#include <string>
+	#include <type_traits>    // For compile-time type checks (component constraints)
+	#include <typeindex>      // For std::type_index (component lookup)
 	#include <unordered_map>
 	#include <vector>
 

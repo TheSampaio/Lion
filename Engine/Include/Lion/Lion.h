@@ -18,6 +18,7 @@
 
 // Logic
 #include <Lion/Logic/Actor.h>
+#include <Lion/Logic/Component.h>
 #include <Lion/Logic/Entity.h>
 #include <Lion/Logic/Scene.h>
 #include <Lion/Logic/Timer.h>
@@ -32,6 +33,7 @@
 #include <Lion/Render/Graphics.h>
 #include <Lion/Render/Renderer.h>
 #include <Lion/Render/Sprite.h>
+#include <Lion/Render/SpriteRenderer.h>
 #include <Lion/Render/Texture.h>
 
 // Signal

@@ -10,25 +10,25 @@ namespace Lion
     {
         mEntities.push_back(entity);
         entity->mScene = shared_from_this();
-        entity->OnAwake();
+        entity->Awake();
     }
 
     void Scene::Remove(Reference<Entity> entity)
     {
         mEntities.remove(entity);
-        entity->OnDestroy();
+        entity->Destroy();
     }
 
     void Scene::OnUpdate()
     {
         for (auto& entity : mEntities)
-            entity->OnUpdateBegin();
+            entity->UpdateBegin();
 
         for (auto& entity : mEntities)
-            entity->OnUpdate();
+            entity->Update();
 
         for (auto& entity : mEntities)
-            entity->OnUpdateEnd();
+            entity->UpdateEnd();
 
         CollisionDetection();
     }
@@ -36,7 +36,7 @@ namespace Lion
     void Scene::OnRender()
     {
         for (auto& entity : mEntities)
-            entity->OnRender();
+            entity->Render();
     }
 
     bool Scene::Collision(Reference<Actor> a, Reference<Actor> b)
