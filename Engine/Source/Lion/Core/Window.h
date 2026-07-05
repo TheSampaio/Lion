@@ -1,26 +1,41 @@
 #pragma once
 
+#include <Lion/Platform/WindowBackend.h>
 #include <Lion/Type/Size.h>
 
 namespace Lion
 {
     class Application;
     class Event;
-    class EventCallback;
     class Graphics;
 
+    // Engine-facing window facade.
+    //
+    // Exposes a windowing-library-agnostic API and delegates every native operation to a
+    // WindowBackend. No windowing library type appears here, so the rest of the engine is
+    // decoupled from the platform backend.
     class Window
     {
     public:
-        static LION_API GLFWwindow* GetId() { return sInstance->mId; }
+        // Opaque native window handle (consumed by the graphics backend to build its surface).
+        static LION_API void* GetNativeHandle() { return sInstance->mBackend->GetNativeHandle(); }
+
         static LION_API std::array<float32, 3> GetBackgroundColor() { return sInstance->mBackgroundColor; }
-        static LION_API Size GetSize() { return { sInstance->mData.Width, sInstance->mData.Height }; }
-        static LION_API std::string GetTitle() { return sInstance->mData.Title; }
+        static LION_API Size GetSize() { return { sInstance->mData.width, sInstance->mData.height }; }
+        static LION_API std::string GetTitle() { return sInstance->mData.title; }
 
         static LION_API void SetBackgroundColor(float32 red, float32 green, float32 blue);
         static LION_API void SetIcon(const std::string& icon);
+        static LION_API void SetResizable(bool enable);
         static LION_API void SetSize(uint32 width, uint32 height);
         static LION_API void SetTitle(const std::string& title);
+
+        // Sets the title-bar text without changing the stored base title (used for live stats).
+        static LION_API void SetDisplayTitle(const std::string& title);
+
+        // Immediate keyboard state, using engine key codes.
+        static LION_API bool IsKeyPressed(int32 keyCode) { return sInstance->mBackend->IsKeyPressed(keyCode); }
+        static LION_API bool IsKeyReleased(int32 keyCode) { return sInstance->mBackend->IsKeyReleased(keyCode); }
 
         static LION_API bool Close();
 
@@ -39,22 +54,14 @@ namespace Lion
     private:
         using EventCallback = std::function<void(Event&)>;
 
-        struct WindowData
-        {
-            std::string Title;
-            uint32 Width, Height;
-            EventCallback mEventCallback;
-        };
-
-        GLFWwindow* mId;
-        GLFWimage* mIcon;
         WindowData mData;
         std::array<float32, 3> mBackgroundColor;
+        std::string mIconPath;
+        Scope<WindowBackend> mBackend;
 
         Window();
-        ~Window();
 
-        static void SetEventCallback(const EventCallback& callback) { sInstance->mData.mEventCallback = callback; }
+        static void SetEventCallback(const EventCallback& callback) { sInstance->mData.eventCallback = callback; }
 
         static bool Initialize();
         static void Show();

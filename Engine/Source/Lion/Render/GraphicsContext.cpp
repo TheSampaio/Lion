@@ -12,7 +12,7 @@ namespace Lion
 		switch (RendererAPI::GetAPI())
 		{
 			case GraphicsAPI::OpenGL:
-				return MakeScope<OpenGLContext>(static_cast<GLFWwindow*>(windowHandle));
+				return MakeScope<OpenGLContext>(windowHandle);
 
 			case GraphicsAPI::Vulkan:
 			case GraphicsAPI::None:

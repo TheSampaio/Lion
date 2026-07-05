@@ -41,13 +41,13 @@ namespace Lion
 
     bool Graphics::Initialize()
     {
-        if (!Window::GetId())
+        if (!Window::GetNativeHandle())
         {
             Log::Console(LogLevel::Error, "[Graphics] No valid window reference. Initialization aborted.");
             return false;
         }
 
-        sInstance->mContext = GraphicsContext::Create(Window::GetId());
+        sInstance->mContext = GraphicsContext::Create(Window::GetNativeHandle());
 
         if (!sInstance->mContext || !sInstance->mContext->Init())
             return false;

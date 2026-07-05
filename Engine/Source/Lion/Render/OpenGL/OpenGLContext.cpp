@@ -5,8 +5,8 @@
 
 namespace Lion
 {
-	OpenGLContext::OpenGLContext(GLFWwindow* windowHandle)
-		: mWindowHandle(windowHandle)
+	OpenGLContext::OpenGLContext(void* windowHandle)
+		: mWindowHandle(static_cast<GLFWwindow*>(windowHandle))
 	{
 	}
 

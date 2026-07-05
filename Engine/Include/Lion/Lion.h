@@ -30,6 +30,7 @@
 
 // Physics
 #include <Lion/Physics/BoxCollider2D.h>
+#include <Lion/Physics/CircleCollider2D.h>
 #include <Lion/Physics/PhysicsWorld.h>
 #include <Lion/Physics/RigidBody2D.h>
 

@@ -21,12 +21,12 @@ namespace Lion
 
     bool Input::GetKeyPress(KeyCode keyCode)
     {
-        return static_cast<bool>(glfwGetKey(Window::GetId(), static_cast<int32>(keyCode)) == GLFW_PRESS);
+        return Window::IsKeyPressed(static_cast<int32>(keyCode));
     }
 
     bool Input::GetKeyRelease(KeyCode keyCode)
     {
-        return static_cast<bool>(glfwGetKey(Window::GetId(), static_cast<int32>(keyCode)) == GLFW_RELEASE);
+        return Window::IsKeyReleased(static_cast<int32>(keyCode));
     }
 
     bool Input::GetKeyTap(KeyCode keyCode)
