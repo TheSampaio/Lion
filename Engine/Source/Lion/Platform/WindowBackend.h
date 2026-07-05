@@ -14,6 +14,7 @@ namespace Lion
 		std::string title;
 		uint32 width = 0;
 		uint32 height = 0;
+		bool resizable = true;
 		std::function<void(Event&)> eventCallback;
 	};
 
@@ -41,6 +42,9 @@ namespace Lion
 
 		// Updates the text shown in the title bar (does not change the stored base title).
 		virtual void SetDisplayTitle(const std::string& title) = 0;
+
+		// Allows or forbids the user to resize the window at runtime.
+		virtual void SetResizable(bool enable) = 0;
 
 		// Loads and applies a window icon from an image file.
 		virtual void SetIcon(const std::string& filePath) = 0;

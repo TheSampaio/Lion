@@ -24,6 +24,7 @@ namespace Lion
 		bool ShouldClose() const override;
 
 		void SetDisplayTitle(const std::string& title) override;
+		void SetResizable(bool enable) override;
 		void SetIcon(const std::string& filePath) override;
 
 		bool IsKeyPressed(int32 keyCode) const override;

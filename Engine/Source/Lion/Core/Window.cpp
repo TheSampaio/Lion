@@ -17,7 +17,7 @@ namespace Lion
     }
 
     Window::Window()
-        : mData{ "Lion Engine", 800, 600, nullptr },
+        : mData{ "Lion Engine", 800, 600 },  // resizable/eventCallback keep their defaults.
         mBackgroundColor{ 0.0f, 0.0f, 0.0f },
         mBackend(WindowBackend::Create())
     {
@@ -61,6 +61,12 @@ namespace Lion
         // Apply immediately when the window already exists; otherwise it is applied at Initialize.
         if (sInstance->mBackend->GetNativeHandle())
             sInstance->mBackend->SetIcon(icon);
+    }
+
+    void Window::SetResizable(bool enable)
+    {
+        sInstance->mData.resizable = enable;
+        sInstance->mBackend->SetResizable(enable);  // Applied live too when the window exists.
     }
 
     void Window::SetSize(uint32 width, uint32 height)

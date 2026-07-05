@@ -36,6 +36,7 @@ namespace Lion
 		// OpenGL, or no context for Vulkan (which manages its own surface and device).
 		glfwWindowHint(GLFW_CLIENT_API, RendererAPI::GetAPI() == GraphicsAPI::OpenGL ? GLFW_OPENGL_API : GLFW_NO_API);
 		glfwWindowHint(GLFW_VISIBLE, false);
+		glfwWindowHint(GLFW_RESIZABLE, mData->resizable ? GLFW_TRUE : GLFW_FALSE);
 
 		mWindow = glfwCreateWindow(
 			static_cast<int32>(mData->width),
@@ -149,6 +150,12 @@ namespace Lion
 	{
 		if (mWindow)
 			glfwSetWindowTitle(mWindow, title.c_str());
+	}
+
+	void GlfwWindow::SetResizable(bool enable)
+	{
+		if (mWindow)
+			glfwSetWindowAttrib(mWindow, GLFW_RESIZABLE, enable ? GLFW_TRUE : GLFW_FALSE);
 	}
 
 	void GlfwWindow::SetIcon(const std::string& filePath)
