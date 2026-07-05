@@ -4,47 +4,40 @@ using namespace Lion;
 
 void Paddle::OnAwake()
 {
-	mTransform = GetTransform();
-	mTransform->SetPosition(Vector(0.0f, -278.0f, Depth::Front));
-	mSprite = MakeScope<Sprite>("Resource/Sprite/Brickout/player.png");
+	GetTransform()->SetPosition(Vector(0.0f, -260.0f, Depth::Front));
+
+	mRenderer = AddComponent<SpriteRenderer>("Resource/Sprite/Brickout/player.png");
+	const Size size = mRenderer->GetSize();
+
+	// Kinematic body: driven by input velocity, unaffected by the ball's impacts.
+	mBody = AddComponent<RigidBody2D>(BodyType::Kinematic);
+	AddComponent<BoxCollider2D>(size.width, size.height, 1.0f, 0.0f, 1.0f);
 }
 
 void Paddle::OnUpdate()
 {
-	const auto& field = Window::GetSize();
-	const float32 maxWidth = (field.width / 2.0f);
+	float32 velocityX = 0.0f;
 
 	if (Input::GetKeyPress(KeyCode::D))
-		mTransform->Translate(Vector(1.0f, 0.0f, 0.0f) * mSpeed * Clock::GetDeltaTime());
+		velocityX = mSpeed;
 
 	else if (Input::GetKeyPress(KeyCode::A))
-		mTransform->Translate(-Vector(1.0f, 0.0f, 0.0f) * mSpeed * Clock::GetDeltaTime());
+		velocityX = -mSpeed;
 
-	// Limits player position to the window client's area
-	if (mTransform->GetPosition().x + (mSprite->GetSize().width / 2.0f) >= maxWidth)
+	mBody->SetLinearVelocity(glm::vec2(velocityX, 0.0f));
+
+	// Keep the paddle inside the window client area.
+	const float32 maxX = (Window::GetSize().width / 2.0f) - (mRenderer->GetSize().width / 2.0f);
+	const Vector position = GetTransform()->GetPosition();
+
+	if (position.x > maxX)
 	{
-		mTransform->SetPosition(
-			Vector(
-				maxWidth - (mSprite->GetSize().width / 2),
-				mTransform->GetPosition().y,
-				mTransform->GetPosition().z
-			)
-		);
+		mBody->SetPosition(glm::vec2(maxX, position.y));
+		mBody->SetLinearVelocity(glm::vec2(0.0f, 0.0f));
 	}
-
-	else if (mTransform->GetPosition().x - (mSprite->GetSize().width / 2.0f) <= -maxWidth)
+	else if (position.x < -maxX)
 	{
-		mTransform->SetPosition(
-			Vector(
-				-maxWidth + (mSprite->GetSize().width / 2),
-				mTransform->GetPosition().y,
-				mTransform->GetPosition().z
-			)
-		);
+		mBody->SetPosition(glm::vec2(-maxX, position.y));
+		mBody->SetLinearVelocity(glm::vec2(0.0f, 0.0f));
 	}
-}
-
-void Paddle::OnRender()
-{
-	mSprite->Draw(mTransform);
 }

@@ -29,7 +29,7 @@ namespace Lion
 			return it->second;
 
 		// Load and cache it
-		auto texture = MakeReference<Texture>(filepath);
+		auto texture = Texture::Create(filepath);
 		sTextures[name] = texture;
 
 		return texture;

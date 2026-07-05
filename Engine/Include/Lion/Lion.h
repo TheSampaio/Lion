@@ -18,6 +18,7 @@
 
 // Logic
 #include <Lion/Logic/Actor.h>
+#include <Lion/Logic/Component.h>
 #include <Lion/Logic/Entity.h>
 #include <Lion/Logic/Scene.h>
 #include <Lion/Logic/Timer.h>
@@ -27,11 +28,17 @@
 #include <Lion/Math/Transform.h>
 #include <Lion/Math/Vector.h>
 
+// Physics
+#include <Lion/Physics/BoxCollider2D.h>
+#include <Lion/Physics/PhysicsWorld.h>
+#include <Lion/Physics/RigidBody2D.h>
+
 // Render
 #include <Lion/Render/CameraOrthographic.h>
 #include <Lion/Render/Graphics.h>
 #include <Lion/Render/Renderer.h>
 #include <Lion/Render/Sprite.h>
+#include <Lion/Render/SpriteRenderer.h>
 #include <Lion/Render/Texture.h>
 
 // Signal

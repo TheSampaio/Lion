@@ -5,35 +5,33 @@
 
 namespace Lion
 {
+    class Texture;
+    class Transform;
+
     struct SpriteInfo
     {
         Vector position = {};
         Vector rotation = {};
         Vector scale = {};
         Size size = {};
-        uint32 texture = 0;
+        Texture* texture = nullptr;  // Non-owning; the Sprite keeps the texture alive.
     };
 
-    class Texture;
-    class Transform;
-
-    struct Depth;
-    struct SpriteInfo;
-
+    // Lightweight drawable: owns a texture and submits a textured quad to the Renderer.
     class Sprite
     {
     public:
         LION_API Sprite(const std::string& filePath);
-        LION_API Sprite(const Reference<Texture> texture);
+        LION_API Sprite(const Reference<Texture>& texture);
 
-        // Gets sprites's size
+        // Returns the sprite's pixel size.
         Size LION_API GetSize();
 
-        // Gets sprites's center
+        // Returns the sprite's pixel center.
         Size LION_API GetCenter();
 
-        // Draws the sprite
-        void LION_API Draw(const Reference<Transform> transform);
+        // Submits the sprite to the Renderer using the given transform.
+        void LION_API Draw(const Reference<Transform>& transform);
 
     private:
         // Attributes

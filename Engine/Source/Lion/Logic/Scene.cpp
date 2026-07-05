@@ -1,50 +1,86 @@
 #include "Engine.h"
 #include "Scene.h"
 
-#include <Lion/Logic/Actor.h>
+#include <Lion/Core/Clock.h>
 #include <Lion/Logic/Entity.h>
+#include <Lion/Physics/PhysicsWorld.h>
 
 namespace Lion
 {
+    Scene::Scene()
+        : mPhysicsWorld(MakeScope<PhysicsWorld>())
+    {
+    }
+
+    Scene::~Scene() = default;
+
     void Scene::Add(Reference<Entity> entity)
     {
         mEntities.push_back(entity);
         entity->mScene = shared_from_this();
-        entity->OnAwake();
+        entity->Awake();
     }
 
     void Scene::Remove(Reference<Entity> entity)
     {
-        mEntities.remove(entity);
-        entity->OnDestroy();
+        // Deferred: the actual removal happens at the end of the frame (see FlushPendingRemoval).
+        mPendingRemoval.push_back(std::move(entity));
+    }
+
+    void Scene::Remove(Entity* entity)
+    {
+        // Keep the owning reference alive in the pending list until it is flushed.
+        for (const auto& candidate : mEntities)
+        {
+            if (candidate.get() == entity)
+            {
+                mPendingRemoval.push_back(candidate);
+                return;
+            }
+        }
+    }
+
+    void Scene::SetGravity(const glm::vec2& gravity)
+    {
+        mPhysicsWorld->SetGravity(gravity);
     }
 
     void Scene::OnUpdate()
     {
         for (auto& entity : mEntities)
-            entity->OnUpdateBegin();
+            entity->UpdateBegin();
 
         for (auto& entity : mEntities)
-            entity->OnUpdate();
+            entity->Update();
 
         for (auto& entity : mEntities)
-            entity->OnUpdateEnd();
+            entity->UpdateEnd();
 
-        CollisionDetection();
+        // Advance the simulation, then reflect the results on the entities and fire collisions.
+        mPhysicsWorld->Step(Clock::GetDeltaTime());
+
+        FlushPendingRemoval();
     }
 
     void Scene::OnRender()
     {
         for (auto& entity : mEntities)
-            entity->OnRender();
+            entity->Render();
     }
 
-    bool Scene::Collision(Reference<Actor> a, Reference<Actor> b)
+    void Scene::FlushPendingRemoval()
     {
-        return false;
-    }
+        for (auto& entity : mPendingRemoval)
+        {
+            const auto it = std::find(mEntities.begin(), mEntities.end(), entity);
 
-    void Scene::CollisionDetection()
-    {
+            if (it != mEntities.end())
+            {
+                mEntities.erase(it);
+                entity->Destroy();
+            }
+        }
+
+        mPendingRemoval.clear();
     }
 }

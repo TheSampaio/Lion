@@ -5,10 +5,9 @@ using namespace Lion;
 
 void Manager::OnAwake()
 {
-	mTransformBackground = MakeReference<Transform>();
-	mTransformBackground->SetPosition(Vector(0.0, 0.0f, Depth::Back));
-
-	mSpriteBackground = MakeScope<Sprite>("Resource/Sprite/Brickout/background.jpg");
+	// The manager owns the background sprite through its own transform and component.
+	GetTransform()->SetPosition(Vector(0.0f, 0.0f, Depth::Back));
+	AddComponent<SpriteRenderer>("Resource/Sprite/Brickout/background.jpg");
 
 	const float32 spacingX = 80.0f;
 	const float32 spacingY = 40.0f;
@@ -35,15 +34,10 @@ void Manager::OnAwake()
 				case 4: texture = Asset::LoadTexture("brick_purple", "Resource/Sprite/Brickout/tile-4.png"); break;
 			}
 
-			float32 x = positionX + col * spacingX;
-			float32 y = positionY - row * spacingY;
+			const float32 x = positionX + col * spacingX;
+			const float32 y = positionY - row * spacingY;
 
 			GetScene()->Add(MakeReference<Brick>(texture, Vector(x, y, Depth::Middle)));
 		}
 	}
-}
-
-void Manager::OnRender()
-{
-	mSpriteBackground->Draw(mTransformBackground);
 }

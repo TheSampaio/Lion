@@ -32,6 +32,7 @@ project "Lion"
     }
 
     links {
+        "%{dependencies.box2d.lib}",
         "%{dependencies.glad.lib}",
         "%{dependencies.glfw.lib}",
         "%{dependencies.imgui.lib}",
