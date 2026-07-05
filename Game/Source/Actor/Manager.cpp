@@ -108,6 +108,7 @@ void Manager::EndGame(State state)
 	}
 	else
 	{
+		mBall->SetVisible(false); // The ball has left the screen; hide it.
 		Window::SetBackgroundColor(0.25f, 0.0f, 0.0f);
 		Log::Console(LogLevel::Warning, "[Game] Game over! Press R to play again.");
 	}
