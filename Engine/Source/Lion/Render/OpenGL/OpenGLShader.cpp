@@ -5,6 +5,11 @@
 
 namespace Lion
 {
+#ifdef LN_SHIPPING
+	// Key used to XOR-obfuscate shader files at build time (see Scripts/ObfuscateShaders.ps1).
+	static constexpr byte kShaderObfuscationKey = 0x5A;
+#endif
+
 	OpenGLShader::OpenGLShader(const std::string& filePath)
 	{
 		const Source source = Parse(filePath);
@@ -69,7 +74,7 @@ namespace Lion
 			Fragment = 1,
 		};
 
-		std::ifstream file(filePath);
+		std::ifstream file(filePath, std::ios::binary);
 
 		if (!file.is_open())
 		{
@@ -77,11 +82,25 @@ namespace Lion
 			return {};
 		}
 
+		std::stringstream buffer;
+		buffer << file.rdbuf();
+		std::string content = buffer.str();
+
+#ifdef LN_SHIPPING
+		// Shaders ship XOR-obfuscated so they cannot be read or edited as plain text on disk.
+		for (char& character : content)
+			character = static_cast<char>(static_cast<byte>(character) ^ kShaderObfuscationKey);
+#endif
+
+		// Normalize line endings so plain and de-obfuscated sources parse identically.
+		content.erase(std::remove(content.begin(), content.end(), '\r'), content.end());
+
 		std::stringstream source[2];
 		Stage stage = Stage::None;
 		std::string line;
+		std::istringstream stream(content);
 
-		while (std::getline(file, line))
+		while (std::getline(stream, line))
 		{
 			if (line.find("#shader") != std::string::npos)
 			{

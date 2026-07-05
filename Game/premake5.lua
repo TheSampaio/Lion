@@ -29,6 +29,9 @@ project "Sandbox"
         "Lion",
     }
 
+    -- Run from the output folder so the game finds its resources the same way it ships.
+    debugdir "%{cfg.targetdir}"
+
     filter "configurations:Shipping"
         kind "WindowedApp"
 
@@ -36,3 +39,14 @@ project "Sandbox"
         buildoptions { "/utf-8" }
         defines "LN_PLATFORM_WIN"
         systemversion "latest"
+
+        -- Copy the Resource folder contents next to the executable (Shader/, Sprite/, ... at root).
+        postbuildcommands {
+            'xcopy /E /I /Y /Q "%{prj.location}Resource" "%{cfg.targetdir}"',
+        }
+
+    filter { "system:windows", "configurations:Shipping" }
+        -- Make shipped shaders unreadable so they cannot be edited in a text editor.
+        postbuildcommands {
+            'powershell -NoProfile -ExecutionPolicy Bypass -File "%{wks.location}Scripts/ObfuscateShaders.ps1" "%{cfg.targetdir}"',
+        }
