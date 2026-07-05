@@ -24,6 +24,16 @@ namespace Lion
     Graphics::Graphics()
     {
         mIsVerticalSynchronizedEnabled = false;
+        mIsVerticalSynchronizationDirty = true;  // Apply the initial swap interval on the first present.
+    }
+
+    void Graphics::SetVerticalSynchronization(bool enable)
+    {
+        if (sInstance->mIsVerticalSynchronizedEnabled == enable)
+            return;
+
+        sInstance->mIsVerticalSynchronizedEnabled = enable;
+        sInstance->mIsVerticalSynchronizationDirty = true;
     }
 
     bool Graphics::Initialize()
@@ -62,7 +72,13 @@ namespace Lion
 
     void Graphics::SwapBuffers()
     {
-        glfwSwapInterval(sInstance->mIsVerticalSynchronizedEnabled);
+        // The swap interval only needs to be reapplied when the user toggles VSync.
+        if (sInstance->mIsVerticalSynchronizationDirty)
+        {
+            glfwSwapInterval(sInstance->mIsVerticalSynchronizedEnabled ? 1 : 0);
+            sInstance->mIsVerticalSynchronizationDirty = false;
+        }
+
         glfwSwapBuffers(Window::GetId());
     }
 

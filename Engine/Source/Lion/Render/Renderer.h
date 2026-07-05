@@ -38,7 +38,7 @@ namespace Lion
         uint32 mEBO;
 
         std::vector<SpriteInfo*> mSpriteBuffer;
-        std::vector<int32> mTextureBuffer;
+        std::vector<uint32> mTextureSlots;  // Slot index -> GL texture id, rebuilt every frame.
         std::vector<Vertex> mVertexBuffer;
 
         Renderer();
@@ -46,7 +46,8 @@ namespace Lion
         static bool Initialize();
         static void Submit(SpriteInfo* spriteInfo);
 
-        static Vertex* CreateQuad(Vertex* target, SpriteInfo* spriteInfo);
+        // Writes the four vertices of a textured quad and returns the advanced buffer cursor.
+        static Vertex* CreateQuad(Vertex* target, const SpriteInfo* spriteInfo, int32 textureSlot);
 
         static ShaderSource Parse(const std::string& filepath);
         static uint32 Compile(uint32 type, const std::string& source);

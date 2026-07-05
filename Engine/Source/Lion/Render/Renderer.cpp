@@ -124,7 +124,7 @@ namespace Lion
         }
 
         self->mSpriteBuffer.reserve(maxQuadCount);
-        self->mTextureBuffer.resize(maxTextureCount, -1);
+        self->mTextureSlots.reserve(maxTextureCount);
         self->mVertexBuffer.resize(maxVertexCount);
 
 #ifdef LN_DEBUG
@@ -176,56 +176,60 @@ namespace Lion
 
         uint32 indexCount = 0;
 
+        // Rebuild the texture-slot table for this frame. Index 0 is reserved, so real
+        // sprites always map to a slot >= 1. Keeping this per frame avoids stale bindings.
+        auto& textureSlots = self->mTextureSlots;
+        textureSlots.assign(1, 0);  // Slot 0 is reserved and never sampled.
+
+        Vertex* buffer = self->mVertexBuffer.data();
+
+        for (const SpriteInfo* sprite : self->mSpriteBuffer)
         {
-            std::vector<uint32> boundTextures;
-            boundTextures.reserve(static_cast<uint32>(self->mSpriteBuffer.size()));
+            const uint32 textureId = sprite->texture;
 
-            Vertex* buffer = self->mVertexBuffer.data();
-
+            // Find the slot already assigned to this texture, if any (linear scan over <= 32).
+            int32 slot = -1;
+            for (uint32 i = 1; i < textureSlots.size(); ++i)
             {
-                // Start from 1 (0 is usually reserved)
-                uint64 nextSlot = 1;
-
-                for (const auto& sprite : self->mSpriteBuffer)
+                if (textureSlots[i] == textureId)
                 {
-                    uint32 textureId = sprite->texture;
-
-                    if (self->mTextureBuffer[textureId] == -1)
-                    {
-                        if (nextSlot >= maxTextureCount)
-                            continue;
-
-                        self->mTextureBuffer[textureId] = static_cast<int32>(nextSlot++);
-                        boundTextures.push_back(textureId);
-                    }
-
-                    // Assign texIndex to sprite
-                    sprite->texture = self->mTextureBuffer[textureId];
-
-                    // Create new quads dynamically
-                    buffer = CreateQuad(buffer, sprite);
-                    indexCount += 6;
+                    slot = static_cast<int32>(i);
+                    break;
                 }
             }
 
-            // Bind vertex buffer
-            glBindBuffer(GL_ARRAY_BUFFER, self->mVBO);
-            glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(Vertex) * self->mVertexBuffer.size(), self->mVertexBuffer.data());
-
+            // Assign a new slot when the texture is seen for the first time this frame.
+            if (slot < 0)
             {
-                // Setup texture array uniforms
-                int samplers[maxTextureCount] = { 0 };
+                if (textureSlots.size() >= maxTextureCount)
+                    continue;  // Texture budget exhausted for this batch; skip the sprite.
 
-                for (int i = 0; i < maxTextureCount; ++i)
-                    samplers[i] = i;
-
-                glUniform1iv(glGetUniformLocation(self->mShaderProgram, "uDiffuseTextureArray"), maxTextureCount, samplers);
+                slot = static_cast<int32>(textureSlots.size());
+                textureSlots.push_back(textureId);
             }
 
-            // Bind the unique textures
-            for (uint32 i = 0; i < boundTextures.size(); ++i)
-                glBindTextureUnit(i + 1, boundTextures[i]);
+            buffer = CreateQuad(buffer, sprite, slot);
+            indexCount += 6;
         }
+
+        // Upload only the vertices actually produced this frame.
+        const size_t vertexCount = static_cast<size_t>(buffer - self->mVertexBuffer.data());
+        glBindBuffer(GL_ARRAY_BUFFER, self->mVBO);
+        glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(Vertex) * vertexCount, self->mVertexBuffer.data());
+
+        {
+            // Sampler i reads from texture unit i.
+            int32 samplers[maxTextureCount] = { 0 };
+
+            for (int32 i = 0; i < static_cast<int32>(maxTextureCount); ++i)
+                samplers[i] = i;
+
+            glUniform1iv(glGetUniformLocation(self->mShaderProgram, "uDiffuseTextureArray"), maxTextureCount, samplers);
+        }
+
+        // Bind each used texture to the unit matching its slot index.
+        for (uint32 slot = 1; slot < textureSlots.size(); ++slot)
+            glBindTextureUnit(slot, textureSlots[slot]);
 
         // Draw
         RenderCommand::DrawIndexedQuads(indexCount);
@@ -245,39 +249,42 @@ namespace Lion
         Renderer::sInstance->mSpriteBuffer.push_back(spriteInfo);
     }
 
-    Vertex* Renderer::CreateQuad(Vertex* target, SpriteInfo* spriteInfo)
+    Vertex* Renderer::CreateQuad(Vertex* target, const SpriteInfo* spriteInfo, int32 textureSlot)
     {
         const float32 x = spriteInfo->position.x;
         const float32 y = spriteInfo->position.y;
         const float32 z = spriteInfo->position.z;
         const Size halfSize = spriteInfo->size * 0.5f;
+        const float32 slot = static_cast<float32>(textureSlot);
+
+        constexpr glm::vec4 white = { 1.0f, 1.0f, 1.0f, 1.0f };
 
         // Top-Left
         target->position = { x - halfSize.width, y + halfSize.height, z };
-        target->color = { 1.0f, 1.0f, 1.0f, 1.0f };
+        target->color = white;
         target->textureCoord = { 0.0f, 1.0f };
-        target->texture = static_cast<float32>(spriteInfo->texture);
+        target->texture = slot;
         target++;
 
         // Bottom-Left
         target->position = { x - halfSize.width, y - halfSize.height, z };
-        target->color = { 1.0f, 1.0f, 1.0f, 1.0f };
+        target->color = white;
         target->textureCoord = { 0.0f, 0.0f };
-        target->texture = static_cast<float32>(spriteInfo->texture);
+        target->texture = slot;
         target++;
 
         // Bottom-Right
         target->position = { x + halfSize.width, y - halfSize.height, z };
-        target->color = { 1.0f, 1.0f, 1.0f, 1.0f };
+        target->color = white;
         target->textureCoord = { 1.0f, 0.0f };
-        target->texture = static_cast<float32>(spriteInfo->texture);
+        target->texture = slot;
         target++;
 
         // Top-Right
         target->position = { x + halfSize.width, y + halfSize.height, z };
-        target->color = { 1.0f, 1.0f, 1.0f, 1.0f };
+        target->color = white;
         target->textureCoord = { 1.0f, 1.0f };
-        target->texture = static_cast<float32>(spriteInfo->texture);
+        target->texture = slot;
         target++;
 
         return target;
@@ -349,9 +356,9 @@ namespace Lion
                         shader = ShaderType::Fragment;
                 }
 
-                else
+                else if (shader != ShaderType::None)
                 {
-                    source[(int)shader] << line << '\n';
+                    source[static_cast<int32>(shader)] << line << '\n';
                 }
             }
         }

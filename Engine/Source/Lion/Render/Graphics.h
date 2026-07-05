@@ -7,7 +7,8 @@ namespace Lion
 	class Graphics
 	{
     public:
-        static LION_API void SetVerticalSynchronization(bool enable) { sInstance->mIsVerticalSynchronizedEnabled = enable; }
+        // Enables or disables vertical synchronization (applied immediately to the context).
+        static LION_API void SetVerticalSynchronization(bool enable);
 
         friend Application;
 
@@ -22,6 +23,7 @@ namespace Lion
 
     private:
         bool mIsVerticalSynchronizedEnabled;
+        bool mIsVerticalSynchronizationDirty;  // Deferred apply: the swap interval is set once per change.
 
         Graphics();
 
