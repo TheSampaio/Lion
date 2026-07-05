@@ -18,10 +18,10 @@ void Paddle::OnUpdate()
 {
 	float32 velocityX = 0.0f;
 
-	if (Input::GetKeyPress(KeyCode::D))
+	if (Input::GetKeyPress(KeyCode::D) || Input::GetKeyPress(KeyCode::Right))
 		velocityX = mSpeed;
 
-	else if (Input::GetKeyPress(KeyCode::A))
+	else if (Input::GetKeyPress(KeyCode::A) || Input::GetKeyPress(KeyCode::Left))
 		velocityX = -mSpeed;
 
 	mBody->SetLinearVelocity(glm::vec2(velocityX, 0.0f));

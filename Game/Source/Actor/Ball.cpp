@@ -3,19 +3,45 @@
 
 using namespace Lion;
 
+Ball::Ball(Reference<Paddle> paddle)
+	: mPaddle(std::move(paddle))
+{
+}
+
 void Ball::OnAwake()
 {
+	// The depth is kept by the physics sync, so set it once here.
+	GetTransform()->SetPosition(Vector(0.0f, 0.0f, Depth::Middle));
+
 	mRenderer = AddComponent<SpriteRenderer>("Resource/Sprite/Brickout/ball.png");
 
 	// Dynamic, frictionless, perfectly elastic ball with a fixed rotation and a circular shape.
 	mBody = AddComponent<RigidBody2D>(BodyType::Dynamic, true);
 	AddComponent<CircleCollider2D>(mRenderer->GetSize().width * 0.5f, 1.0f, 0.0f, 1.0f);
 
+	const float32 ballRadius = mRenderer->GetSize().height * 0.5f;
+	const float32 paddleHalfHeight = mPaddle->GetComponent<SpriteRenderer>()->GetSize().height * 0.5f;
+	mAttachOffsetY = paddleHalfHeight + ballRadius + kAttachGap;
+
 	Reset();
 }
 
 void Ball::OnUpdate()
 {
+	if (mState == State::Attached)
+	{
+		FollowPaddle();
+
+		// Launch the ball with Space or Enter.
+		if (Input::GetKeyPress(KeyCode::Space) || Input::GetKeyPress(KeyCode::Return))
+		{
+			mState = State::Launched;
+			mBody->SetLinearVelocity(LaunchVelocity());
+		}
+
+		return;
+	}
+
 	glm::vec2 velocity = mBody->GetLinearVelocity();
 
 	// Ignore a stopped ball (game over): do not relaunch it.
@@ -34,6 +60,10 @@ void Ball::OnUpdate()
 
 void Ball::OnCollision(Actor& other)
 {
+	// No steering while the ball is resting on the paddle.
+	if (mState != State::Launched)
+		return;
+
 	// Steering only happens on the paddle; walls and bricks bounce through the physics solver.
 	Paddle* paddle = dynamic_cast<Paddle*>(&other);
 
@@ -54,11 +84,8 @@ void Ball::OnCollision(Actor& other)
 
 void Ball::Reset()
 {
-	GetTransform()->SetPosition(Vector(kStartX, kStartY, Depth::Middle));
-
-	mBody->SetPosition(glm::vec2(kStartX, kStartY));
-	mBody->SetLinearVelocity(LaunchVelocity());
-
+	mState = State::Attached;
+	FollowPaddle();
 	SetVisible(true);
 }
 
@@ -76,4 +103,13 @@ glm::vec2 Ball::LaunchVelocity() const
 {
 	// Launch mostly upward with a slight rightward lean, at the constant travel speed.
 	return glm::normalize(glm::vec2(1.0f, 2.0f)) * kSpeed;
+}
+
+void Ball::FollowPaddle()
+{
+	// Sit just above the paddle and move with it while attached.
+	const Vector paddlePosition = mPaddle->GetTransform()->GetPosition();
+
+	mBody->SetLinearVelocity(glm::vec2(0.0f, 0.0f));
+	mBody->SetPosition(glm::vec2(paddlePosition.x, paddlePosition.y + mAttachOffsetY));
 }

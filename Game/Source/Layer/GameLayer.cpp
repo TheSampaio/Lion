@@ -24,9 +24,13 @@ void GameLayer::OnCreate()
 	mScene->Add(MakeReference<Wall>(Vector(-halfWidth, 0.0f, Depth::Back), thickness, field.height)); // Left
 	mScene->Add(MakeReference<Wall>(Vector(halfWidth, 0.0f, Depth::Back), thickness, field.height));  // Right
 
-	auto ball = MakeReference<Ball>();
+	// The paddle is created first so the ball can attach to it and follow it until launched.
+	auto paddle = MakeReference<Paddle>();
+	mScene->Add(paddle);
+
+	auto ball = MakeReference<Ball>(paddle);
 	mScene->Add(ball);
-	mScene->Add(MakeReference<Paddle>());
+
 	mScene->Add(MakeReference<Manager>(ball));
 }
 
