@@ -10,7 +10,11 @@ public:
 	void OnAwake() override;
 	void OnCollision(Lion::Actor& other) override;
 
+	// Whether the brick has been hit and is awaiting removal by the Manager.
+	bool IsDestroyed() const { return mDestroyed; }
+
 private:
 	Lion::Reference<Lion::Texture> mTexture;
 	Lion::Vector mPosition;
+	bool mDestroyed = false;
 };
