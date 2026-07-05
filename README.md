@@ -12,6 +12,7 @@
     <h2>📑 Table of Contents</h2>
     <ul>
       <li><a href="#preview">🚀 Preview</a></li>
+      <li><a href="#features">✨ Features</a></li>
       <li><a href="#structure">📂 Project Structure</a></li>
       <li><a href="#dependencies">🛠 Dependencies</a></li>
       <li><a href="#build-run">🏗 Build &amp; Run</a></li>
@@ -24,6 +25,18 @@
     <h2>🚀 Preview</h2>
     <p>Coming soon — screenshots, demos, and GIFs will be added here.</p>
     <img src=".github/image/lion-engine-showcase-transparent.png" alt="Lion Engine Showcase">
+    <p>The bundled <strong>Brickout</strong> sandbox is a playable, physics-driven demo. Move the paddle with <kbd>A</kbd> / <kbd>D</kbd>; the ball bounces off the walls and destroys bricks on contact.</p>
+  </div>
+
+  <div id="features">
+    <h2>✨ Features</h2>
+    <ul>
+      <li><strong>Entities &amp; Components</strong> — a Unity-like model where every <code>Entity</code> owns a <code>Transform</code> and can host reusable components (<code>SpriteRenderer</code>, <code>RigidBody2D</code>, <code>BoxCollider2D</code>) attached via <code>AddComponent&lt;T&gt;()</code>.</li>
+      <li><strong>2D Physics</strong> — <a href="https://github.com/erincatto/box2d">Box2D</a> integration through a <code>PhysicsWorld</code> with a fixed time step, transform synchronization and collision callbacks (<code>Actor::OnCollision</code>).</li>
+      <li><strong>Backend-agnostic renderer</strong> — every OpenGL call lives behind a small RHI (<code>RendererAPI</code>, <code>GraphicsContext</code>, <code>Shader</code>, <code>Buffer</code>, <code>VertexArray</code>, <code>Texture</code>), so a Vulkan backend can be added without touching high-level code.</li>
+      <li><strong>Batched sprite rendering</strong> — sprites are batched into a single dynamic buffer with per-frame texture slotting and depth sorting, issued in one draw call.</li>
+      <li><strong>Layer stack, events, input, logging and a resource cache</strong> for building games on top of the engine.</li>
+    </ul>
   </div>
 
   <div id="structure">
@@ -57,6 +70,7 @@
 │           │
 │           ├── Logic
 │           │   ├── Actor.cpp / .h
+│           │   ├── Component.cpp / .h
 │           │   ├── Entity.cpp / .h
 │           │   ├── Scene.cpp / .h
 │           │   └── Timer.cpp / .h
@@ -66,14 +80,33 @@
 │           │   ├── Transform.cpp / .h
 │           │   └── Vector.cpp / .h
 │           │
+│           ├── Physics
+│           │   ├── BoxCollider2D.cpp / .h
+│           │   ├── PhysicsWorld.cpp / .h
+│           │   └── RigidBody2D.cpp / .h
+│           │
 │           ├── Render
+│           │   ├── OpenGL
+│           │   │   ├── OpenGLBuffer.cpp / .h
+│           │   │   ├── OpenGLContext.cpp / .h
+│           │   │   ├── OpenGLRendererAPI.cpp / .h
+│           │   │   ├── OpenGLShader.cpp / .h
+│           │   │   ├── OpenGLTexture.cpp / .h
+│           │   │   └── OpenGLVertexArray.cpp / .h
+│           │   │
+│           │   ├── Buffer.cpp / .h
 │           │   ├── Camera.cpp / .h
 │           │   ├── CameraOrthographic.cpp / .h
 │           │   ├── Graphics.cpp / .h
+│           │   ├── GraphicsContext.cpp / .h
 │           │   ├── RenderCommand.cpp / .h
 │           │   ├── Renderer.cpp / .h
+│           │   ├── RendererAPI.cpp / .h
+│           │   ├── Shader.cpp / .h
 │           │   ├── Sprite.cpp / .h
-│           │   └── Texture.cpp / .h
+│           │   ├── SpriteRenderer.cpp / .h
+│           │   ├── Texture.cpp / .h
+│           │   └── VertexArray.cpp / .h
 │           │
 │           ├── Signal
 │           │   ├── Event.cpp / .h
@@ -101,7 +134,8 @@
 │       │   ├── Ball.cpp / .h
 │       │   ├── Brick.cpp / .h
 │       │   ├── Manager.cpp / .h
-│       │   └── Paddle.cpp / .h
+│       │   ├── Paddle.cpp / .h
+│       │   └── Wall.cpp / .h
 │       │
 │       ├── Layer
 │       │   ├── CoreLayer.cpp / .h
