@@ -1,39 +1,34 @@
 #include "Engine.h"
 #include "Sprite.h"
 
-#include <Lion/Core/Log.h>
-
 #include <Lion/Render/Renderer.h>
 #include <Lion/Render/Texture.h>
 
 #include <Lion/Math/Transform.h>
-#include <Lion/Type/Depth.h>
 
 namespace Lion
 {
     Sprite::Sprite(const std::string& filePath)
+        : mSpriteInfo(MakeScope<SpriteInfo>()),
+        mTexture(Texture::Create(filePath))
     {
-        mTexture = MakeReference<Texture>(filePath);
-        mSpriteInfo = MakeScope<SpriteInfo>();
-        mSpriteInfo->texture = mTexture->GetId();
+        mSpriteInfo->texture = mTexture.get();
     }
 
-    Sprite::Sprite(const Reference<Texture> texture)
-        : mTexture(texture)
+    Sprite::Sprite(const Reference<Texture>& texture)
+        : mSpriteInfo(MakeScope<SpriteInfo>()),
+        mTexture(texture)
     {
-        mSpriteInfo = MakeScope<SpriteInfo>();
-        mSpriteInfo->texture = mTexture->GetId();
+        mSpriteInfo->texture = mTexture.get();
     }
 
-    void Sprite::Draw(const Reference<Transform> transform)
+    void Sprite::Draw(const Reference<Transform>& transform)
     {
-        const auto& size = mTexture->GetSize();
-
         mSpriteInfo->position = transform->mPosition;
         mSpriteInfo->rotation = transform->mRotation;
         mSpriteInfo->scale = transform->mScale;
-        mSpriteInfo->size = size;
-        mSpriteInfo->texture = mTexture->GetId();
+        mSpriteInfo->size = mTexture->GetSize();
+        mSpriteInfo->texture = mTexture.get();
 
         Renderer::Submit(mSpriteInfo.get());
     }

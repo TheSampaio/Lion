@@ -3,11 +3,12 @@
 namespace Lion
 {
     class Application;
+    class GraphicsContext;
 
 	class Graphics
 	{
     public:
-        // Enables or disables vertical synchronization (applied immediately to the context).
+        // Enables or disables vertical synchronization (applied on the next present).
         static LION_API void SetVerticalSynchronization(bool enable);
 
         friend Application;
@@ -22,6 +23,8 @@ namespace Lion
         Graphics& operator=(const Graphics&) = delete;
 
     private:
+        Scope<GraphicsContext> mContext;
+
         bool mIsVerticalSynchronizedEnabled;
         bool mIsVerticalSynchronizationDirty;  // Deferred apply: the swap interval is set once per change.
 

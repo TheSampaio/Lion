@@ -1,50 +1,40 @@
 #include "Engine.h"
 #include "RenderCommand.h"
 
+#include <Lion/Render/RendererAPI.h>
+
 namespace Lion
 {
-	void RenderCommand::SetShaderInt(uint32 shaderProgram, const char8* name, int32 value)
+	Scope<RendererAPI> RenderCommand::sRendererAPI = nullptr;
+
+	void RenderCommand::Init()
 	{
-		glUniform1i(glGetUniformLocation(shaderProgram, name), value);
+		sRendererAPI = RendererAPI::Create();
+		sRendererAPI->Init();
 	}
 
-	void RenderCommand::SetShaderFloat(uint32 shaderProgram, const char8* name, float32 value)
+	void RenderCommand::Shutdown()
 	{
-		glUniform1f(glGetUniformLocation(shaderProgram, name), value);
+		sRendererAPI.reset();
 	}
 
-	void RenderCommand::SetShaderFloat3(uint32 shaderProgram, const char8* name, float32 value1, float32 value2, float32 value3)
+	void RenderCommand::SetViewport(int32 x, int32 y, uint32 width, uint32 height)
 	{
-		glUniform3f(glGetUniformLocation(shaderProgram, name), value1, value2, value3);
+		sRendererAPI->SetViewport(x, y, width, height);
 	}
 
-	void RenderCommand::SetShaderMatrix4(uint32 shaderProgram, const char8* name, glm::mat4 value)
+	void RenderCommand::SetClearColor(float32 red, float32 green, float32 blue, float32 alpha)
 	{
-		glUniformMatrix4fv(glGetUniformLocation(shaderProgram, name), 1, GL_FALSE, glm::value_ptr(value));
+		sRendererAPI->SetClearColor(red, green, blue, alpha);
 	}
 
-	void RenderCommand::BindTexture2D(uint32 texture)
+	void RenderCommand::Clear()
 	{
-		glBindTexture(GL_TEXTURE_2D, texture);
+		sRendererAPI->Clear();
 	}
 
-	void RenderCommand::Clear(uint32 mask)
+	void RenderCommand::DrawIndexed(uint32 indexCount)
 	{
-		glClear(mask);
-	}
-
-	void RenderCommand::CreateViewport(int32 x, int32 y, uint32 width, uint32 height)
-	{
-		glViewport(x, y, width, height);
-	}
-
-	void RenderCommand::ClearColor(float32 red, float32 green, float32 blue, float32 alpha)
-	{
-		glClearColor(red, green, blue, alpha);
-	}
-
-	void RenderCommand::DrawIndexedQuads(int32 count)
-	{
-		glDrawElements(GL_TRIANGLES, count * 6, GL_UNSIGNED_INT, nullptr);
+		sRendererAPI->DrawIndexed(indexCount);
 	}
 }
