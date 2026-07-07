@@ -182,34 +182,35 @@ namespace Lion
         const float32 x = spriteInfo->position.x;
         const float32 y = spriteInfo->position.y;
         const float32 z = spriteInfo->position.z;
-        const Size halfSize = spriteInfo->size * 0.5f;
+        const float32 halfWidth = spriteInfo->size.width * 0.5f * spriteInfo->scale.x;
+        const float32 halfHeight = spriteInfo->size.height * 0.5f * spriteInfo->scale.y;
         const float32 slot = static_cast<float32>(textureSlot);
 
         constexpr glm::vec4 white = { 1.0f, 1.0f, 1.0f, 1.0f };
 
         // Top-Left
-        target->position = { x - halfSize.width, y + halfSize.height, z };
+        target->position = { x - halfWidth, y + halfHeight, z };
         target->color = white;
         target->textureCoord = { 0.0f, 1.0f };
         target->texture = slot;
         target++;
 
         // Bottom-Left
-        target->position = { x - halfSize.width, y - halfSize.height, z };
+        target->position = { x - halfWidth, y - halfHeight, z };
         target->color = white;
         target->textureCoord = { 0.0f, 0.0f };
         target->texture = slot;
         target++;
 
         // Bottom-Right
-        target->position = { x + halfSize.width, y - halfSize.height, z };
+        target->position = { x + halfWidth, y - halfHeight, z };
         target->color = white;
         target->textureCoord = { 1.0f, 0.0f };
         target->texture = slot;
         target++;
 
         // Top-Right
-        target->position = { x + halfSize.width, y + halfSize.height, z };
+        target->position = { x + halfWidth, y + halfHeight, z };
         target->color = white;
         target->textureCoord = { 1.0f, 1.0f };
         target->texture = slot;

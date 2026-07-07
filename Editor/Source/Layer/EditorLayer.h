@@ -19,10 +19,13 @@ private:
 	Lion::Reference<Lion::CameraOrthographic> mCamera;
 	Lion::Reference<Lion::Scene> mScene;
 	Lion::Reference<Lion::Framebuffer> mFramebuffer;
+	Lion::Reference<Lion::Entity> mSelectedEntity;
 	glm::vec2 mViewportSize{ 0.0f, 0.0f };
 
 	void CreateDemoScene();
 	void DrawMenuBar();
 	void DrawViewport();
+	void DrawHierarchy();
+	void DrawProperties();
 	void BuildDefaultLayout(unsigned int dockspaceId);
 };

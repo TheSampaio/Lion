@@ -43,6 +43,9 @@ namespace Lion
 		// Removes every entity from the scene (used by New/Open in the editor).
 		LION_API void Clear();
 
+		// Immediately processes pending removals (for tools that don't run the update loop).
+		LION_API void FlushRemovals();
+
 	private:
 		std::list<Reference<Entity>> mEntities;
 		std::vector<Reference<Entity>> mPendingRemoval;

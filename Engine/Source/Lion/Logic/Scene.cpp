@@ -82,6 +82,11 @@ namespace Lion
             entity->Render();
     }
 
+    void Scene::FlushRemovals()
+    {
+        FlushPendingRemoval();
+    }
+
     void Scene::FlushPendingRemoval()
     {
         for (auto& entity : mPendingRemoval)

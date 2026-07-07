@@ -111,21 +111,8 @@ void EditorLayer::OnRenderUI()
 	// --- Panels -----------------------------------------------------------------------------
 
 	DrawViewport();
-
-	ImGui::Begin("Scene Hierarchy");
-	int32 index = 0;
-	for (const auto& entity : mScene->GetEntities())
-	{
-		(void)entity;
-		ImGui::BulletText("Entity %d", index++);
-	}
-	if (index == 0)
-		ImGui::TextDisabled("Empty scene");
-	ImGui::End();
-
-	ImGui::Begin("Properties");
-	ImGui::TextDisabled("Select an entity to edit its components.");
-	ImGui::End();
+	DrawHierarchy();
+	DrawProperties();
 
 	ImGui::Begin("Statistics");
 	const ImGuiIO& io = ImGui::GetIO();
@@ -153,6 +140,124 @@ void EditorLayer::DrawViewport()
 
 	ImGui::End();
 	ImGui::PopStyleVar();
+}
+
+void EditorLayer::DrawHierarchy()
+{
+	ImGui::Begin("Scene Hierarchy");
+
+	if (ImGui::Button("Add Entity"))
+	{
+		auto entity = MakeReference<Entity>();
+		mScene->Add(entity);
+		mSelectedEntity = entity;
+	}
+
+	if (mSelectedEntity)
+	{
+		ImGui::SameLine();
+
+		if (ImGui::Button("Delete"))
+		{
+			mScene->Remove(mSelectedEntity);
+			mScene->FlushRemovals();
+			mSelectedEntity = nullptr;
+		}
+	}
+
+	ImGui::Separator();
+
+	int32 index = 0;
+	for (const auto& entity : mScene->GetEntities())
+	{
+		ImGui::PushID(index);
+
+		const std::string label = "Entity " + std::to_string(index);
+		if (ImGui::Selectable(label.c_str(), entity == mSelectedEntity))
+			mSelectedEntity = entity;
+
+		ImGui::PopID();
+		index++;
+	}
+
+	if (index == 0)
+		ImGui::TextDisabled("Empty scene");
+
+	// Click empty space inside the panel to deselect.
+	if (ImGui::IsWindowHovered() && !ImGui::IsAnyItemHovered() && ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+		mSelectedEntity = nullptr;
+
+	ImGui::End();
+}
+
+void EditorLayer::DrawProperties()
+{
+	ImGui::Begin("Properties");
+
+	if (!mSelectedEntity)
+	{
+		ImGui::TextDisabled("Select an entity to edit its components.");
+		ImGui::End();
+		return;
+	}
+
+	if (ImGui::CollapsingHeader("Transform", ImGuiTreeNodeFlags_DefaultOpen))
+	{
+		const Reference<Transform> transform = mSelectedEntity->GetTransform();
+
+		Vector position = transform->GetPosition();
+		float32 positionValues[3] = { position.x, position.y, position.z };
+		if (ImGui::DragFloat3("Position", positionValues, 1.0f))
+			transform->SetPosition(Vector(positionValues[0], positionValues[1], positionValues[2]));
+
+		Vector rotation = transform->GetRotation();
+		float32 rotationValues[3] = { rotation.x, rotation.y, rotation.z };
+		if (ImGui::DragFloat3("Rotation", rotationValues, 0.5f))
+			transform->SetRotation(Vector(rotationValues[0], rotationValues[1], rotationValues[2]));
+
+		Vector scale = transform->GetScale();
+		float32 scaleValues[3] = { scale.x, scale.y, scale.z };
+		if (ImGui::DragFloat3("Scale", scaleValues, 0.01f))
+			transform->SetScale(Vector(scaleValues[0], scaleValues[1], scaleValues[2]));
+	}
+
+	if (const SpriteRenderer* renderer = mSelectedEntity->GetComponent<SpriteRenderer>())
+	{
+		if (ImGui::CollapsingHeader("Sprite Renderer", ImGuiTreeNodeFlags_DefaultOpen))
+			ImGui::Text("Texture: %s", renderer->GetTexturePath().c_str());
+	}
+
+	if (const RigidBody2D* body = mSelectedEntity->GetComponent<RigidBody2D>())
+	{
+		if (ImGui::CollapsingHeader("Rigid Body 2D", ImGuiTreeNodeFlags_DefaultOpen))
+		{
+			static const char8* bodyTypes[] = { "Static", "Kinematic", "Dynamic" };
+			ImGui::Text("Type: %s", bodyTypes[static_cast<int32>(body->GetBodyType())]);
+			ImGui::Text("Fixed Rotation: %s", body->IsFixedRotation() ? "true" : "false");
+		}
+	}
+
+	if (const BoxCollider2D* collider = mSelectedEntity->GetComponent<BoxCollider2D>())
+	{
+		if (ImGui::CollapsingHeader("Box Collider 2D", ImGuiTreeNodeFlags_DefaultOpen))
+		{
+			ImGui::Text("Size: %.1f x %.1f", collider->GetWidth(), collider->GetHeight());
+			ImGui::Text("Density: %.2f  Friction: %.2f  Restitution: %.2f",
+				collider->GetDensity(), collider->GetFriction(), collider->GetRestitution());
+		}
+	}
+
+	if (const CircleCollider2D* collider = mSelectedEntity->GetComponent<CircleCollider2D>())
+	{
+		if (ImGui::CollapsingHeader("Circle Collider 2D", ImGuiTreeNodeFlags_DefaultOpen))
+		{
+			ImGui::Text("Radius: %.1f", collider->GetRadius());
+			ImGui::Text("Density: %.2f  Friction: %.2f  Restitution: %.2f",
+				collider->GetDensity(), collider->GetFriction(), collider->GetRestitution());
+		}
+	}
+
+	ImGui::End();
 }
 
 void EditorLayer::DrawMenuBar()
