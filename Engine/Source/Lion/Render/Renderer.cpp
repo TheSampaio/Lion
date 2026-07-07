@@ -186,31 +186,41 @@ namespace Lion
         const float32 halfHeight = spriteInfo->size.height * 0.5f * spriteInfo->scale.y;
         const float32 slot = static_cast<float32>(textureSlot);
 
+        // Rotate the corner offsets around the sprite center (rotation.z is stored in degrees).
+        const float32 angle = glm::radians(spriteInfo->rotation.z);
+        const float32 cosAngle = std::cos(angle);
+        const float32 sinAngle = std::sin(angle);
+
+        const auto corner = [&](float32 offsetX, float32 offsetY) -> glm::vec3
+        {
+            return { x + offsetX * cosAngle - offsetY * sinAngle, y + offsetX * sinAngle + offsetY * cosAngle, z };
+        };
+
         constexpr glm::vec4 white = { 1.0f, 1.0f, 1.0f, 1.0f };
 
         // Top-Left
-        target->position = { x - halfWidth, y + halfHeight, z };
+        target->position = corner(-halfWidth, halfHeight);
         target->color = white;
         target->textureCoord = { 0.0f, 1.0f };
         target->texture = slot;
         target++;
 
         // Bottom-Left
-        target->position = { x - halfWidth, y - halfHeight, z };
+        target->position = corner(-halfWidth, -halfHeight);
         target->color = white;
         target->textureCoord = { 0.0f, 0.0f };
         target->texture = slot;
         target++;
 
         // Bottom-Right
-        target->position = { x + halfWidth, y - halfHeight, z };
+        target->position = corner(halfWidth, -halfHeight);
         target->color = white;
         target->textureCoord = { 1.0f, 0.0f };
         target->texture = slot;
         target++;
 
         // Top-Right
-        target->position = { x + halfWidth, y + halfHeight, z };
+        target->position = corner(halfWidth, halfHeight);
         target->color = white;
         target->textureCoord = { 1.0f, 1.0f };
         target->texture = slot;
