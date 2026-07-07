@@ -2,6 +2,8 @@
 
 #include <Lion/Lion.h>
 
+#include <imguizmo/ImGuizmo.h>
+
 // Root editor layer: sets up the window, renders a scene into a framebuffer and draws the
 // docked editor UI (menu bar + panels), displaying the framebuffer inside the Viewport panel.
 class EditorLayer : public Lion::Layer
@@ -15,6 +17,7 @@ public:
 private:
 	bool mShowDemo = false;
 	bool mLayoutInitialized = false;
+	ImGuizmo::OPERATION mGizmoOperation = ImGuizmo::TRANSLATE;
 
 	Lion::Reference<Lion::CameraOrthographic> mCamera;
 	Lion::Reference<Lion::Scene> mScene;

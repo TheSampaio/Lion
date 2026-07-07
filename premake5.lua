@@ -60,6 +60,11 @@ workspace "Lion"
         include = "%{wks.location}/Vendor/json/include",
     }
 
+    dependencies["imguizmo"] = {
+        include = "%{wks.location}/Vendor/imguizmo/include",
+        source = "%{wks.location}/Vendor/imguizmo/include/imguizmo/ImGuizmo.cpp",
+    }
+
     dependencies["spdlog"] = {
         include = "%{wks.location}/Vendor/spdlog/include",
     }

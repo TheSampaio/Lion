@@ -8,6 +8,7 @@ project "Editor"
     files {
         "%{prj.location}/**.h",
         "%{prj.location}/**.cpp",
+        "%{dependencies.imguizmo.source}",  -- compiled with the editor (editor-only dependency)
     }
 
     includedirs {
@@ -21,6 +22,8 @@ project "Editor"
         "%{dependencies.glfw.include}",
         "%{dependencies.glm.include}",
         "%{dependencies.imgui.include}",
+        "%{dependencies.imguizmo.include}",
+        "%{wks.location}/Vendor/imgui/include/imgui",  -- so ImGuizmo can include "imgui.h" directly
         "%{dependencies.spdlog.include}",
         "%{dependencies.stb.include}",
     }

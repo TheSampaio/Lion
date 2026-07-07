@@ -75,6 +75,8 @@ void EditorLayer::OnRender()
 
 void EditorLayer::OnRenderUI()
 {
+	ImGuizmo::BeginFrame();
+
 	DrawMenuBar();
 
 	// Fullscreen, borderless host window that holds the dockspace (below the main menu bar).
@@ -137,6 +139,52 @@ void EditorLayer::DrawViewport()
 	// Display the framebuffer's color texture, flipped vertically (OpenGL is bottom-up).
 	const auto textureId = static_cast<ImTextureID>(mFramebuffer->GetColorAttachment());
 	ImGui::Image(textureId, available, ImVec2(0.0f, 1.0f), ImVec2(1.0f, 0.0f));
+
+	const ImVec2 imageMin = ImGui::GetItemRectMin();
+	const ImVec2 imageSize = ImGui::GetItemRectSize();
+
+	// W/E/R switch the gizmo between move / rotate / scale (unless typing or dragging).
+	if (!ImGuizmo::IsUsing() && !ImGui::IsAnyItemActive())
+	{
+		if (ImGui::IsKeyPressed(ImGuiKey_W)) mGizmoOperation = ImGuizmo::TRANSLATE;
+		if (ImGui::IsKeyPressed(ImGuiKey_E)) mGizmoOperation = ImGuizmo::ROTATE;
+		if (ImGui::IsKeyPressed(ImGuiKey_R)) mGizmoOperation = ImGuizmo::SCALE;
+	}
+
+	if (mSelectedEntity)
+	{
+		ImGuizmo::SetOrthographic(true);
+		ImGuizmo::SetDrawlist();
+		ImGuizmo::SetRect(imageMin.x, imageMin.y, imageSize.x, imageSize.y);
+
+		const glm::mat4 view = mCamera->GetViewMatrix();
+		const glm::mat4 projection = mCamera->GetProjectionMatrix();
+
+		const Reference<Transform> transform = mSelectedEntity->GetTransform();
+		const Vector position = transform->GetPosition();
+		const Vector rotation = transform->GetRotation();
+		const Vector scale = transform->GetScale();
+
+		// Build the entity's model matrix (rotation in degrees, matching the Transform).
+		float32 translationValues[3] = { position.x, position.y, position.z };
+		float32 rotationValues[3] = { 0.0f, 0.0f, rotation.z };
+		float32 scaleValues[3] = { scale.x, scale.y, 1.0f };
+
+		float32 model[16];
+		ImGuizmo::RecomposeMatrixFromComponents(translationValues, rotationValues, scaleValues, model);
+
+		ImGuizmo::Manipulate(glm::value_ptr(view), glm::value_ptr(projection), mGizmoOperation, ImGuizmo::LOCAL, model);
+
+		if (ImGuizmo::IsUsing())
+		{
+			float32 newTranslation[3], newRotation[3], newScale[3];
+			ImGuizmo::DecomposeMatrixToComponents(model, newTranslation, newRotation, newScale);
+
+			transform->SetPosition(Vector(newTranslation[0], newTranslation[1], position.z));
+			transform->SetRotation(Vector(0.0f, 0.0f, newRotation[2]));
+			transform->SetScale(Vector(newScale[0], newScale[1], 1.0f));
+		}
+	}
 
 	ImGui::End();
 	ImGui::PopStyleVar();
