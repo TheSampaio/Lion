@@ -40,6 +40,9 @@ namespace Lion
 		// Whether the user requested the window to close.
 		virtual bool ShouldClose() const = 0;
 
+		// Programmatically requests the window to close (e.g. an editor "Exit" action).
+		virtual void RequestClose() = 0;
+
 		// Updates the text shown in the title bar (does not change the stored base title).
 		virtual void SetDisplayTitle(const std::string& title) = 0;
 

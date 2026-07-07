@@ -39,6 +39,9 @@ namespace Lion
 
         static LION_API bool Close();
 
+        // Requests the window to close (used by editor/menu "Exit" actions).
+        static LION_API void RequestClose();
+
         friend Application;
         friend Graphics;
 

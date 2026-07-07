@@ -163,6 +163,12 @@ namespace Lion
 		return glfwWindowShouldClose(mWindow);
 	}
 
+	void GlfwWindow::RequestClose()
+	{
+		if (mWindow)
+			glfwSetWindowShouldClose(mWindow, GLFW_TRUE);
+	}
+
 	void GlfwWindow::SetDisplayTitle(const std::string& title)
 	{
 		if (mWindow)
