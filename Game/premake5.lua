@@ -27,6 +27,7 @@ project "Sandbox"
 
     links {
         "Lion",
+        "%{dependencies.imgui.lib}",
     }
 
     filter "configurations:Shipping"

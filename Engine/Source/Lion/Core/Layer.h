@@ -24,6 +24,9 @@ namespace Lion
 		// OnRender
 		virtual void OnRender() {}
 
+		// ImGui / debug UI (called between the render pass and buffer swap)
+		virtual void OnRenderUI() {}
+
 		// OnEvent
 		virtual void OnEvent(Event& event) {};
 	};

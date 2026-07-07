@@ -3,6 +3,7 @@
 
 #include <Lion/Core/Asset.h>
 #include <Lion/Core/Clock.h>
+#include <Lion/Core/ImGuiLayer.h>
 #include <Lion/Core/Input.h>
 #include <Lion/Core/Layer.h>
 #include <Lion/Core/Log.h>
@@ -86,6 +87,10 @@ namespace Lion
 		Graphics::New();
 		Renderer::New();
 		Clock::New();
+
+		// Create the ImGui context now so the client can adopt it before Run() (see Launcher.h).
+		mImGuiLayer = MakeScope<ImGuiLayer>();
+		mImGuiLayer->CreateContext();
 	}
 
 	Application::~Application()
@@ -112,6 +117,9 @@ namespace Lion
 		Graphics::ShowSpecification();
 
 #endif // LN_DEBUG
+
+		// Immediate-mode UI backends, initialized once the graphics context is ready.
+		mImGuiLayer->InitBackend();
 
 		// Window's events sign up
 		Window::SetEventCallback(LION_BIND_EVENT(Application::OnEvent));
@@ -150,10 +158,21 @@ namespace Lion
 				for (Layer* layer : *mStack)
 					layer->OnRender();
 
+				// UI overlay (drawn on top of the scene)
+				mImGuiLayer->Begin();
+
+				for (Layer* layer : *mStack)
+					layer->OnRenderUI();
+
+				mImGuiLayer->End();
+
 				Graphics::SwapBuffers();
 			}
 
 		} while (!Window::Close());
+
+		// Release the UI while the graphics context is still alive.
+		mImGuiLayer->Shutdown();
 	}
 
 	void Application::Initialize()
