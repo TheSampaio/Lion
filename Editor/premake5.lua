@@ -33,9 +33,6 @@ project "Editor"
     filter "configurations:Shipping"
         kind "WindowedApp"
 
-    -- The editor runs from its output folder, next to the engine DLL and its resources.
-    debugdir "%{cfg.targetdir}"
-
     filter "system:windows"
         buildoptions { "/utf-8" }
         defines "LN_PLATFORM_WIN"
