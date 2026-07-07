@@ -39,6 +39,10 @@ namespace Lion
 		// Native Box2D handle, used by colliders to attach shapes.
 		b2BodyId GetBodyId() const { return mBodyId; }
 
+		// Configuration accessors (used by serialization).
+		BodyType GetBodyType() const { return mType; }
+		bool IsFixedRotation() const { return mFixedRotation; }
+
 		// Copies the simulated transform back to the owner entity (called by PhysicsWorld).
 		void SyncTransform();
 

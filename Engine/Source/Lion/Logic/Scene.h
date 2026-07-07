@@ -34,6 +34,15 @@ namespace Lion
 		// Sets the world gravity, in meters per second squared.
 		LION_API void SetGravity(const glm::vec2& gravity);
 
+		// Returns the world gravity, in meters per second squared.
+		LION_API glm::vec2 GetGravity() const;
+
+		// Entities currently in the scene (used by serialization and editor panels).
+		const std::list<Reference<Entity>>& GetEntities() const { return mEntities; }
+
+		// Removes every entity from the scene (used by New/Open in the editor).
+		LION_API void Clear();
+
 	private:
 		std::list<Reference<Entity>> mEntities;
 		std::vector<Reference<Entity>> mPendingRemoval;

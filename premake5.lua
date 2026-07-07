@@ -56,6 +56,10 @@ workspace "Lion"
         lib = "imgui",
     }
 
+    dependencies["json"] = {
+        include = "%{wks.location}/Vendor/json/include",
+    }
+
     dependencies["spdlog"] = {
         include = "%{wks.location}/Vendor/spdlog/include",
     }

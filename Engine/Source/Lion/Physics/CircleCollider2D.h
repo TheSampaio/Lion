@@ -19,6 +19,12 @@ namespace Lion
 
 		void OnAwake() override;
 
+		// Configuration accessors (used by serialization).
+		float32 GetRadius() const { return mRadius; }
+		float32 GetDensity() const { return mDensity; }
+		float32 GetFriction() const { return mFriction; }
+		float32 GetRestitution() const { return mRestitution; }
+
 	private:
 		float32 mRadius;
 		float32 mDensity;

@@ -6,7 +6,7 @@
 namespace Lion
 {
 	SpriteRenderer::SpriteRenderer(const std::string& filePath)
-		: mSprite(MakeScope<Sprite>(filePath))
+		: mSprite(MakeScope<Sprite>(filePath)), mTexturePath(filePath)
 	{
 	}
 

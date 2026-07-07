@@ -27,6 +27,9 @@ namespace Lion
 		// Sets the world gravity, in meters per second squared.
 		LION_API void SetGravity(const glm::vec2& gravity);
 
+		// Returns the current world gravity, in meters per second squared.
+		LION_API glm::vec2 GetGravity() const;
+
 		// Advances the simulation, syncs transforms and dispatches collisions.
 		void Step(float32 deltaTime);
 

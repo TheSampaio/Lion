@@ -113,10 +113,14 @@ void EditorLayer::OnRenderUI()
 	DrawViewport();
 
 	ImGui::Begin("Scene Hierarchy");
-	ImGui::TextDisabled("Demo scene");
-	ImGui::BulletText("Background");
-	ImGui::BulletText("Bricks x5");
-	ImGui::BulletText("Ball");
+	int32 index = 0;
+	for (const auto& entity : mScene->GetEntities())
+	{
+		(void)entity;
+		ImGui::BulletText("Entity %d", index++);
+	}
+	if (index == 0)
+		ImGui::TextDisabled("Empty scene");
 	ImGui::End();
 
 	ImGui::Begin("Properties");
@@ -153,10 +157,33 @@ void EditorLayer::DrawViewport()
 
 void EditorLayer::DrawMenuBar()
 {
+	static const char8* sceneFilter = "Lion Scene (*.json)\0*.json\0";
+
 	if (ImGui::BeginMainMenuBar())
 	{
 		if (ImGui::BeginMenu("File"))
 		{
+			if (ImGui::MenuItem("New Scene"))
+				mScene->Clear();
+
+			if (ImGui::MenuItem("Open Scene..."))
+			{
+				const std::string path = FileDialog::Open(sceneFilter);
+
+				if (!path.empty())
+					SceneSerializer::Deserialize(mScene, path);
+			}
+
+			if (ImGui::MenuItem("Save Scene As..."))
+			{
+				const std::string path = FileDialog::Save(sceneFilter, "json");
+
+				if (!path.empty())
+					SceneSerializer::Serialize(mScene, path);
+			}
+
+			ImGui::Separator();
+
 			if (ImGui::MenuItem("Exit", "Alt+F4"))
 				Window::RequestClose();
 

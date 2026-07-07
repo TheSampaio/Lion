@@ -1,0 +1,193 @@
+#include "Engine.h"
+#include "SceneSerializer.h"
+
+#include <nlohmann/json.hpp>
+
+#include <Lion/Core/Log.h>
+#include <Lion/Logic/Entity.h>
+#include <Lion/Logic/Scene.h>
+#include <Lion/Math/Transform.h>
+#include <Lion/Physics/BoxCollider2D.h>
+#include <Lion/Physics/CircleCollider2D.h>
+#include <Lion/Physics/RigidBody2D.h>
+#include <Lion/Render/SpriteRenderer.h>
+
+using Json = nlohmann::json;
+
+namespace Lion
+{
+	static const char8* BodyTypeToString(BodyType type)
+	{
+		switch (type)
+		{
+			case BodyType::Kinematic: return "Kinematic";
+			case BodyType::Dynamic:   return "Dynamic";
+			case BodyType::Static:    return "Static";
+		}
+
+		return "Static";
+	}
+
+	static BodyType BodyTypeFromString(const std::string& value)
+	{
+		if (value == "Kinematic") return BodyType::Kinematic;
+		if (value == "Dynamic")   return BodyType::Dynamic;
+		return BodyType::Static;
+	}
+
+	static Vector VectorFromJson(const Json& array)
+	{
+		return Vector(array.at(0).get<float32>(), array.at(1).get<float32>(), array.at(2).get<float32>());
+	}
+
+	bool SceneSerializer::Serialize(const Reference<Scene>& scene, const std::string& filePath)
+	{
+		Json root;
+
+		const glm::vec2 gravity = scene->GetGravity();
+		root["gravity"] = { gravity.x, gravity.y };
+		root["entities"] = Json::array();
+
+		for (const auto& entity : scene->GetEntities())
+		{
+			Json node;
+
+			const Reference<Transform> transform = entity->GetTransform();
+			const Vector position = transform->GetPosition();
+			const Vector rotation = transform->GetRotation();
+			const Vector scale = transform->GetScale();
+
+			node["transform"]["position"] = { position.x, position.y, position.z };
+			node["transform"]["rotation"] = { rotation.x, rotation.y, rotation.z };
+			node["transform"]["scale"]    = { scale.x, scale.y, scale.z };
+
+			Json components = Json::object();
+
+			if (const SpriteRenderer* renderer = entity->GetComponent<SpriteRenderer>())
+				components["SpriteRenderer"]["texture"] = renderer->GetTexturePath();
+
+			if (const RigidBody2D* body = entity->GetComponent<RigidBody2D>())
+			{
+				components["RigidBody2D"]["type"] = BodyTypeToString(body->GetBodyType());
+				components["RigidBody2D"]["fixedRotation"] = body->IsFixedRotation();
+			}
+
+			if (const BoxCollider2D* collider = entity->GetComponent<BoxCollider2D>())
+			{
+				components["BoxCollider2D"]["width"] = collider->GetWidth();
+				components["BoxCollider2D"]["height"] = collider->GetHeight();
+				components["BoxCollider2D"]["density"] = collider->GetDensity();
+				components["BoxCollider2D"]["friction"] = collider->GetFriction();
+				components["BoxCollider2D"]["restitution"] = collider->GetRestitution();
+			}
+
+			if (const CircleCollider2D* collider = entity->GetComponent<CircleCollider2D>())
+			{
+				components["CircleCollider2D"]["radius"] = collider->GetRadius();
+				components["CircleCollider2D"]["density"] = collider->GetDensity();
+				components["CircleCollider2D"]["friction"] = collider->GetFriction();
+				components["CircleCollider2D"]["restitution"] = collider->GetRestitution();
+			}
+
+			node["components"] = components;
+			root["entities"].push_back(node);
+		}
+
+		std::ofstream file(filePath);
+
+		if (!file.is_open())
+		{
+			Log::Console(LogLevel::Error, LION_FORMAT_TEXT("[SceneSerializer] Failed to write scene: '{}'.", filePath));
+			return false;
+		}
+
+		file << root.dump(2);
+		Log::Console(LogLevel::Success, LION_FORMAT_TEXT("[SceneSerializer] Saved scene: '{}'.", filePath));
+		return true;
+	}
+
+	bool SceneSerializer::Deserialize(const Reference<Scene>& scene, const std::string& filePath)
+	{
+		std::ifstream file(filePath);
+
+		if (!file.is_open())
+		{
+			Log::Console(LogLevel::Warning, LION_FORMAT_TEXT("[SceneSerializer] Failed to open scene: '{}'.", filePath));
+			return false;
+		}
+
+		Json root;
+
+		try
+		{
+			file >> root;
+		}
+		catch (const std::exception& exception)
+		{
+			Log::Console(LogLevel::Error, LION_FORMAT_TEXT("[SceneSerializer] Invalid scene JSON: {}", exception.what()));
+			return false;
+		}
+
+		scene->Clear();
+
+		if (root.contains("gravity") && root["gravity"].is_array() && root["gravity"].size() == 2)
+			scene->SetGravity(glm::vec2(root["gravity"][0].get<float32>(), root["gravity"][1].get<float32>()));
+
+		if (!root.contains("entities"))
+			return true;
+
+		for (const auto& node : root["entities"])
+		{
+			auto entity = MakeReference<Entity>();
+
+			if (node.contains("transform"))
+			{
+				const Json& transform = node["transform"];
+				const Reference<Transform> target = entity->GetTransform();
+
+				if (transform.contains("position")) target->SetPosition(VectorFromJson(transform["position"]));
+				if (transform.contains("rotation")) target->SetRotation(VectorFromJson(transform["rotation"]));
+				if (transform.contains("scale"))    target->SetScale(VectorFromJson(transform["scale"]));
+			}
+
+			if (node.contains("components"))
+			{
+				const Json& components = node["components"];
+
+				// RigidBody2D must be attached before its colliders (they need the body on awake).
+				if (components.contains("RigidBody2D"))
+				{
+					const Json& body = components["RigidBody2D"];
+					entity->AddComponent<RigidBody2D>(BodyTypeFromString(body.value("type", std::string("Static"))), body.value("fixedRotation", false));
+				}
+
+				if (components.contains("BoxCollider2D"))
+				{
+					const Json& collider = components["BoxCollider2D"];
+					entity->AddComponent<BoxCollider2D>(
+						collider.value("width", 1.0f), collider.value("height", 1.0f),
+						collider.value("density", 1.0f), collider.value("friction", 0.2f), collider.value("restitution", 0.0f));
+				}
+
+				if (components.contains("CircleCollider2D"))
+				{
+					const Json& collider = components["CircleCollider2D"];
+					entity->AddComponent<CircleCollider2D>(
+						collider.value("radius", 1.0f),
+						collider.value("density", 1.0f), collider.value("friction", 0.2f), collider.value("restitution", 0.0f));
+				}
+
+				if (components.contains("SpriteRenderer"))
+				{
+					const Json& renderer = components["SpriteRenderer"];
+					entity->AddComponent<SpriteRenderer>(renderer.value("texture", std::string()));
+				}
+			}
+
+			scene->Add(entity);
+		}
+
+		Log::Console(LogLevel::Success, LION_FORMAT_TEXT("[SceneSerializer] Loaded scene: '{}'.", filePath));
+		return true;
+	}
+}

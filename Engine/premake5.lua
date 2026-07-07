@@ -27,6 +27,7 @@ project "Lion"
         "%{dependencies.glfw.include}",
         "%{dependencies.glm.include}",
         "%{dependencies.imgui.include}",
+        "%{dependencies.json.include}",
         "%{dependencies.spdlog.include}",
         "%{dependencies.stb.include}",
     }

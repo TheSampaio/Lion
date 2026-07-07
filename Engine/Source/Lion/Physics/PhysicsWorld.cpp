@@ -31,6 +31,12 @@ namespace Lion
 		b2World_SetGravity(mWorldId, { gravity.x, gravity.y });
 	}
 
+	glm::vec2 PhysicsWorld::GetGravity() const
+	{
+		const b2Vec2 gravity = b2World_GetGravity(mWorldId);
+		return { gravity.x, gravity.y };
+	}
+
 	void PhysicsWorld::Step(float32 deltaTime)
 	{
 		mAccumulator += deltaTime;
