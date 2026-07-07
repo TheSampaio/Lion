@@ -83,6 +83,12 @@ namespace Lion
         return self->mShader != nullptr;
     }
 
+    void Renderer::Clear(float32 red, float32 green, float32 blue, float32 alpha)
+    {
+        RenderCommand::SetClearColor(red, green, blue, alpha);
+        RenderCommand::Clear();
+    }
+
     void Renderer::RenderBegin(const Reference<Camera>& camera)
     {
         Renderer* self = sInstance;

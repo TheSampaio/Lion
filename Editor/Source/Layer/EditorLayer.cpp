@@ -12,6 +12,67 @@ void EditorLayer::OnAttach()
 	Window::SetResizable(true);
 }
 
+void EditorLayer::OnCreate()
+{
+	mCamera = MakeReference<CameraOrthographic>();
+	mScene = MakeReference<Scene>();
+
+	FramebufferSpecification spec;
+	spec.width = 1280;
+	spec.height = 720;
+	mFramebuffer = Framebuffer::Create(spec);
+
+	CreateDemoScene();
+}
+
+void EditorLayer::CreateDemoScene()
+{
+	// Background.
+	auto background = MakeReference<Entity>();
+	background->GetTransform()->SetPosition(Vector(0.0f, 0.0f, Depth::Back));
+	background->AddComponent<SpriteRenderer>("Sprite/Brickout/background.jpg");
+	mScene->Add(background);
+
+	// A row of bricks.
+	for (int32 i = 0; i < 5; i++)
+	{
+		auto brick = MakeReference<Entity>();
+		brick->GetTransform()->SetPosition(Vector(-160.0f + i * 80.0f, 60.0f, Depth::Middle));
+		brick->AddComponent<SpriteRenderer>("Sprite/Brickout/tile-" + std::to_string(i + 1) + ".png");
+		mScene->Add(brick);
+	}
+
+	// Ball.
+	auto ball = MakeReference<Entity>();
+	ball->GetTransform()->SetPosition(Vector(0.0f, -80.0f, Depth::Middle));
+	ball->AddComponent<SpriteRenderer>("Sprite/Brickout/ball.png");
+	mScene->Add(ball);
+}
+
+void EditorLayer::OnRender()
+{
+	// Match the framebuffer/camera to the viewport panel size measured last frame.
+	const FramebufferSpecification& spec = mFramebuffer->GetSpecification();
+	const uint32 targetWidth = static_cast<uint32>(mViewportSize.x);
+	const uint32 targetHeight = static_cast<uint32>(mViewportSize.y);
+
+	if (targetWidth > 0 && targetHeight > 0 && (targetWidth != spec.width || targetHeight != spec.height))
+	{
+		mFramebuffer->Resize(targetWidth, targetHeight);
+		mCamera->OnResize(mViewportSize.x, mViewportSize.y);
+	}
+
+	// Render the scene into the framebuffer instead of the window.
+	mFramebuffer->Bind();
+	Renderer::Clear(0.12f, 0.12f, 0.15f, 1.0f);
+
+	Renderer::RenderBegin(mCamera);
+	mScene->OnRender();
+	Renderer::RenderEnd();
+
+	mFramebuffer->Unbind();
+}
+
 void EditorLayer::OnRenderUI()
 {
 	DrawMenuBar();
@@ -36,7 +97,6 @@ void EditorLayer::OnRenderUI()
 
 	const ImGuiID dockspaceId = ImGui::GetID("LionEditorDockspace");
 
-	// Apply the default layout on first run (when there is no saved layout to restore).
 	if (!mLayoutInitialized)
 	{
 		mLayoutInitialized = true;
@@ -50,13 +110,13 @@ void EditorLayer::OnRenderUI()
 
 	// --- Panels -----------------------------------------------------------------------------
 
-	ImGui::Begin("Viewport");
-	ImGui::TextWrapped("Scene viewport.");
-	ImGui::TextDisabled("A framebuffer render target will draw the scene here (next step).");
-	ImGui::End();
+	DrawViewport();
 
 	ImGui::Begin("Scene Hierarchy");
-	ImGui::TextDisabled("No scene loaded yet.");
+	ImGui::TextDisabled("Demo scene");
+	ImGui::BulletText("Background");
+	ImGui::BulletText("Bricks x5");
+	ImGui::BulletText("Ball");
 	ImGui::End();
 
 	ImGui::Begin("Properties");
@@ -67,10 +127,28 @@ void EditorLayer::OnRenderUI()
 	const ImGuiIO& io = ImGui::GetIO();
 	ImGui::Text("FPS:   %.1f", io.Framerate);
 	ImGui::Text("Frame: %.3f ms", 1000.0f / io.Framerate);
+	ImGui::Separator();
+	ImGui::Text("Viewport: %.0f x %.0f", mViewportSize.x, mViewportSize.y);
 	ImGui::End();
 
 	if (mShowDemo)
 		ImGui::ShowDemoWindow(&mShowDemo);
+}
+
+void EditorLayer::DrawViewport()
+{
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+	ImGui::Begin("Viewport");
+
+	const ImVec2 available = ImGui::GetContentRegionAvail();
+	mViewportSize = { available.x, available.y };
+
+	// Display the framebuffer's color texture, flipped vertically (OpenGL is bottom-up).
+	const auto textureId = static_cast<ImTextureID>(mFramebuffer->GetColorAttachment());
+	ImGui::Image(textureId, available, ImVec2(0.0f, 1.0f), ImVec2(1.0f, 0.0f));
+
+	ImGui::End();
+	ImGui::PopStyleVar();
 }
 
 void EditorLayer::DrawMenuBar()

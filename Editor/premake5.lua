@@ -33,12 +33,17 @@ project "Editor"
     filter "configurations:Shipping"
         kind "WindowedApp"
 
+    -- The editor runs from its output folder, next to the engine DLL and its resources.
+    debugdir "%{cfg.targetdir}"
+
     filter "system:windows"
         buildoptions { "/utf-8" }
         defines "LN_PLATFORM_WIN"
         systemversion "latest"
 
-        -- Copy the engine DLL next to the editor executable.
         postbuildcommands {
+            -- Engine DLL next to the editor executable.
             '{COPY} "%{wks.location}/.Out/Bin/' .. output_dir .. 'Lion/Lion.dll" "%{cfg.targetdir}"',
+            -- Shared resources (shader + sprites) flattened next to the executable.
+            'xcopy /E /I /Y /Q "%{wks.location}/Game/Resource" "%{cfg.targetdir}"',
         }

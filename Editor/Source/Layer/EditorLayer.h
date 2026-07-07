@@ -2,17 +2,27 @@
 
 #include <Lion/Lion.h>
 
-// Root editor layer: sets up the window and draws the docked editor UI (menu bar + panels).
+// Root editor layer: sets up the window, renders a scene into a framebuffer and draws the
+// docked editor UI (menu bar + panels), displaying the framebuffer inside the Viewport panel.
 class EditorLayer : public Lion::Layer
 {
 public:
 	void OnAttach() override;
+	void OnCreate() override;
+	void OnRender() override;
 	void OnRenderUI() override;
 
 private:
 	bool mShowDemo = false;
 	bool mLayoutInitialized = false;
 
+	Lion::Reference<Lion::CameraOrthographic> mCamera;
+	Lion::Reference<Lion::Scene> mScene;
+	Lion::Reference<Lion::Framebuffer> mFramebuffer;
+	glm::vec2 mViewportSize{ 0.0f, 0.0f };
+
+	void CreateDemoScene();
 	void DrawMenuBar();
+	void DrawViewport();
 	void BuildDefaultLayout(unsigned int dockspaceId);
 };
