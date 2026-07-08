@@ -18,15 +18,18 @@ public:
 
 private:
 	bool mShowDemo = false;
+	bool mShowShortcuts = false;
 	bool mLayoutInitialized = false;
 	bool mConsoleAutoScroll = true;
 	bool mPlaying = false;
+	bool mRenameFocus = false;  // Request keyboard focus on the inline rename field for one frame.
 	ImGuizmo::OPERATION mGizmoOperation = ImGuizmo::TRANSLATE;
 
 	Lion::Reference<Lion::CameraOrthographic> mCamera;
 	Lion::Reference<Lion::Scene> mScene;
 	Lion::Reference<Lion::Framebuffer> mFramebuffer;
 	Lion::Reference<Lion::Entity> mSelectedEntity;
+	Lion::Reference<Lion::Entity> mRenamingEntity;  // Entity whose name is being edited inline (F2 / context menu).
 	glm::vec2 mViewportSize{ 0.0f, 0.0f };
 
 	// Undo/redo history of full-scene JSON snapshots. mPendingSnapshot holds the pre-edit state
@@ -49,7 +52,12 @@ private:
 	void DrawHierarchy();
 	void DrawProperties();
 	void DrawConsole();
+	void DrawShortcuts();
 	void BuildDefaultLayout(unsigned int dockspaceId);
+
+	// Draws a collapsing header for a component with a right-aligned "X" remove button.
+	// Returns whether the body is open; sets removeRequested when the button is pressed.
+	bool DrawComponentHeader(const char* label, bool& removeRequested);
 
 	// Undo/redo helpers. RecordSnapshot is for discrete actions (add/delete); BeginEdit/CommitEdit
 	// group a continuous edit (a gizmo or slider drag) into a single undo step.

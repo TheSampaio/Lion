@@ -188,6 +188,7 @@ void EditorLayer::DrawUI()
 	ImGui::End();
 
 	DrawConsole();
+	DrawShortcuts();
 
 	// Commit any in-progress continuous edit (gizmo/slider drag) once the mouse is released.
 	if (mHasPending && ImGui::IsMouseReleased(ImGuiMouseButton_Left))
@@ -252,6 +253,71 @@ void EditorLayer::DrawConsole()
 		ImGui::SetScrollHereY(1.0f);
 
 	ImGui::EndChild();
+	ImGui::End();
+}
+
+void EditorLayer::DrawShortcuts()
+{
+	if (!mShowShortcuts)
+		return;
+
+	ImGui::SetNextWindowSize(ImVec2(430.0f, 470.0f), ImGuiCond_FirstUseEver);
+
+	if (ImGui::Begin("Shortcuts", &mShowShortcuts))
+	{
+		struct Shortcut { const char8* keys; const char8* action; };
+
+		const auto section = [](const char8* title, std::initializer_list<Shortcut> items)
+		{
+			ImGui::SeparatorText(title);
+
+			if (ImGui::BeginTable(title, 2, ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_PadOuterX))
+			{
+				ImGui::TableSetupColumn("Shortcut", ImGuiTableColumnFlags_WidthFixed, 130.0f);
+				ImGui::TableSetupColumn("Action", ImGuiTableColumnFlags_WidthStretch);
+
+				for (const Shortcut& shortcut : items)
+				{
+					ImGui::TableNextRow();
+					ImGui::TableSetColumnIndex(0);
+					ImGui::TextColored(ImVec4(0.30f, 0.58f, 0.95f, 1.0f), "%s", shortcut.keys);
+					ImGui::TableSetColumnIndex(1);
+					ImGui::TextUnformatted(shortcut.action);
+				}
+
+				ImGui::EndTable();
+			}
+		};
+
+		section("General", {
+			{ "F1", "Toggle this Shortcuts panel" },
+			{ "Ctrl+Z", "Undo" },
+			{ "Ctrl+Y", "Redo" },
+		});
+
+		section("Play Mode", {
+			{ "F5", "Play (run the scene simulation)" },
+			{ "F8", "Stop (return to the edited state)" },
+		});
+
+		section("Gizmo", {
+			{ "W", "Move (translate)" },
+			{ "E", "Rotate" },
+			{ "R", "Scale" },
+		});
+
+		section("Hierarchy", {
+			{ "Double-click", "Rename an entity" },
+			{ "F2", "Rename the selected entity" },
+			{ "Delete", "Delete the selected entity" },
+			{ "Right-click", "Context menu (create / delete)" },
+		});
+
+		section("Viewport", {
+			{ "Left Click", "Select the entity under the cursor" },
+		});
+	}
+
 	ImGui::End();
 }
 
@@ -326,13 +392,14 @@ void EditorLayer::Redo()
 
 void EditorLayer::HandleShortcuts()
 {
-	// F5 / F8 toggle Play mode (available even while a text field is focused).
+	// These are available even while a text field is focused.
 	if (ImGui::IsKeyPressed(ImGuiKey_F5, false)) StartPlay();
 	if (ImGui::IsKeyPressed(ImGuiKey_F8, false)) StopPlay();
+	if (ImGui::IsKeyPressed(ImGuiKey_F1, false)) mShowShortcuts = !mShowShortcuts;
 
 	const ImGuiIO& io = ImGui::GetIO();
 
-	// Undo/redo is an edit-mode action; ignore it while playing or typing in a text field.
+	// The actions below are edit-mode only; ignore them while playing or typing in a text field.
 	if (mPlaying || io.WantTextInput)
 		return;
 
@@ -341,6 +408,20 @@ void EditorLayer::HandleShortcuts()
 
 	if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_Y, false))
 		Redo();
+
+	if (mSelectedEntity && ImGui::IsKeyPressed(ImGuiKey_F2, false))
+	{
+		mRenamingEntity = mSelectedEntity;
+		mRenameFocus = true;
+	}
+
+	if (mSelectedEntity && ImGui::IsKeyPressed(ImGuiKey_Delete, false))
+	{
+		RecordSnapshot();
+		mScene->Remove(mSelectedEntity);
+		mScene->FlushRemovals();
+		mSelectedEntity = nullptr;
+	}
 }
 
 void EditorLayer::DrawViewport()
@@ -414,52 +495,152 @@ void EditorLayer::DrawHierarchy()
 {
 	ImGui::Begin("Scene Hierarchy");
 
-	if (ImGui::Button("Add Entity"))
+	// Compact toolbar: a single "+" create button; everything else is on the context menus.
+	if (ImGui::Button("+ Create"))
 	{
 		RecordSnapshot();
-
 		auto entity = MakeReference<Entity>();
 		mScene->Add(entity);
 		mSelectedEntity = entity;
+		mRenamingEntity = entity;   // Let the user name it right away.
+		mRenameFocus = true;
 	}
-
-	if (mSelectedEntity)
-	{
-		ImGui::SameLine();
-
-		if (ImGui::Button("Delete"))
-		{
-			RecordSnapshot();
-
-			mScene->Remove(mSelectedEntity);
-			mScene->FlushRemovals();
-			mSelectedEntity = nullptr;
-		}
-	}
+	if (ImGui::IsItemHovered())
+		ImGui::SetTooltip("Create an empty entity");
 
 	ImGui::Separator();
+
+	Reference<Entity> entityToDelete;
 
 	int32 index = 0;
 	for (const auto& entity : mScene->GetEntities())
 	{
 		ImGui::PushID(index);
 
-		const std::string& name = entity->GetName();
-		if (ImGui::Selectable(name.empty() ? "(unnamed)" : name.c_str(), entity == mSelectedEntity))
-			mSelectedEntity = entity;
+		if (entity == mRenamingEntity)
+		{
+			// Inline rename field (started via F2, double-click or the context menu).
+			char buffer[128];
+			const std::string& name = entity->GetName();
+			const size_t length = name.copy(buffer, sizeof(buffer) - 1);
+			buffer[length] = '\0';
+
+			if (mRenameFocus)
+			{
+				ImGui::SetKeyboardFocusHere();
+				mRenameFocus = false;
+			}
+
+			ImGui::SetNextItemWidth(-1.0f);
+			const bool committed = ImGui::InputText("##rename", buffer, sizeof(buffer),
+				ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll);
+
+			if (committed || ImGui::IsItemDeactivated())
+			{
+				RecordSnapshot();
+				entity->SetName(buffer);
+				mRenamingEntity = nullptr;
+			}
+		}
+		else
+		{
+			const std::string& name = entity->GetName();
+			if (ImGui::Selectable(name.empty() ? "(unnamed)" : name.c_str(), entity == mSelectedEntity))
+				mSelectedEntity = entity;
+
+			// Double-click a row to rename it in place.
+			if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
+			{
+				mSelectedEntity = entity;
+				mRenamingEntity = entity;
+				mRenameFocus = true;
+			}
+
+			// Right-click a row for its context menu.
+			if (ImGui::BeginPopupContextItem())
+			{
+				mSelectedEntity = entity;
+
+				if (ImGui::MenuItem("Rename", "F2"))
+				{
+					mRenamingEntity = entity;
+					mRenameFocus = true;
+				}
+
+				ImGui::Separator();
+
+				if (ImGui::MenuItem("Delete", "Del"))
+					entityToDelete = entity;
+
+				ImGui::EndPopup();
+			}
+		}
 
 		ImGui::PopID();
 		index++;
 	}
 
 	if (index == 0)
-		ImGui::TextDisabled("Empty scene");
+		ImGui::TextDisabled("Empty scene — right-click to create an entity.");
+
+	// Right-click empty space in the panel to create an entity (Unity/Hazel-style).
+	if (ImGui::BeginPopupContextWindow("HierarchyContext",
+		ImGuiPopupFlags_MouseButtonRight | ImGuiPopupFlags_NoOpenOverItems))
+	{
+		if (ImGui::MenuItem("Create Empty Entity"))
+		{
+			RecordSnapshot();
+			auto entity = MakeReference<Entity>();
+			mScene->Add(entity);
+			mSelectedEntity = entity;
+			mRenamingEntity = entity;
+			mRenameFocus = true;
+		}
+
+		ImGui::EndPopup();
+	}
 
 	// Click empty space inside the panel to deselect.
 	if (ImGui::IsWindowHovered() && !ImGui::IsAnyItemHovered() && ImGui::IsMouseClicked(ImGuiMouseButton_Left))
 		mSelectedEntity = nullptr;
 
+	// Deferred deletion (never mutate the entity list while iterating it above).
+	if (entityToDelete)
+	{
+		RecordSnapshot();
+
+		if (mSelectedEntity == entityToDelete) mSelectedEntity = nullptr;
+		if (mRenamingEntity == entityToDelete) mRenamingEntity = nullptr;
+
+		mScene->Remove(entityToDelete);
+		mScene->FlushRemovals();
+	}
+
 	ImGui::End();
+}
+
+bool EditorLayer::DrawComponentHeader(const char* label, bool& removeRequested)
+{
+	ImGui::PushID(label);
+
+	const ImGuiStyle& style = ImGui::GetStyle();
+	const float32 lineHeight = ImGui::GetFontSize() + style.FramePadding.y * 2.0f;
+	const float32 available = ImGui::GetContentRegionAvail().x;
+
+	ImGui::SetNextItemAllowOverlap();
+	const bool open = ImGui::CollapsingHeader(label,
+		ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_SpanAvailWidth | ImGuiTreeNodeFlags_AllowOverlap);
+
+	// Right-aligned square "X" button sitting on the header row.
+	ImGui::SameLine(available - lineHeight);
+	if (ImGui::Button("X", ImVec2(lineHeight, lineHeight)))
+		removeRequested = true;
+
+	if (ImGui::IsItemHovered())
+		ImGui::SetTooltip("Remove component");
+
+	ImGui::PopID();
+	return open;
 }
 
 void EditorLayer::DrawProperties()
@@ -518,7 +699,7 @@ void EditorLayer::DrawProperties()
 
 	if (SpriteRenderer* renderer = mSelectedEntity->GetComponent<SpriteRenderer>())
 	{
-		if (ImGui::CollapsingHeader("Sprite Renderer", ImGuiTreeNodeFlags_DefaultOpen))
+		if (DrawComponentHeader("Sprite Renderer", removeSprite))
 		{
 			// Reload the texture only once the user finishes editing (not per keystroke).
 			char textureBuffer[256];
@@ -529,14 +710,12 @@ void EditorLayer::DrawProperties()
 			ImGui::InputText("Texture", textureBuffer, sizeof(textureBuffer));
 			if (ImGui::IsItemActivated()) BeginEdit();
 			if (ImGui::IsItemDeactivatedAfterEdit()) { renderer->SetTexturePath(textureBuffer); CommitEdit(); }
-
-			if (ImGui::SmallButton("Remove Component##sprite")) removeSprite = true;
 		}
 	}
 
 	if (RigidBody2D* body = mSelectedEntity->GetComponent<RigidBody2D>())
 	{
-		if (ImGui::CollapsingHeader("Rigid Body 2D", ImGuiTreeNodeFlags_DefaultOpen))
+		if (DrawComponentHeader("Rigid Body 2D", removeBody))
 		{
 			static const char8* bodyTypes[] = { "Static", "Kinematic", "Dynamic" };
 
@@ -553,14 +732,12 @@ void EditorLayer::DrawProperties()
 				RecordSnapshot();
 				body->SetFixedRotation(fixedRotation);
 			}
-
-			if (ImGui::SmallButton("Remove Component##body")) removeBody = true;
 		}
 	}
 
 	if (BoxCollider2D* collider = mSelectedEntity->GetComponent<BoxCollider2D>())
 	{
-		if (ImGui::CollapsingHeader("Box Collider 2D", ImGuiTreeNodeFlags_DefaultOpen))
+		if (DrawComponentHeader("Box Collider 2D", removeBox))
 		{
 			float32 width = collider->GetWidth();
 			if (ImGui::DragFloat("Width", &width, 1.0f, 0.0f, 10000.0f)) collider->SetWidth(width);
@@ -586,14 +763,12 @@ void EditorLayer::DrawProperties()
 			if (ImGui::DragFloat("Restitution", &restitution, 0.01f, 0.0f, 1.0f)) collider->SetRestitution(restitution);
 			if (ImGui::IsItemActivated()) BeginEdit();
 			if (ImGui::IsItemDeactivatedAfterEdit()) CommitEdit();
-
-			if (ImGui::SmallButton("Remove Component##box")) removeBox = true;
 		}
 	}
 
 	if (CircleCollider2D* collider = mSelectedEntity->GetComponent<CircleCollider2D>())
 	{
-		if (ImGui::CollapsingHeader("Circle Collider 2D", ImGuiTreeNodeFlags_DefaultOpen))
+		if (DrawComponentHeader("Circle Collider 2D", removeCircle))
 		{
 			float32 radius = collider->GetRadius();
 			if (ImGui::DragFloat("Radius", &radius, 1.0f, 0.0f, 10000.0f)) collider->SetRadius(radius);
@@ -614,8 +789,6 @@ void EditorLayer::DrawProperties()
 			if (ImGui::DragFloat("Restitution", &restitution, 0.01f, 0.0f, 1.0f)) collider->SetRestitution(restitution);
 			if (ImGui::IsItemActivated()) BeginEdit();
 			if (ImGui::IsItemDeactivatedAfterEdit()) CommitEdit();
-
-			if (ImGui::SmallButton("Remove Component##circle")) removeCircle = true;
 		}
 	}
 
@@ -720,6 +893,12 @@ void EditorLayer::DrawMenuBar()
 		if (ImGui::BeginMenu("View"))
 		{
 			ImGui::MenuItem("ImGui Demo Window", nullptr, &mShowDemo);
+			ImGui::EndMenu();
+		}
+
+		if (ImGui::BeginMenu("Help"))
+		{
+			ImGui::MenuItem("Shortcuts", "F1", &mShowShortcuts);
 			ImGui::EndMenu();
 		}
 
