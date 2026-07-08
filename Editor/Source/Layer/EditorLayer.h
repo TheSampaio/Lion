@@ -27,6 +27,15 @@ private:
 	Lion::Reference<Lion::Entity> mSelectedEntity;
 	glm::vec2 mViewportSize{ 0.0f, 0.0f };
 
+	// Undo/redo history of full-scene JSON snapshots. mPendingSnapshot holds the pre-edit state
+	// captured at the start of a continuous edit (gizmo/drag), committed once the edit ends.
+	std::vector<std::string> mUndoStack;
+	std::vector<std::string> mRedoStack;
+	std::string mPendingSnapshot;
+	bool mHasPending = false;
+
+	static constexpr size_t kMaxUndo = 100;
+
 	void CreateDemoScene();
 	void RenderScene();
 	void DrawUI();
@@ -36,4 +45,13 @@ private:
 	void DrawProperties();
 	void DrawConsole();
 	void BuildDefaultLayout(unsigned int dockspaceId);
+
+	// Undo/redo helpers. RecordSnapshot is for discrete actions (add/delete); BeginEdit/CommitEdit
+	// group a continuous edit (a gizmo or slider drag) into a single undo step.
+	void RecordSnapshot();
+	void BeginEdit();
+	void CommitEdit();
+	void Undo();
+	void Redo();
+	void HandleShortcuts();
 };

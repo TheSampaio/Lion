@@ -14,5 +14,11 @@ namespace Lion
 
 		// Replaces the scene's contents with those loaded from a JSON file. Returns false on failure.
 		static LION_API bool Deserialize(const Reference<Scene>& scene, const std::string& filePath);
+
+		// Serializes the scene to an in-memory JSON string (no logging), e.g. for editor undo/redo.
+		static LION_API std::string SerializeToString(const Reference<Scene>& scene);
+
+		// Replaces the scene's contents from an in-memory JSON string. Returns false on failure.
+		static LION_API bool DeserializeFromString(const Reference<Scene>& scene, const std::string& text);
 	};
 }

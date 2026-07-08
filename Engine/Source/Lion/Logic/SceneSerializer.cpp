@@ -40,7 +40,7 @@ namespace Lion
 		return Vector(array.at(0).get<float32>(), array.at(1).get<float32>(), array.at(2).get<float32>());
 	}
 
-	bool SceneSerializer::Serialize(const Reference<Scene>& scene, const std::string& filePath)
+	std::string SceneSerializer::SerializeToString(const Reference<Scene>& scene)
 	{
 		Json root;
 
@@ -93,6 +93,11 @@ namespace Lion
 			root["entities"].push_back(node);
 		}
 
+		return root.dump(2);
+	}
+
+	bool SceneSerializer::Serialize(const Reference<Scene>& scene, const std::string& filePath)
+	{
 		std::ofstream file(filePath);
 
 		if (!file.is_open())
@@ -101,26 +106,18 @@ namespace Lion
 			return false;
 		}
 
-		file << root.dump(2);
+		file << SerializeToString(scene);
 		Log::Console(LogLevel::Success, LION_FORMAT_TEXT("[SceneSerializer] Saved scene: '{}'.", filePath));
 		return true;
 	}
 
-	bool SceneSerializer::Deserialize(const Reference<Scene>& scene, const std::string& filePath)
+	bool SceneSerializer::DeserializeFromString(const Reference<Scene>& scene, const std::string& text)
 	{
-		std::ifstream file(filePath);
-
-		if (!file.is_open())
-		{
-			Log::Console(LogLevel::Warning, LION_FORMAT_TEXT("[SceneSerializer] Failed to open scene: '{}'.", filePath));
-			return false;
-		}
-
 		Json root;
 
 		try
 		{
-			file >> root;
+			root = Json::parse(text);
 		}
 		catch (const std::exception& exception)
 		{
@@ -186,6 +183,25 @@ namespace Lion
 
 			scene->Add(entity);
 		}
+
+		return true;
+	}
+
+	bool SceneSerializer::Deserialize(const Reference<Scene>& scene, const std::string& filePath)
+	{
+		std::ifstream file(filePath);
+
+		if (!file.is_open())
+		{
+			Log::Console(LogLevel::Warning, LION_FORMAT_TEXT("[SceneSerializer] Failed to open scene: '{}'.", filePath));
+			return false;
+		}
+
+		std::stringstream buffer;
+		buffer << file.rdbuf();
+
+		if (!DeserializeFromString(scene, buffer.str()))
+			return false;
 
 		Log::Console(LogLevel::Success, LION_FORMAT_TEXT("[SceneSerializer] Loaded scene: '{}'.", filePath));
 		return true;

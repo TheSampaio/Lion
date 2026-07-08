@@ -100,6 +100,7 @@ void EditorLayer::RenderScene()
 void EditorLayer::DrawUI()
 {
 	DrawMenuBar();
+	HandleShortcuts();
 
 	// Fullscreen, borderless host window that holds the dockspace (below the main menu bar).
 	const ImGuiViewport* viewport = ImGui::GetMainViewport();
@@ -147,6 +148,10 @@ void EditorLayer::DrawUI()
 	ImGui::End();
 
 	DrawConsole();
+
+	// Commit any in-progress continuous edit (gizmo/slider drag) once the mouse is released.
+	if (mHasPending && ImGui::IsMouseReleased(ImGuiMouseButton_Left))
+		CommitEdit();
 
 	if (mShowDemo)
 		ImGui::ShowDemoWindow(&mShowDemo);
@@ -210,6 +215,90 @@ void EditorLayer::DrawConsole()
 	ImGui::End();
 }
 
+void EditorLayer::RecordSnapshot()
+{
+	// Snapshot the current state onto the undo stack (used right before a discrete edit).
+	mUndoStack.push_back(SceneSerializer::SerializeToString(mScene));
+
+	if (mUndoStack.size() > kMaxUndo)
+		mUndoStack.erase(mUndoStack.begin());
+
+	mRedoStack.clear();
+}
+
+void EditorLayer::BeginEdit()
+{
+	// Capture the pre-edit state once at the start of a continuous edit (gizmo/slider drag).
+	if (mHasPending)
+		return;
+
+	mPendingSnapshot = SceneSerializer::SerializeToString(mScene);
+	mHasPending = true;
+}
+
+void EditorLayer::CommitEdit()
+{
+	if (!mHasPending)
+		return;
+
+	mHasPending = false;
+
+	// Only record a step if the edit actually changed the scene.
+	if (SceneSerializer::SerializeToString(mScene) == mPendingSnapshot)
+		return;
+
+	mUndoStack.push_back(mPendingSnapshot);
+
+	if (mUndoStack.size() > kMaxUndo)
+		mUndoStack.erase(mUndoStack.begin());
+
+	mRedoStack.clear();
+}
+
+void EditorLayer::Undo()
+{
+	if (mUndoStack.empty())
+		return;
+
+	mRedoStack.push_back(SceneSerializer::SerializeToString(mScene));
+
+	const std::string state = mUndoStack.back();
+	mUndoStack.pop_back();
+
+	// The scene is rebuilt from scratch, so any selected-entity pointer becomes stale.
+	mSelectedEntity = nullptr;
+	SceneSerializer::DeserializeFromString(mScene, state);
+}
+
+void EditorLayer::Redo()
+{
+	if (mRedoStack.empty())
+		return;
+
+	mUndoStack.push_back(SceneSerializer::SerializeToString(mScene));
+
+	const std::string state = mRedoStack.back();
+	mRedoStack.pop_back();
+
+	mSelectedEntity = nullptr;
+	SceneSerializer::DeserializeFromString(mScene, state);
+}
+
+void EditorLayer::HandleShortcuts()
+{
+	const ImGuiIO& io = ImGui::GetIO();
+
+	// Don't steal Ctrl+Z/Y while typing in a text field (ImGui handles those internally).
+	if (io.WantTextInput)
+		return;
+
+	if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_Z, false))
+		Undo();
+
+	if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_Y, false))
+		Redo();
+}
+
 void EditorLayer::DrawViewport()
 {
 	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
@@ -255,6 +344,10 @@ void EditorLayer::DrawViewport()
 		float32 model[16];
 		ImGuizmo::RecomposeMatrixFromComponents(translationValues, rotationValues, scaleValues, model);
 
+		// Capture the pre-edit state the moment the gizmo is grabbed (before Manipulate mutates it).
+		if (ImGui::IsMouseClicked(ImGuiMouseButton_Left) && ImGuizmo::IsOver())
+			BeginEdit();
+
 		ImGuizmo::Manipulate(glm::value_ptr(view), glm::value_ptr(projection), mGizmoOperation, ImGuizmo::LOCAL, model);
 
 		if (ImGuizmo::IsUsing())
@@ -278,6 +371,8 @@ void EditorLayer::DrawHierarchy()
 
 	if (ImGui::Button("Add Entity"))
 	{
+		RecordSnapshot();
+
 		auto entity = MakeReference<Entity>();
 		mScene->Add(entity);
 		mSelectedEntity = entity;
@@ -289,6 +384,8 @@ void EditorLayer::DrawHierarchy()
 
 		if (ImGui::Button("Delete"))
 		{
+			RecordSnapshot();
+
 			mScene->Remove(mSelectedEntity);
 			mScene->FlushRemovals();
 			mSelectedEntity = nullptr;
@@ -339,16 +436,22 @@ void EditorLayer::DrawProperties()
 		float32 positionValues[3] = { position.x, position.y, position.z };
 		if (ImGui::DragFloat3("Position", positionValues, 1.0f))
 			transform->SetPosition(Vector(positionValues[0], positionValues[1], positionValues[2]));
+		if (ImGui::IsItemActivated()) BeginEdit();
+		if (ImGui::IsItemDeactivatedAfterEdit()) CommitEdit();
 
 		Vector rotation = transform->GetRotation();
 		float32 rotationValues[3] = { rotation.x, rotation.y, rotation.z };
 		if (ImGui::DragFloat3("Rotation", rotationValues, 0.5f))
 			transform->SetRotation(Vector(rotationValues[0], rotationValues[1], rotationValues[2]));
+		if (ImGui::IsItemActivated()) BeginEdit();
+		if (ImGui::IsItemDeactivatedAfterEdit()) CommitEdit();
 
 		Vector scale = transform->GetScale();
 		float32 scaleValues[3] = { scale.x, scale.y, scale.z };
 		if (ImGui::DragFloat3("Scale", scaleValues, 0.01f))
 			transform->SetScale(Vector(scaleValues[0], scaleValues[1], scaleValues[2]));
+		if (ImGui::IsItemActivated()) BeginEdit();
+		if (ImGui::IsItemDeactivatedAfterEdit()) CommitEdit();
 	}
 
 	if (const SpriteRenderer* renderer = mSelectedEntity->GetComponent<SpriteRenderer>())
@@ -399,14 +502,22 @@ void EditorLayer::DrawMenuBar()
 		if (ImGui::BeginMenu("File"))
 		{
 			if (ImGui::MenuItem("New Scene"))
+			{
+				RecordSnapshot();
 				mScene->Clear();
+				mSelectedEntity = nullptr;
+			}
 
 			if (ImGui::MenuItem("Open Scene..."))
 			{
 				const std::string path = FileDialog::Open(sceneFilter);
 
 				if (!path.empty())
+				{
+					RecordSnapshot();
+					mSelectedEntity = nullptr;
 					SceneSerializer::Deserialize(mScene, path);
+				}
 			}
 
 			if (ImGui::MenuItem("Save Scene As..."))
@@ -421,6 +532,17 @@ void EditorLayer::DrawMenuBar()
 
 			if (ImGui::MenuItem("Exit", "Alt+F4"))
 				Window::RequestClose();
+
+			ImGui::EndMenu();
+		}
+
+		if (ImGui::BeginMenu("Edit"))
+		{
+			if (ImGui::MenuItem("Undo", "Ctrl+Z", false, !mUndoStack.empty()))
+				Undo();
+
+			if (ImGui::MenuItem("Redo", "Ctrl+Y", false, !mRedoStack.empty()))
+				Redo();
 
 			ImGui::EndMenu();
 		}
