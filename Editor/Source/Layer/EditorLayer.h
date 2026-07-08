@@ -12,6 +12,7 @@ class EditorLayer : public Lion::Layer
 public:
 	void OnAttach() override;
 	void OnCreate() override;
+	void OnUpdate() override;
 	void OnRender() override;
 	void OnDetach() override;
 
@@ -19,6 +20,7 @@ private:
 	bool mShowDemo = false;
 	bool mLayoutInitialized = false;
 	bool mConsoleAutoScroll = true;
+	bool mPlaying = false;
 	ImGuizmo::OPERATION mGizmoOperation = ImGuizmo::TRANSLATE;
 
 	Lion::Reference<Lion::CameraOrthographic> mCamera;
@@ -33,6 +35,9 @@ private:
 	std::vector<std::string> mRedoStack;
 	std::string mPendingSnapshot;
 	bool mHasPending = false;
+
+	// Snapshot of the edited scene captured when entering Play mode, restored on Stop.
+	std::string mPlaySnapshot;
 
 	static constexpr size_t kMaxUndo = 100;
 
@@ -54,4 +59,9 @@ private:
 	void Undo();
 	void Redo();
 	void HandleShortcuts();
+
+	// Play mode: StartPlay snapshots the edited scene and re-awakes it (creating physics bodies) so
+	// the simulation runs; StopPlay restores the snapshot, returning to the edited state.
+	void StartPlay();
+	void StopPlay();
 };

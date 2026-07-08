@@ -30,9 +30,44 @@ void EditorLayer::OnCreate()
 	CreateDemoScene();
 }
 
+void EditorLayer::OnUpdate()
+{
+	// Only advance the scene simulation (physics + entity scripts) while in Play mode.
+	if (mPlaying)
+		mScene->OnUpdate();
+}
+
 void EditorLayer::OnDetach()
 {
 	EditorGui::Shutdown();
+}
+
+void EditorLayer::StartPlay()
+{
+	if (mPlaying)
+		return;
+
+	// Save the edited scene, then rebuild it so every component runs OnAwake again (which creates
+	// the Box2D bodies/shapes needed for the simulation).
+	mPlaySnapshot = SceneSerializer::SerializeToString(mScene);
+	mSelectedEntity = nullptr;
+	SceneSerializer::DeserializeFromString(mScene, mPlaySnapshot);
+
+	mPlaying = true;
+	Log::Console(LogLevel::Information, "[Editor] Play mode started.");
+}
+
+void EditorLayer::StopPlay()
+{
+	if (!mPlaying)
+		return;
+
+	// Restore the scene to exactly the edited state captured when Play started.
+	mSelectedEntity = nullptr;
+	SceneSerializer::DeserializeFromString(mScene, mPlaySnapshot);
+
+	mPlaying = false;
+	Log::Console(LogLevel::Information, "[Editor] Play mode stopped.");
 }
 
 void EditorLayer::CreateDemoScene()
@@ -54,11 +89,13 @@ void EditorLayer::CreateDemoScene()
 		mScene->Add(brick);
 	}
 
-	// Ball.
+	// Ball (with physics, so pressing Play drops it under gravity).
 	auto ball = MakeReference<Entity>();
 	ball->SetName("Ball");
-	ball->GetTransform()->SetPosition(Vector(0.0f, -80.0f, Depth::Middle));
+	ball->GetTransform()->SetPosition(Vector(0.0f, 120.0f, Depth::Middle));
 	ball->AddComponent<SpriteRenderer>("Sprite/Brickout/ball.png");
+	ball->AddComponent<RigidBody2D>(BodyType::Dynamic, false);
+	ball->AddComponent<CircleCollider2D>(16.0f);
 	mScene->Add(ball);
 }
 
@@ -289,10 +326,14 @@ void EditorLayer::Redo()
 
 void EditorLayer::HandleShortcuts()
 {
+	// F5 / F8 toggle Play mode (available even while a text field is focused).
+	if (ImGui::IsKeyPressed(ImGuiKey_F5, false)) StartPlay();
+	if (ImGui::IsKeyPressed(ImGuiKey_F8, false)) StopPlay();
+
 	const ImGuiIO& io = ImGui::GetIO();
 
-	// Don't steal Ctrl+Z/Y while typing in a text field (ImGui handles those internally).
-	if (io.WantTextInput)
+	// Undo/redo is an edit-mode action; ignore it while playing or typing in a text field.
+	if (mPlaying || io.WantTextInput)
 		return;
 
 	if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_Z, false))
@@ -318,14 +359,15 @@ void EditorLayer::DrawViewport()
 	const ImVec2 imageSize = ImGui::GetItemRectSize();
 
 	// W/E/R switch the gizmo between move / rotate / scale (unless typing or dragging).
-	if (!ImGuizmo::IsUsing() && !ImGui::IsAnyItemActive())
+	if (!mPlaying && !ImGuizmo::IsUsing() && !ImGui::IsAnyItemActive())
 	{
 		if (ImGui::IsKeyPressed(ImGuiKey_W)) mGizmoOperation = ImGuizmo::TRANSLATE;
 		if (ImGui::IsKeyPressed(ImGuiKey_E)) mGizmoOperation = ImGuizmo::ROTATE;
 		if (ImGui::IsKeyPressed(ImGuiKey_R)) mGizmoOperation = ImGuizmo::SCALE;
 	}
 
-	if (mSelectedEntity)
+	// The gizmo is an editing tool; hide it while the simulation is running.
+	if (mSelectedEntity && !mPlaying)
 	{
 		ImGuizmo::SetOrthographic(true);
 		ImGuizmo::SetDrawlist();
@@ -679,6 +721,21 @@ void EditorLayer::DrawMenuBar()
 		{
 			ImGui::MenuItem("ImGui Demo Window", nullptr, &mShowDemo);
 			ImGui::EndMenu();
+		}
+
+		// Play / Stop controls, right-aligned in the menu bar.
+		ImGui::SameLine(ImGui::GetWindowWidth() - 110.0f);
+
+		if (mPlaying)
+		{
+			ImGui::TextColored(ImVec4(0.45f, 0.85f, 0.50f, 1.0f), "PLAYING");
+			ImGui::SameLine();
+			if (ImGui::SmallButton("Stop (F8)"))
+				StopPlay();
+		}
+		else if (ImGui::SmallButton("Play (F5)"))
+		{
+			StartPlay();
 		}
 
 		ImGui::EndMainMenuBar();
