@@ -470,10 +470,17 @@ void EditorLayer::DrawProperties()
 		if (ImGui::IsItemDeactivatedAfterEdit()) CommitEdit();
 	}
 
+	// Components can request removal here; the removal itself is deferred until after drawing so we
+	// never delete a component while its section is still being rendered.
+	bool removeSprite = false, removeBody = false, removeBox = false, removeCircle = false;
+
 	if (const SpriteRenderer* renderer = mSelectedEntity->GetComponent<SpriteRenderer>())
 	{
 		if (ImGui::CollapsingHeader("Sprite Renderer", ImGuiTreeNodeFlags_DefaultOpen))
+		{
 			ImGui::Text("Texture: %s", renderer->GetTexturePath().c_str());
+			if (ImGui::SmallButton("Remove Component##sprite")) removeSprite = true;
+		}
 	}
 
 	if (const RigidBody2D* body = mSelectedEntity->GetComponent<RigidBody2D>())
@@ -483,6 +490,7 @@ void EditorLayer::DrawProperties()
 			static const char8* bodyTypes[] = { "Static", "Kinematic", "Dynamic" };
 			ImGui::Text("Type: %s", bodyTypes[static_cast<int32>(body->GetBodyType())]);
 			ImGui::Text("Fixed Rotation: %s", body->IsFixedRotation() ? "true" : "false");
+			if (ImGui::SmallButton("Remove Component##body")) removeBody = true;
 		}
 	}
 
@@ -493,6 +501,7 @@ void EditorLayer::DrawProperties()
 			ImGui::Text("Size: %.1f x %.1f", collider->GetWidth(), collider->GetHeight());
 			ImGui::Text("Density: %.2f  Friction: %.2f  Restitution: %.2f",
 				collider->GetDensity(), collider->GetFriction(), collider->GetRestitution());
+			if (ImGui::SmallButton("Remove Component##box")) removeBox = true;
 		}
 	}
 
@@ -503,7 +512,49 @@ void EditorLayer::DrawProperties()
 			ImGui::Text("Radius: %.1f", collider->GetRadius());
 			ImGui::Text("Density: %.2f  Friction: %.2f  Restitution: %.2f",
 				collider->GetDensity(), collider->GetFriction(), collider->GetRestitution());
+			if (ImGui::SmallButton("Remove Component##circle")) removeCircle = true;
 		}
+	}
+
+	// Apply any requested component removal (one per frame is enough for a click).
+	if (removeSprite) { RecordSnapshot(); mSelectedEntity->RemoveComponent<SpriteRenderer>(); }
+	if (removeBody)   { RecordSnapshot(); mSelectedEntity->RemoveComponent<RigidBody2D>(); }
+	if (removeBox)    { RecordSnapshot(); mSelectedEntity->RemoveComponent<BoxCollider2D>(); }
+	if (removeCircle) { RecordSnapshot(); mSelectedEntity->RemoveComponent<CircleCollider2D>(); }
+
+	// "Add Component" lists only the component types the entity doesn't already have.
+	ImGui::Separator();
+
+	if (ImGui::Button("Add Component"))
+		ImGui::OpenPopup("AddComponentPopup");
+
+	if (ImGui::BeginPopup("AddComponentPopup"))
+	{
+		if (!mSelectedEntity->HasComponent<SpriteRenderer>() && ImGui::MenuItem("Sprite Renderer"))
+		{
+			RecordSnapshot();
+			mSelectedEntity->AddComponent<SpriteRenderer>("Sprite/Brickout/tile-1.png");
+		}
+
+		if (!mSelectedEntity->HasComponent<RigidBody2D>() && ImGui::MenuItem("Rigid Body 2D"))
+		{
+			RecordSnapshot();
+			mSelectedEntity->AddComponent<RigidBody2D>();
+		}
+
+		if (!mSelectedEntity->HasComponent<BoxCollider2D>() && ImGui::MenuItem("Box Collider 2D"))
+		{
+			RecordSnapshot();
+			mSelectedEntity->AddComponent<BoxCollider2D>(100.0f, 100.0f);
+		}
+
+		if (!mSelectedEntity->HasComponent<CircleCollider2D>() && ImGui::MenuItem("Circle Collider 2D"))
+		{
+			RecordSnapshot();
+			mSelectedEntity->AddComponent<CircleCollider2D>(50.0f);
+		}
+
+		ImGui::EndPopup();
 	}
 
 	ImGui::End();
