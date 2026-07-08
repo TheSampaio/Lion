@@ -21,6 +21,10 @@ namespace Lion
 		Entity(const Entity&) = delete;
 		Entity& operator=(const Entity&) = delete;
 
+		// The entity's display name (shown in the editor Hierarchy and saved to scenes).
+		LION_API const std::string& GetName() const { return mName; }
+		LION_API void SetName(const std::string& name) { mName = name; }
+
 		// Returns the scene that currently owns this entity (null while detached).
 		LION_API Reference<Scene> GetScene() const { return mScene; }
 
@@ -76,6 +80,7 @@ namespace Lion
 		friend Scene;
 
 	private:
+		std::string mName = "Entity";
 		Reference<Transform> mTransform;
 		Reference<Scene> mScene;
 

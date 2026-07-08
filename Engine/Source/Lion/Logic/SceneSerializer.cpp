@@ -51,6 +51,7 @@ namespace Lion
 		for (const auto& entity : scene->GetEntities())
 		{
 			Json node;
+			node["name"] = entity->GetName();
 
 			const Reference<Transform> transform = entity->GetTransform();
 			const Vector position = transform->GetPosition();
@@ -136,6 +137,7 @@ namespace Lion
 		for (const auto& node : root["entities"])
 		{
 			auto entity = MakeReference<Entity>();
+			entity->SetName(node.value("name", std::string("Entity")));
 
 			if (node.contains("transform"))
 			{

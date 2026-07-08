@@ -39,6 +39,7 @@ void EditorLayer::CreateDemoScene()
 {
 	// Background.
 	auto background = MakeReference<Entity>();
+	background->SetName("Background");
 	background->GetTransform()->SetPosition(Vector(0.0f, 0.0f, Depth::Back));
 	background->AddComponent<SpriteRenderer>("Sprite/Brickout/background.jpg");
 	mScene->Add(background);
@@ -47,6 +48,7 @@ void EditorLayer::CreateDemoScene()
 	for (int32 i = 0; i < 5; i++)
 	{
 		auto brick = MakeReference<Entity>();
+		brick->SetName("Brick " + std::to_string(i + 1));
 		brick->GetTransform()->SetPosition(Vector(-160.0f + i * 80.0f, 60.0f, Depth::Middle));
 		brick->AddComponent<SpriteRenderer>("Sprite/Brickout/tile-" + std::to_string(i + 1) + ".png");
 		mScene->Add(brick);
@@ -54,6 +56,7 @@ void EditorLayer::CreateDemoScene()
 
 	// Ball.
 	auto ball = MakeReference<Entity>();
+	ball->SetName("Ball");
 	ball->GetTransform()->SetPosition(Vector(0.0f, -80.0f, Depth::Middle));
 	ball->AddComponent<SpriteRenderer>("Sprite/Brickout/ball.png");
 	mScene->Add(ball);
@@ -399,8 +402,8 @@ void EditorLayer::DrawHierarchy()
 	{
 		ImGui::PushID(index);
 
-		const std::string label = "Entity " + std::to_string(index);
-		if (ImGui::Selectable(label.c_str(), entity == mSelectedEntity))
+		const std::string& name = entity->GetName();
+		if (ImGui::Selectable(name.empty() ? "(unnamed)" : name.c_str(), entity == mSelectedEntity))
 			mSelectedEntity = entity;
 
 		ImGui::PopID();
@@ -427,6 +430,19 @@ void EditorLayer::DrawProperties()
 		ImGui::End();
 		return;
 	}
+
+	// Editable entity name.
+	char nameBuffer[128];
+	const std::string& currentName = mSelectedEntity->GetName();
+	const size_t copied = currentName.copy(nameBuffer, sizeof(nameBuffer) - 1);
+	nameBuffer[copied] = '\0';
+
+	if (ImGui::InputText("Name", nameBuffer, sizeof(nameBuffer)))
+		mSelectedEntity->SetName(nameBuffer);
+	if (ImGui::IsItemActivated()) BeginEdit();
+	if (ImGui::IsItemDeactivatedAfterEdit()) CommitEdit();
+
+	ImGui::Separator();
 
 	if (ImGui::CollapsingHeader("Transform", ImGuiTreeNodeFlags_DefaultOpen))
 	{
