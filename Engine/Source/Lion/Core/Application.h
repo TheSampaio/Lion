@@ -10,7 +10,6 @@ namespace Lion
 {
 	class Asset;
 	class Event;
-	class ImGuiLayer;
 	class Layer;
 	class Stack;
 
@@ -28,7 +27,6 @@ namespace Lion
 	private:
 		Scope<Asset> mAsset;
 		Scope<Stack> mStack;
-		Scope<ImGuiLayer> mImGuiLayer;
 		bool mMinimized;
 
 		LION_API void Run();

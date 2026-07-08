@@ -27,6 +27,7 @@ namespace Lion
         static LION_API void SetBackgroundColor(float32 red, float32 green, float32 blue);
         static LION_API void SetIcon(const std::string& icon);
         static LION_API void SetResizable(bool enable);
+        static LION_API void SetMaximized(bool enable);
         static LION_API void SetSize(uint32 width, uint32 height);
         static LION_API void SetTitle(const std::string& title);
 

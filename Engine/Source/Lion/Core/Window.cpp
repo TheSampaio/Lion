@@ -74,6 +74,11 @@ namespace Lion
         sInstance->mBackend->SetResizable(enable);  // Applied live too when the window exists.
     }
 
+    void Window::SetMaximized(bool enable)
+    {
+        sInstance->mData.maximized = enable;
+    }
+
     void Window::SetSize(uint32 width, uint32 height)
     {
         sInstance->mData.width = width;

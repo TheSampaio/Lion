@@ -31,6 +31,7 @@ project "Editor"
     links {
         "Lion",
         "%{dependencies.imgui.lib}",
+        "%{dependencies.glfw.lib}",  -- ImGui's GLFW backend links against GLFW directly (editor-only).
     }
 
     filter "configurations:Shipping"
@@ -44,6 +45,8 @@ project "Editor"
         postbuildcommands {
             -- Engine DLL next to the editor executable.
             '{COPY} "%{wks.location}/.Out/Bin/' .. output_dir .. 'Lion/Lion.dll" "%{cfg.targetdir}"',
+            -- GLFW shared library (the editor's ImGui backend links against it directly).
+            '{COPYFILE} "%{dependencies.glfw.dll}" "%{cfg.targetdir}"',
             -- Shared resources (shader + sprites) flattened next to the executable.
             'xcopy /E /I /Y /Q "%{wks.location}/Game/Resource" "%{cfg.targetdir}"',
         }

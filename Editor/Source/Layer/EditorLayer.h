@@ -2,6 +2,7 @@
 
 #include <Lion/Lion.h>
 
+#include <imgui/imgui.h>
 #include <imguizmo/ImGuizmo.h>
 
 // Root editor layer: sets up the window, renders a scene into a framebuffer and draws the
@@ -12,7 +13,7 @@ public:
 	void OnAttach() override;
 	void OnCreate() override;
 	void OnRender() override;
-	void OnRenderUI() override;
+	void OnDetach() override;
 
 private:
 	bool mShowDemo = false;
@@ -26,6 +27,8 @@ private:
 	glm::vec2 mViewportSize{ 0.0f, 0.0f };
 
 	void CreateDemoScene();
+	void RenderScene();
+	void DrawUI();
 	void DrawMenuBar();
 	void DrawViewport();
 	void DrawHierarchy();

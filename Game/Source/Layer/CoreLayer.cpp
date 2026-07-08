@@ -13,25 +13,6 @@ void CoreLayer::OnAttach()
 	Graphics::SetVerticalSynchronization(false);
 }
 
-void CoreLayer::OnRenderUI()
-{
-	static bool showDemo = false;
-	const ImGuiIO& io = ImGui::GetIO();
-
-	ImGui::Begin("Lion - Debug");
-	ImGui::Text("Dear ImGui is running.");
-	ImGui::Separator();
-	ImGui::Text("FPS:   %.1f", io.Framerate);
-	ImGui::Text("Frame: %.3f ms", 1000.0f / io.Framerate);
-	ImGui::Separator();
-	ImGui::Checkbox("Show ImGui demo window", &showDemo);
-	ImGui::End();
-
-	// The demo window is a full feature showcase; handy to confirm docking and widgets work.
-	if (showDemo)
-		ImGui::ShowDemoWindow(&showDemo);
-}
-
 void CoreLayer::OnEvent(Event& event)
 {
 	EventDispatcher dispatcher(event);

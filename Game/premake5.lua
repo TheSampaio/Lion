@@ -20,14 +20,12 @@ project "Sandbox"
         "%{dependencies.glad.include}",
         "%{dependencies.glfw.include}",
         "%{dependencies.glm.include}",
-        "%{dependencies.imgui.include}",
         "%{dependencies.spdlog.include}",
         "%{dependencies.stb.include}",
     }
 
     links {
         "Lion",
-        "%{dependencies.imgui.lib}",
     }
 
     filter "configurations:Shipping"

@@ -6,7 +6,6 @@ class CoreLayer : public Lion::Layer
 {
 public:
 	void OnAttach() override;
-	void OnRenderUI() override;
 	void OnEvent(Lion::Event& event) override;
 
 private:

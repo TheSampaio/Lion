@@ -8,10 +8,6 @@
 	#include <glad/glad.h>
 	#include <glfw/glfw3.h>
 
-	#include <imgui/imgui.h>
-	#include <imgui/backends/imgui_impl_glfw.h>
-	#include <imgui/backends/imgui_impl_opengl3.h>
-
 	#include <spdlog/spdlog.h>
 	#include <stb_image/stb_image.h>
 

@@ -1,5 +1,7 @@
 #include "EditorLayer.h"
 
+#include "../EditorGui.h"
+
 #include <imgui/imgui_internal.h> // DockBuilder API for the default layout.
 
 using namespace Lion;
@@ -10,10 +12,13 @@ void EditorLayer::OnAttach()
 	Window::SetTitle("Lion Editor");
 	Window::SetBackgroundColor(0.10f, 0.10f, 0.11f);
 	Window::SetResizable(true);
+	Window::SetMaximized(true);
 }
 
 void EditorLayer::OnCreate()
 {
+	EditorGui::Init();
+
 	mCamera = MakeReference<CameraOrthographic>();
 	mScene = MakeReference<Scene>();
 
@@ -23,6 +28,11 @@ void EditorLayer::OnCreate()
 	mFramebuffer = Framebuffer::Create(spec);
 
 	CreateDemoScene();
+}
+
+void EditorLayer::OnDetach()
+{
+	EditorGui::Shutdown();
 }
 
 void EditorLayer::CreateDemoScene()
@@ -51,6 +61,20 @@ void EditorLayer::CreateDemoScene()
 
 void EditorLayer::OnRender()
 {
+	// The scene is rendered into the framebuffer first, then the editor UI is drawn on top of
+	// the window with the framebuffer shown inside the Viewport panel.
+	RenderScene();
+
+	EditorGui::BeginFrame();
+	ImGuizmo::BeginFrame();
+
+	DrawUI();
+
+	EditorGui::EndFrame();
+}
+
+void EditorLayer::RenderScene()
+{
 	// Match the framebuffer/camera to the viewport panel size measured last frame.
 	const FramebufferSpecification& spec = mFramebuffer->GetSpecification();
 	const uint32 targetWidth = static_cast<uint32>(mViewportSize.x);
@@ -73,10 +97,8 @@ void EditorLayer::OnRender()
 	mFramebuffer->Unbind();
 }
 
-void EditorLayer::OnRenderUI()
+void EditorLayer::DrawUI()
 {
-	ImGuizmo::BeginFrame();
-
 	DrawMenuBar();
 
 	// Fullscreen, borderless host window that holds the dockspace (below the main menu bar).
