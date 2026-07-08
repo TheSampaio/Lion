@@ -25,6 +25,12 @@ namespace Lion
 		float32 GetFriction() const { return mFriction; }
 		float32 GetRestitution() const { return mRestitution; }
 
+		// Configuration mutators (used by the editor Inspector; applied when the shape is created).
+		void SetRadius(float32 value) { mRadius = value; }
+		void SetDensity(float32 value) { mDensity = value; }
+		void SetFriction(float32 value) { mFriction = value; }
+		void SetRestitution(float32 value) { mRestitution = value; }
+
 	private:
 		float32 mRadius;
 		float32 mDensity;

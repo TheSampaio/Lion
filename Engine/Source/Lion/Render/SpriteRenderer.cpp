@@ -22,6 +22,15 @@ namespace Lion
 		return mSprite->GetSize();
 	}
 
+	void SpriteRenderer::SetTexturePath(const std::string& filePath)
+	{
+		if (filePath == mTexturePath)
+			return;
+
+		mSprite = MakeScope<Sprite>(filePath);
+		mTexturePath = filePath;
+	}
+
 	void SpriteRenderer::OnRender()
 	{
 		mSprite->Draw(GetTransform());
