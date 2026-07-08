@@ -21,12 +21,16 @@
 #include <Lion/Logic/Component.h>
 #include <Lion/Logic/Entity.h>
 #include <Lion/Logic/Scene.h>
+#include <Lion/Logic/SceneSerializer.h>
 #include <Lion/Logic/Timer.h>
 
 // Math
 #include <Lion/Math/Sigma.h>
 #include <Lion/Math/Transform.h>
 #include <Lion/Math/Vector.h>
+
+// Platform
+#include <Lion/Platform/FileDialog.h>
 
 // Physics
 #include <Lion/Physics/BoxCollider2D.h>
@@ -36,6 +40,7 @@
 
 // Render
 #include <Lion/Render/CameraOrthographic.h>
+#include <Lion/Render/Framebuffer.h>
 #include <Lion/Render/Graphics.h>
 #include <Lion/Render/Renderer.h>
 #include <Lion/Render/Sprite.h>

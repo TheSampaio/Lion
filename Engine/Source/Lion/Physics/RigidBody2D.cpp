@@ -44,10 +44,12 @@ namespace Lion
 			return;
 
 		const Vector position = GetTransform()->GetPosition();
+		const Vector rotation = GetTransform()->GetRotation();
 
 		b2BodyDef bodyDef = b2DefaultBodyDef();
 		bodyDef.type = ToBox2DBodyType(mType);
 		bodyDef.position = { position.x * PhysicsWorld::MetersPerPixel, position.y * PhysicsWorld::MetersPerPixel };
+		bodyDef.rotation = b2MakeRot(glm::radians(rotation.z));  // Transform rotation is stored in degrees.
 		bodyDef.fixedRotation = mFixedRotation;
 		bodyDef.linearVelocity = { mPendingVelocity.x, mPendingVelocity.y };
 		bodyDef.userData = &GetOwner();
@@ -104,12 +106,12 @@ namespace Lion
 			return;
 
 		const b2Vec2 position = b2Body_GetPosition(mBodyId);
-		const float32 angle = b2Rot_GetAngle(b2Body_GetRotation(mBodyId));
+		const float32 angle = glm::degrees(b2Rot_GetAngle(b2Body_GetRotation(mBodyId)));
 
 		const Reference<Transform> transform = GetTransform();
 		const Vector current = transform->GetPosition();
 
-		// Preserve the sprite depth (z) that physics does not manage.
+		// Preserve the sprite depth (z) that physics does not manage; rotation is stored in degrees.
 		transform->SetPosition(Vector(position.x * PhysicsWorld::PixelsPerMeter, position.y * PhysicsWorld::PixelsPerMeter, current.z));
 		transform->SetRotation(Vector(0.0f, 0.0f, angle));
 	}

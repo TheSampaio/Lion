@@ -38,6 +38,7 @@ namespace Lion
 		glfwWindowHint(GLFW_CLIENT_API, RendererAPI::GetAPI() == GraphicsAPI::OpenGL ? GLFW_OPENGL_API : GLFW_NO_API);
 		glfwWindowHint(GLFW_VISIBLE, false);
 		glfwWindowHint(GLFW_RESIZABLE, mData->resizable ? GLFW_TRUE : GLFW_FALSE);
+		glfwWindowHint(GLFW_MAXIMIZED, mData->maximized ? GLFW_TRUE : GLFW_FALSE);
 
 		mWindow = glfwCreateWindow(
 			static_cast<int32>(mData->width),
@@ -161,6 +162,12 @@ namespace Lion
 	bool GlfwWindow::ShouldClose() const
 	{
 		return glfwWindowShouldClose(mWindow);
+	}
+
+	void GlfwWindow::RequestClose()
+	{
+		if (mWindow)
+			glfwSetWindowShouldClose(mWindow, GLFW_TRUE);
 	}
 
 	void GlfwWindow::SetDisplayTitle(const std::string& title)

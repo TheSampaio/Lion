@@ -22,6 +22,7 @@ namespace Lion
         glm::vec4 color;
         glm::vec2 textureCoord;
         float32 texture;
+        float32 entityId;  // Owner entity id (as float; exact for ids well under 2^24), for editor picking.
     };
 
     Renderer* Renderer::sInstance = nullptr;
@@ -51,6 +52,7 @@ namespace Lion
             { ShaderDataType::Float4, "iColor" },
             { ShaderDataType::Float2, "iTexCoord" },
             { ShaderDataType::Float,  "iTexId" },
+            { ShaderDataType::Float,  "iEntityId" },
         });
         self->mVertexArray->AddVertexBuffer(self->mVertexBuffer);
 
@@ -81,6 +83,12 @@ namespace Lion
         self->mVertexData.resize(maxVertexCount);
 
         return self->mShader != nullptr;
+    }
+
+    void Renderer::Clear(float32 red, float32 green, float32 blue, float32 alpha)
+    {
+        RenderCommand::SetClearColor(red, green, blue, alpha);
+        RenderCommand::Clear();
     }
 
     void Renderer::RenderBegin(const Reference<Camera>& camera)
@@ -176,37 +184,53 @@ namespace Lion
         const float32 x = spriteInfo->position.x;
         const float32 y = spriteInfo->position.y;
         const float32 z = spriteInfo->position.z;
-        const Size halfSize = spriteInfo->size * 0.5f;
+        const float32 halfWidth = spriteInfo->size.width * 0.5f * spriteInfo->scale.x;
+        const float32 halfHeight = spriteInfo->size.height * 0.5f * spriteInfo->scale.y;
         const float32 slot = static_cast<float32>(textureSlot);
+        const float32 entityId = static_cast<float32>(spriteInfo->entityId);
+
+        // Rotate the corner offsets around the sprite center (rotation.z is stored in degrees).
+        const float32 angle = glm::radians(spriteInfo->rotation.z);
+        const float32 cosAngle = std::cos(angle);
+        const float32 sinAngle = std::sin(angle);
+
+        const auto corner = [&](float32 offsetX, float32 offsetY) -> glm::vec3
+        {
+            return { x + offsetX * cosAngle - offsetY * sinAngle, y + offsetX * sinAngle + offsetY * cosAngle, z };
+        };
 
         constexpr glm::vec4 white = { 1.0f, 1.0f, 1.0f, 1.0f };
 
         // Top-Left
-        target->position = { x - halfSize.width, y + halfSize.height, z };
+        target->position = corner(-halfWidth, halfHeight);
         target->color = white;
         target->textureCoord = { 0.0f, 1.0f };
         target->texture = slot;
+        target->entityId = entityId;
         target++;
 
         // Bottom-Left
-        target->position = { x - halfSize.width, y - halfSize.height, z };
+        target->position = corner(-halfWidth, -halfHeight);
         target->color = white;
         target->textureCoord = { 0.0f, 0.0f };
         target->texture = slot;
+        target->entityId = entityId;
         target++;
 
         // Bottom-Right
-        target->position = { x + halfSize.width, y - halfSize.height, z };
+        target->position = corner(halfWidth, -halfHeight);
         target->color = white;
         target->textureCoord = { 1.0f, 0.0f };
         target->texture = slot;
+        target->entityId = entityId;
         target++;
 
         // Top-Right
-        target->position = { x + halfSize.width, y + halfSize.height, z };
+        target->position = corner(halfWidth, halfHeight);
         target->color = white;
         target->textureCoord = { 1.0f, 1.0f };
         target->texture = slot;
+        target->entityId = entityId;
         target++;
 
         return target;

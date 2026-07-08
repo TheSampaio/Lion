@@ -49,6 +49,11 @@ namespace Lion
         return sInstance->mBackend->ShouldClose();
     }
 
+    void Window::RequestClose()
+    {
+        sInstance->mBackend->RequestClose();
+    }
+
     void Window::SetBackgroundColor(float32 red, float32 green, float32 blue)
     {
         sInstance->mBackgroundColor = { red, green, blue };
@@ -67,6 +72,11 @@ namespace Lion
     {
         sInstance->mData.resizable = enable;
         sInstance->mBackend->SetResizable(enable);  // Applied live too when the window exists.
+    }
+
+    void Window::SetMaximized(bool enable)
+    {
+        sInstance->mData.maximized = enable;
     }
 
     void Window::SetSize(uint32 width, uint32 height)

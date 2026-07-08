@@ -1,12 +1,13 @@
 #include "Engine.h"
 #include "SpriteRenderer.h"
 
+#include <Lion/Logic/Entity.h>
 #include <Lion/Render/Sprite.h>
 
 namespace Lion
 {
 	SpriteRenderer::SpriteRenderer(const std::string& filePath)
-		: mSprite(MakeScope<Sprite>(filePath))
+		: mSprite(MakeScope<Sprite>(filePath)), mTexturePath(filePath)
 	{
 	}
 
@@ -22,8 +23,17 @@ namespace Lion
 		return mSprite->GetSize();
 	}
 
+	void SpriteRenderer::SetTexturePath(const std::string& filePath)
+	{
+		if (filePath == mTexturePath)
+			return;
+
+		mSprite = MakeScope<Sprite>(filePath);
+		mTexturePath = filePath;
+	}
+
 	void SpriteRenderer::OnRender()
 	{
-		mSprite->Draw(GetTransform());
+		mSprite->Draw(GetTransform(), GetOwner().GetId());
 	}
 }

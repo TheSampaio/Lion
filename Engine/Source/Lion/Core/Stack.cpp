@@ -7,11 +7,10 @@ namespace Lion
 {
 	Stack::~Stack()
 	{
+		// Layers are detached by Application::Run (while the context is still alive); here we
+		// only release them.
 		for (Layer* layer : m_Layers)
-		{
-			layer->OnDetach();
 			delete layer;
-		}
 	}
 
 	void Stack::PushLayer(Layer* layer)

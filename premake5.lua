@@ -45,6 +45,7 @@ workspace "Lion"
     dependencies["glfw"] = {
         include = "%{wks.location}/Vendor/glfw/include",
         lib = "glfw",
+        dll = "%{wks.location}/Vendor/glfw/.Out/Bin/" .. output_dir .. "glfw/glfw.dll",
     }
 
     dependencies["glm"] = {
@@ -54,6 +55,15 @@ workspace "Lion"
     dependencies["imgui"] = {
         include = "%{wks.location}/Vendor/imgui/include",
         lib = "imgui",
+    }
+
+    dependencies["json"] = {
+        include = "%{wks.location}/Vendor/json/include",
+    }
+
+    dependencies["imguizmo"] = {
+        include = "%{wks.location}/Vendor/imguizmo/include",
+        source = "%{wks.location}/Vendor/imguizmo/include/imguizmo/ImGuizmo.cpp",
     }
 
     dependencies["spdlog"] = {
@@ -73,10 +83,22 @@ group ". External Dependencies"
     include "Vendor/imgui"
     include "Vendor/spdlog"
     include "Vendor/stb"
+
+    -- Override GLFW (a submodule) to build as a shared library without editing the vendored file.
+    -- A single shared GLFW keeps one copy of its global state, shared by the engine DLL (which owns
+    -- the window) and the editor executable (whose ImGui GLFW backend must act on that same window).
+    project "glfw"
+        filter {}
+        kind "SharedLib"
+        defines { "_GLFW_BUILD_DLL" }
 group ""
 
 group "Core"
     include "Engine"
+group ""
+
+group "Tools"
+    include "Editor"
 group ""
 
 group "Misc"

@@ -25,9 +25,16 @@ namespace Lion
 		// Returns the wrapped sprite for advanced tweaking.
 		LION_API Sprite& GetSprite() const { return *mSprite; }
 
+		// Source texture path (empty when constructed from an existing texture); used by serialization.
+		const std::string& GetTexturePath() const { return mTexturePath; }
+
+		// Replaces the drawn texture by loading a new one from disk (used by the editor Inspector).
+		LION_API void SetTexturePath(const std::string& filePath);
+
 		void OnRender() override;
 
 	private:
 		Scope<Sprite> mSprite;
+		std::string mTexturePath;
 	};
 }

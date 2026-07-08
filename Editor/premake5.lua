@@ -1,4 +1,4 @@
-project "Sandbox"
+project "Editor"
     kind "ConsoleApp"
 
     -- Output directories
@@ -8,6 +8,7 @@ project "Sandbox"
     files {
         "%{prj.location}/**.h",
         "%{prj.location}/**.cpp",
+        "%{dependencies.imguizmo.source}",  -- compiled with the editor (editor-only dependency)
     }
 
     includedirs {
@@ -20,12 +21,17 @@ project "Sandbox"
         "%{dependencies.glad.include}",
         "%{dependencies.glfw.include}",
         "%{dependencies.glm.include}",
+        "%{dependencies.imgui.include}",
+        "%{dependencies.imguizmo.include}",
+        "%{wks.location}/Vendor/imgui/include/imgui",  -- so ImGuizmo can include "imgui.h" directly
         "%{dependencies.spdlog.include}",
         "%{dependencies.stb.include}",
     }
 
     links {
         "Lion",
+        "%{dependencies.imgui.lib}",
+        "%{dependencies.glfw.lib}",  -- ImGui's GLFW backend links against GLFW directly (editor-only).
     }
 
     filter "configurations:Shipping"
@@ -36,13 +42,11 @@ project "Sandbox"
         defines "LN_PLATFORM_WIN"
         systemversion "latest"
 
-        -- Copy the Resource folder contents next to the executable (Shader/, Sprite/, ... at root).
         postbuildcommands {
-            'xcopy /E /I /Y /Q "%{prj.location}Resource" "%{cfg.targetdir}"',
-        }
-
-    filter { "system:windows", "configurations:Shipping" }
-        -- Make shipped shaders unreadable so they cannot be edited in a text editor.
-        postbuildcommands {
-            'powershell -NoProfile -ExecutionPolicy Bypass -File "%{wks.location}Scripts/ObfuscateShaders.ps1" "%{cfg.targetdir}"',
+            -- Engine DLL next to the editor executable.
+            '{COPY} "%{wks.location}/.Out/Bin/' .. output_dir .. 'Lion/Lion.dll" "%{cfg.targetdir}"',
+            -- GLFW shared library (the editor's ImGui backend links against it directly).
+            '{COPYFILE} "%{dependencies.glfw.dll}" "%{cfg.targetdir}"',
+            -- Shared resources (shader + sprites) flattened next to the executable.
+            'xcopy /E /I /Y /Q "%{wks.location}/Game/Resource" "%{cfg.targetdir}"',
         }

@@ -154,6 +154,11 @@ namespace Lion
 			}
 
 		} while (!Window::Close());
+
+		// Detach layers while the window and graphics context are still alive, so they can
+		// release GPU/UI resources safely (the stack destructor only deletes them afterwards).
+		for (Layer* layer : *mStack)
+			layer->OnDetach();
 	}
 
 	void Application::Initialize()

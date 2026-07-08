@@ -15,6 +15,7 @@ namespace Lion
         Vector scale = {};
         Size size = {};
         Texture* texture = nullptr;  // Non-owning; the Sprite keeps the texture alive.
+        int32 entityId = -1;         // Owner entity id for editor picking (-1 = none).
     };
 
     // Lightweight drawable: owns a texture and submits a textured quad to the Renderer.
@@ -30,8 +31,9 @@ namespace Lion
         // Returns the sprite's pixel center.
         Size LION_API GetCenter();
 
-        // Submits the sprite to the Renderer using the given transform.
-        void LION_API Draw(const Reference<Transform>& transform);
+        // Submits the sprite to the Renderer using the given transform. The optional entityId is
+        // forwarded to the renderer for editor picking (-1 means "not associated with an entity").
+        void LION_API Draw(const Reference<Transform>& transform, int32 entityId = -1);
 
     private:
         // Attributes

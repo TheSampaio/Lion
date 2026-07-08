@@ -23,6 +23,9 @@ namespace Lion
     class Renderer
     {
     public:
+        // Clears the currently bound framebuffer with the given color.
+        static LION_API void Clear(float32 red, float32 green, float32 blue, float32 alpha = 1.0f);
+
         // Begins a batch: binds the shared shader/geometry and uploads the camera matrices.
         static LION_API void RenderBegin(const Reference<Camera>& camera);
 

@@ -45,6 +45,20 @@ namespace Lion
         mPhysicsWorld->SetGravity(gravity);
     }
 
+    glm::vec2 Scene::GetGravity() const
+    {
+        return mPhysicsWorld->GetGravity();
+    }
+
+    void Scene::Clear()
+    {
+        for (auto& entity : mEntities)
+            entity->Destroy();
+
+        mEntities.clear();
+        mPendingRemoval.clear();
+    }
+
     void Scene::OnUpdate()
     {
         for (auto& entity : mEntities)
@@ -66,6 +80,11 @@ namespace Lion
     {
         for (auto& entity : mEntities)
             entity->Render();
+    }
+
+    void Scene::FlushRemovals()
+    {
+        FlushPendingRemoval();
     }
 
     void Scene::FlushPendingRemoval()
