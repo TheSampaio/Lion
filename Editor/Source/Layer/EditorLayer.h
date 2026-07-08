@@ -59,6 +59,10 @@ private:
 	// Returns whether the body is open; sets removeRequested when the button is pressed.
 	bool DrawComponentHeader(const char* label, bool& removeRequested);
 
+	// Draws an X/Y/Z vector editor with red/green/blue axis buttons (Unity/Godot-style). Clicking an
+	// axis button resets that component to resetValue. Returns whether any value changed.
+	bool DrawVec3Control(const char* label, float values[3], float speed, float resetValue);
+
 	// Undo/redo helpers. RecordSnapshot is for discrete actions (add/delete); BeginEdit/CommitEdit
 	// group a continuous edit (a gizmo or slider drag) into a single undo step.
 	void RecordSnapshot();

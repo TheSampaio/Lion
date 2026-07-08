@@ -670,6 +670,65 @@ bool EditorLayer::DrawComponentHeader(const char* label, bool& removeRequested)
 	return open;
 }
 
+bool EditorLayer::DrawVec3Control(const char* label, float values[3], float speed, float resetValue)
+{
+	struct Axis { const char8* name; ImVec4 color; ImVec4 hovered; };
+	static const Axis axes[3] = {
+		{ "X", ImVec4(0.71f, 0.24f, 0.27f, 1.0f), ImVec4(0.83f, 0.31f, 0.34f, 1.0f) },  // Red
+		{ "Y", ImVec4(0.29f, 0.53f, 0.29f, 1.0f), ImVec4(0.36f, 0.64f, 0.36f, 1.0f) },  // Green
+		{ "Z", ImVec4(0.22f, 0.40f, 0.68f, 1.0f), ImVec4(0.28f, 0.49f, 0.80f, 1.0f) },  // Blue
+	};
+
+	bool changed = false;
+	const ImGuiStyle& style = ImGui::GetStyle();
+
+	ImGui::PushID(label);
+
+	const float32 lineHeight = ImGui::GetFontSize() + style.FramePadding.y * 2.0f;
+	const ImVec2 buttonSize(lineHeight + 3.0f, lineHeight);
+
+	// Reserve room for the trailing label, then split the rest across the three axes.
+	const float32 labelWidth = 70.0f;
+	const float32 controlsWidth = ImGui::GetContentRegionAvail().x - labelWidth;
+	const float32 axisWidth = (controlsWidth - 2.0f * style.ItemInnerSpacing.x) / 3.0f;
+	const float32 dragWidth = (axisWidth - buttonSize.x > 12.0f) ? axisWidth - buttonSize.x : 12.0f;
+
+	for (int32 i = 0; i < 3; ++i)
+	{
+		if (i > 0)
+			ImGui::SameLine(0.0f, style.ItemInnerSpacing.x);
+
+		ImGui::PushID(i);
+
+		// Colored axis button: click to reset this component.
+		ImGui::PushStyleColor(ImGuiCol_Button, axes[i].color);
+		ImGui::PushStyleColor(ImGuiCol_ButtonHovered, axes[i].hovered);
+		ImGui::PushStyleColor(ImGuiCol_ButtonActive, axes[i].color);
+		if (ImGui::Button(axes[i].name, buttonSize))
+		{
+			RecordSnapshot();
+			values[i] = resetValue;
+			changed = true;
+		}
+		ImGui::PopStyleColor(3);
+
+		ImGui::SameLine(0.0f, 0.0f);
+		ImGui::SetNextItemWidth(dragWidth);
+		if (ImGui::DragFloat("##value", &values[i], speed))
+			changed = true;
+		if (ImGui::IsItemActivated()) BeginEdit();
+		if (ImGui::IsItemDeactivatedAfterEdit()) CommitEdit();
+
+		ImGui::PopID();
+	}
+
+	ImGui::SameLine(0.0f, style.ItemInnerSpacing.x);
+	ImGui::TextUnformatted(label);
+
+	ImGui::PopID();
+	return changed;
+}
+
 void EditorLayer::DrawProperties()
 {
 	ImGui::Begin("Properties");
@@ -700,24 +759,18 @@ void EditorLayer::DrawProperties()
 
 		Vector position = transform->GetPosition();
 		float32 positionValues[3] = { position.x, position.y, position.z };
-		if (ImGui::DragFloat3("Position", positionValues, 1.0f))
+		if (DrawVec3Control("Position", positionValues, 1.0f, 0.0f))
 			transform->SetPosition(Vector(positionValues[0], positionValues[1], positionValues[2]));
-		if (ImGui::IsItemActivated()) BeginEdit();
-		if (ImGui::IsItemDeactivatedAfterEdit()) CommitEdit();
 
 		Vector rotation = transform->GetRotation();
 		float32 rotationValues[3] = { rotation.x, rotation.y, rotation.z };
-		if (ImGui::DragFloat3("Rotation", rotationValues, 0.5f))
+		if (DrawVec3Control("Rotation", rotationValues, 0.5f, 0.0f))
 			transform->SetRotation(Vector(rotationValues[0], rotationValues[1], rotationValues[2]));
-		if (ImGui::IsItemActivated()) BeginEdit();
-		if (ImGui::IsItemDeactivatedAfterEdit()) CommitEdit();
 
 		Vector scale = transform->GetScale();
 		float32 scaleValues[3] = { scale.x, scale.y, scale.z };
-		if (ImGui::DragFloat3("Scale", scaleValues, 0.01f))
+		if (DrawVec3Control("Scale", scaleValues, 0.01f, 1.0f))
 			transform->SetScale(Vector(scaleValues[0], scaleValues[1], scaleValues[2]));
-		if (ImGui::IsItemActivated()) BeginEdit();
-		if (ImGui::IsItemDeactivatedAfterEdit()) CommitEdit();
 	}
 
 	// Components can request removal here; the removal itself is deferred until after drawing so we
