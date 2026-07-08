@@ -1,6 +1,7 @@
 #include "Engine.h"
 #include "SpriteRenderer.h"
 
+#include <Lion/Logic/Entity.h>
 #include <Lion/Render/Sprite.h>
 
 namespace Lion
@@ -33,6 +34,6 @@ namespace Lion
 
 	void SpriteRenderer::OnRender()
 	{
-		mSprite->Draw(GetTransform());
+		mSprite->Draw(GetTransform(), GetOwner().GetId());
 	}
 }

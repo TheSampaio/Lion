@@ -7,6 +7,9 @@ namespace Lion
 	{
 		uint32 width = 0;
 		uint32 height = 0;
+
+		// Adds a secondary integer attachment holding the entity id per pixel (editor picking).
+		bool hasEntityId = false;
 	};
 
 	// Off-screen render target.
@@ -29,6 +32,12 @@ namespace Lion
 
 		// Native handle of the color texture, usable as an ImGui image id.
 		virtual uint32 GetColorAttachment() const = 0;
+
+		// Clears the entity-id attachment to the given value (typically -1). No-op without the attachment.
+		virtual void ClearEntityId(int32 value) = 0;
+
+		// Reads the entity id at a pixel of the id attachment (origin bottom-left). Returns -1 if absent.
+		virtual int32 ReadEntityId(uint32 x, uint32 y) = 0;
 
 		virtual const FramebufferSpecification& GetSpecification() const = 0;
 

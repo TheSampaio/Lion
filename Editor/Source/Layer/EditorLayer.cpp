@@ -25,6 +25,7 @@ void EditorLayer::OnCreate()
 	FramebufferSpecification spec;
 	spec.width = 1280;
 	spec.height = 720;
+	spec.hasEntityId = true;   // Secondary attachment for pixel-perfect viewport picking.
 	mFramebuffer = Framebuffer::Create(spec);
 
 	CreateDemoScene();
@@ -129,6 +130,7 @@ void EditorLayer::RenderScene()
 	// Render the scene into the framebuffer instead of the window.
 	mFramebuffer->Bind();
 	Renderer::Clear(0.12f, 0.12f, 0.15f, 1.0f);
+	mFramebuffer->ClearEntityId(-1);  // Empty pixels map to "no entity".
 
 	Renderer::RenderBegin(mCamera);
 	mScene->OnRender();
@@ -438,6 +440,7 @@ void EditorLayer::DrawViewport()
 
 	const ImVec2 imageMin = ImGui::GetItemRectMin();
 	const ImVec2 imageSize = ImGui::GetItemRectSize();
+	const bool imageHovered = ImGui::IsItemHovered();
 
 	// W/E/R switch the gizmo between move / rotate / scale (unless typing or dragging).
 	if (!mPlaying && !ImGuizmo::IsUsing() && !ImGui::IsAnyItemActive())
@@ -484,6 +487,30 @@ void EditorLayer::DrawViewport()
 			transform->SetPosition(Vector(newTranslation[0], newTranslation[1], position.z));
 			transform->SetRotation(Vector(0.0f, 0.0f, newRotation[2]));
 			transform->SetScale(Vector(newScale[0], newScale[1], 1.0f));
+		}
+	}
+
+	// Pixel-perfect click-to-select: read the entity id under the cursor from the id attachment.
+	// Skipped while over/using the gizmo (that click drives the gizmo instead).
+	if (imageHovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left) && !ImGuizmo::IsOver() && !ImGuizmo::IsUsing())
+	{
+		const ImVec2 mouse = ImGui::GetMousePos();
+		const int32 pixelX = static_cast<int32>(mouse.x - imageMin.x);
+		const int32 pixelY = static_cast<int32>(imageSize.y - (mouse.y - imageMin.y));  // Flip Y (bottom-up).
+
+		if (pixelX >= 0 && pixelY >= 0 && pixelX < static_cast<int32>(imageSize.x) && pixelY < static_cast<int32>(imageSize.y))
+		{
+			const int32 id = mFramebuffer->ReadEntityId(static_cast<uint32>(pixelX), static_cast<uint32>(pixelY));
+
+			mSelectedEntity = nullptr;
+			for (const auto& entity : mScene->GetEntities())
+			{
+				if (entity->GetId() == id)
+				{
+					mSelectedEntity = entity;
+					break;
+				}
+			}
 		}
 	}
 

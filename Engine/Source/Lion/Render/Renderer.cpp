@@ -22,6 +22,7 @@ namespace Lion
         glm::vec4 color;
         glm::vec2 textureCoord;
         float32 texture;
+        float32 entityId;  // Owner entity id (as float; exact for ids well under 2^24), for editor picking.
     };
 
     Renderer* Renderer::sInstance = nullptr;
@@ -51,6 +52,7 @@ namespace Lion
             { ShaderDataType::Float4, "iColor" },
             { ShaderDataType::Float2, "iTexCoord" },
             { ShaderDataType::Float,  "iTexId" },
+            { ShaderDataType::Float,  "iEntityId" },
         });
         self->mVertexArray->AddVertexBuffer(self->mVertexBuffer);
 
@@ -185,6 +187,7 @@ namespace Lion
         const float32 halfWidth = spriteInfo->size.width * 0.5f * spriteInfo->scale.x;
         const float32 halfHeight = spriteInfo->size.height * 0.5f * spriteInfo->scale.y;
         const float32 slot = static_cast<float32>(textureSlot);
+        const float32 entityId = static_cast<float32>(spriteInfo->entityId);
 
         // Rotate the corner offsets around the sprite center (rotation.z is stored in degrees).
         const float32 angle = glm::radians(spriteInfo->rotation.z);
@@ -203,6 +206,7 @@ namespace Lion
         target->color = white;
         target->textureCoord = { 0.0f, 1.0f };
         target->texture = slot;
+        target->entityId = entityId;
         target++;
 
         // Bottom-Left
@@ -210,6 +214,7 @@ namespace Lion
         target->color = white;
         target->textureCoord = { 0.0f, 0.0f };
         target->texture = slot;
+        target->entityId = entityId;
         target++;
 
         // Bottom-Right
@@ -217,6 +222,7 @@ namespace Lion
         target->color = white;
         target->textureCoord = { 1.0f, 0.0f };
         target->texture = slot;
+        target->entityId = entityId;
         target++;
 
         // Top-Right
@@ -224,6 +230,7 @@ namespace Lion
         target->color = white;
         target->textureCoord = { 1.0f, 1.0f };
         target->texture = slot;
+        target->entityId = entityId;
         target++;
 
         return target;

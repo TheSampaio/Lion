@@ -22,13 +22,14 @@ namespace Lion
         mSpriteInfo->texture = mTexture.get();
     }
 
-    void Sprite::Draw(const Reference<Transform>& transform)
+    void Sprite::Draw(const Reference<Transform>& transform, int32 entityId)
     {
         mSpriteInfo->position = transform->mPosition;
         mSpriteInfo->rotation = transform->mRotation;
         mSpriteInfo->scale = transform->mScale;
         mSpriteInfo->size = mTexture->GetSize();
         mSpriteInfo->texture = mTexture.get();
+        mSpriteInfo->entityId = entityId;
 
         Renderer::Submit(mSpriteInfo.get());
     }

@@ -5,8 +5,12 @@
 
 namespace Lion
 {
+	// Monotonic source of process-unique entity ids. 0 is reserved to mean "no entity", so ids
+	// start at 1 (the framebuffer's entity-id attachment is cleared to -1 for empty pixels).
+	static int32 sNextEntityId = 1;
+
 	Entity::Entity()
-		: mTransform(MakeReference<Transform>())
+		: mId(sNextEntityId++), mTransform(MakeReference<Transform>())
 	{
 	}
 

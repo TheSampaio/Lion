@@ -21,6 +21,10 @@ namespace Lion
 		Entity(const Entity&) = delete;
 		Entity& operator=(const Entity&) = delete;
 
+		// Process-unique runtime id (not serialized). Used by the editor for pixel-perfect picking:
+		// the id is written into the framebuffer's entity-id attachment and read back on click.
+		LION_API int32 GetId() const { return mId; }
+
 		// The entity's display name (shown in the editor Hierarchy and saved to scenes).
 		LION_API const std::string& GetName() const { return mName; }
 		LION_API void SetName(const std::string& name) { mName = name; }
@@ -80,6 +84,7 @@ namespace Lion
 		friend Scene;
 
 	private:
+		const int32 mId;
 		std::string mName = "Entity";
 		Reference<Transform> mTransform;
 		Reference<Scene> mScene;
