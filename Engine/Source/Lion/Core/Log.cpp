@@ -1,9 +1,31 @@
 #include "Engine.h"
 #include "Log.h"
 
+#include <ctime>
+
 namespace Lion
 {
 	Log* Log::sInstance = nullptr;
+
+	namespace
+	{
+		// Current local time-of-day as "HH:MM:SS", matching the spdlog console pattern.
+		std::string CurrentTimeString()
+		{
+			const std::time_t now = std::time(nullptr);
+			std::tm local{};
+
+#if LN_PLATFORM_WIN
+			localtime_s(&local, &now);
+#else
+			localtime_r(&now, &local);
+#endif
+
+			char buffer[16];
+			std::strftime(buffer, sizeof(buffer), "%H:%M:%S", &local);
+			return buffer;
+		}
+	}
 
 	void Log::New()
 	{
@@ -16,9 +38,29 @@ namespace Lion
 		sInstance = nullptr;
 	}
 
+	const std::vector<LogEntry>& Log::GetHistory()
+	{
+		return sInstance->mHistory;
+	}
+
+	void Log::ClearHistory()
+	{
+		sInstance->mHistory.clear();
+	}
+
 	void Log::Console(LogLevel mode, const std::string& message)
 	{
 #ifndef LN_SHIPPING
+		// Retain every line in memory so the editor Console can display the full history, regardless
+		// of which severities are routed to spdlog in the current configuration.
+		if (sInstance)
+		{
+			if (sInstance->mHistory.size() >= kMaxHistory)
+				sInstance->mHistory.erase(sInstance->mHistory.begin());
+
+			sInstance->mHistory.push_back({ mode, CurrentTimeString(), message });
+		}
+
 		switch (mode)
 		{
 		case LogLevel::Error:

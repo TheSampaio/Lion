@@ -18,6 +18,7 @@ public:
 private:
 	bool mShowDemo = false;
 	bool mLayoutInitialized = false;
+	bool mConsoleAutoScroll = true;
 	ImGuizmo::OPERATION mGizmoOperation = ImGuizmo::TRANSLATE;
 
 	Lion::Reference<Lion::CameraOrthographic> mCamera;
@@ -33,5 +34,6 @@ private:
 	void DrawViewport();
 	void DrawHierarchy();
 	void DrawProperties();
+	void DrawConsole();
 	void BuildDefaultLayout(unsigned int dockspaceId);
 };

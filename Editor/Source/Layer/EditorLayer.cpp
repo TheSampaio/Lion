@@ -146,8 +146,68 @@ void EditorLayer::DrawUI()
 	ImGui::Text("Viewport: %.0f x %.0f", mViewportSize.x, mViewportSize.y);
 	ImGui::End();
 
+	DrawConsole();
+
 	if (mShowDemo)
 		ImGui::ShowDemoWindow(&mShowDemo);
+}
+
+namespace
+{
+	// Display color for each log severity, mirroring the spdlog console coloring.
+	ImVec4 LogLevelColor(LogLevel level)
+	{
+		switch (level)
+		{
+			case LogLevel::Error:       return ImVec4(0.94f, 0.35f, 0.35f, 1.0f);
+			case LogLevel::Fatal:       return ImVec4(1.00f, 0.30f, 0.55f, 1.0f);
+			case LogLevel::Warning:     return ImVec4(0.95f, 0.80f, 0.35f, 1.0f);
+			case LogLevel::Success:     return ImVec4(0.45f, 0.85f, 0.50f, 1.0f);
+			case LogLevel::Information: return ImVec4(0.60f, 0.75f, 0.95f, 1.0f);
+			case LogLevel::Trace:       return ImVec4(0.65f, 0.65f, 0.65f, 1.0f);
+		}
+
+		return ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
+	}
+}
+
+void EditorLayer::DrawConsole()
+{
+	ImGui::Begin("Console");
+
+	// Toolbar: clear the history, follow new output, and filter by substring.
+	if (ImGui::Button("Clear"))
+		Log::ClearHistory();
+
+	ImGui::SameLine();
+	ImGui::Checkbox("Auto-scroll", &mConsoleAutoScroll);
+
+	ImGui::SameLine();
+	static ImGuiTextFilter filter;
+	filter.Draw("Filter", 180.0f);
+
+	ImGui::Separator();
+
+	ImGui::BeginChild("ConsoleOutput", ImVec2(0.0f, 0.0f), false, ImGuiWindowFlags_HorizontalScrollbar);
+
+	for (const LogEntry& entry : Log::GetHistory())
+	{
+		const std::string line = "[" + entry.time + "] " + entry.message;
+
+		if (!filter.PassFilter(line.c_str()))
+			continue;
+
+		ImGui::PushStyleColor(ImGuiCol_Text, LogLevelColor(entry.level));
+		ImGui::TextUnformatted(line.c_str());
+		ImGui::PopStyleColor();
+	}
+
+	// Keep following the tail while the view is already scrolled to the bottom.
+	if (mConsoleAutoScroll && ImGui::GetScrollY() >= ImGui::GetScrollMaxY())
+		ImGui::SetScrollHereY(1.0f);
+
+	ImGui::EndChild();
+	ImGui::End();
 }
 
 void EditorLayer::DrawViewport()
@@ -388,6 +448,7 @@ void EditorLayer::BuildDefaultLayout(unsigned int dockspaceId)
 
 	ImGui::DockBuilderDockWindow("Scene Hierarchy", left);
 	ImGui::DockBuilderDockWindow("Properties", right);
+	ImGui::DockBuilderDockWindow("Console", bottom);
 	ImGui::DockBuilderDockWindow("Statistics", bottom);
 	ImGui::DockBuilderDockWindow("Viewport", center);
 
