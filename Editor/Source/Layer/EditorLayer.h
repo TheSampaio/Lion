@@ -96,7 +96,10 @@ private:
 	void HandleShortcuts();
 
 	// Shortcut/keybinding helpers.
-	void InitShortcuts();                                  // Assigns the default bindings.
+	void InitShortcuts();                                  // Sets defaults, then loads overrides from disk.
+	void ResetShortcutsToDefault();                        // Assigns the built-in default bindings.
+	void LoadShortcuts();                                  // Overrides binds from the on-disk config, if present.
+	void SaveShortcuts() const;                            // Persists the current binds to disk.
 	bool IsShortcutPressed(ShortcutAction action) const;   // True when the bound combo was pressed this frame.
 	std::string KeybindToString(const Keybind& bind) const;
 

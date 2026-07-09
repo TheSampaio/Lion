@@ -2,6 +2,8 @@
 
 #include "../EditorGui.h"
 
+#include <fstream>
+
 #include <Lion/Core/Filesystem.h>
 
 #include <imgui/imgui_internal.h> // DockBuilder API for the default layout.
@@ -289,7 +291,8 @@ void EditorLayer::DrawShortcuts()
 		ImGui::SameLine(ImGui::GetContentRegionAvail().x - ImGui::CalcTextSize("Reset to Defaults").x - ImGui::GetStyle().FramePadding.x * 2.0f);
 		if (ImGui::SmallButton("Reset to Defaults"))
 		{
-			InitShortcuts();
+			ResetShortcutsToDefault();
+			SaveShortcuts();
 			mRebindingIndex = -1;
 		}
 
@@ -364,6 +367,7 @@ void EditorLayer::DrawShortcuts()
 
 					mBinds[mRebindingIndex] = { key, io.KeyCtrl, io.KeyShift, io.KeyAlt };
 					mRebindingIndex = -1;
+					SaveShortcuts();
 					break;
 				}
 			}
@@ -442,7 +446,13 @@ void EditorLayer::Redo()
 	SceneSerializer::DeserializeFromString(mScene, state);
 }
 
-void EditorLayer::InitShortcuts()
+namespace
+{
+	// Config file for user-customized shortcuts, kept next to imgui.ini (the working directory).
+	constexpr const char8* kShortcutsFile = "shortcuts.cfg";
+}
+
+void EditorLayer::ResetShortcutsToDefault()
 {
 	const auto set = [&](ShortcutAction action, ImGuiKey key, bool ctrl = false, bool shift = false, bool alt = false)
 	{
@@ -459,6 +469,43 @@ void EditorLayer::InitShortcuts()
 	set(ShortcutAction::GizmoScale, ImGuiKey_R);
 	set(ShortcutAction::RenameEntity, ImGuiKey_F2);
 	set(ShortcutAction::DeleteEntity, ImGuiKey_Delete);
+}
+
+void EditorLayer::InitShortcuts()
+{
+	ResetShortcutsToDefault();
+	LoadShortcuts();
+}
+
+void EditorLayer::LoadShortcuts()
+{
+	std::ifstream file(kShortcutsFile);
+
+	if (!file.is_open())
+		return;
+
+	int index = 0, key = 0, ctrl = 0, shift = 0, alt = 0;
+
+	while (file >> index >> key >> ctrl >> shift >> alt)
+	{
+		if (index >= 0 && index < static_cast<int>(ShortcutAction::Count))
+			mBinds[index] = { static_cast<ImGuiKey>(key), ctrl != 0, shift != 0, alt != 0 };
+	}
+}
+
+void EditorLayer::SaveShortcuts() const
+{
+	std::ofstream file(kShortcutsFile);
+
+	if (!file.is_open())
+		return;
+
+	for (int i = 0; i < static_cast<int>(ShortcutAction::Count); ++i)
+	{
+		const Keybind& bind = mBinds[i];
+		file << i << ' ' << static_cast<int>(bind.key) << ' '
+			<< (bind.ctrl ? 1 : 0) << ' ' << (bind.shift ? 1 : 0) << ' ' << (bind.alt ? 1 : 0) << '\n';
+	}
 }
 
 bool EditorLayer::IsShortcutPressed(ShortcutAction action) const
@@ -1081,10 +1128,12 @@ void EditorLayer::DrawProperties()
 		ImGui::PopID();
 	}
 
-	// Apply the deferred reorder, then removal. Reordering only affects the Inspector's display
-	// order (serialization is canonical), so it is not an undo step.
+	// Apply the deferred reorder, then removal. Order is serialized, so a reorder is an undo step.
 	if (dragFrom >= 0 && dragTo >= 0 && dragFrom != dragTo)
+	{
+		RecordSnapshot();
 		mSelectedEntity->MoveComponent(dragFrom, dragTo);
+	}
 
 	if (componentToRemove)
 	{

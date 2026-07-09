@@ -37,6 +37,7 @@ namespace Lion
 		shapeDef.material.restitution = mRestitution;
 		shapeDef.enableContactEvents = true;  // Required for Actor::OnCollision callbacks.
 
-		mShapeId = b2CreateCircleShape(body->GetBodyId(), &shapeDef, &circle);
+		// EnsureBody so the shape attaches correctly regardless of component order.
+		mShapeId = b2CreateCircleShape(body->EnsureBody(), &shapeDef, &circle);
 	}
 }

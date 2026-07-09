@@ -30,18 +30,26 @@ namespace Lion
 
 	void RigidBody2D::OnAwake()
 	{
+		EnsureBody();
+	}
+
+	b2BodyId RigidBody2D::EnsureBody()
+	{
+		if (mHasBody)
+			return mBodyId;
+
 		const Reference<Scene> scene = GetOwner().GetScene();
 
 		if (!scene)
 		{
 			Log::Console(LogLevel::Error, "[RigidBody2D] Owner is not part of a scene; body not created.");
-			return;
+			return mBodyId;
 		}
 
 		mWorld = scene->GetPhysicsWorld();
 
 		if (!mWorld)
-			return;
+			return mBodyId;
 
 		const Vector position = GetTransform()->GetPosition();
 		const Vector rotation = GetTransform()->GetRotation();
@@ -58,6 +66,7 @@ namespace Lion
 		mHasBody = true;
 
 		mWorld->Register(this);
+		return mBodyId;
 	}
 
 	void RigidBody2D::OnDestroy()

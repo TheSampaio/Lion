@@ -39,6 +39,10 @@ namespace Lion
 		// Native Box2D handle, used by colliders to attach shapes.
 		b2BodyId GetBodyId() const { return mBodyId; }
 
+		// Creates the Box2D body if it does not exist yet and returns its id. Called by OnAwake and by
+		// colliders, so the body is created regardless of component awake order.
+		b2BodyId EnsureBody();
+
 		// Configuration accessors (used by serialization).
 		BodyType GetBodyType() const { return mType; }
 		bool IsFixedRotation() const { return mFixedRotation; }

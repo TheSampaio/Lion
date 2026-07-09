@@ -62,32 +62,47 @@ namespace Lion
 			node["transform"]["rotation"] = { rotation.x, rotation.y, rotation.z };
 			node["transform"]["scale"]    = { scale.x, scale.y, scale.z };
 
-			Json components = Json::object();
+			// Components are written as an ordered array so the editor's display/drag order round-trips.
+			Json components = Json::array();
 
-			if (const SpriteRenderer* renderer = entity->GetComponent<SpriteRenderer>())
-				components["SpriteRenderer"]["texture"] = renderer->GetTexturePath();
-
-			if (const RigidBody2D* body = entity->GetComponent<RigidBody2D>())
+			for (const auto& component : entity->GetComponents())
 			{
-				components["RigidBody2D"]["type"] = BodyTypeToString(body->GetBodyType());
-				components["RigidBody2D"]["fixedRotation"] = body->IsFixedRotation();
-			}
+				Json entry;
 
-			if (const BoxCollider2D* collider = entity->GetComponent<BoxCollider2D>())
-			{
-				components["BoxCollider2D"]["width"] = collider->GetWidth();
-				components["BoxCollider2D"]["height"] = collider->GetHeight();
-				components["BoxCollider2D"]["density"] = collider->GetDensity();
-				components["BoxCollider2D"]["friction"] = collider->GetFriction();
-				components["BoxCollider2D"]["restitution"] = collider->GetRestitution();
-			}
+				if (const SpriteRenderer* renderer = dynamic_cast<const SpriteRenderer*>(component.get()))
+				{
+					entry["type"] = "SpriteRenderer";
+					entry["texture"] = renderer->GetTexturePath();
+				}
+				else if (const RigidBody2D* body = dynamic_cast<const RigidBody2D*>(component.get()))
+				{
+					entry["type"] = "RigidBody2D";
+					entry["bodyType"] = BodyTypeToString(body->GetBodyType());
+					entry["fixedRotation"] = body->IsFixedRotation();
+				}
+				else if (const BoxCollider2D* collider = dynamic_cast<const BoxCollider2D*>(component.get()))
+				{
+					entry["type"] = "BoxCollider2D";
+					entry["width"] = collider->GetWidth();
+					entry["height"] = collider->GetHeight();
+					entry["density"] = collider->GetDensity();
+					entry["friction"] = collider->GetFriction();
+					entry["restitution"] = collider->GetRestitution();
+				}
+				else if (const CircleCollider2D* collider = dynamic_cast<const CircleCollider2D*>(component.get()))
+				{
+					entry["type"] = "CircleCollider2D";
+					entry["radius"] = collider->GetRadius();
+					entry["density"] = collider->GetDensity();
+					entry["friction"] = collider->GetFriction();
+					entry["restitution"] = collider->GetRestitution();
+				}
+				else
+				{
+					continue;
+				}
 
-			if (const CircleCollider2D* collider = entity->GetComponent<CircleCollider2D>())
-			{
-				components["CircleCollider2D"]["radius"] = collider->GetRadius();
-				components["CircleCollider2D"]["density"] = collider->GetDensity();
-				components["CircleCollider2D"]["friction"] = collider->GetFriction();
-				components["CircleCollider2D"]["restitution"] = collider->GetRestitution();
+				components.push_back(entry);
 			}
 
 			node["components"] = components;
@@ -153,33 +168,58 @@ namespace Lion
 			{
 				const Json& components = node["components"];
 
-				// RigidBody2D must be attached before its colliders (they need the body on awake).
-				if (components.contains("RigidBody2D"))
+				if (components.is_array())
 				{
-					const Json& body = components["RigidBody2D"];
-					entity->AddComponent<RigidBody2D>(BodyTypeFromString(body.value("type", std::string("Static"))), body.value("fixedRotation", false));
-				}
+					// Ordered format: add components in their saved order (safe in any order because
+					// RigidBody2D::EnsureBody creates the body on demand).
+					for (const auto& entry : components)
+					{
+						const std::string type = entry.value("type", std::string());
 
-				if (components.contains("BoxCollider2D"))
-				{
-					const Json& collider = components["BoxCollider2D"];
-					entity->AddComponent<BoxCollider2D>(
-						collider.value("width", 1.0f), collider.value("height", 1.0f),
-						collider.value("density", 1.0f), collider.value("friction", 0.2f), collider.value("restitution", 0.0f));
+						if (type == "SpriteRenderer")
+							entity->AddComponent<SpriteRenderer>(entry.value("texture", std::string()));
+						else if (type == "RigidBody2D")
+							entity->AddComponent<RigidBody2D>(BodyTypeFromString(entry.value("bodyType", std::string("Static"))), entry.value("fixedRotation", false));
+						else if (type == "BoxCollider2D")
+							entity->AddComponent<BoxCollider2D>(
+								entry.value("width", 1.0f), entry.value("height", 1.0f),
+								entry.value("density", 1.0f), entry.value("friction", 0.2f), entry.value("restitution", 0.0f));
+						else if (type == "CircleCollider2D")
+							entity->AddComponent<CircleCollider2D>(
+								entry.value("radius", 1.0f),
+								entry.value("density", 1.0f), entry.value("friction", 0.2f), entry.value("restitution", 0.0f));
+					}
 				}
-
-				if (components.contains("CircleCollider2D"))
+				else
 				{
-					const Json& collider = components["CircleCollider2D"];
-					entity->AddComponent<CircleCollider2D>(
-						collider.value("radius", 1.0f),
-						collider.value("density", 1.0f), collider.value("friction", 0.2f), collider.value("restitution", 0.0f));
-				}
+					// Legacy keyed-object format (older saved scenes). RigidBody first for awake order.
+					if (components.contains("RigidBody2D"))
+					{
+						const Json& body = components["RigidBody2D"];
+						entity->AddComponent<RigidBody2D>(BodyTypeFromString(body.value("type", std::string("Static"))), body.value("fixedRotation", false));
+					}
 
-				if (components.contains("SpriteRenderer"))
-				{
-					const Json& renderer = components["SpriteRenderer"];
-					entity->AddComponent<SpriteRenderer>(renderer.value("texture", std::string()));
+					if (components.contains("BoxCollider2D"))
+					{
+						const Json& collider = components["BoxCollider2D"];
+						entity->AddComponent<BoxCollider2D>(
+							collider.value("width", 1.0f), collider.value("height", 1.0f),
+							collider.value("density", 1.0f), collider.value("friction", 0.2f), collider.value("restitution", 0.0f));
+					}
+
+					if (components.contains("CircleCollider2D"))
+					{
+						const Json& collider = components["CircleCollider2D"];
+						entity->AddComponent<CircleCollider2D>(
+							collider.value("radius", 1.0f),
+							collider.value("density", 1.0f), collider.value("friction", 0.2f), collider.value("restitution", 0.0f));
+					}
+
+					if (components.contains("SpriteRenderer"))
+					{
+						const Json& renderer = components["SpriteRenderer"];
+						entity->AddComponent<SpriteRenderer>(renderer.value("texture", std::string()));
+					}
 				}
 			}
 
