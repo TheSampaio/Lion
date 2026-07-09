@@ -71,6 +71,16 @@ namespace Lion
 			UnregisterComponent(std::type_index(typeid(T)));
 		}
 
+		// Attached components in their stored order (i.e. the order they were added). The editor
+		// draws them in this order and can reorder them.
+		LION_API const std::vector<Scope<Component>>& GetComponents() const { return mComponents; }
+
+		// Removes a specific component instance (used by the editor's per-component remove button).
+		LION_API void RemoveComponent(Component* component);
+
+		// Moves the component at 'from' to index 'to', shifting the others (editor drag-to-reorder).
+		LION_API void MoveComponent(int32 from, int32 to);
+
 		// Override points for scripted behaviour of the entity itself.
 		virtual void OnAwake() {}
 		virtual void OnDestroy() {}

@@ -55,9 +55,10 @@ private:
 	void DrawShortcuts();
 	void BuildDefaultLayout(unsigned int dockspaceId);
 
-	// Draws a collapsing header for a component with a right-aligned "X" remove button.
-	// Returns whether the body is open; sets removeRequested when the button is pressed.
-	bool DrawComponentHeader(const char* label, bool& removeRequested);
+	// Draws a collapsing header for a component with a right-aligned "X" remove button and
+	// drag-to-reorder support. Returns whether the body is open; sets removeRequested when the X is
+	// pressed, and sets dragFrom/dragTo when a header is dropped onto this one.
+	bool DrawComponentHeader(const char* label, int index, bool& removeRequested, int& dragFrom, int& dragTo);
 
 	// Draws an X/Y/Z vector editor with red/green/blue axis buttons (Unity/Godot-style). Clicking an
 	// axis button resets that component to resetValue. Returns whether any value changed.

@@ -648,7 +648,7 @@ void EditorLayer::DrawHierarchy()
 	ImGui::End();
 }
 
-bool EditorLayer::DrawComponentHeader(const char* label, bool& removeRequested)
+bool EditorLayer::DrawComponentHeader(const char* label, int index, bool& removeRequested, int& dragFrom, int& dragTo)
 {
 	ImGui::PushID(label);
 
@@ -659,6 +659,24 @@ bool EditorLayer::DrawComponentHeader(const char* label, bool& removeRequested)
 	ImGui::SetNextItemAllowOverlap();
 	const bool open = ImGui::CollapsingHeader(label,
 		ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_SpanAvailWidth | ImGuiTreeNodeFlags_AllowOverlap);
+
+	// Drag the header onto another component's header to reorder.
+	if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID))
+	{
+		ImGui::SetDragDropPayload("LN_COMPONENT", &index, sizeof(int));
+		ImGui::Text("Move %s", label);
+		ImGui::EndDragDropSource();
+	}
+
+	if (ImGui::BeginDragDropTarget())
+	{
+		if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("LN_COMPONENT"))
+		{
+			dragFrom = *static_cast<const int*>(payload->Data);
+			dragTo = index;
+		}
+		ImGui::EndDragDropTarget();
+	}
 
 	// Right-aligned square "X" button sitting on the header row.
 	ImGui::SameLine(available - lineHeight);
@@ -775,133 +793,150 @@ void EditorLayer::DrawProperties()
 			transform->SetScale(Vector(scaleValues[0], scaleValues[1], scaleValues[2]));
 	}
 
-	// Components can request removal here; the removal itself is deferred until after drawing so we
-	// never delete a component while its section is still being rendered.
-	bool removeSprite = false, removeBody = false, removeBox = false, removeCircle = false;
+	// Draw components in their stored order so a newly added one always appears at the end; headers
+	// can be dragged onto each other to reorder. Removal/reorder are deferred to after the loop so
+	// the component list is never mutated mid-iteration.
+	Component* componentToRemove = nullptr;
+	int dragFrom = -1, dragTo = -1;
 
-	if (SpriteRenderer* renderer = mSelectedEntity->GetComponent<SpriteRenderer>())
+	const std::vector<Scope<Component>>& components = mSelectedEntity->GetComponents();
+	for (int i = 0; i < static_cast<int>(components.size()); ++i)
 	{
-		if (DrawComponentHeader("Sprite Renderer", removeSprite))
+		Component* component = components[i].get();
+		ImGui::PushID(i);
+		bool remove = false;
+
+		if (SpriteRenderer* renderer = dynamic_cast<SpriteRenderer*>(component))
 		{
-			// Reload the texture only once the user finishes editing (not per keystroke).
-			char textureBuffer[256];
-			const std::string& path = renderer->GetTexturePath();
-			const size_t length = path.copy(textureBuffer, sizeof(textureBuffer) - 1);
-			textureBuffer[length] = '\0';
-
-			const ImGuiStyle& style = ImGui::GetStyle();
-			const float32 browseWidth = ImGui::CalcTextSize("...").x + style.FramePadding.x * 2.0f;
-			const float32 labelWidth = 60.0f;
-
-			ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - browseWidth - labelWidth - style.ItemInnerSpacing.x * 2.0f);
-			ImGui::InputText("##texture", textureBuffer, sizeof(textureBuffer));
-			if (ImGui::IsItemActivated()) BeginEdit();
-			if (ImGui::IsItemDeactivatedAfterEdit()) { renderer->SetTexturePath(textureBuffer); CommitEdit(); }
-
-			// Browse for a sprite file; store the path relative to the resource root.
-			ImGui::SameLine(0.0f, style.ItemInnerSpacing.x);
-			if (ImGui::Button("..."))
+			if (DrawComponentHeader("Sprite Renderer", i, remove, dragFrom, dragTo))
 			{
-				const std::string picked = FileDialog::Open("Images (*.png;*.jpg;*.jpeg;*.bmp)\0*.png;*.jpg;*.jpeg;*.bmp\0All Files\0*.*\0");
+				// Reload the texture only once the user finishes editing (not per keystroke).
+				char textureBuffer[256];
+				const std::string& path = renderer->GetTexturePath();
+				const size_t length = path.copy(textureBuffer, sizeof(textureBuffer) - 1);
+				textureBuffer[length] = '\0';
 
-				if (!picked.empty())
+				const ImGuiStyle& style = ImGui::GetStyle();
+				const float32 browseWidth = ImGui::CalcTextSize("...").x + style.FramePadding.x * 2.0f;
+				const float32 labelWidth = 60.0f;
+
+				ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - browseWidth - labelWidth - style.ItemInnerSpacing.x * 2.0f);
+				ImGui::InputText("##texture", textureBuffer, sizeof(textureBuffer));
+				if (ImGui::IsItemActivated()) BeginEdit();
+				if (ImGui::IsItemDeactivatedAfterEdit()) { renderer->SetTexturePath(textureBuffer); CommitEdit(); }
+
+				// Browse for a sprite file; store the path relative to the resource root.
+				ImGui::SameLine(0.0f, style.ItemInnerSpacing.x);
+				if (ImGui::Button("..."))
+				{
+					const std::string picked = FileDialog::Open("Images (*.png;*.jpg;*.jpeg;*.bmp)\0*.png;*.jpg;*.jpeg;*.bmp\0All Files\0*.*\0");
+
+					if (!picked.empty())
+					{
+						RecordSnapshot();
+						renderer->SetTexturePath(ToResourceRelativePath(picked));
+					}
+				}
+				if (ImGui::IsItemHovered())
+					ImGui::SetTooltip("Browse for a sprite image");
+
+				ImGui::SameLine(0.0f, style.ItemInnerSpacing.x);
+				ImGui::TextUnformatted("Texture");
+			}
+		}
+		else if (RigidBody2D* body = dynamic_cast<RigidBody2D*>(component))
+		{
+			if (DrawComponentHeader("Rigid Body 2D", i, remove, dragFrom, dragTo))
+			{
+				static const char8* bodyTypes[] = { "Static", "Kinematic", "Dynamic" };
+
+				int32 typeIndex = static_cast<int32>(body->GetBodyType());
+				if (ImGui::Combo("Type", &typeIndex, bodyTypes, IM_ARRAYSIZE(bodyTypes)))
 				{
 					RecordSnapshot();
-					renderer->SetTexturePath(ToResourceRelativePath(picked));
+					body->SetBodyType(static_cast<BodyType>(typeIndex));
+				}
+
+				bool fixedRotation = body->IsFixedRotation();
+				if (ImGui::Checkbox("Fixed Rotation", &fixedRotation))
+				{
+					RecordSnapshot();
+					body->SetFixedRotation(fixedRotation);
 				}
 			}
-			if (ImGui::IsItemHovered())
-				ImGui::SetTooltip("Browse for a sprite image");
-
-			ImGui::SameLine(0.0f, style.ItemInnerSpacing.x);
-			ImGui::TextUnformatted("Texture");
 		}
-	}
-
-	if (RigidBody2D* body = mSelectedEntity->GetComponent<RigidBody2D>())
-	{
-		if (DrawComponentHeader("Rigid Body 2D", removeBody))
+		else if (BoxCollider2D* collider = dynamic_cast<BoxCollider2D*>(component))
 		{
-			static const char8* bodyTypes[] = { "Static", "Kinematic", "Dynamic" };
-
-			int32 typeIndex = static_cast<int32>(body->GetBodyType());
-			if (ImGui::Combo("Type", &typeIndex, bodyTypes, IM_ARRAYSIZE(bodyTypes)))
+			if (DrawComponentHeader("Box Collider 2D", i, remove, dragFrom, dragTo))
 			{
-				RecordSnapshot();
-				body->SetBodyType(static_cast<BodyType>(typeIndex));
-			}
+				float32 width = collider->GetWidth();
+				if (ImGui::DragFloat("Width", &width, 1.0f, 0.0f, 10000.0f)) collider->SetWidth(width);
+				if (ImGui::IsItemActivated()) BeginEdit();
+				if (ImGui::IsItemDeactivatedAfterEdit()) CommitEdit();
 
-			bool fixedRotation = body->IsFixedRotation();
-			if (ImGui::Checkbox("Fixed Rotation", &fixedRotation))
+				float32 height = collider->GetHeight();
+				if (ImGui::DragFloat("Height", &height, 1.0f, 0.0f, 10000.0f)) collider->SetHeight(height);
+				if (ImGui::IsItemActivated()) BeginEdit();
+				if (ImGui::IsItemDeactivatedAfterEdit()) CommitEdit();
+
+				float32 density = collider->GetDensity();
+				if (ImGui::DragFloat("Density", &density, 0.05f, 0.0f, 100.0f)) collider->SetDensity(density);
+				if (ImGui::IsItemActivated()) BeginEdit();
+				if (ImGui::IsItemDeactivatedAfterEdit()) CommitEdit();
+
+				float32 friction = collider->GetFriction();
+				if (ImGui::DragFloat("Friction", &friction, 0.01f, 0.0f, 1.0f)) collider->SetFriction(friction);
+				if (ImGui::IsItemActivated()) BeginEdit();
+				if (ImGui::IsItemDeactivatedAfterEdit()) CommitEdit();
+
+				float32 restitution = collider->GetRestitution();
+				if (ImGui::DragFloat("Restitution", &restitution, 0.01f, 0.0f, 1.0f)) collider->SetRestitution(restitution);
+				if (ImGui::IsItemActivated()) BeginEdit();
+				if (ImGui::IsItemDeactivatedAfterEdit()) CommitEdit();
+			}
+		}
+		else if (CircleCollider2D* collider = dynamic_cast<CircleCollider2D*>(component))
+		{
+			if (DrawComponentHeader("Circle Collider 2D", i, remove, dragFrom, dragTo))
 			{
-				RecordSnapshot();
-				body->SetFixedRotation(fixedRotation);
+				float32 radius = collider->GetRadius();
+				if (ImGui::DragFloat("Radius", &radius, 1.0f, 0.0f, 10000.0f)) collider->SetRadius(radius);
+				if (ImGui::IsItemActivated()) BeginEdit();
+				if (ImGui::IsItemDeactivatedAfterEdit()) CommitEdit();
+
+				float32 density = collider->GetDensity();
+				if (ImGui::DragFloat("Density", &density, 0.05f, 0.0f, 100.0f)) collider->SetDensity(density);
+				if (ImGui::IsItemActivated()) BeginEdit();
+				if (ImGui::IsItemDeactivatedAfterEdit()) CommitEdit();
+
+				float32 friction = collider->GetFriction();
+				if (ImGui::DragFloat("Friction", &friction, 0.01f, 0.0f, 1.0f)) collider->SetFriction(friction);
+				if (ImGui::IsItemActivated()) BeginEdit();
+				if (ImGui::IsItemDeactivatedAfterEdit()) CommitEdit();
+
+				float32 restitution = collider->GetRestitution();
+				if (ImGui::DragFloat("Restitution", &restitution, 0.01f, 0.0f, 1.0f)) collider->SetRestitution(restitution);
+				if (ImGui::IsItemActivated()) BeginEdit();
+				if (ImGui::IsItemDeactivatedAfterEdit()) CommitEdit();
 			}
 		}
+
+		if (remove)
+			componentToRemove = component;
+
+		ImGui::PopID();
 	}
 
-	if (BoxCollider2D* collider = mSelectedEntity->GetComponent<BoxCollider2D>())
+	// Apply the deferred reorder, then removal. Reordering only affects the Inspector's display
+	// order (serialization is canonical), so it is not an undo step.
+	if (dragFrom >= 0 && dragTo >= 0 && dragFrom != dragTo)
+		mSelectedEntity->MoveComponent(dragFrom, dragTo);
+
+	if (componentToRemove)
 	{
-		if (DrawComponentHeader("Box Collider 2D", removeBox))
-		{
-			float32 width = collider->GetWidth();
-			if (ImGui::DragFloat("Width", &width, 1.0f, 0.0f, 10000.0f)) collider->SetWidth(width);
-			if (ImGui::IsItemActivated()) BeginEdit();
-			if (ImGui::IsItemDeactivatedAfterEdit()) CommitEdit();
-
-			float32 height = collider->GetHeight();
-			if (ImGui::DragFloat("Height", &height, 1.0f, 0.0f, 10000.0f)) collider->SetHeight(height);
-			if (ImGui::IsItemActivated()) BeginEdit();
-			if (ImGui::IsItemDeactivatedAfterEdit()) CommitEdit();
-
-			float32 density = collider->GetDensity();
-			if (ImGui::DragFloat("Density", &density, 0.05f, 0.0f, 100.0f)) collider->SetDensity(density);
-			if (ImGui::IsItemActivated()) BeginEdit();
-			if (ImGui::IsItemDeactivatedAfterEdit()) CommitEdit();
-
-			float32 friction = collider->GetFriction();
-			if (ImGui::DragFloat("Friction", &friction, 0.01f, 0.0f, 1.0f)) collider->SetFriction(friction);
-			if (ImGui::IsItemActivated()) BeginEdit();
-			if (ImGui::IsItemDeactivatedAfterEdit()) CommitEdit();
-
-			float32 restitution = collider->GetRestitution();
-			if (ImGui::DragFloat("Restitution", &restitution, 0.01f, 0.0f, 1.0f)) collider->SetRestitution(restitution);
-			if (ImGui::IsItemActivated()) BeginEdit();
-			if (ImGui::IsItemDeactivatedAfterEdit()) CommitEdit();
-		}
+		RecordSnapshot();
+		mSelectedEntity->RemoveComponent(componentToRemove);
 	}
-
-	if (CircleCollider2D* collider = mSelectedEntity->GetComponent<CircleCollider2D>())
-	{
-		if (DrawComponentHeader("Circle Collider 2D", removeCircle))
-		{
-			float32 radius = collider->GetRadius();
-			if (ImGui::DragFloat("Radius", &radius, 1.0f, 0.0f, 10000.0f)) collider->SetRadius(radius);
-			if (ImGui::IsItemActivated()) BeginEdit();
-			if (ImGui::IsItemDeactivatedAfterEdit()) CommitEdit();
-
-			float32 density = collider->GetDensity();
-			if (ImGui::DragFloat("Density", &density, 0.05f, 0.0f, 100.0f)) collider->SetDensity(density);
-			if (ImGui::IsItemActivated()) BeginEdit();
-			if (ImGui::IsItemDeactivatedAfterEdit()) CommitEdit();
-
-			float32 friction = collider->GetFriction();
-			if (ImGui::DragFloat("Friction", &friction, 0.01f, 0.0f, 1.0f)) collider->SetFriction(friction);
-			if (ImGui::IsItemActivated()) BeginEdit();
-			if (ImGui::IsItemDeactivatedAfterEdit()) CommitEdit();
-
-			float32 restitution = collider->GetRestitution();
-			if (ImGui::DragFloat("Restitution", &restitution, 0.01f, 0.0f, 1.0f)) collider->SetRestitution(restitution);
-			if (ImGui::IsItemActivated()) BeginEdit();
-			if (ImGui::IsItemDeactivatedAfterEdit()) CommitEdit();
-		}
-	}
-
-	// Apply any requested component removal (one per frame is enough for a click).
-	if (removeSprite) { RecordSnapshot(); mSelectedEntity->RemoveComponent<SpriteRenderer>(); }
-	if (removeBody)   { RecordSnapshot(); mSelectedEntity->RemoveComponent<RigidBody2D>(); }
-	if (removeBox)    { RecordSnapshot(); mSelectedEntity->RemoveComponent<BoxCollider2D>(); }
-	if (removeCircle) { RecordSnapshot(); mSelectedEntity->RemoveComponent<CircleCollider2D>(); }
 
 	// "Add Component" lists only the component types the entity doesn't already have.
 	ImGui::Separator();
