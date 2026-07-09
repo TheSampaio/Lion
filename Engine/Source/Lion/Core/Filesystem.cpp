@@ -1,6 +1,8 @@
 #include "Engine.h"
 #include "Filesystem.h"
 
+#include <filesystem>
+
 #ifdef LN_PLATFORM_WIN
 	#define WIN32_LEAN_AND_MEAN
 	#define NOMINMAX
@@ -59,5 +61,23 @@ namespace Lion
 		}
 
 		return path;
+	}
+
+	std::string ToResourceRelativePath(const std::string& absolutePath)
+	{
+		const std::string& root = ExecutableDirectory();
+
+		if (!root.empty())
+		{
+			std::error_code error;
+			const std::filesystem::path relative = std::filesystem::relative(absolutePath, root, error);
+			const std::string result = error ? std::string() : relative.generic_string();
+
+			// Keep it only when the file actually lives under the resource root (no ".." escapes).
+			if (!result.empty() && result.rfind("..", 0) != 0)
+				return result;
+		}
+
+		return absolutePath;
 	}
 }

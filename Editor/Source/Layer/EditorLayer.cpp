@@ -2,6 +2,8 @@
 
 #include "../EditorGui.h"
 
+#include <Lion/Core/Filesystem.h>
+
 #include <imgui/imgui_internal.h> // DockBuilder API for the default layout.
 
 using namespace Lion;
@@ -787,9 +789,32 @@ void EditorLayer::DrawProperties()
 			const size_t length = path.copy(textureBuffer, sizeof(textureBuffer) - 1);
 			textureBuffer[length] = '\0';
 
-			ImGui::InputText("Texture", textureBuffer, sizeof(textureBuffer));
+			const ImGuiStyle& style = ImGui::GetStyle();
+			const float32 browseWidth = ImGui::CalcTextSize("...").x + style.FramePadding.x * 2.0f;
+			const float32 labelWidth = 60.0f;
+
+			ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - browseWidth - labelWidth - style.ItemInnerSpacing.x * 2.0f);
+			ImGui::InputText("##texture", textureBuffer, sizeof(textureBuffer));
 			if (ImGui::IsItemActivated()) BeginEdit();
 			if (ImGui::IsItemDeactivatedAfterEdit()) { renderer->SetTexturePath(textureBuffer); CommitEdit(); }
+
+			// Browse for a sprite file; store the path relative to the resource root.
+			ImGui::SameLine(0.0f, style.ItemInnerSpacing.x);
+			if (ImGui::Button("..."))
+			{
+				const std::string picked = FileDialog::Open("Images (*.png;*.jpg;*.jpeg;*.bmp)\0*.png;*.jpg;*.jpeg;*.bmp\0All Files\0*.*\0");
+
+				if (!picked.empty())
+				{
+					RecordSnapshot();
+					renderer->SetTexturePath(ToResourceRelativePath(picked));
+				}
+			}
+			if (ImGui::IsItemHovered())
+				ImGui::SetTooltip("Browse for a sprite image");
+
+			ImGui::SameLine(0.0f, style.ItemInnerSpacing.x);
+			ImGui::TextUnformatted("Texture");
 		}
 	}
 
