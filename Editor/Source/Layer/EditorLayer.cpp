@@ -516,8 +516,68 @@ void EditorLayer::DrawViewport()
 		}
 	}
 
+	if (mShowColliders)
+		DrawColliderOverlays(imageMin, imageSize);
+
 	ImGui::End();
 	ImGui::PopStyleVar();
+}
+
+void EditorLayer::DrawColliderOverlays(const ImVec2& imageMin, const ImVec2& imageSize)
+{
+	if (imageSize.x <= 0.0f || imageSize.y <= 0.0f)
+		return;
+
+	const glm::mat4 viewProjection = mCamera->GetProjectionMatrix() * mCamera->GetViewMatrix();
+	ImDrawList* drawList = ImGui::GetWindowDrawList();
+	const ImU32 color = IM_COL32(80, 220, 120, 255);  // Unity-like collider green.
+
+	// Projects a world-space point (in pixels, z = 0) to a screen position inside the viewport image.
+	const auto worldToScreen = [&](float32 worldX, float32 worldY) -> ImVec2
+	{
+		const glm::vec4 clip = viewProjection * glm::vec4(worldX, worldY, 0.0f, 1.0f);
+		const float32 ndcX = clip.x / clip.w;
+		const float32 ndcY = clip.y / clip.w;
+		return ImVec2(
+			imageMin.x + (ndcX * 0.5f + 0.5f) * imageSize.x,
+			imageMin.y + (1.0f - (ndcY * 0.5f + 0.5f)) * imageSize.y);  // Flip Y for top-down screen space.
+	};
+
+	for (const auto& entity : mScene->GetEntities())
+	{
+		const Reference<Transform> transform = entity->GetTransform();
+		const Vector position = transform->GetPosition();
+		const float32 angle = glm::radians(transform->GetRotation().z);
+		const float32 cosAngle = std::cos(angle);
+		const float32 sinAngle = std::sin(angle);
+
+		if (const BoxCollider2D* box = entity->GetComponent<BoxCollider2D>())
+		{
+			const float32 halfWidth = box->GetWidth() * 0.5f;
+			const float32 halfHeight = box->GetHeight() * 0.5f;
+
+			const auto corner = [&](float32 offsetX, float32 offsetY)
+			{
+				return worldToScreen(
+					position.x + offsetX * cosAngle - offsetY * sinAngle,
+					position.y + offsetX * sinAngle + offsetY * cosAngle);
+			};
+
+			const ImVec2 points[4] = {
+				corner(-halfWidth,  halfHeight), corner(halfWidth,  halfHeight),
+				corner( halfWidth, -halfHeight), corner(-halfWidth, -halfHeight),
+			};
+			drawList->AddPolyline(points, 4, color, ImDrawFlags_Closed, 1.5f);
+		}
+
+		if (const CircleCollider2D* circle = entity->GetComponent<CircleCollider2D>())
+		{
+			const ImVec2 center = worldToScreen(position.x, position.y);
+			const ImVec2 edge = worldToScreen(position.x + circle->GetRadius(), position.y);
+			const float32 screenRadius = std::fabs(edge.x - center.x);
+			drawList->AddCircle(center, screenRadius, color, 32, 1.5f);
+		}
+	}
 }
 
 void EditorLayer::DrawHierarchy()
@@ -1032,6 +1092,7 @@ void EditorLayer::DrawMenuBar()
 
 		if (ImGui::BeginMenu("View"))
 		{
+			ImGui::MenuItem("Show Colliders", nullptr, &mShowColliders);
 			ImGui::MenuItem("ImGui Demo Window", nullptr, &mShowDemo);
 			ImGui::EndMenu();
 		}

@@ -22,6 +22,7 @@ private:
 	bool mLayoutInitialized = false;
 	bool mConsoleAutoScroll = true;
 	bool mPlaying = false;
+	bool mShowColliders = true;  // Draw collider hitbox outlines over the viewport.
 	bool mRenameFocus = false;  // Request keyboard focus on the inline rename field for one frame.
 	ImGuizmo::OPERATION mGizmoOperation = ImGuizmo::TRANSLATE;
 
@@ -49,6 +50,7 @@ private:
 	void DrawUI();
 	void DrawMenuBar();
 	void DrawViewport();
+	void DrawColliderOverlays(const ImVec2& imageMin, const ImVec2& imageSize);
 	void DrawHierarchy();
 	void DrawProperties();
 	void DrawConsole();
