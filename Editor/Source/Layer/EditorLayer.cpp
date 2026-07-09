@@ -989,12 +989,17 @@ void EditorLayer::DrawMenuBar()
 		{
 			ImGui::TextColored(ImVec4(0.45f, 0.85f, 0.50f, 1.0f), "PLAYING");
 			ImGui::SameLine();
-			if (ImGui::SmallButton("Stop (F8)"))
+			if (ImGui::SmallButton("Stop"))
 				StopPlay();
+			if (ImGui::IsItemHovered())
+				ImGui::SetTooltip("Stop the simulation (F8)");
 		}
-		else if (ImGui::SmallButton("Play (F5)"))
+		else
 		{
-			StartPlay();
+			if (ImGui::SmallButton("Play"))
+				StartPlay();
+			if (ImGui::IsItemHovered())
+				ImGui::SetTooltip("Run the scene simulation (F5)");
 		}
 
 		ImGui::EndMainMenuBar();
@@ -1008,14 +1013,17 @@ void EditorLayer::BuildDefaultLayout(unsigned int dockspaceId)
 	ImGui::DockBuilderSetNodeSize(dockspaceId, ImGui::GetMainViewport()->WorkSize);
 
 	ImGuiID center = dockspaceId;
+	ImGuiID right        = ImGui::DockBuilderSplitNode(center, ImGuiDir_Right, 0.25f, nullptr, &center);
 	const ImGuiID left   = ImGui::DockBuilderSplitNode(center, ImGuiDir_Left,  0.20f, nullptr, &center);
-	const ImGuiID right  = ImGui::DockBuilderSplitNode(center, ImGuiDir_Right, 0.25f, nullptr, &center);
 	const ImGuiID bottom = ImGui::DockBuilderSplitNode(center, ImGuiDir_Down,  0.25f, nullptr, &center);
 
+	// Split the right column so Statistics sits on top of Properties.
+	const ImGuiID rightTop = ImGui::DockBuilderSplitNode(right, ImGuiDir_Up, 0.30f, nullptr, &right);
+
 	ImGui::DockBuilderDockWindow("Scene Hierarchy", left);
+	ImGui::DockBuilderDockWindow("Statistics", rightTop);
 	ImGui::DockBuilderDockWindow("Properties", right);
 	ImGui::DockBuilderDockWindow("Console", bottom);
-	ImGui::DockBuilderDockWindow("Statistics", bottom);
 	ImGui::DockBuilderDockWindow("Viewport", center);
 
 	ImGui::DockBuilderFinish(dockspaceId);
