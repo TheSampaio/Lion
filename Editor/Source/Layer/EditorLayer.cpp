@@ -20,6 +20,7 @@ void EditorLayer::OnAttach()
 void EditorLayer::OnCreate()
 {
 	EditorGui::Init();
+	InitShortcuts();
 
 	mCamera = MakeReference<CameraOrthographic>();
 	mScene = MakeReference<Scene>();
@@ -265,61 +266,108 @@ void EditorLayer::DrawShortcuts()
 	if (!mShowShortcuts)
 		return;
 
-	ImGui::SetNextWindowSize(ImVec2(430.0f, 470.0f), ImGuiCond_FirstUseEver);
+	ImGui::SetNextWindowSize(ImVec2(460.0f, 500.0f), ImGuiCond_FirstUseEver);
 
 	if (ImGui::Begin("Shortcuts", &mShowShortcuts))
 	{
-		struct Shortcut { const char8* keys; const char8* action; };
-
-		const auto section = [](const char8* title, std::initializer_list<Shortcut> items)
-		{
-			ImGui::SeparatorText(title);
-
-			if (ImGui::BeginTable(title, 2, ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_PadOuterX))
-			{
-				ImGui::TableSetupColumn("Shortcut", ImGuiTableColumnFlags_WidthFixed, 130.0f);
-				ImGui::TableSetupColumn("Action", ImGuiTableColumnFlags_WidthStretch);
-
-				for (const Shortcut& shortcut : items)
-				{
-					ImGui::TableNextRow();
-					ImGui::TableSetColumnIndex(0);
-					ImGui::TextColored(ImVec4(0.30f, 0.58f, 0.95f, 1.0f), "%s", shortcut.keys);
-					ImGui::TableSetColumnIndex(1);
-					ImGui::TextUnformatted(shortcut.action);
-				}
-
-				ImGui::EndTable();
-			}
+		// The rebindable actions, grouped by category (order defines the display order).
+		struct Row { ShortcutAction action; const char8* category; const char8* name; };
+		static const Row rows[] = {
+			{ ShortcutAction::ToggleShortcuts, "General",   "Toggle Shortcuts panel" },
+			{ ShortcutAction::Undo,            "General",   "Undo" },
+			{ ShortcutAction::Redo,            "General",   "Redo" },
+			{ ShortcutAction::Play,            "Play Mode", "Play (run the simulation)" },
+			{ ShortcutAction::Stop,            "Play Mode", "Stop (return to edited state)" },
+			{ ShortcutAction::GizmoMove,       "Gizmo",     "Move (translate)" },
+			{ ShortcutAction::GizmoRotate,     "Gizmo",     "Rotate" },
+			{ ShortcutAction::GizmoScale,      "Gizmo",     "Scale" },
+			{ ShortcutAction::RenameEntity,    "Hierarchy", "Rename selected entity" },
+			{ ShortcutAction::DeleteEntity,    "Hierarchy", "Delete selected entity" },
 		};
 
-		section("General", {
-			{ "F1", "Toggle this Shortcuts panel" },
-			{ "Ctrl+Z", "Undo" },
-			{ "Ctrl+Y", "Redo" },
-		});
+		ImGui::TextDisabled("Click a shortcut to rebind it, then press a key (Esc to cancel).");
+		ImGui::SameLine(ImGui::GetContentRegionAvail().x - ImGui::CalcTextSize("Reset to Defaults").x - ImGui::GetStyle().FramePadding.x * 2.0f);
+		if (ImGui::SmallButton("Reset to Defaults"))
+		{
+			InitShortcuts();
+			mRebindingIndex = -1;
+		}
 
-		section("Play Mode", {
-			{ "F5", "Play (run the scene simulation)" },
-			{ "F8", "Stop (return to the edited state)" },
-		});
+		const char8* currentCategory = nullptr;
 
-		section("Gizmo", {
-			{ "W", "Move (translate)" },
-			{ "E", "Rotate" },
-			{ "R", "Scale" },
-		});
+		for (const Row& row : rows)
+		{
+			const int index = static_cast<int>(row.action);
 
-		section("Hierarchy", {
-			{ "Double-click", "Rename an entity" },
-			{ "F2", "Rename the selected entity" },
-			{ "Delete", "Delete the selected entity" },
-			{ "Right-click", "Context menu (create / delete)" },
-		});
+			if (currentCategory == nullptr || std::string(currentCategory) != row.category)
+			{
+				currentCategory = row.category;
+				ImGui::SeparatorText(row.category);
+			}
 
-		section("Viewport", {
-			{ "Left Click", "Select the entity under the cursor" },
-		});
+			ImGui::PushID(index);
+
+			// A fixed-width button on the left showing the current binding; click to rebind.
+			const bool capturing = (mRebindingIndex == index);
+			const std::string label = capturing ? "Press a key..." : KeybindToString(mBinds[index]);
+
+			if (capturing)
+				ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.30f, 0.58f, 0.95f, 1.0f));
+
+			if (ImGui::Button(label.c_str(), ImVec2(150.0f, 0.0f)))
+				mRebindingIndex = capturing ? -1 : index;
+
+			if (capturing)
+				ImGui::PopStyleColor();
+
+			ImGui::SameLine();
+			ImGui::TextUnformatted(row.name);
+
+			ImGui::PopID();
+		}
+
+		// Non-rebindable, mouse-driven shortcuts, shown for reference.
+		ImGui::SeparatorText("Mouse");
+		ImGui::BulletText("Left Click viewport - select entity");
+		ImGui::BulletText("Double-click hierarchy - rename entity");
+		ImGui::BulletText("Right-click hierarchy - context menu");
+		ImGui::BulletText("Drag component header - reorder");
+
+		// Capture a new key for the action being rebound.
+		if (mRebindingIndex >= 0)
+		{
+			const ImGuiIO& io = ImGui::GetIO();
+
+			if (ImGui::IsKeyPressed(ImGuiKey_Escape, false))
+			{
+				mRebindingIndex = -1;
+			}
+			else
+			{
+				const auto isModifier = [](ImGuiKey k)
+				{
+					return k == ImGuiKey_LeftCtrl  || k == ImGuiKey_RightCtrl
+						|| k == ImGuiKey_LeftShift || k == ImGuiKey_RightShift
+						|| k == ImGuiKey_LeftAlt   || k == ImGuiKey_RightAlt
+						|| k == ImGuiKey_LeftSuper || k == ImGuiKey_RightSuper;
+				};
+
+				for (ImGuiKey key = ImGuiKey_NamedKey_BEGIN; key < ImGuiKey_NamedKey_END; key = static_cast<ImGuiKey>(key + 1))
+				{
+					if (isModifier(key) || !ImGui::IsKeyPressed(key, false))
+						continue;
+
+					// Skip mouse and gamepad "keys"; only accept keyboard keys.
+					const std::string keyName = ImGui::GetKeyName(key);
+					if (keyName.rfind("Mouse", 0) == 0 || keyName.rfind("Pad", 0) == 0 || keyName.rfind("Gamepad", 0) == 0)
+						continue;
+
+					mBinds[mRebindingIndex] = { key, io.KeyCtrl, io.KeyShift, io.KeyAlt };
+					mRebindingIndex = -1;
+					break;
+				}
+			}
+		}
 	}
 
 	ImGui::End();
@@ -394,32 +442,78 @@ void EditorLayer::Redo()
 	SceneSerializer::DeserializeFromString(mScene, state);
 }
 
-void EditorLayer::HandleShortcuts()
+void EditorLayer::InitShortcuts()
 {
-	// These are available even while a text field is focused.
-	if (ImGui::IsKeyPressed(ImGuiKey_F5, false)) StartPlay();
-	if (ImGui::IsKeyPressed(ImGuiKey_F8, false)) StopPlay();
-	if (ImGui::IsKeyPressed(ImGuiKey_F1, false)) mShowShortcuts = !mShowShortcuts;
+	const auto set = [&](ShortcutAction action, ImGuiKey key, bool ctrl = false, bool shift = false, bool alt = false)
+	{
+		mBinds[static_cast<int>(action)] = { key, ctrl, shift, alt };
+	};
+
+	set(ShortcutAction::Undo, ImGuiKey_Z, true);
+	set(ShortcutAction::Redo, ImGuiKey_Y, true);
+	set(ShortcutAction::Play, ImGuiKey_F5);
+	set(ShortcutAction::Stop, ImGuiKey_F8);
+	set(ShortcutAction::ToggleShortcuts, ImGuiKey_F1);
+	set(ShortcutAction::GizmoMove, ImGuiKey_W);
+	set(ShortcutAction::GizmoRotate, ImGuiKey_E);
+	set(ShortcutAction::GizmoScale, ImGuiKey_R);
+	set(ShortcutAction::RenameEntity, ImGuiKey_F2);
+	set(ShortcutAction::DeleteEntity, ImGuiKey_Delete);
+}
+
+bool EditorLayer::IsShortcutPressed(ShortcutAction action) const
+{
+	const Keybind& bind = mBinds[static_cast<int>(action)];
+
+	if (bind.key == ImGuiKey_None)
+		return false;
 
 	const ImGuiIO& io = ImGui::GetIO();
 
-	// The actions below are edit-mode only; ignore them while playing or typing in a text field.
-	if (mPlaying || io.WantTextInput)
+	if (io.KeyCtrl != bind.ctrl || io.KeyShift != bind.shift || io.KeyAlt != bind.alt)
+		return false;
+
+	return ImGui::IsKeyPressed(bind.key, false);
+}
+
+std::string EditorLayer::KeybindToString(const Keybind& bind) const
+{
+	if (bind.key == ImGuiKey_None)
+		return "None";
+
+	std::string text;
+	if (bind.ctrl)  text += "Ctrl+";
+	if (bind.shift) text += "Shift+";
+	if (bind.alt)   text += "Alt+";
+	text += ImGui::GetKeyName(bind.key);
+	return text;
+}
+
+void EditorLayer::HandleShortcuts()
+{
+	// Don't trigger actions while the user is capturing a new key in the Shortcuts panel.
+	if (mRebindingIndex >= 0)
 		return;
 
-	if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_Z, false))
-		Undo();
+	// These are available even while a text field is focused.
+	if (IsShortcutPressed(ShortcutAction::Play)) StartPlay();
+	if (IsShortcutPressed(ShortcutAction::Stop)) StopPlay();
+	if (IsShortcutPressed(ShortcutAction::ToggleShortcuts)) mShowShortcuts = !mShowShortcuts;
 
-	if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_Y, false))
-		Redo();
+	// The actions below are edit-mode only; ignore them while playing or typing in a text field.
+	if (mPlaying || ImGui::GetIO().WantTextInput)
+		return;
 
-	if (mSelectedEntity && ImGui::IsKeyPressed(ImGuiKey_F2, false))
+	if (IsShortcutPressed(ShortcutAction::Undo)) Undo();
+	if (IsShortcutPressed(ShortcutAction::Redo)) Redo();
+
+	if (mSelectedEntity && IsShortcutPressed(ShortcutAction::RenameEntity))
 	{
 		mRenamingEntity = mSelectedEntity;
 		mRenameFocus = true;
 	}
 
-	if (mSelectedEntity && ImGui::IsKeyPressed(ImGuiKey_Delete, false))
+	if (mSelectedEntity && IsShortcutPressed(ShortcutAction::DeleteEntity))
 	{
 		RecordSnapshot();
 		mScene->Remove(mSelectedEntity);
@@ -444,12 +538,12 @@ void EditorLayer::DrawViewport()
 	const ImVec2 imageSize = ImGui::GetItemRectSize();
 	const bool imageHovered = ImGui::IsItemHovered();
 
-	// W/E/R switch the gizmo between move / rotate / scale (unless typing or dragging).
-	if (!mPlaying && !ImGuizmo::IsUsing() && !ImGui::IsAnyItemActive())
+	// The bound gizmo keys switch between move / rotate / scale (unless typing, dragging or rebinding).
+	if (!mPlaying && mRebindingIndex < 0 && !ImGuizmo::IsUsing() && !ImGui::IsAnyItemActive())
 	{
-		if (ImGui::IsKeyPressed(ImGuiKey_W)) mGizmoOperation = ImGuizmo::TRANSLATE;
-		if (ImGui::IsKeyPressed(ImGuiKey_E)) mGizmoOperation = ImGuizmo::ROTATE;
-		if (ImGui::IsKeyPressed(ImGuiKey_R)) mGizmoOperation = ImGuizmo::SCALE;
+		if (IsShortcutPressed(ShortcutAction::GizmoMove))   mGizmoOperation = ImGuizmo::TRANSLATE;
+		if (IsShortcutPressed(ShortcutAction::GizmoRotate)) mGizmoOperation = ImGuizmo::ROTATE;
+		if (IsShortcutPressed(ShortcutAction::GizmoScale))  mGizmoOperation = ImGuizmo::SCALE;
 	}
 
 	// The gizmo is an editing tool; hide it while the simulation is running.

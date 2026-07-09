@@ -17,6 +17,26 @@ public:
 	void OnDetach() override;
 
 private:
+	// Rebindable editor shortcuts. Each action holds a key plus modifier flags; the Shortcuts panel
+	// lets the user change them, and the handlers query them via IsShortcutPressed.
+	enum class ShortcutAction
+	{
+		Undo, Redo, Play, Stop, ToggleShortcuts,
+		GizmoMove, GizmoRotate, GizmoScale, RenameEntity, DeleteEntity,
+		Count
+	};
+
+	struct Keybind
+	{
+		ImGuiKey key = ImGuiKey_None;
+		bool ctrl = false;
+		bool shift = false;
+		bool alt = false;
+	};
+
+	Keybind mBinds[static_cast<int>(ShortcutAction::Count)];
+	int mRebindingIndex = -1;  // Index of the action currently capturing a new key (-1 = none).
+
 	bool mShowDemo = false;
 	bool mShowShortcuts = false;
 	bool mLayoutInitialized = false;
@@ -74,6 +94,11 @@ private:
 	void Undo();
 	void Redo();
 	void HandleShortcuts();
+
+	// Shortcut/keybinding helpers.
+	void InitShortcuts();                                  // Assigns the default bindings.
+	bool IsShortcutPressed(ShortcutAction action) const;   // True when the bound combo was pressed this frame.
+	std::string KeybindToString(const Keybind& bind) const;
 
 	// Play mode: StartPlay snapshots the edited scene and re-awakes it (creating physics bodies) so
 	// the simulation runs; StopPlay restores the snapshot, returning to the edited state.
