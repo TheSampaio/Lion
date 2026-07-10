@@ -2,6 +2,7 @@
 
 #include "../EditorGui.h"
 
+#include <filesystem>
 #include <fstream>
 
 #include <Lion/Core/Filesystem.h>
@@ -252,6 +253,7 @@ void EditorLayer::DrawUI()
 	ImGui::End();
 
 	DrawConsole();
+	DrawProject();
 	DrawShortcuts();
 
 	// Commit any in-progress continuous edit (gizmo/slider drag) once the mouse is released.
@@ -436,6 +438,126 @@ void EditorLayer::DrawConsole()
 
 		ImGui::EndTable();
 	}
+
+	ImGui::End();
+}
+
+namespace
+{
+	// Only asset-like files are listed; the resource root also holds the executable and its DLLs.
+	bool IsAssetFile(const std::filesystem::path& path)
+	{
+		static const char8* extensions[] = { ".png", ".jpg", ".jpeg", ".bmp", ".glsl", ".json" };
+
+		std::string extension = path.extension().string();
+		std::transform(extension.begin(), extension.end(), extension.begin(),
+			[](unsigned char c) { return static_cast<char8>(std::tolower(c)); });
+
+		for (const char8* candidate : extensions)
+		{
+			if (extension == candidate)
+				return true;
+		}
+
+		return false;
+	}
+}
+
+void EditorLayer::DrawProject()
+{
+	ImGui::Begin("Project");
+
+	const std::string& root = ResourceRootDirectory();
+
+	if (root.empty())
+	{
+		ImGui::TextDisabled("Could not locate the resource root.");
+		ImGui::End();
+		return;
+	}
+
+	const std::filesystem::path current = std::filesystem::path(root) / mProjectPath;
+
+	// --- Breadcrumb toolbar.
+	ImGui::BeginDisabled(mProjectPath.empty());
+	if (ImGui::Button("Up"))
+	{
+		const std::filesystem::path parent = std::filesystem::path(mProjectPath).parent_path();
+		mProjectPath = parent.generic_string();
+	}
+	ImGui::EndDisabled();
+
+	ImGui::SameLine();
+	ImGui::TextDisabled("Assets/%s", mProjectPath.c_str());
+
+	ImGui::Separator();
+
+	std::error_code error;
+
+	if (!std::filesystem::is_directory(current, error))
+	{
+		ImGui::TextDisabled("Folder not found; returning to the root.");
+		mProjectPath.clear();
+		ImGui::End();
+		return;
+	}
+
+	// --- Directories first, then asset files.
+	std::string enterDirectory;
+
+	for (const auto& entry : std::filesystem::directory_iterator(current, error))
+	{
+		if (!entry.is_directory())
+			continue;
+
+		const std::string name = entry.path().filename().generic_string();
+
+		ImGui::PushID(name.c_str());
+		ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.95f, 0.80f, 0.35f, 1.0f));
+		const bool activated = ImGui::Selectable(name.c_str(), false, ImGuiSelectableFlags_AllowDoubleClick);
+		ImGui::PopStyleColor();
+
+		if (activated && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
+			enterDirectory = mProjectPath.empty() ? name : mProjectPath + "/" + name;
+
+		ImGui::PopID();
+	}
+
+	for (const auto& entry : std::filesystem::directory_iterator(current, error))
+	{
+		if (entry.is_directory() || !IsAssetFile(entry.path()))
+			continue;
+
+		const std::string name = entry.path().filename().generic_string();
+		const std::string assetPath = mProjectPath.empty() ? name : mProjectPath + "/" + name;
+
+		ImGui::PushID(name.c_str());
+		ImGui::Selectable(name.c_str());
+
+		// Drag an asset onto a field that accepts it (e.g. the Sprite Renderer's texture).
+		if (ImGui::BeginDragDropSource())
+		{
+			ImGui::SetDragDropPayload("LN_ASSET_PATH", assetPath.c_str(), assetPath.size() + 1);
+			ImGui::TextUnformatted(name.c_str());
+			ImGui::EndDragDropSource();
+		}
+
+		if (ImGui::BeginPopupContextItem())
+		{
+			if (ImGui::MenuItem("Copy path"))
+				ImGui::SetClipboardText(assetPath.c_str());
+
+			ImGui::EndPopup();
+		}
+
+		if (ImGui::IsItemHovered())
+			ImGui::SetTooltip("%s", assetPath.c_str());
+
+		ImGui::PopID();
+	}
+
+	if (!enterDirectory.empty())
+		mProjectPath = enterDirectory;
 
 	ImGui::End();
 }
@@ -1448,6 +1570,18 @@ void EditorLayer::DrawProperties()
 				if (ImGui::IsItemActivated()) BeginEdit();
 				if (ImGui::IsItemDeactivatedAfterEdit()) { renderer->SetTexturePath(textureBuffer); CommitEdit(); }
 
+				// Drop an image from the Project panel to assign it.
+				if (ImGui::BeginDragDropTarget())
+				{
+					if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("LN_ASSET_PATH"))
+					{
+						RecordSnapshot();
+						renderer->SetTexturePath(static_cast<const char8*>(payload->Data));
+					}
+
+					ImGui::EndDragDropTarget();
+				}
+
 				// Browse for a sprite file; store the path relative to the resource root.
 				ImGui::SameLine(0.0f, style.ItemInnerSpacing.x);
 				if (ImGui::Button("..."))
@@ -1695,6 +1829,7 @@ void EditorLayer::BuildDefaultLayout(unsigned int dockspaceId)
 	ImGui::DockBuilderDockWindow("Statistics", rightTop);
 	ImGui::DockBuilderDockWindow("Properties", right);
 	ImGui::DockBuilderDockWindow("Console", bottom);
+	ImGui::DockBuilderDockWindow("Project", bottom);
 	ImGui::DockBuilderDockWindow("Viewport", center);
 
 	ImGui::DockBuilderFinish(dockspaceId);

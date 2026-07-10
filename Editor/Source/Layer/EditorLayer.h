@@ -73,6 +73,9 @@ private:
 	// Serialized entity held by Ctrl+C, pasted by Ctrl+V.
 	std::string mEntityClipboard;
 
+	// Project panel: the folder currently being browsed, relative to the resource root.
+	std::string mProjectPath;
+
 	// Hierarchy tree state, applied after the tree is drawn (never mutate it mid-iteration).
 	std::unordered_map<Lion::Entity*, Lion::Reference<Lion::Entity>> mEntityLookup;
 	Lion::Reference<Lion::Entity> mEntityToDelete;
@@ -92,6 +95,7 @@ private:
 	void DrawEntityNode(const Lion::Reference<Lion::Entity>& entity);
 	void DrawProperties();
 	void DrawConsole();
+	void DrawProject();
 	void DrawShortcuts();
 	void BuildDefaultLayout(unsigned int dockspaceId);
 

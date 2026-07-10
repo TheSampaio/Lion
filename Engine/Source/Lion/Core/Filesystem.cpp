@@ -63,6 +63,11 @@ namespace Lion
 		return path;
 	}
 
+	const std::string& ResourceRootDirectory()
+	{
+		return ExecutableDirectory();
+	}
+
 	std::string ToResourceRelativePath(const std::string& absolutePath)
 	{
 		const std::string& root = ExecutableDirectory();
