@@ -29,7 +29,9 @@ namespace Lion
 		static LION_API void Console(LogLevel mode, const std::string& message);
 
 		// In-memory history of every logged line (oldest first), for editor/tooling consumption.
-		static LION_API const std::vector<LogEntry>& GetHistory();
+		// A deque so dropping the oldest entry at the cap is O(1) instead of shifting the whole
+		// buffer, while still allowing the editor to index into it.
+		static LION_API const std::deque<LogEntry>& GetHistory();
 
 		// Clears the in-memory log history (does not affect already-printed console output).
 		static LION_API void ClearHistory();
@@ -51,6 +53,6 @@ namespace Lion
 		// Maximum number of retained entries; the oldest are dropped once the cap is reached.
 		static constexpr size_t kMaxHistory = 1024;
 
-		std::vector<LogEntry> mHistory;
+		std::deque<LogEntry> mHistory;
 	};
 }

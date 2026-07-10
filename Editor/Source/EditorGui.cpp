@@ -10,6 +10,14 @@
 
 using namespace Lion;
 
+// Bold UI font, loaded alongside the regular one (null when the font file is unavailable).
+static ImFont* sBoldFont = nullptr;
+
+ImFont* EditorGui::GetBoldFont()
+{
+	return sBoldFont;
+}
+
 static void SetDarkTheme()
 {
 	ImGui::StyleColorsDark();
@@ -122,6 +130,10 @@ void EditorGui::Init()
 	// Prefer Segoe UI (much more legible than ImGui's built-in font); fall back to the default.
 	if (std::filesystem::exists("C:/Windows/Fonts/segoeui.ttf"))
 		io.Fonts->AddFontFromFileTTF("C:/Windows/Fonts/segoeui.ttf", 18.0f);
+
+	// A bold companion, used where emphasis matters (Transform axis buttons).
+	if (std::filesystem::exists("C:/Windows/Fonts/segoeuib.ttf"))
+		sBoldFont = io.Fonts->AddFontFromFileTTF("C:/Windows/Fonts/segoeuib.ttf", 18.0f);
 
 	SetDarkTheme();
 

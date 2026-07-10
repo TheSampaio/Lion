@@ -26,8 +26,12 @@ private:
 		GizmoMove, GizmoRotate, GizmoScale, RenameEntity, DeleteEntity,
 		Pause, ToggleColliders,
 		CopyEntity, PasteEntity, DuplicateEntity,
+		ToolSelect,
 		Count
 	};
+
+	// Viewport tools, mirroring the Q/W/E/R row in the top-left corner.
+	enum class Tool { Select, Move, Rotate, Scale };
 
 	struct Keybind
 	{
@@ -47,11 +51,16 @@ private:
 	bool mConsoleShowErrors = true;    // Console severity filters (Error/Fatal, Warning, everything else).
 	bool mConsoleShowWarnings = true;
 	bool mConsoleShowInfo = true;
+
+	// Console rendering: only the entries passing the filters are indexed here, and a list clipper
+	// draws just the visible slice, so a full history costs the same as a screenful.
+	std::vector<int> mConsoleVisible;
+	int mConsoleSelected = -1;
 	bool mPlaying = false;
 	bool mPaused = false;        // In play mode but the simulation is halted.
-	bool mShowColliders = true;  // Draw collider hitbox outlines over the viewport.
-	bool mRenameFocus = false;  // Request keyboard focus on the inline rename field for one frame.
-	ImGuizmo::OPERATION mGizmoOperation = ImGuizmo::TRANSLATE;
+	bool mShowColliders = false;  // Collider outlines are a debug view, off until enabled in Settings.
+	bool mRenameFocus = false;   // Request keyboard focus on the inline rename field for one frame.
+	Tool mTool = Tool::Move;
 
 	Lion::Reference<Lion::CameraOrthographic> mCamera;
 	Lion::Reference<Lion::Scene> mScene;

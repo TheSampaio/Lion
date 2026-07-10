@@ -296,22 +296,6 @@ namespace
 		return ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
 	}
 
-	// Short tag shown in the severity column (an icon will replace it later).
-	const char8* LogLevelTag(LogLevel level)
-	{
-		switch (level)
-		{
-			case LogLevel::Error:       return "ERROR";
-			case LogLevel::Fatal:       return "FATAL";
-			case LogLevel::Warning:     return "WARN";
-			case LogLevel::Success:     return "OK";
-			case LogLevel::Information: return "INFO";
-			case LogLevel::Trace:       return "TRACE";
-		}
-
-		return "LOG";
-	}
-
 	// A severity filter rendered as a toggle button with its message count.
 	bool LogFilterToggle(const char8* label, int count, bool& enabled, const ImVec4& color)
 	{
@@ -335,7 +319,7 @@ void EditorLayer::DrawConsole()
 {
 	ImGui::Begin("Console");
 
-	const std::vector<LogEntry>& history = Log::GetHistory();
+	const std::deque<LogEntry>& history = Log::GetHistory();
 
 	int errorCount = 0, warningCount = 0, infoCount = 0;
 	for (const LogEntry& entry : history)
@@ -379,66 +363,102 @@ void EditorLayer::DrawConsole()
 
 	ImGui::Separator();
 
-	// --- Message list: one table row per entry, tag | time | message.
-	const ImGuiTableFlags tableFlags =
-		ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY | ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_SizingFixedFit;
+	// --- Collect the entries that pass the filters; the list below indexes into this.
+	mConsoleVisible.clear();
 
-	if (ImGui::BeginTable("ConsoleLog", 3, tableFlags))
+	for (int index = 0; index < static_cast<int>(history.size()); ++index)
 	{
-		ImGui::TableSetupColumn("Level", ImGuiTableColumnFlags_WidthFixed, 58.0f);
-		ImGui::TableSetupColumn("Time", ImGuiTableColumnFlags_WidthFixed, 70.0f);
-		ImGui::TableSetupColumn("Message", ImGuiTableColumnFlags_WidthStretch);
+		const LogBucket bucket = LogLevelBucket(history[index].level);
 
-		int row = 0;
-		for (const LogEntry& entry : history)
+		if ((bucket == LogBucket::Error && !mConsoleShowErrors) ||
+			(bucket == LogBucket::Warning && !mConsoleShowWarnings) ||
+			(bucket == LogBucket::Info && !mConsoleShowInfo))
+			continue;
+
+		if (!filter.PassFilter(history[index].message.c_str()))
+			continue;
+
+		mConsoleVisible.push_back(index);
+	}
+
+	// --- Message list: a severity dot, a dimmed timestamp and the message. The clipper submits only
+	// the rows actually on screen, so a full history costs no more than a screenful.
+	ImGui::BeginChild("ConsoleOutput", ImVec2(0.0f, 0.0f), false, ImGuiWindowFlags_HorizontalScrollbar);
+
+	// Sampled before the rows are submitted: it reflects where the user left the view last frame.
+	const bool wasAtBottom = ImGui::GetScrollY() >= ImGui::GetScrollMaxY() - 1.0f;
+
+	int contextIndex = -1;
+	ImDrawList* drawList = ImGui::GetWindowDrawList();
+
+	ImGuiListClipper clipper;
+	clipper.Begin(static_cast<int>(mConsoleVisible.size()));
+
+	while (clipper.Step())
+	{
+		for (int row = clipper.DisplayStart; row < clipper.DisplayEnd; ++row)
 		{
-			const LogBucket bucket = LogLevelBucket(entry.level);
+			const int index = mConsoleVisible[row];
+			const LogEntry& entry = history[index];
+			const ImVec4 accent = LogLevelColor(entry.level);
 
-			if ((bucket == LogBucket::Error && !mConsoleShowErrors) ||
-				(bucket == LogBucket::Warning && !mConsoleShowWarnings) ||
-				(bucket == LogBucket::Info && !mConsoleShowInfo))
-				continue;
+			ImGui::PushID(index);
 
-			if (!filter.PassFilter(entry.message.c_str()))
-				continue;
+			const ImVec2 rowMin = ImGui::GetCursorScreenPos();
 
-			const ImVec4 color = LogLevelColor(entry.level);
+			if (ImGui::Selectable("##row", mConsoleSelected == index))
+				mConsoleSelected = index;
 
-			ImGui::TableNextRow();
-			ImGui::PushID(row++);
+			if (ImGui::IsItemHovered() && ImGui::IsMouseClicked(ImGuiMouseButton_Right))
+			{
+				mConsoleSelected = index;
+				contextIndex = index;
+			}
 
-			// Tint the whole row for errors so they stand out at a glance.
-			if (bucket == LogBucket::Error)
-				ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0, ImGui::GetColorU32(ImVec4(color.x, color.y, color.z, 0.12f)));
+			// A small severity dot stands in for the icon that will replace it later.
+			drawList->AddCircleFilled(
+				ImVec2(rowMin.x + 10.0f, rowMin.y + ImGui::GetTextLineHeight() * 0.5f),
+				4.0f, ImGui::GetColorU32(accent));
 
-			ImGui::TableSetColumnIndex(0);
-			ImGui::TextColored(color, "%s", LogLevelTag(entry.level));
-
-			ImGui::TableSetColumnIndex(1);
+			ImGui::SameLine(24.0f);
 			ImGui::TextDisabled("%s", entry.time.c_str());
 
-			ImGui::TableSetColumnIndex(2);
+			ImGui::SameLine(96.0f);
+
+			// Only errors and warnings tint their message; everything else reads as plain text.
+			const bool tinted = LogLevelBucket(entry.level) != LogBucket::Info;
+
+			if (tinted)
+				ImGui::PushStyleColor(ImGuiCol_Text, accent);
+
 			ImGui::TextUnformatted(entry.message.c_str());
 
-			// Right-click any row to copy its message.
-			if (ImGui::BeginPopupContextItem("LogEntryContext"))
-			{
-				if (ImGui::MenuItem("Copy message"))
-					ImGui::SetClipboardText(entry.message.c_str());
-
-				ImGui::EndPopup();
-			}
+			if (tinted)
+				ImGui::PopStyleColor();
 
 			ImGui::PopID();
 		}
-
-		// Keep following the tail while the view is already scrolled to the bottom.
-		if (mConsoleAutoScroll && ImGui::GetScrollY() >= ImGui::GetScrollMaxY())
-			ImGui::SetScrollHereY(1.0f);
-
-		ImGui::EndTable();
 	}
 
+	clipper.End();
+
+	if (contextIndex >= 0)
+		ImGui::OpenPopup("ConsoleRowContext");
+
+	if (ImGui::BeginPopup("ConsoleRowContext"))
+	{
+		if (ImGui::MenuItem("Copy message") && mConsoleSelected >= 0 && mConsoleSelected < static_cast<int>(history.size()))
+			ImGui::SetClipboardText(history[mConsoleSelected].message.c_str());
+
+		ImGui::EndPopup();
+	}
+
+	// Keep following the tail while the view is parked at the bottom; scrolling up detaches it.
+	// (Checking the position rather than the entry count keeps this working once the history caps.)
+	if (mConsoleAutoScroll && wasAtBottom)
+		ImGui::SetScrollY(ImGui::GetScrollMaxY());
+
+	ImGui::EndChild();
 	ImGui::End();
 }
 
@@ -580,9 +600,10 @@ void EditorLayer::DrawShortcuts()
 			{ ShortcutAction::Play,            "Play Mode", "Play (run the simulation)" },
 			{ ShortcutAction::Pause,           "Play Mode", "Pause / resume the simulation" },
 			{ ShortcutAction::Stop,            "Play Mode", "Stop (return to edited state)" },
-			{ ShortcutAction::GizmoMove,       "Gizmo",     "Move (translate)" },
-			{ ShortcutAction::GizmoRotate,     "Gizmo",     "Rotate" },
-			{ ShortcutAction::GizmoScale,      "Gizmo",     "Scale" },
+			{ ShortcutAction::ToolSelect,      "Tools",     "Select tool" },
+			{ ShortcutAction::GizmoMove,       "Tools",     "Move tool (translate)" },
+			{ ShortcutAction::GizmoRotate,     "Tools",     "Rotate tool" },
+			{ ShortcutAction::GizmoScale,      "Tools",     "Scale tool" },
 			{ ShortcutAction::RenameEntity,    "Hierarchy", "Rename selected entity" },
 			{ ShortcutAction::DeleteEntity,    "Hierarchy", "Delete selected entity" },
 			{ ShortcutAction::CopyEntity,      "Hierarchy", "Copy selected entity" },
@@ -778,6 +799,7 @@ void EditorLayer::ResetShortcutsToDefault()
 	set(ShortcutAction::CopyEntity, ImGuiKey_C, true);
 	set(ShortcutAction::PasteEntity, ImGuiKey_V, true);
 	set(ShortcutAction::DuplicateEntity, ImGuiKey_D, true);
+	set(ShortcutAction::ToolSelect, ImGuiKey_Q);
 }
 
 void EditorLayer::CreateFolder()
@@ -950,17 +972,18 @@ void EditorLayer::DrawViewport()
 	const ImVec2 imageSize = ImGui::GetItemRectSize();
 	const bool imageHovered = ImGui::IsItemHovered();
 
-	// The bound gizmo keys switch between move / rotate / scale (unless typing, dragging or rebinding).
+	// The bound tool keys pick the active viewport tool (unless typing, dragging or rebinding).
 	if (!mPlaying && mRebindingIndex < 0 && !ImGuizmo::IsUsing() && !ImGui::IsAnyItemActive())
 	{
-		if (IsShortcutPressed(ShortcutAction::GizmoMove))   mGizmoOperation = ImGuizmo::TRANSLATE;
-		if (IsShortcutPressed(ShortcutAction::GizmoRotate)) mGizmoOperation = ImGuizmo::ROTATE;
-		if (IsShortcutPressed(ShortcutAction::GizmoScale))  mGizmoOperation = ImGuizmo::SCALE;
+		if (IsShortcutPressed(ShortcutAction::ToolSelect))  mTool = Tool::Select;
+		if (IsShortcutPressed(ShortcutAction::GizmoMove))   mTool = Tool::Move;
+		if (IsShortcutPressed(ShortcutAction::GizmoRotate)) mTool = Tool::Rotate;
+		if (IsShortcutPressed(ShortcutAction::GizmoScale))  mTool = Tool::Scale;
 	}
 
-	// The gizmo is an editing tool; hide it while the simulation is running, and folders have no
-	// meaningful transform to manipulate.
-	if (mSelectedEntity && !mPlaying && !mSelectedEntity->IsFolder())
+	// The gizmo is an editing tool; hide it while the simulation is running, for folders (no
+	// meaningful transform), and for the Select tool, which only picks entities.
+	if (mSelectedEntity && !mPlaying && mTool != Tool::Select && !mSelectedEntity->IsFolder())
 	{
 		ImGuizmo::SetOrthographic(true);
 		ImGuizmo::SetDrawlist();
@@ -987,7 +1010,11 @@ void EditorLayer::DrawViewport()
 		if (ImGui::IsMouseClicked(ImGuiMouseButton_Left) && ImGuizmo::IsOver())
 			BeginEdit();
 
-		ImGuizmo::Manipulate(glm::value_ptr(view), glm::value_ptr(projection), mGizmoOperation, ImGuizmo::LOCAL, model);
+		const ImGuizmo::OPERATION operation =
+			(mTool == Tool::Rotate) ? ImGuizmo::ROTATE :
+			(mTool == Tool::Scale)  ? ImGuizmo::SCALE  : ImGuizmo::TRANSLATE;
+
+		ImGuizmo::Manipulate(glm::value_ptr(view), glm::value_ptr(projection), operation, ImGuizmo::LOCAL, model);
 
 		if (ImGuizmo::IsUsing())
 		{
@@ -1044,21 +1071,65 @@ void EditorLayer::DrawViewport()
 void EditorLayer::DrawViewportToolbar(const ImVec2& imageMin, const ImVec2& imageSize)
 {
 	const ImGuiStyle& style = ImGui::GetStyle();
+	const ImVec4 accent(0.24f, 0.52f, 0.90f, 1.0f);
 
-	// Collider visibility toggle, pinned to the viewport's top-left corner.
+	// Tools (Select / Move / Rotate / Scale), pinned to the viewport's top-left corner. Icons will
+	// replace the labels later.
 	ImGui::SetCursorScreenPos(ImVec2(imageMin.x + 8.0f, imageMin.y + 8.0f));
 
-	if (mShowColliders)
-		ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.24f, 0.52f, 0.90f, 1.0f));
+	struct ToolButton { Tool tool; const char8* label; const char8* tooltip; };
+	static const ToolButton tools[] = {
+		{ Tool::Select, "Select", "Select entities (Q)" },
+		{ Tool::Move,   "Move",   "Move the selection (W)" },
+		{ Tool::Rotate, "Rotate", "Rotate the selection (E)" },
+		{ Tool::Scale,  "Scale",  "Scale the selection (R)" },
+	};
 
-	if (ImGui::Button("Colliders"))
-		mShowColliders = !mShowColliders;
+	for (const ToolButton& button : tools)
+	{
+		if (button.tool != tools[0].tool)
+			ImGui::SameLine();
 
-	if (mShowColliders)
-		ImGui::PopStyleColor();
+		const bool active = (mTool == button.tool);
+
+		if (active)
+			ImGui::PushStyleColor(ImGuiCol_Button, accent);
+
+		if (ImGui::Button(button.label))
+			mTool = button.tool;
+
+		if (active)
+			ImGui::PopStyleColor();
+
+		if (ImGui::IsItemHovered())
+			ImGui::SetTooltip("%s", button.tooltip);
+	}
+
+	// Settings, pinned to the viewport's top-right corner (a gear icon later).
+	const float32 settingsWidth = ImGui::CalcTextSize("Settings").x + style.FramePadding.x * 2.0f;
+	ImGui::SetCursorScreenPos(ImVec2(imageMin.x + imageSize.x - settingsWidth - 8.0f, imageMin.y + 8.0f));
+
+	if (ImGui::Button("Settings"))
+		ImGui::OpenPopup("ViewportSettings");
 
 	if (ImGui::IsItemHovered())
-		ImGui::SetTooltip("Toggle collider hitboxes (F4)");
+		ImGui::SetTooltip("Viewport display options");
+
+	if (ImGui::BeginPopup("ViewportSettings"))
+	{
+		// Shading modes are placeholders until the renderer supports them.
+		bool unavailable = false;
+		ImGui::BeginDisabled();
+		ImGui::MenuItem("Lit", nullptr, &unavailable);
+		ImGui::MenuItem("Unlit", nullptr, &unavailable);
+		ImGui::MenuItem("Wireframe", nullptr, &unavailable);
+		ImGui::EndDisabled();
+
+		ImGui::Separator();
+		ImGui::MenuItem("Colliders", "F4", &mShowColliders);
+
+		ImGui::EndPopup();
+	}
 
 	// Play / Pause / Stop, centered along the viewport's top edge.
 	const char8* pauseLabel = mPaused ? "Resume" : "Pause";
@@ -1441,14 +1512,17 @@ bool EditorLayer::DrawVec3Control(const char* label, float values[3], float spee
 
 	ImGui::PushID(label);
 
+	// A square badge, so the axis letter sits dead centre instead of floating in frame padding.
 	const float32 lineHeight = ImGui::GetFontSize() + style.FramePadding.y * 2.0f;
-	const ImVec2 buttonSize(lineHeight + 3.0f, lineHeight);
+	const ImVec2 buttonSize(lineHeight, lineHeight);
 
 	// Reserve room for the trailing label, then split the rest across the three axes.
 	const float32 labelWidth = 70.0f;
 	const float32 controlsWidth = ImGui::GetContentRegionAvail().x - labelWidth;
 	const float32 axisWidth = (controlsWidth - 2.0f * style.ItemInnerSpacing.x) / 3.0f;
 	const float32 dragWidth = (axisWidth - buttonSize.x > 12.0f) ? axisWidth - buttonSize.x : 12.0f;
+
+	ImFont* boldFont = EditorGui::GetBoldFont();
 
 	for (int32 i = 0; i < 3; ++i)
 	{
@@ -1457,17 +1531,27 @@ bool EditorLayer::DrawVec3Control(const char* label, float values[3], float spee
 
 		ImGui::PushID(i);
 
-		// Colored axis button: click to reset this component.
+		// Colored axis badge: click to reset this component.
+		ImGui::PushStyleVar(ImGuiStyleVar_ButtonTextAlign, ImVec2(0.5f, 0.5f));
 		ImGui::PushStyleColor(ImGuiCol_Button, axes[i].color);
 		ImGui::PushStyleColor(ImGuiCol_ButtonHovered, axes[i].hovered);
 		ImGui::PushStyleColor(ImGuiCol_ButtonActive, axes[i].color);
+
+		if (boldFont)
+			ImGui::PushFont(boldFont);
+
 		if (ImGui::Button(axes[i].name, buttonSize))
 		{
 			RecordSnapshot();
 			values[i] = resetValue;
 			changed = true;
 		}
+
+		if (boldFont)
+			ImGui::PopFont();
+
 		ImGui::PopStyleColor(3);
+		ImGui::PopStyleVar();
 
 		ImGui::SameLine(0.0f, 0.0f);
 		ImGui::SetNextItemWidth(dragWidth);

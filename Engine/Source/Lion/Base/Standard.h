@@ -8,6 +8,7 @@
 	#include <cmath>
 	#include <cstdint>        // For fixed size integer types
 	#include <cstddef>        // For std::size_t
+	#include <deque>          // For the log history (dropping the oldest entry stays O(1))
 	#include <format>
 	#include <fstream>
 	#include <functional>
