@@ -44,6 +44,9 @@ private:
 	bool mShowShortcuts = false;
 	bool mLayoutInitialized = false;
 	bool mConsoleAutoScroll = true;
+	bool mConsoleShowErrors = true;    // Console severity filters (Error/Fatal, Warning, everything else).
+	bool mConsoleShowWarnings = true;
+	bool mConsoleShowInfo = true;
 	bool mPlaying = false;
 	bool mPaused = false;        // In play mode but the simulation is halted.
 	bool mShowColliders = true;  // Draw collider hitbox outlines over the viewport.

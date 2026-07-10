@@ -264,6 +264,20 @@ void EditorLayer::DrawUI()
 
 namespace
 {
+	// Console severity buckets, mirroring the three filter toggles (Unity-style).
+	enum class LogBucket { Error, Warning, Info };
+
+	LogBucket LogLevelBucket(LogLevel level)
+	{
+		switch (level)
+		{
+			case LogLevel::Error:
+			case LogLevel::Fatal:   return LogBucket::Error;
+			case LogLevel::Warning: return LogBucket::Warning;
+			default:                return LogBucket::Info;
+		}
+	}
+
 	// Display color for each log severity, mirroring the spdlog console coloring.
 	ImVec4 LogLevelColor(LogLevel level)
 	{
@@ -279,44 +293,150 @@ namespace
 
 		return ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
 	}
+
+	// Short tag shown in the severity column (an icon will replace it later).
+	const char8* LogLevelTag(LogLevel level)
+	{
+		switch (level)
+		{
+			case LogLevel::Error:       return "ERROR";
+			case LogLevel::Fatal:       return "FATAL";
+			case LogLevel::Warning:     return "WARN";
+			case LogLevel::Success:     return "OK";
+			case LogLevel::Information: return "INFO";
+			case LogLevel::Trace:       return "TRACE";
+		}
+
+		return "LOG";
+	}
+
+	// A severity filter rendered as a toggle button with its message count.
+	bool LogFilterToggle(const char8* label, int count, bool& enabled, const ImVec4& color)
+	{
+		const std::string text = std::string(label) + "  " + std::to_string(count);
+
+		ImGui::PushStyleColor(ImGuiCol_Button, enabled ? ImVec4(color.x, color.y, color.z, 0.28f) : ImVec4(0, 0, 0, 0));
+		ImGui::PushStyleColor(ImGuiCol_Text, enabled ? color : ImVec4(0.45f, 0.46f, 0.49f, 1.0f));
+
+		const bool clicked = ImGui::Button(text.c_str());
+
+		ImGui::PopStyleColor(2);
+
+		if (clicked)
+			enabled = !enabled;
+
+		return clicked;
+	}
 }
 
 void EditorLayer::DrawConsole()
 {
 	ImGui::Begin("Console");
 
-	// Toolbar: clear the history, follow new output, and filter by substring.
+	const std::vector<LogEntry>& history = Log::GetHistory();
+
+	int errorCount = 0, warningCount = 0, infoCount = 0;
+	for (const LogEntry& entry : history)
+	{
+		switch (LogLevelBucket(entry.level))
+		{
+			case LogBucket::Error:   errorCount++;   break;
+			case LogBucket::Warning: warningCount++; break;
+			case LogBucket::Info:    infoCount++;    break;
+		}
+	}
+
+	// --- Toolbar: clear, search, follow-tail, and the severity filters (right-aligned).
+	const ImGuiStyle& style = ImGui::GetStyle();
+
 	if (ImGui::Button("Clear"))
 		Log::ClearHistory();
 
 	ImGui::SameLine();
-	ImGui::Checkbox("Auto-scroll", &mConsoleAutoScroll);
+	static ImGuiTextFilter filter;
+	ImGui::SetNextItemWidth(240.0f);
+	if (ImGui::InputTextWithHint("##search", "Search logs...", filter.InputBuf, IM_ARRAYSIZE(filter.InputBuf)))
+		filter.Build();
 
 	ImGui::SameLine();
-	static ImGuiTextFilter filter;
-	filter.Draw("Filter", 180.0f);
+	ImGui::Checkbox("Auto-scroll", &mConsoleAutoScroll);
+
+	const std::string errorText = "ERROR  " + std::to_string(errorCount);
+	const std::string warnText = "WARN  " + std::to_string(warningCount);
+	const std::string infoText = "INFO  " + std::to_string(infoCount);
+	const float32 togglesWidth =
+		ImGui::CalcTextSize(errorText.c_str()).x + ImGui::CalcTextSize(warnText.c_str()).x +
+		ImGui::CalcTextSize(infoText.c_str()).x + style.FramePadding.x * 6.0f + style.ItemSpacing.x * 2.0f;
+
+	ImGui::SameLine(ImGui::GetContentRegionMax().x - togglesWidth);
+	LogFilterToggle("ERROR", errorCount, mConsoleShowErrors, LogLevelColor(LogLevel::Error));
+	ImGui::SameLine();
+	LogFilterToggle("WARN", warningCount, mConsoleShowWarnings, LogLevelColor(LogLevel::Warning));
+	ImGui::SameLine();
+	LogFilterToggle("INFO", infoCount, mConsoleShowInfo, LogLevelColor(LogLevel::Information));
 
 	ImGui::Separator();
 
-	ImGui::BeginChild("ConsoleOutput", ImVec2(0.0f, 0.0f), false, ImGuiWindowFlags_HorizontalScrollbar);
+	// --- Message list: one table row per entry, tag | time | message.
+	const ImGuiTableFlags tableFlags =
+		ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY | ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_SizingFixedFit;
 
-	for (const LogEntry& entry : Log::GetHistory())
+	if (ImGui::BeginTable("ConsoleLog", 3, tableFlags))
 	{
-		const std::string line = "[" + entry.time + "] " + entry.message;
+		ImGui::TableSetupColumn("Level", ImGuiTableColumnFlags_WidthFixed, 58.0f);
+		ImGui::TableSetupColumn("Time", ImGuiTableColumnFlags_WidthFixed, 70.0f);
+		ImGui::TableSetupColumn("Message", ImGuiTableColumnFlags_WidthStretch);
 
-		if (!filter.PassFilter(line.c_str()))
-			continue;
+		int row = 0;
+		for (const LogEntry& entry : history)
+		{
+			const LogBucket bucket = LogLevelBucket(entry.level);
 
-		ImGui::PushStyleColor(ImGuiCol_Text, LogLevelColor(entry.level));
-		ImGui::TextUnformatted(line.c_str());
-		ImGui::PopStyleColor();
+			if ((bucket == LogBucket::Error && !mConsoleShowErrors) ||
+				(bucket == LogBucket::Warning && !mConsoleShowWarnings) ||
+				(bucket == LogBucket::Info && !mConsoleShowInfo))
+				continue;
+
+			if (!filter.PassFilter(entry.message.c_str()))
+				continue;
+
+			const ImVec4 color = LogLevelColor(entry.level);
+
+			ImGui::TableNextRow();
+			ImGui::PushID(row++);
+
+			// Tint the whole row for errors so they stand out at a glance.
+			if (bucket == LogBucket::Error)
+				ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0, ImGui::GetColorU32(ImVec4(color.x, color.y, color.z, 0.12f)));
+
+			ImGui::TableSetColumnIndex(0);
+			ImGui::TextColored(color, "%s", LogLevelTag(entry.level));
+
+			ImGui::TableSetColumnIndex(1);
+			ImGui::TextDisabled("%s", entry.time.c_str());
+
+			ImGui::TableSetColumnIndex(2);
+			ImGui::TextUnformatted(entry.message.c_str());
+
+			// Right-click any row to copy its message.
+			if (ImGui::BeginPopupContextItem("LogEntryContext"))
+			{
+				if (ImGui::MenuItem("Copy message"))
+					ImGui::SetClipboardText(entry.message.c_str());
+
+				ImGui::EndPopup();
+			}
+
+			ImGui::PopID();
+		}
+
+		// Keep following the tail while the view is already scrolled to the bottom.
+		if (mConsoleAutoScroll && ImGui::GetScrollY() >= ImGui::GetScrollMaxY())
+			ImGui::SetScrollHereY(1.0f);
+
+		ImGui::EndTable();
 	}
 
-	// Keep following the tail while the view is already scrolled to the bottom.
-	if (mConsoleAutoScroll && ImGui::GetScrollY() >= ImGui::GetScrollMaxY())
-		ImGui::SetScrollHereY(1.0f);
-
-	ImGui::EndChild();
 	ImGui::End();
 }
 
