@@ -46,6 +46,11 @@ namespace Lion
 		return sInstance ? sInstance->mHistory : empty;
 	}
 
+	size_t Log::GetTotalCount()
+	{
+		return sInstance ? sInstance->mTotalCount : 0;
+	}
+
 	void Log::ClearHistory()
 	{
 		if (sInstance)
@@ -63,6 +68,7 @@ namespace Lion
 				sInstance->mHistory.pop_front();
 
 			sInstance->mHistory.push_back({ mode, CurrentTimeString(), message });
+			++sInstance->mTotalCount;
 		}
 
 		switch (mode)

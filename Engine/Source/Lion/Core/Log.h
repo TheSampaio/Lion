@@ -33,6 +33,10 @@ namespace Lion
 		// buffer, while still allowing the editor to index into it.
 		static LION_API const std::deque<LogEntry>& GetHistory();
 
+		// Number of lines logged since startup. Unlike the history size it never decreases, so tools
+		// can tell that new lines arrived even once the history saturates at its cap.
+		static LION_API size_t GetTotalCount();
+
 		// Clears the in-memory log history (does not affect already-printed console output).
 		static LION_API void ClearHistory();
 
@@ -54,5 +58,6 @@ namespace Lion
 		static constexpr size_t kMaxHistory = 1024;
 
 		std::deque<LogEntry> mHistory;
+		size_t mTotalCount = 0;
 	};
 }

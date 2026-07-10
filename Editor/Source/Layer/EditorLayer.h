@@ -56,6 +56,7 @@ private:
 	// draws just the visible slice, so a full history costs the same as a screenful.
 	std::vector<int> mConsoleVisible;
 	int mConsoleSelected = -1;
+	size_t mConsoleLastTotal = 0;   // Total lines logged as of the last drawn frame; drives the tail follow.
 	bool mPlaying = false;
 	bool mPaused = false;        // In play mode but the simulation is halted.
 	bool mShowColliders = false;  // Collider outlines are a debug view, off until enabled in Settings.

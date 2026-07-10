@@ -317,7 +317,13 @@ namespace
 
 void EditorLayer::DrawConsole()
 {
-	ImGui::Begin("Console");
+	// While the panel is collapsed or sits behind another dock tab there is no layout to build, and
+	// leaving the tail counter untouched makes it snap to the newest line once it comes back.
+	if (!ImGui::Begin("Console"))
+	{
+		ImGui::End();
+		return;
+	}
 
 	const std::deque<LogEntry>& history = Log::GetHistory();
 
@@ -385,9 +391,6 @@ void EditorLayer::DrawConsole()
 	// the rows actually on screen, so a full history costs no more than a screenful.
 	ImGui::BeginChild("ConsoleOutput", ImVec2(0.0f, 0.0f), false, ImGuiWindowFlags_HorizontalScrollbar);
 
-	// Sampled before the rows are submitted: it reflects where the user left the view last frame.
-	const bool wasAtBottom = ImGui::GetScrollY() >= ImGui::GetScrollMaxY() - 1.0f;
-
 	int contextIndex = -1;
 	ImDrawList* drawList = ImGui::GetWindowDrawList();
 
@@ -453,10 +456,17 @@ void EditorLayer::DrawConsole()
 		ImGui::EndPopup();
 	}
 
-	// Keep following the tail while the view is parked at the bottom; scrolling up detaches it.
-	// (Checking the position rather than the entry count keeps this working once the history caps.)
-	if (mConsoleAutoScroll && wasAtBottom)
-		ImGui::SetScrollY(ImGui::GetScrollMaxY());
+	// Follow the tail whenever lines were logged since the last frame this panel was drawn. Keying
+	// off the total logged count rather than the scroll offset keeps the follow alive once the
+	// history saturates at its cap, and after the panel spent frames hidden behind another tab
+	// (where the offset stays put while the content grows past it). SetScrollHereY targets the
+	// cursor, which the clipper leaves at the end of the virtual list, so it lands on the bottom.
+	const size_t totalLogged = Log::GetTotalCount();
+
+	if (mConsoleAutoScroll && totalLogged != mConsoleLastTotal)
+		ImGui::SetScrollHereY(1.0f);
+
+	mConsoleLastTotal = totalLogged;
 
 	ImGui::EndChild();
 	ImGui::End();
@@ -958,8 +968,11 @@ void EditorLayer::HandleShortcuts()
 
 void EditorLayer::DrawViewport()
 {
+	// The viewport image fills the window edge to edge. Begin() captures the padding, so it is
+	// restored right away: popups opened from here (e.g. Settings) then get the normal padding.
 	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
 	ImGui::Begin("Viewport");
+	ImGui::PopStyleVar();
 
 	const ImVec2 available = ImGui::GetContentRegionAvail();
 	mViewportSize = { available.x, available.y };
@@ -1030,11 +1043,17 @@ void EditorLayer::DrawViewport()
 	if (mShowColliders)
 		DrawColliderOverlays(imageMin, imageSize);
 
-	// Play mode is signalled by an accent outline around the viewport.
+	// Play mode is signalled by an accent outline around the viewport. It is inset by half its
+	// thickness so the whole stroke stays inside the image instead of being clipped in half.
 	if (mPlaying)
 	{
-		const ImVec2 imageMax(imageMin.x + imageSize.x, imageMin.y + imageSize.y);
-		ImGui::GetWindowDrawList()->AddRect(imageMin, imageMax, IM_COL32(61, 133, 224, 255), 0.0f, 0, 3.0f);
+		constexpr float32 thickness = 5.0f;
+		const float32 inset = thickness * 0.5f;
+
+		ImGui::GetWindowDrawList()->AddRect(
+			ImVec2(imageMin.x + inset, imageMin.y + inset),
+			ImVec2(imageMin.x + imageSize.x - inset, imageMin.y + imageSize.y - inset),
+			IM_COL32(61, 133, 224, 255), 0.0f, 0, thickness);
 	}
 
 	DrawViewportToolbar(imageMin, imageSize);
@@ -1065,7 +1084,6 @@ void EditorLayer::DrawViewport()
 	}
 
 	ImGui::End();
-	ImGui::PopStyleVar();
 }
 
 void EditorLayer::DrawViewportToolbar(const ImVec2& imageMin, const ImVec2& imageSize)
@@ -1512,9 +1530,11 @@ bool EditorLayer::DrawVec3Control(const char* label, float values[3], float spee
 
 	ImGui::PushID(label);
 
-	// A square badge, so the axis letter sits dead centre instead of floating in frame padding.
+	// A compact badge, as tall as the drag field next to it. Its frame padding is zeroed below so the
+	// letter is centred in the whole badge instead of inside a rectangle shrunk by the padding
+	// (which, being narrower than the bold glyph, pushed the letter to the left).
 	const float32 lineHeight = ImGui::GetFontSize() + style.FramePadding.y * 2.0f;
-	const ImVec2 buttonSize(lineHeight, lineHeight);
+	const ImVec2 buttonSize(lineHeight * 0.7f, lineHeight);
 
 	// Reserve room for the trailing label, then split the rest across the three axes.
 	const float32 labelWidth = 70.0f;
@@ -1532,6 +1552,7 @@ bool EditorLayer::DrawVec3Control(const char* label, float values[3], float spee
 		ImGui::PushID(i);
 
 		// Colored axis badge: click to reset this component.
+		ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0.0f, 0.0f));
 		ImGui::PushStyleVar(ImGuiStyleVar_ButtonTextAlign, ImVec2(0.5f, 0.5f));
 		ImGui::PushStyleColor(ImGuiCol_Button, axes[i].color);
 		ImGui::PushStyleColor(ImGuiCol_ButtonHovered, axes[i].hovered);
@@ -1551,7 +1572,7 @@ bool EditorLayer::DrawVec3Control(const char* label, float values[3], float spee
 			ImGui::PopFont();
 
 		ImGui::PopStyleColor(3);
-		ImGui::PopStyleVar();
+		ImGui::PopStyleVar(2);
 
 		ImGui::SameLine(0.0f, 0.0f);
 		ImGui::SetNextItemWidth(dragWidth);
