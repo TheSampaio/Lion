@@ -38,8 +38,8 @@ void EditorLayer::OnCreate()
 
 void EditorLayer::OnUpdate()
 {
-	// Only advance the scene simulation (physics + entity scripts) while in Play mode.
-	if (mPlaying)
+	// Only advance the scene simulation (physics + entity scripts) while playing and not paused.
+	if (mPlaying && !mPaused)
 		mScene->OnUpdate();
 }
 
@@ -48,19 +48,73 @@ void EditorLayer::OnDetach()
 	EditorGui::Shutdown();
 }
 
+int EditorLayer::SelectedEntityIndex() const
+{
+	if (!mSelectedEntity)
+		return -1;
+
+	int index = 0;
+	for (const auto& entity : mScene->GetEntities())
+	{
+		if (entity == mSelectedEntity)
+			return index;
+
+		index++;
+	}
+
+	return -1;
+}
+
+void EditorLayer::SelectEntityByIndex(int index)
+{
+	mSelectedEntity = nullptr;
+	mRenamingEntity = nullptr;
+
+	if (index < 0)
+		return;
+
+	int current = 0;
+	for (const auto& entity : mScene->GetEntities())
+	{
+		if (current == index)
+		{
+			mSelectedEntity = entity;
+			return;
+		}
+
+		current++;
+	}
+}
+
 void EditorLayer::StartPlay()
 {
 	if (mPlaying)
+	{
+		mPaused = false;  // Play acts as "resume" while paused.
 		return;
+	}
 
 	// Save the edited scene, then rebuild it so every component runs OnAwake again (which creates
-	// the Box2D bodies/shapes needed for the simulation).
+	// the Box2D bodies/shapes needed for the simulation). The rebuild preserves entity order, so the
+	// selection is restored by index.
+	const int selected = SelectedEntityIndex();
+
 	mPlaySnapshot = SceneSerializer::SerializeToString(mScene);
-	mSelectedEntity = nullptr;
 	SceneSerializer::DeserializeFromString(mScene, mPlaySnapshot);
+	SelectEntityByIndex(selected);
 
 	mPlaying = true;
+	mPaused = false;
 	Log::Console(LogLevel::Information, "[Editor] Play mode started.");
+}
+
+void EditorLayer::TogglePause()
+{
+	if (!mPlaying)
+		return;
+
+	mPaused = !mPaused;
+	Log::Console(LogLevel::Information, mPaused ? "[Editor] Play mode paused." : "[Editor] Play mode resumed.");
 }
 
 void EditorLayer::StopPlay()
@@ -69,10 +123,13 @@ void EditorLayer::StopPlay()
 		return;
 
 	// Restore the scene to exactly the edited state captured when Play started.
-	mSelectedEntity = nullptr;
+	const int selected = SelectedEntityIndex();
+
 	SceneSerializer::DeserializeFromString(mScene, mPlaySnapshot);
+	SelectEntityByIndex(selected);
 
 	mPlaying = false;
+	mPaused = false;
 	Log::Console(LogLevel::Information, "[Editor] Play mode stopped.");
 }
 
@@ -279,12 +336,14 @@ void EditorLayer::DrawShortcuts()
 			{ ShortcutAction::Undo,            "General",   "Undo" },
 			{ ShortcutAction::Redo,            "General",   "Redo" },
 			{ ShortcutAction::Play,            "Play Mode", "Play (run the simulation)" },
+			{ ShortcutAction::Pause,           "Play Mode", "Pause / resume the simulation" },
 			{ ShortcutAction::Stop,            "Play Mode", "Stop (return to edited state)" },
 			{ ShortcutAction::GizmoMove,       "Gizmo",     "Move (translate)" },
 			{ ShortcutAction::GizmoRotate,     "Gizmo",     "Rotate" },
 			{ ShortcutAction::GizmoScale,      "Gizmo",     "Scale" },
 			{ ShortcutAction::RenameEntity,    "Hierarchy", "Rename selected entity" },
 			{ ShortcutAction::DeleteEntity,    "Hierarchy", "Delete selected entity" },
+			{ ShortcutAction::ToggleColliders, "Viewport",  "Toggle collider hitboxes" },
 		};
 
 		ImGui::TextDisabled("Click a shortcut to rebind it, then press a key (Esc to cancel).");
@@ -469,6 +528,8 @@ void EditorLayer::ResetShortcutsToDefault()
 	set(ShortcutAction::GizmoScale, ImGuiKey_R);
 	set(ShortcutAction::RenameEntity, ImGuiKey_F2);
 	set(ShortcutAction::DeleteEntity, ImGuiKey_Delete);
+	set(ShortcutAction::Pause, ImGuiKey_F7);
+	set(ShortcutAction::ToggleColliders, ImGuiKey_F4);
 }
 
 void EditorLayer::InitShortcuts()
@@ -544,8 +605,10 @@ void EditorLayer::HandleShortcuts()
 
 	// These are available even while a text field is focused.
 	if (IsShortcutPressed(ShortcutAction::Play)) StartPlay();
+	if (IsShortcutPressed(ShortcutAction::Pause)) TogglePause();
 	if (IsShortcutPressed(ShortcutAction::Stop)) StopPlay();
 	if (IsShortcutPressed(ShortcutAction::ToggleShortcuts)) mShowShortcuts = !mShowShortcuts;
+	if (IsShortcutPressed(ShortcutAction::ToggleColliders)) mShowColliders = !mShowColliders;
 
 	// The actions below are edit-mode only; ignore them while playing or typing in a text field.
 	if (mPlaying || ImGui::GetIO().WantTextInput)
@@ -633,9 +696,22 @@ void EditorLayer::DrawViewport()
 		}
 	}
 
+	if (mShowColliders)
+		DrawColliderOverlays(imageMin, imageSize);
+
+	// Play mode is signalled by an accent outline around the viewport.
+	if (mPlaying)
+	{
+		const ImVec2 imageMax(imageMin.x + imageSize.x, imageMin.y + imageSize.y);
+		ImGui::GetWindowDrawList()->AddRect(imageMin, imageMax, IM_COL32(61, 133, 224, 255), 0.0f, 0, 3.0f);
+	}
+
+	DrawViewportToolbar(imageMin, imageSize);
+
 	// Pixel-perfect click-to-select: read the entity id under the cursor from the id attachment.
-	// Skipped while over/using the gizmo (that click drives the gizmo instead).
-	if (imageHovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left) && !ImGuizmo::IsOver() && !ImGuizmo::IsUsing())
+	// Skipped while over/using the gizmo or the overlay toolbar (those clicks belong to them).
+	if (imageHovered && !ImGui::IsAnyItemHovered() &&
+		ImGui::IsMouseClicked(ImGuiMouseButton_Left) && !ImGuizmo::IsOver() && !ImGuizmo::IsUsing())
 	{
 		const ImVec2 mouse = ImGui::GetMousePos();
 		const int32 pixelX = static_cast<int32>(mouse.x - imageMin.x);
@@ -657,11 +733,65 @@ void EditorLayer::DrawViewport()
 		}
 	}
 
-	if (mShowColliders)
-		DrawColliderOverlays(imageMin, imageSize);
-
 	ImGui::End();
 	ImGui::PopStyleVar();
+}
+
+void EditorLayer::DrawViewportToolbar(const ImVec2& imageMin, const ImVec2& imageSize)
+{
+	const ImGuiStyle& style = ImGui::GetStyle();
+
+	// Collider visibility toggle, pinned to the viewport's top-left corner.
+	ImGui::SetCursorScreenPos(ImVec2(imageMin.x + 8.0f, imageMin.y + 8.0f));
+
+	if (mShowColliders)
+		ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.24f, 0.52f, 0.90f, 1.0f));
+
+	if (ImGui::Button("Colliders"))
+		mShowColliders = !mShowColliders;
+
+	if (mShowColliders)
+		ImGui::PopStyleColor();
+
+	if (ImGui::IsItemHovered())
+		ImGui::SetTooltip("Toggle collider hitboxes (F4)");
+
+	// Play / Pause / Stop, centered along the viewport's top edge.
+	const char8* pauseLabel = mPaused ? "Resume" : "Pause";
+	const float32 playWidth = ImGui::CalcTextSize("Play").x + style.FramePadding.x * 2.0f;
+	const float32 pauseWidth = ImGui::CalcTextSize(pauseLabel).x + style.FramePadding.x * 2.0f;
+	const float32 stopWidth = ImGui::CalcTextSize("Stop").x + style.FramePadding.x * 2.0f;
+	const float32 totalWidth = playWidth + pauseWidth + stopWidth + style.ItemSpacing.x * 2.0f;
+
+	ImGui::SetCursorScreenPos(ImVec2(imageMin.x + (imageSize.x - totalWidth) * 0.5f, imageMin.y + 8.0f));
+
+	// Play doubles as "resume" while paused, so it stays enabled in that state.
+	ImGui::BeginDisabled(mPlaying && !mPaused);
+	if (ImGui::Button("Play"))
+		StartPlay();
+	ImGui::EndDisabled();
+	if (ImGui::IsItemHovered())
+		ImGui::SetTooltip("Run the scene simulation (F5)");
+
+	ImGui::SameLine();
+	ImGui::BeginDisabled(!mPlaying);
+	if (mPaused)
+		ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.24f, 0.52f, 0.90f, 1.0f));
+	if (ImGui::Button(pauseLabel))
+		TogglePause();
+	if (mPaused)
+		ImGui::PopStyleColor();
+	ImGui::EndDisabled();
+	if (ImGui::IsItemHovered())
+		ImGui::SetTooltip(mPaused ? "Resume the simulation (F7)" : "Pause the simulation (F7)");
+
+	ImGui::SameLine();
+	ImGui::BeginDisabled(!mPlaying);
+	if (ImGui::Button("Stop"))
+		StopPlay();
+	ImGui::EndDisabled();
+	if (ImGui::IsItemHovered())
+		ImGui::SetTooltip("Stop and return to the edited state (F8)");
 }
 
 void EditorLayer::DrawColliderOverlays(const ImVec2& imageMin, const ImVec2& imageSize)
@@ -855,11 +985,14 @@ bool EditorLayer::DrawComponentHeader(const char* label, int index, bool& remove
 
 	const ImGuiStyle& style = ImGui::GetStyle();
 	const float32 lineHeight = ImGui::GetFontSize() + style.FramePadding.y * 2.0f;
-	const float32 available = ImGui::GetContentRegionAvail().x;
 
 	ImGui::SetNextItemAllowOverlap();
 	const bool open = ImGui::CollapsingHeader(label,
 		ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_SpanAvailWidth | ImGuiTreeNodeFlags_AllowOverlap);
+
+	// Exact header bounds, so the remove button sits flush against its right edge.
+	const ImVec2 headerMin = ImGui::GetItemRectMin();
+	const ImVec2 headerMax = ImGui::GetItemRectMax();
 
 	// Drag the header onto another component's header to reorder.
 	if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID))
@@ -879,8 +1012,9 @@ bool EditorLayer::DrawComponentHeader(const char* label, int index, bool& remove
 		ImGui::EndDragDropTarget();
 	}
 
-	// Right-aligned square "X" button sitting on the header row.
-	ImGui::SameLine(available - lineHeight);
+	// Square "X" button sitting on the header row, flush with its right edge.
+	ImGui::SameLine();
+	ImGui::SetCursorScreenPos(ImVec2(headerMax.x - lineHeight, headerMin.y));
 	if (ImGui::Button("X", ImVec2(lineHeight, lineHeight)))
 		removeRequested = true;
 
@@ -1244,26 +1378,6 @@ void EditorLayer::DrawMenuBar()
 		{
 			ImGui::MenuItem("Shortcuts", "F1", &mShowShortcuts);
 			ImGui::EndMenu();
-		}
-
-		// Play / Stop controls, right-aligned in the menu bar.
-		ImGui::SameLine(ImGui::GetWindowWidth() - 110.0f);
-
-		if (mPlaying)
-		{
-			ImGui::TextColored(ImVec4(0.45f, 0.85f, 0.50f, 1.0f), "PLAYING");
-			ImGui::SameLine();
-			if (ImGui::SmallButton("Stop"))
-				StopPlay();
-			if (ImGui::IsItemHovered())
-				ImGui::SetTooltip("Stop the simulation (F8)");
-		}
-		else
-		{
-			if (ImGui::SmallButton("Play"))
-				StartPlay();
-			if (ImGui::IsItemHovered())
-				ImGui::SetTooltip("Run the scene simulation (F5)");
 		}
 
 		ImGui::EndMainMenuBar();

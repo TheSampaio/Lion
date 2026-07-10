@@ -19,10 +19,12 @@ public:
 private:
 	// Rebindable editor shortcuts. Each action holds a key plus modifier flags; the Shortcuts panel
 	// lets the user change them, and the handlers query them via IsShortcutPressed.
+	// New actions are appended so indices already saved in shortcuts.cfg stay valid.
 	enum class ShortcutAction
 	{
 		Undo, Redo, Play, Stop, ToggleShortcuts,
 		GizmoMove, GizmoRotate, GizmoScale, RenameEntity, DeleteEntity,
+		Pause, ToggleColliders,
 		Count
 	};
 
@@ -42,6 +44,7 @@ private:
 	bool mLayoutInitialized = false;
 	bool mConsoleAutoScroll = true;
 	bool mPlaying = false;
+	bool mPaused = false;        // In play mode but the simulation is halted.
 	bool mShowColliders = true;  // Draw collider hitbox outlines over the viewport.
 	bool mRenameFocus = false;  // Request keyboard focus on the inline rename field for one frame.
 	ImGuizmo::OPERATION mGizmoOperation = ImGuizmo::TRANSLATE;
@@ -104,7 +107,16 @@ private:
 	std::string KeybindToString(const Keybind& bind) const;
 
 	// Play mode: StartPlay snapshots the edited scene and re-awakes it (creating physics bodies) so
-	// the simulation runs; StopPlay restores the snapshot, returning to the edited state.
+	// the simulation runs; StopPlay restores the snapshot, returning to the edited state. Both keep
+	// the current selection by index (the entity list round-trips in order).
 	void StartPlay();
 	void StopPlay();
+	void TogglePause();
+
+	// Play/Stop/Collider controls drawn as an overlay on top of the viewport image.
+	void DrawViewportToolbar(const ImVec2& imageMin, const ImVec2& imageSize);
+
+	// Selection is stored by index across a scene rebuild (serialize/deserialize round-trip).
+	int SelectedEntityIndex() const;
+	void SelectEntityByIndex(int index);
 };
