@@ -25,6 +25,7 @@ private:
 		Undo, Redo, Play, Stop, ToggleShortcuts,
 		GizmoMove, GizmoRotate, GizmoScale, RenameEntity, DeleteEntity,
 		Pause, ToggleColliders,
+		CopyEntity, PasteEntity, DuplicateEntity,
 		Count
 	};
 
@@ -66,6 +67,9 @@ private:
 	// Snapshot of the edited scene captured when entering Play mode, restored on Stop.
 	std::string mPlaySnapshot;
 
+	// Serialized entity held by Ctrl+C, pasted by Ctrl+V.
+	std::string mEntityClipboard;
+
 	static constexpr size_t kMaxUndo = 100;
 
 	void CreateDemoScene();
@@ -97,6 +101,12 @@ private:
 	void Undo();
 	void Redo();
 	void HandleShortcuts();
+
+	// Entity clipboard: copy the selection, paste a new entity from the clipboard, or do both at
+	// once (duplicate). The new entity is appended to the scene and becomes the selection.
+	void CopyEntity();
+	void PasteEntity();
+	void DuplicateEntity();
 
 	// Shortcut/keybinding helpers.
 	void InitShortcuts();                                  // Sets defaults, then loads overrides from disk.

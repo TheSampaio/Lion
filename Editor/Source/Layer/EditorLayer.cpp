@@ -343,6 +343,9 @@ void EditorLayer::DrawShortcuts()
 			{ ShortcutAction::GizmoScale,      "Gizmo",     "Scale" },
 			{ ShortcutAction::RenameEntity,    "Hierarchy", "Rename selected entity" },
 			{ ShortcutAction::DeleteEntity,    "Hierarchy", "Delete selected entity" },
+			{ ShortcutAction::CopyEntity,      "Hierarchy", "Copy selected entity" },
+			{ ShortcutAction::PasteEntity,     "Hierarchy", "Paste entity from clipboard" },
+			{ ShortcutAction::DuplicateEntity, "Hierarchy", "Duplicate selected entity" },
 			{ ShortcutAction::ToggleColliders, "Viewport",  "Toggle collider hitboxes" },
 		};
 
@@ -530,6 +533,45 @@ void EditorLayer::ResetShortcutsToDefault()
 	set(ShortcutAction::DeleteEntity, ImGuiKey_Delete);
 	set(ShortcutAction::Pause, ImGuiKey_F7);
 	set(ShortcutAction::ToggleColliders, ImGuiKey_F4);
+	set(ShortcutAction::CopyEntity, ImGuiKey_C, true);
+	set(ShortcutAction::PasteEntity, ImGuiKey_V, true);
+	set(ShortcutAction::DuplicateEntity, ImGuiKey_D, true);
+}
+
+void EditorLayer::CopyEntity()
+{
+	if (mSelectedEntity)
+		mEntityClipboard = SceneSerializer::SerializeEntityToString(mSelectedEntity);
+}
+
+void EditorLayer::PasteEntity()
+{
+	if (mEntityClipboard.empty())
+		return;
+
+	RecordSnapshot();
+
+	if (Reference<Entity> pasted = SceneSerializer::DeserializeEntityFromString(mScene, mEntityClipboard))
+	{
+		pasted->SetName(pasted->GetName() + " (Copy)");
+		mSelectedEntity = pasted;
+	}
+}
+
+void EditorLayer::DuplicateEntity()
+{
+	if (!mSelectedEntity)
+		return;
+
+	RecordSnapshot();
+
+	const std::string data = SceneSerializer::SerializeEntityToString(mSelectedEntity);
+
+	if (Reference<Entity> copy = SceneSerializer::DeserializeEntityFromString(mScene, data))
+	{
+		copy->SetName(copy->GetName() + " (Copy)");
+		mSelectedEntity = copy;
+	}
 }
 
 void EditorLayer::InitShortcuts()
@@ -616,6 +658,10 @@ void EditorLayer::HandleShortcuts()
 
 	if (IsShortcutPressed(ShortcutAction::Undo)) Undo();
 	if (IsShortcutPressed(ShortcutAction::Redo)) Redo();
+
+	if (IsShortcutPressed(ShortcutAction::CopyEntity)) CopyEntity();
+	if (IsShortcutPressed(ShortcutAction::PasteEntity)) PasteEntity();
+	if (IsShortcutPressed(ShortcutAction::DuplicateEntity)) DuplicateEntity();
 
 	if (mSelectedEntity && IsShortcutPressed(ShortcutAction::RenameEntity))
 	{
@@ -932,6 +978,12 @@ void EditorLayer::DrawHierarchy()
 
 				ImGui::Separator();
 
+				if (ImGui::MenuItem("Copy", "Ctrl+C"))      CopyEntity();
+				if (ImGui::MenuItem("Duplicate", "Ctrl+D")) DuplicateEntity();
+				if (ImGui::MenuItem("Paste", "Ctrl+V", false, !mEntityClipboard.empty())) PasteEntity();
+
+				ImGui::Separator();
+
 				if (ImGui::MenuItem("Delete", "Del"))
 					entityToDelete = entity;
 
@@ -959,6 +1011,9 @@ void EditorLayer::DrawHierarchy()
 			mRenamingEntity = entity;
 			mRenameFocus = true;
 		}
+
+		if (ImGui::MenuItem("Paste", "Ctrl+V", false, !mEntityClipboard.empty()))
+			PasteEntity();
 
 		ImGui::EndPopup();
 	}
