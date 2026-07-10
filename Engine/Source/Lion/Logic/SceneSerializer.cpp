@@ -46,6 +46,9 @@ namespace Lion
 		Json node;
 		node["name"] = entity->GetName();
 
+		if (entity->IsFolder())
+			node["folder"] = true;
+
 		const Reference<Transform> transform = entity->GetTransform();
 		const Vector position = transform->GetPosition();
 		const Vector rotation = transform->GetRotation();
@@ -204,6 +207,7 @@ namespace Lion
 	{
 		auto entity = MakeReference<Entity>();
 		entity->SetName(node.value("name", std::string("Entity")));
+		entity->SetFolder(node.value("folder", false));
 
 		if (node.contains("transform"))
 		{

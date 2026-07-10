@@ -658,6 +658,20 @@ void EditorLayer::ResetShortcutsToDefault()
 	set(ShortcutAction::DuplicateEntity, ImGuiKey_D, true);
 }
 
+void EditorLayer::CreateFolder()
+{
+	RecordSnapshot();
+
+	auto folder = MakeReference<Entity>();
+	folder->SetFolder(true);
+	folder->SetName("Folder");
+	mScene->Add(folder);
+
+	mSelectedEntity = folder;
+	mRenamingEntity = folder;   // Let the user name it right away.
+	mRenameFocus = true;
+}
+
 void EditorLayer::CopyEntity()
 {
 	if (mSelectedEntity)
@@ -822,8 +836,9 @@ void EditorLayer::DrawViewport()
 		if (IsShortcutPressed(ShortcutAction::GizmoScale))  mGizmoOperation = ImGuizmo::SCALE;
 	}
 
-	// The gizmo is an editing tool; hide it while the simulation is running.
-	if (mSelectedEntity && !mPlaying)
+	// The gizmo is an editing tool; hide it while the simulation is running, and folders have no
+	// meaningful transform to manipulate.
+	if (mSelectedEntity && !mPlaying && !mSelectedEntity->IsFolder())
 	{
 		ImGuizmo::SetOrthographic(true);
 		ImGuizmo::SetDrawlist();
@@ -1077,6 +1092,9 @@ void EditorLayer::DrawHierarchy()
 			mRenameFocus = true;
 		}
 
+		if (ImGui::MenuItem("Create Folder"))
+			CreateFolder();
+
 		if (ImGui::MenuItem("Paste", "Ctrl+V", false, !mEntityClipboard.empty()))
 			PasteEntity();
 
@@ -1151,7 +1169,16 @@ void EditorLayer::DrawEntityNode(const Reference<Entity>& entity)
 		flags |= ImGuiTreeNodeFlags_Selected;
 
 	const std::string& name = entity->GetName();
+	const bool folder = entity->IsFolder();
+
+	// Folders are tinted so they read as organizational nodes rather than scene objects.
+	if (folder)
+		ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.95f, 0.80f, 0.35f, 1.0f));
+
 	const bool open = ImGui::TreeNodeEx("##node", flags, "%s", name.empty() ? "(unnamed)" : name.c_str());
+
+	if (folder)
+		ImGui::PopStyleColor();
 
 	// Clicking the label (not the expand arrow) selects the entity.
 	if (ImGui::IsItemClicked() && !ImGui::IsItemToggledOpen())
@@ -1360,6 +1387,14 @@ void EditorLayer::DrawProperties()
 	if (ImGui::IsItemDeactivatedAfterEdit()) CommitEdit();
 
 	ImGui::Separator();
+
+	// A folder only organizes the hierarchy: it has no transform or components to edit.
+	if (mSelectedEntity->IsFolder())
+	{
+		ImGui::TextDisabled("Folder — groups entities in the hierarchy.");
+		ImGui::End();
+		return;
+	}
 
 	if (ImGui::CollapsingHeader("Transform", ImGuiTreeNodeFlags_DefaultOpen))
 	{

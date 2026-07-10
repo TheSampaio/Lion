@@ -29,6 +29,11 @@ namespace Lion
 		LION_API const std::string& GetName() const { return mName; }
 		LION_API void SetName(const std::string& name) { mName = name; }
 
+		// A folder is a purely organizational entity: it holds no components and keeps an identity
+		// transform, so grouping entities under it never moves them.
+		LION_API bool IsFolder() const { return mIsFolder; }
+		LION_API void SetFolder(bool value) { mIsFolder = value; }
+
 		// Returns the scene that currently owns this entity (null while detached).
 		LION_API Reference<Scene> GetScene() const { return mScene; }
 
@@ -118,6 +123,7 @@ namespace Lion
 
 	private:
 		const int32 mId;
+		bool mIsFolder = false;
 		std::string mName = "Entity";
 		Reference<Transform> mTransform;
 		Reference<Scene> mScene;

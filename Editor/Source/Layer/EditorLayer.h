@@ -119,6 +119,9 @@ private:
 	void PasteEntity();
 	void DuplicateEntity();
 
+	// Creates an organizational folder entity (no components, identity transform).
+	void CreateFolder();
+
 	// Shortcut/keybinding helpers.
 	void InitShortcuts();                                  // Sets defaults, then loads overrides from disk.
 	void ResetShortcutsToDefault();                        // Assigns the built-in default bindings.
