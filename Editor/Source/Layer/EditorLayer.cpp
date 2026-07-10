@@ -1047,7 +1047,7 @@ void EditorLayer::DrawViewport()
 	// thickness so the whole stroke stays inside the image instead of being clipped in half.
 	if (mPlaying)
 	{
-		constexpr float32 thickness = 5.0f;
+		constexpr float32 thickness = 4.0f;
 		const float32 inset = thickness * 0.5f;
 
 		ImGui::GetWindowDrawList()->AddRect(
@@ -1532,7 +1532,7 @@ bool EditorLayer::DrawVec3Control(const char* label, float values[3], float spee
 
 	// A compact badge, as tall as the drag field next to it. Its frame padding is zeroed below so the
 	// letter is centred in the whole badge instead of inside a rectangle shrunk by the padding
-	// (which, being narrower than the bold glyph, pushed the letter to the left).
+	// (which, being narrower than the glyph, pushed the letter to the left).
 	const float32 lineHeight = ImGui::GetFontSize() + style.FramePadding.y * 2.0f;
 	const ImVec2 buttonSize(lineHeight * 0.7f, lineHeight);
 
@@ -1541,8 +1541,6 @@ bool EditorLayer::DrawVec3Control(const char* label, float values[3], float spee
 	const float32 controlsWidth = ImGui::GetContentRegionAvail().x - labelWidth;
 	const float32 axisWidth = (controlsWidth - 2.0f * style.ItemInnerSpacing.x) / 3.0f;
 	const float32 dragWidth = (axisWidth - buttonSize.x > 12.0f) ? axisWidth - buttonSize.x : 12.0f;
-
-	ImFont* boldFont = EditorGui::GetBoldFont();
 
 	for (int32 i = 0; i < 3; ++i)
 	{
@@ -1558,18 +1556,12 @@ bool EditorLayer::DrawVec3Control(const char* label, float values[3], float spee
 		ImGui::PushStyleColor(ImGuiCol_ButtonHovered, axes[i].hovered);
 		ImGui::PushStyleColor(ImGuiCol_ButtonActive, axes[i].color);
 
-		if (boldFont)
-			ImGui::PushFont(boldFont);
-
 		if (ImGui::Button(axes[i].name, buttonSize))
 		{
 			RecordSnapshot();
 			values[i] = resetValue;
 			changed = true;
 		}
-
-		if (boldFont)
-			ImGui::PopFont();
 
 		ImGui::PopStyleColor(3);
 		ImGui::PopStyleVar(2);
