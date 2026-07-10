@@ -2,6 +2,7 @@
 
 #include "../EditorGui.h"
 
+#include <cctype>
 #include <filesystem>
 #include <fstream>
 
@@ -204,6 +205,7 @@ void EditorLayer::RenderScene()
 
 void EditorLayer::DrawUI()
 {
+	ApplyPendingLayout();
 	DrawMenuBar();
 	HandleShortcuts();
 
@@ -225,17 +227,19 @@ void EditorLayer::DrawUI()
 	ImGui::Begin("LionEditorDockHost", nullptr, hostFlags);
 	ImGui::PopStyleVar(3);
 
-	const ImGuiID dockspaceId = ImGui::GetID("LionEditorDockspace");
+	// Kept for the next frame's ApplyPendingLayout: GetID reads the current window's ID stack, and by
+	// then no window is being submitted.
+	mDockspaceId = ImGui::GetID("LionEditorDockspace");
 
 	if (!mLayoutInitialized)
 	{
 		mLayoutInitialized = true;
 
-		if (ImGui::DockBuilderGetNode(dockspaceId) == nullptr)
-			BuildDefaultLayout(dockspaceId);
+		if (ImGui::DockBuilderGetNode(mDockspaceId) == nullptr)
+			BuildDefaultLayout(mDockspaceId);
 	}
 
-	ImGui::DockSpace(dockspaceId);
+	ImGui::DockSpace(mDockspaceId);
 	ImGui::End();
 
 	// --- Panels -----------------------------------------------------------------------------
@@ -255,6 +259,7 @@ void EditorLayer::DrawUI()
 	DrawConsole();
 	DrawProject();
 	DrawShortcuts();
+	DrawLayoutPopups();
 
 	// Commit any in-progress continuous edit (gizmo/slider drag) once the mouse is released.
 	if (mHasPending && ImGui::IsMouseReleased(ImGuiMouseButton_Left))
@@ -420,7 +425,7 @@ void EditorLayer::DrawConsole()
 
 			// A small severity dot stands in for the icon that will replace it later.
 			drawList->AddCircleFilled(
-				ImVec2(rowMin.x + 10.0f, rowMin.y + ImGui::GetTextLineHeight() * 0.5f),
+				ImVec2(rowMin.x + 8.0f, rowMin.y + ImGui::GetTextLineHeight() * 0.5f),
 				4.0f, ImGui::GetColorU32(accent));
 
 			ImGui::SameLine(24.0f);
@@ -474,6 +479,10 @@ void EditorLayer::DrawConsole()
 
 namespace
 {
+	// Saved dock layouts, in a folder of their own inside the resource root (where the editor already
+	// keeps imgui.ini and shortcuts.cfg). The Project panel skips it: it is editor state, not an asset.
+	constexpr const char8* kLayoutsDirectory = "Layouts";
+
 	// Only asset-like files are listed; the resource root also holds the executable and its DLLs.
 	bool IsAssetFile(const std::filesystem::path& path)
 	{
@@ -541,6 +550,10 @@ void EditorLayer::DrawProject()
 			continue;
 
 		const std::string name = entry.path().filename().generic_string();
+
+		// The editor's own layouts folder sits in the resource root, but it holds no assets.
+		if (mProjectPath.empty() && name == kLayoutsDirectory)
+			continue;
 
 		ImGui::PushID(name.c_str());
 		ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.95f, 0.80f, 0.35f, 1.0f));
@@ -1532,12 +1545,13 @@ bool EditorLayer::DrawVec3Control(const char* label, float values[3], float spee
 
 	// A compact badge, as tall as the drag field next to it. Its frame padding is zeroed below so the
 	// letter is centred in the whole badge instead of inside a rectangle shrunk by the padding
-	// (which, being narrower than the glyph, pushed the letter to the left).
+	// (which, being narrower than the glyph, pushed the letter to the left). The width is rounded
+	// down to an even number of pixels, keeping it on the same grid as the rest of the metrics.
 	const float32 lineHeight = ImGui::GetFontSize() + style.FramePadding.y * 2.0f;
-	const ImVec2 buttonSize(lineHeight * 0.7f, lineHeight);
+	const ImVec2 buttonSize(ImFloor(lineHeight * 0.35f) * 2.0f, lineHeight);
 
 	// Reserve room for the trailing label, then split the rest across the three axes.
-	const float32 labelWidth = 70.0f;
+	const float32 labelWidth = 72.0f;
 	const float32 controlsWidth = ImGui::GetContentRegionAvail().x - labelWidth;
 	const float32 axisWidth = (controlsWidth - 2.0f * style.ItemInnerSpacing.x) / 3.0f;
 	const float32 dragWidth = (axisWidth - buttonSize.x > 12.0f) ? axisWidth - buttonSize.x : 12.0f;
@@ -1936,6 +1950,12 @@ void EditorLayer::DrawMenuBar()
 			ImGui::EndMenu();
 		}
 
+		if (ImGui::BeginMenu("Window"))
+		{
+			DrawLayoutMenu();
+			ImGui::EndMenu();
+		}
+
 		if (ImGui::BeginMenu("Help"))
 		{
 			ImGui::MenuItem("Shortcuts", "F1", &mShowShortcuts);
@@ -1948,24 +1968,204 @@ void EditorLayer::DrawMenuBar()
 
 void EditorLayer::BuildDefaultLayout(unsigned int dockspaceId)
 {
+	// Three columns: the browsers on the left, the viewport over the console in the middle, and the
+	// inspectors on the right. Panel sizes are authored as round pixel counts rather than as
+	// free-floating ratios, so at the usual window sizes the layout lands on the same even grid as
+	// the rest of the UI.
+	constexpr float32 kLeftWidth        = 300.0f;  // Scene Hierarchy over Project.
+	constexpr float32 kRightWidth       = 400.0f;  // Statistics over Properties: the inspectors need the extra room.
+	constexpr float32 kConsoleHeight    = 256.0f;
+	constexpr float32 kProjectHeight    = 320.0f;
+	constexpr float32 kStatisticsHeight = 192.0f;
+
+	const ImVec2 work = ImGui::GetMainViewport()->WorkSize;
+
+	// A split ratio is relative to the node being split, and each split shrinks what is left over.
+	// Clamping keeps a small window degrading into thinner panels instead of swallowing the viewport.
+	const auto ratio = [](float32 size, float32 extent)
+	{
+		return ImClamp(size / ImMax(extent, 1.0f), 0.05f, 0.5f);
+	};
+
 	ImGui::DockBuilderRemoveNode(dockspaceId);
 	ImGui::DockBuilderAddNode(dockspaceId, ImGuiDockNodeFlags_DockSpace);
-	ImGui::DockBuilderSetNodeSize(dockspaceId, ImGui::GetMainViewport()->WorkSize);
+	ImGui::DockBuilderSetNodeSize(dockspaceId, work);
 
 	ImGuiID center = dockspaceId;
-	ImGuiID right        = ImGui::DockBuilderSplitNode(center, ImGuiDir_Right, 0.25f, nullptr, &center);
-	const ImGuiID left   = ImGui::DockBuilderSplitNode(center, ImGuiDir_Left,  0.20f, nullptr, &center);
-	const ImGuiID bottom = ImGui::DockBuilderSplitNode(center, ImGuiDir_Down,  0.25f, nullptr, &center);
+	ImGuiID right = ImGui::DockBuilderSplitNode(center, ImGuiDir_Right, ratio(kRightWidth, work.x), nullptr, &center);
+	ImGuiID left  = ImGui::DockBuilderSplitNode(center, ImGuiDir_Left, ratio(kLeftWidth, work.x - kRightWidth), nullptr, &center);
 
-	// Split the right column so Statistics sits on top of Properties.
-	const ImGuiID rightTop = ImGui::DockBuilderSplitNode(right, ImGuiDir_Up, 0.30f, nullptr, &right);
+	const ImGuiID bottom     = ImGui::DockBuilderSplitNode(center, ImGuiDir_Down, ratio(kConsoleHeight, work.y), nullptr, &center);
+	const ImGuiID leftBottom = ImGui::DockBuilderSplitNode(left, ImGuiDir_Down, ratio(kProjectHeight, work.y), nullptr, &left);
+	const ImGuiID rightTop   = ImGui::DockBuilderSplitNode(right, ImGuiDir_Up, ratio(kStatisticsHeight, work.y), nullptr, &right);
 
 	ImGui::DockBuilderDockWindow("Scene Hierarchy", left);
+	ImGui::DockBuilderDockWindow("Project", leftBottom);
+	ImGui::DockBuilderDockWindow("Viewport", center);
+	ImGui::DockBuilderDockWindow("Console", bottom);
 	ImGui::DockBuilderDockWindow("Statistics", rightTop);
 	ImGui::DockBuilderDockWindow("Properties", right);
-	ImGui::DockBuilderDockWindow("Console", bottom);
-	ImGui::DockBuilderDockWindow("Project", bottom);
-	ImGui::DockBuilderDockWindow("Viewport", center);
 
 	ImGui::DockBuilderFinish(dockspaceId);
+}
+
+std::string EditorLayer::LayoutPath(const std::string& name)
+{
+	return std::string(kLayoutsDirectory) + "/" + name + ".ini";
+}
+
+bool EditorLayer::IsValidLayoutName(const std::string& name)
+{
+	// The name becomes a file name, so keep it to characters that cannot escape the layouts folder.
+	if (name.empty() || name.size() > 48)
+		return false;
+
+	return std::all_of(name.begin(), name.end(), [](char8 character)
+	{
+		return std::isalnum(static_cast<unsigned char>(character)) ||
+			character == ' ' || character == '-' || character == '_';
+	});
+}
+
+std::vector<std::string> EditorLayer::SavedLayouts() const
+{
+	std::vector<std::string> layouts;
+	std::error_code error;
+
+	for (const std::filesystem::directory_entry& entry : std::filesystem::directory_iterator(kLayoutsDirectory, error))
+		if (entry.is_regular_file() && entry.path().extension() == ".ini")
+			layouts.push_back(entry.path().stem().string());
+
+	std::sort(layouts.begin(), layouts.end());
+	return layouts;
+}
+
+void EditorLayer::SaveLayout(const std::string& name) const
+{
+	std::error_code error;
+	std::filesystem::create_directories(kLayoutsDirectory, error);
+
+	if (error)
+	{
+		Log::Console(LogLevel::Error, LION_FORMAT_TEXT("[Editor] Could not create the layouts folder: {}.", error.message()));
+		return;
+	}
+
+	ImGui::SaveIniSettingsToDisk(LayoutPath(name).c_str());
+	Log::Console(LogLevel::Success, LION_FORMAT_TEXT("[Editor] Layout '{}' saved.", name));
+}
+
+void EditorLayer::ApplyPendingLayout()
+{
+	// Rebuilding the dock tree tears down and recreates every node, so it has to happen before any
+	// window is submitted this frame. The menu only records the request; this consumes it.
+	if (mLayoutRequest == LayoutRequest::None || mDockspaceId == 0)
+		return;
+
+	if (mLayoutRequest == LayoutRequest::Reset)
+	{
+		BuildDefaultLayout(mDockspaceId);
+	}
+	else if (std::filesystem::exists(LayoutPath(mLayoutToLoad)))
+	{
+		// Reading an ini rebuilds the dock nodes and re-applies every window's position and size.
+		ImGui::LoadIniSettingsFromDisk(LayoutPath(mLayoutToLoad).c_str());
+	}
+	else
+	{
+		Log::Console(LogLevel::Warning, LION_FORMAT_TEXT("[Editor] Layout '{}' no longer exists.", mLayoutToLoad));
+	}
+
+	mLayoutRequest = LayoutRequest::None;
+	mLayoutToLoad.clear();
+}
+
+void EditorLayer::DrawLayoutMenu()
+{
+	if (!ImGui::BeginMenu("Layouts"))
+		return;
+
+	if (ImGui::MenuItem("Default"))
+		mLayoutRequest = LayoutRequest::Reset;
+
+	const std::vector<std::string> layouts = SavedLayouts();
+
+	if (!layouts.empty())
+	{
+		ImGui::Separator();
+
+		for (const std::string& name : layouts)
+			if (ImGui::MenuItem(name.c_str()))
+			{
+				mLayoutToLoad = name;
+				mLayoutRequest = LayoutRequest::Load;
+			}
+	}
+
+	ImGui::Separator();
+
+	if (ImGui::MenuItem("Save Layout..."))
+		mOpenSaveLayoutPopup = true;
+
+	if (ImGui::BeginMenu("Delete Layout", !layouts.empty()))
+	{
+		for (const std::string& name : layouts)
+			if (ImGui::MenuItem(name.c_str()))
+			{
+				std::error_code error;
+				std::filesystem::remove(LayoutPath(name), error);
+			}
+
+		ImGui::EndMenu();
+	}
+
+	ImGui::EndMenu();
+}
+
+void EditorLayer::DrawLayoutPopups()
+{
+	// The menu item cannot open the popup itself: the menu closes on click, taking the popup's ID
+	// scope with it. Opening it here, at the root, keeps the modal alive.
+	if (mOpenSaveLayoutPopup)
+	{
+		mOpenSaveLayoutPopup = false;
+		mLayoutName[0] = '\0';
+		ImGui::OpenPopup("Save Layout");
+	}
+
+	const ImVec2 center = ImGui::GetMainViewport()->GetCenter();
+	ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+
+	if (!ImGui::BeginPopupModal("Save Layout", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+		return;
+
+	ImGui::TextUnformatted("Layout name");
+
+	if (ImGui::IsWindowAppearing())
+		ImGui::SetKeyboardFocusHere();
+
+	ImGui::SetNextItemWidth(256.0f);
+	const bool submitted = ImGui::InputText("##name", mLayoutName, IM_ARRAYSIZE(mLayoutName),
+		ImGuiInputTextFlags_EnterReturnsTrue);
+
+	const bool valid = IsValidLayoutName(mLayoutName);
+
+	if (mLayoutName[0] != '\0' && !valid)
+		ImGui::TextColored(LogLevelColor(LogLevel::Error), "Letters, digits, spaces, - and _ only.");
+
+	ImGui::BeginDisabled(!valid);
+
+	if (ImGui::Button("Save", ImVec2(96.0f, 0.0f)) || (submitted && valid))
+	{
+		SaveLayout(mLayoutName);
+		ImGui::CloseCurrentPopup();
+	}
+
+	ImGui::EndDisabled();
+	ImGui::SameLine();
+
+	if (ImGui::Button("Cancel", ImVec2(96.0f, 0.0f)) || ImGui::IsKeyPressed(ImGuiKey_Escape))
+		ImGui::CloseCurrentPopup();
+
+	ImGui::EndPopup();
 }
