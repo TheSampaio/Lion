@@ -1,5 +1,7 @@
 #include "EditorGui.h"
 
+#include <filesystem>
+
 #include <Lion/Lion.h>
 
 #include <imgui/imgui.h>
@@ -116,6 +118,10 @@ void EditorGui::Init()
 	ImGuiIO& io = ImGui::GetIO();
 	io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
 	io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+
+	// Prefer Segoe UI (much more legible than ImGui's built-in font); fall back to the default.
+	if (std::filesystem::exists("C:/Windows/Fonts/segoeui.ttf"))
+		io.Fonts->AddFontFromFileTTF("C:/Windows/Fonts/segoeui.ttf", 18.0f);
 
 	SetDarkTheme();
 

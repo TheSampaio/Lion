@@ -2,6 +2,10 @@
 
 #include "../EditorGui.h"
 
+#include <fstream>
+
+#include <Lion/Core/Filesystem.h>
+
 #include <imgui/imgui_internal.h> // DockBuilder API for the default layout.
 
 using namespace Lion;
@@ -18,6 +22,7 @@ void EditorLayer::OnAttach()
 void EditorLayer::OnCreate()
 {
 	EditorGui::Init();
+	InitShortcuts();
 
 	mCamera = MakeReference<CameraOrthographic>();
 	mScene = MakeReference<Scene>();
@@ -263,61 +268,110 @@ void EditorLayer::DrawShortcuts()
 	if (!mShowShortcuts)
 		return;
 
-	ImGui::SetNextWindowSize(ImVec2(430.0f, 470.0f), ImGuiCond_FirstUseEver);
+	ImGui::SetNextWindowSize(ImVec2(460.0f, 500.0f), ImGuiCond_FirstUseEver);
 
 	if (ImGui::Begin("Shortcuts", &mShowShortcuts))
 	{
-		struct Shortcut { const char8* keys; const char8* action; };
-
-		const auto section = [](const char8* title, std::initializer_list<Shortcut> items)
-		{
-			ImGui::SeparatorText(title);
-
-			if (ImGui::BeginTable(title, 2, ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_PadOuterX))
-			{
-				ImGui::TableSetupColumn("Shortcut", ImGuiTableColumnFlags_WidthFixed, 130.0f);
-				ImGui::TableSetupColumn("Action", ImGuiTableColumnFlags_WidthStretch);
-
-				for (const Shortcut& shortcut : items)
-				{
-					ImGui::TableNextRow();
-					ImGui::TableSetColumnIndex(0);
-					ImGui::TextColored(ImVec4(0.30f, 0.58f, 0.95f, 1.0f), "%s", shortcut.keys);
-					ImGui::TableSetColumnIndex(1);
-					ImGui::TextUnformatted(shortcut.action);
-				}
-
-				ImGui::EndTable();
-			}
+		// The rebindable actions, grouped by category (order defines the display order).
+		struct Row { ShortcutAction action; const char8* category; const char8* name; };
+		static const Row rows[] = {
+			{ ShortcutAction::ToggleShortcuts, "General",   "Toggle Shortcuts panel" },
+			{ ShortcutAction::Undo,            "General",   "Undo" },
+			{ ShortcutAction::Redo,            "General",   "Redo" },
+			{ ShortcutAction::Play,            "Play Mode", "Play (run the simulation)" },
+			{ ShortcutAction::Stop,            "Play Mode", "Stop (return to edited state)" },
+			{ ShortcutAction::GizmoMove,       "Gizmo",     "Move (translate)" },
+			{ ShortcutAction::GizmoRotate,     "Gizmo",     "Rotate" },
+			{ ShortcutAction::GizmoScale,      "Gizmo",     "Scale" },
+			{ ShortcutAction::RenameEntity,    "Hierarchy", "Rename selected entity" },
+			{ ShortcutAction::DeleteEntity,    "Hierarchy", "Delete selected entity" },
 		};
 
-		section("General", {
-			{ "F1", "Toggle this Shortcuts panel" },
-			{ "Ctrl+Z", "Undo" },
-			{ "Ctrl+Y", "Redo" },
-		});
+		ImGui::TextDisabled("Click a shortcut to rebind it, then press a key (Esc to cancel).");
+		ImGui::SameLine(ImGui::GetContentRegionAvail().x - ImGui::CalcTextSize("Reset to Defaults").x - ImGui::GetStyle().FramePadding.x * 2.0f);
+		if (ImGui::SmallButton("Reset to Defaults"))
+		{
+			ResetShortcutsToDefault();
+			SaveShortcuts();
+			mRebindingIndex = -1;
+		}
 
-		section("Play Mode", {
-			{ "F5", "Play (run the scene simulation)" },
-			{ "F8", "Stop (return to the edited state)" },
-		});
+		const char8* currentCategory = nullptr;
 
-		section("Gizmo", {
-			{ "W", "Move (translate)" },
-			{ "E", "Rotate" },
-			{ "R", "Scale" },
-		});
+		for (const Row& row : rows)
+		{
+			const int index = static_cast<int>(row.action);
 
-		section("Hierarchy", {
-			{ "Double-click", "Rename an entity" },
-			{ "F2", "Rename the selected entity" },
-			{ "Delete", "Delete the selected entity" },
-			{ "Right-click", "Context menu (create / delete)" },
-		});
+			if (currentCategory == nullptr || std::string(currentCategory) != row.category)
+			{
+				currentCategory = row.category;
+				ImGui::SeparatorText(row.category);
+			}
 
-		section("Viewport", {
-			{ "Left Click", "Select the entity under the cursor" },
-		});
+			ImGui::PushID(index);
+
+			// A fixed-width button on the left showing the current binding; click to rebind.
+			const bool capturing = (mRebindingIndex == index);
+			const std::string label = capturing ? "Press a key..." : KeybindToString(mBinds[index]);
+
+			if (capturing)
+				ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.30f, 0.58f, 0.95f, 1.0f));
+
+			if (ImGui::Button(label.c_str(), ImVec2(150.0f, 0.0f)))
+				mRebindingIndex = capturing ? -1 : index;
+
+			if (capturing)
+				ImGui::PopStyleColor();
+
+			ImGui::SameLine();
+			ImGui::TextUnformatted(row.name);
+
+			ImGui::PopID();
+		}
+
+		// Non-rebindable, mouse-driven shortcuts, shown for reference.
+		ImGui::SeparatorText("Mouse");
+		ImGui::BulletText("Left Click viewport - select entity");
+		ImGui::BulletText("Double-click hierarchy - rename entity");
+		ImGui::BulletText("Right-click hierarchy - context menu");
+		ImGui::BulletText("Drag component header - reorder");
+
+		// Capture a new key for the action being rebound.
+		if (mRebindingIndex >= 0)
+		{
+			const ImGuiIO& io = ImGui::GetIO();
+
+			if (ImGui::IsKeyPressed(ImGuiKey_Escape, false))
+			{
+				mRebindingIndex = -1;
+			}
+			else
+			{
+				const auto isModifier = [](ImGuiKey k)
+				{
+					return k == ImGuiKey_LeftCtrl  || k == ImGuiKey_RightCtrl
+						|| k == ImGuiKey_LeftShift || k == ImGuiKey_RightShift
+						|| k == ImGuiKey_LeftAlt   || k == ImGuiKey_RightAlt
+						|| k == ImGuiKey_LeftSuper || k == ImGuiKey_RightSuper;
+				};
+
+				for (ImGuiKey key = ImGuiKey_NamedKey_BEGIN; key < ImGuiKey_NamedKey_END; key = static_cast<ImGuiKey>(key + 1))
+				{
+					if (isModifier(key) || !ImGui::IsKeyPressed(key, false))
+						continue;
+
+					// Skip mouse and gamepad "keys"; only accept keyboard keys.
+					const std::string keyName = ImGui::GetKeyName(key);
+					if (keyName.rfind("Mouse", 0) == 0 || keyName.rfind("Pad", 0) == 0 || keyName.rfind("Gamepad", 0) == 0)
+						continue;
+
+					mBinds[mRebindingIndex] = { key, io.KeyCtrl, io.KeyShift, io.KeyAlt };
+					mRebindingIndex = -1;
+					SaveShortcuts();
+					break;
+				}
+			}
+		}
 	}
 
 	ImGui::End();
@@ -392,32 +446,121 @@ void EditorLayer::Redo()
 	SceneSerializer::DeserializeFromString(mScene, state);
 }
 
-void EditorLayer::HandleShortcuts()
+namespace
 {
-	// These are available even while a text field is focused.
-	if (ImGui::IsKeyPressed(ImGuiKey_F5, false)) StartPlay();
-	if (ImGui::IsKeyPressed(ImGuiKey_F8, false)) StopPlay();
-	if (ImGui::IsKeyPressed(ImGuiKey_F1, false)) mShowShortcuts = !mShowShortcuts;
+	// Config file for user-customized shortcuts, kept next to imgui.ini (the working directory).
+	constexpr const char8* kShortcutsFile = "shortcuts.cfg";
+}
+
+void EditorLayer::ResetShortcutsToDefault()
+{
+	const auto set = [&](ShortcutAction action, ImGuiKey key, bool ctrl = false, bool shift = false, bool alt = false)
+	{
+		mBinds[static_cast<int>(action)] = { key, ctrl, shift, alt };
+	};
+
+	set(ShortcutAction::Undo, ImGuiKey_Z, true);
+	set(ShortcutAction::Redo, ImGuiKey_Y, true);
+	set(ShortcutAction::Play, ImGuiKey_F5);
+	set(ShortcutAction::Stop, ImGuiKey_F8);
+	set(ShortcutAction::ToggleShortcuts, ImGuiKey_F1);
+	set(ShortcutAction::GizmoMove, ImGuiKey_W);
+	set(ShortcutAction::GizmoRotate, ImGuiKey_E);
+	set(ShortcutAction::GizmoScale, ImGuiKey_R);
+	set(ShortcutAction::RenameEntity, ImGuiKey_F2);
+	set(ShortcutAction::DeleteEntity, ImGuiKey_Delete);
+}
+
+void EditorLayer::InitShortcuts()
+{
+	ResetShortcutsToDefault();
+	LoadShortcuts();
+}
+
+void EditorLayer::LoadShortcuts()
+{
+	std::ifstream file(kShortcutsFile);
+
+	if (!file.is_open())
+		return;
+
+	int index = 0, key = 0, ctrl = 0, shift = 0, alt = 0;
+
+	while (file >> index >> key >> ctrl >> shift >> alt)
+	{
+		if (index >= 0 && index < static_cast<int>(ShortcutAction::Count))
+			mBinds[index] = { static_cast<ImGuiKey>(key), ctrl != 0, shift != 0, alt != 0 };
+	}
+}
+
+void EditorLayer::SaveShortcuts() const
+{
+	std::ofstream file(kShortcutsFile);
+
+	if (!file.is_open())
+		return;
+
+	for (int i = 0; i < static_cast<int>(ShortcutAction::Count); ++i)
+	{
+		const Keybind& bind = mBinds[i];
+		file << i << ' ' << static_cast<int>(bind.key) << ' '
+			<< (bind.ctrl ? 1 : 0) << ' ' << (bind.shift ? 1 : 0) << ' ' << (bind.alt ? 1 : 0) << '\n';
+	}
+}
+
+bool EditorLayer::IsShortcutPressed(ShortcutAction action) const
+{
+	const Keybind& bind = mBinds[static_cast<int>(action)];
+
+	if (bind.key == ImGuiKey_None)
+		return false;
 
 	const ImGuiIO& io = ImGui::GetIO();
 
-	// The actions below are edit-mode only; ignore them while playing or typing in a text field.
-	if (mPlaying || io.WantTextInput)
+	if (io.KeyCtrl != bind.ctrl || io.KeyShift != bind.shift || io.KeyAlt != bind.alt)
+		return false;
+
+	return ImGui::IsKeyPressed(bind.key, false);
+}
+
+std::string EditorLayer::KeybindToString(const Keybind& bind) const
+{
+	if (bind.key == ImGuiKey_None)
+		return "None";
+
+	std::string text;
+	if (bind.ctrl)  text += "Ctrl+";
+	if (bind.shift) text += "Shift+";
+	if (bind.alt)   text += "Alt+";
+	text += ImGui::GetKeyName(bind.key);
+	return text;
+}
+
+void EditorLayer::HandleShortcuts()
+{
+	// Don't trigger actions while the user is capturing a new key in the Shortcuts panel.
+	if (mRebindingIndex >= 0)
 		return;
 
-	if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_Z, false))
-		Undo();
+	// These are available even while a text field is focused.
+	if (IsShortcutPressed(ShortcutAction::Play)) StartPlay();
+	if (IsShortcutPressed(ShortcutAction::Stop)) StopPlay();
+	if (IsShortcutPressed(ShortcutAction::ToggleShortcuts)) mShowShortcuts = !mShowShortcuts;
 
-	if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_Y, false))
-		Redo();
+	// The actions below are edit-mode only; ignore them while playing or typing in a text field.
+	if (mPlaying || ImGui::GetIO().WantTextInput)
+		return;
 
-	if (mSelectedEntity && ImGui::IsKeyPressed(ImGuiKey_F2, false))
+	if (IsShortcutPressed(ShortcutAction::Undo)) Undo();
+	if (IsShortcutPressed(ShortcutAction::Redo)) Redo();
+
+	if (mSelectedEntity && IsShortcutPressed(ShortcutAction::RenameEntity))
 	{
 		mRenamingEntity = mSelectedEntity;
 		mRenameFocus = true;
 	}
 
-	if (mSelectedEntity && ImGui::IsKeyPressed(ImGuiKey_Delete, false))
+	if (mSelectedEntity && IsShortcutPressed(ShortcutAction::DeleteEntity))
 	{
 		RecordSnapshot();
 		mScene->Remove(mSelectedEntity);
@@ -442,12 +585,12 @@ void EditorLayer::DrawViewport()
 	const ImVec2 imageSize = ImGui::GetItemRectSize();
 	const bool imageHovered = ImGui::IsItemHovered();
 
-	// W/E/R switch the gizmo between move / rotate / scale (unless typing or dragging).
-	if (!mPlaying && !ImGuizmo::IsUsing() && !ImGui::IsAnyItemActive())
+	// The bound gizmo keys switch between move / rotate / scale (unless typing, dragging or rebinding).
+	if (!mPlaying && mRebindingIndex < 0 && !ImGuizmo::IsUsing() && !ImGui::IsAnyItemActive())
 	{
-		if (ImGui::IsKeyPressed(ImGuiKey_W)) mGizmoOperation = ImGuizmo::TRANSLATE;
-		if (ImGui::IsKeyPressed(ImGuiKey_E)) mGizmoOperation = ImGuizmo::ROTATE;
-		if (ImGui::IsKeyPressed(ImGuiKey_R)) mGizmoOperation = ImGuizmo::SCALE;
+		if (IsShortcutPressed(ShortcutAction::GizmoMove))   mGizmoOperation = ImGuizmo::TRANSLATE;
+		if (IsShortcutPressed(ShortcutAction::GizmoRotate)) mGizmoOperation = ImGuizmo::ROTATE;
+		if (IsShortcutPressed(ShortcutAction::GizmoScale))  mGizmoOperation = ImGuizmo::SCALE;
 	}
 
 	// The gizmo is an editing tool; hide it while the simulation is running.
@@ -514,8 +657,68 @@ void EditorLayer::DrawViewport()
 		}
 	}
 
+	if (mShowColliders)
+		DrawColliderOverlays(imageMin, imageSize);
+
 	ImGui::End();
 	ImGui::PopStyleVar();
+}
+
+void EditorLayer::DrawColliderOverlays(const ImVec2& imageMin, const ImVec2& imageSize)
+{
+	if (imageSize.x <= 0.0f || imageSize.y <= 0.0f)
+		return;
+
+	const glm::mat4 viewProjection = mCamera->GetProjectionMatrix() * mCamera->GetViewMatrix();
+	ImDrawList* drawList = ImGui::GetWindowDrawList();
+	const ImU32 color = IM_COL32(80, 220, 120, 255);  // Unity-like collider green.
+
+	// Projects a world-space point (in pixels, z = 0) to a screen position inside the viewport image.
+	const auto worldToScreen = [&](float32 worldX, float32 worldY) -> ImVec2
+	{
+		const glm::vec4 clip = viewProjection * glm::vec4(worldX, worldY, 0.0f, 1.0f);
+		const float32 ndcX = clip.x / clip.w;
+		const float32 ndcY = clip.y / clip.w;
+		return ImVec2(
+			imageMin.x + (ndcX * 0.5f + 0.5f) * imageSize.x,
+			imageMin.y + (1.0f - (ndcY * 0.5f + 0.5f)) * imageSize.y);  // Flip Y for top-down screen space.
+	};
+
+	for (const auto& entity : mScene->GetEntities())
+	{
+		const Reference<Transform> transform = entity->GetTransform();
+		const Vector position = transform->GetPosition();
+		const float32 angle = glm::radians(transform->GetRotation().z);
+		const float32 cosAngle = std::cos(angle);
+		const float32 sinAngle = std::sin(angle);
+
+		if (const BoxCollider2D* box = entity->GetComponent<BoxCollider2D>())
+		{
+			const float32 halfWidth = box->GetWidth() * 0.5f;
+			const float32 halfHeight = box->GetHeight() * 0.5f;
+
+			const auto corner = [&](float32 offsetX, float32 offsetY)
+			{
+				return worldToScreen(
+					position.x + offsetX * cosAngle - offsetY * sinAngle,
+					position.y + offsetX * sinAngle + offsetY * cosAngle);
+			};
+
+			const ImVec2 points[4] = {
+				corner(-halfWidth,  halfHeight), corner(halfWidth,  halfHeight),
+				corner( halfWidth, -halfHeight), corner(-halfWidth, -halfHeight),
+			};
+			drawList->AddPolyline(points, 4, color, ImDrawFlags_Closed, 1.5f);
+		}
+
+		if (const CircleCollider2D* circle = entity->GetComponent<CircleCollider2D>())
+		{
+			const ImVec2 center = worldToScreen(position.x, position.y);
+			const ImVec2 edge = worldToScreen(position.x + circle->GetRadius(), position.y);
+			const float32 screenRadius = std::fabs(edge.x - center.x);
+			drawList->AddCircle(center, screenRadius, color, 32, 1.5f);
+		}
+	}
 }
 
 void EditorLayer::DrawHierarchy()
@@ -646,7 +849,7 @@ void EditorLayer::DrawHierarchy()
 	ImGui::End();
 }
 
-bool EditorLayer::DrawComponentHeader(const char* label, bool& removeRequested)
+bool EditorLayer::DrawComponentHeader(const char* label, int index, bool& removeRequested, int& dragFrom, int& dragTo)
 {
 	ImGui::PushID(label);
 
@@ -657,6 +860,24 @@ bool EditorLayer::DrawComponentHeader(const char* label, bool& removeRequested)
 	ImGui::SetNextItemAllowOverlap();
 	const bool open = ImGui::CollapsingHeader(label,
 		ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_SpanAvailWidth | ImGuiTreeNodeFlags_AllowOverlap);
+
+	// Drag the header onto another component's header to reorder.
+	if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID))
+	{
+		ImGui::SetDragDropPayload("LN_COMPONENT", &index, sizeof(int));
+		ImGui::Text("Move %s", label);
+		ImGui::EndDragDropSource();
+	}
+
+	if (ImGui::BeginDragDropTarget())
+	{
+		if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("LN_COMPONENT"))
+		{
+			dragFrom = *static_cast<const int*>(payload->Data);
+			dragTo = index;
+		}
+		ImGui::EndDragDropTarget();
+	}
 
 	// Right-aligned square "X" button sitting on the header row.
 	ImGui::SameLine(available - lineHeight);
@@ -773,110 +994,152 @@ void EditorLayer::DrawProperties()
 			transform->SetScale(Vector(scaleValues[0], scaleValues[1], scaleValues[2]));
 	}
 
-	// Components can request removal here; the removal itself is deferred until after drawing so we
-	// never delete a component while its section is still being rendered.
-	bool removeSprite = false, removeBody = false, removeBox = false, removeCircle = false;
+	// Draw components in their stored order so a newly added one always appears at the end; headers
+	// can be dragged onto each other to reorder. Removal/reorder are deferred to after the loop so
+	// the component list is never mutated mid-iteration.
+	Component* componentToRemove = nullptr;
+	int dragFrom = -1, dragTo = -1;
 
-	if (SpriteRenderer* renderer = mSelectedEntity->GetComponent<SpriteRenderer>())
+	const std::vector<Scope<Component>>& components = mSelectedEntity->GetComponents();
+	for (int i = 0; i < static_cast<int>(components.size()); ++i)
 	{
-		if (DrawComponentHeader("Sprite Renderer", removeSprite))
+		Component* component = components[i].get();
+		ImGui::PushID(i);
+		bool remove = false;
+
+		if (SpriteRenderer* renderer = dynamic_cast<SpriteRenderer*>(component))
 		{
-			// Reload the texture only once the user finishes editing (not per keystroke).
-			char textureBuffer[256];
-			const std::string& path = renderer->GetTexturePath();
-			const size_t length = path.copy(textureBuffer, sizeof(textureBuffer) - 1);
-			textureBuffer[length] = '\0';
-
-			ImGui::InputText("Texture", textureBuffer, sizeof(textureBuffer));
-			if (ImGui::IsItemActivated()) BeginEdit();
-			if (ImGui::IsItemDeactivatedAfterEdit()) { renderer->SetTexturePath(textureBuffer); CommitEdit(); }
-		}
-	}
-
-	if (RigidBody2D* body = mSelectedEntity->GetComponent<RigidBody2D>())
-	{
-		if (DrawComponentHeader("Rigid Body 2D", removeBody))
-		{
-			static const char8* bodyTypes[] = { "Static", "Kinematic", "Dynamic" };
-
-			int32 typeIndex = static_cast<int32>(body->GetBodyType());
-			if (ImGui::Combo("Type", &typeIndex, bodyTypes, IM_ARRAYSIZE(bodyTypes)))
+			if (DrawComponentHeader("Sprite Renderer", i, remove, dragFrom, dragTo))
 			{
-				RecordSnapshot();
-				body->SetBodyType(static_cast<BodyType>(typeIndex));
-			}
+				// Reload the texture only once the user finishes editing (not per keystroke).
+				char textureBuffer[256];
+				const std::string& path = renderer->GetTexturePath();
+				const size_t length = path.copy(textureBuffer, sizeof(textureBuffer) - 1);
+				textureBuffer[length] = '\0';
 
-			bool fixedRotation = body->IsFixedRotation();
-			if (ImGui::Checkbox("Fixed Rotation", &fixedRotation))
+				const ImGuiStyle& style = ImGui::GetStyle();
+				const float32 browseWidth = ImGui::CalcTextSize("...").x + style.FramePadding.x * 2.0f;
+				const float32 labelWidth = 60.0f;
+
+				ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - browseWidth - labelWidth - style.ItemInnerSpacing.x * 2.0f);
+				ImGui::InputText("##texture", textureBuffer, sizeof(textureBuffer));
+				if (ImGui::IsItemActivated()) BeginEdit();
+				if (ImGui::IsItemDeactivatedAfterEdit()) { renderer->SetTexturePath(textureBuffer); CommitEdit(); }
+
+				// Browse for a sprite file; store the path relative to the resource root.
+				ImGui::SameLine(0.0f, style.ItemInnerSpacing.x);
+				if (ImGui::Button("..."))
+				{
+					const std::string picked = FileDialog::Open("Images (*.png;*.jpg;*.jpeg;*.bmp)\0*.png;*.jpg;*.jpeg;*.bmp\0All Files\0*.*\0");
+
+					if (!picked.empty())
+					{
+						RecordSnapshot();
+						renderer->SetTexturePath(ToResourceRelativePath(picked));
+					}
+				}
+				if (ImGui::IsItemHovered())
+					ImGui::SetTooltip("Browse for a sprite image");
+
+				ImGui::SameLine(0.0f, style.ItemInnerSpacing.x);
+				ImGui::TextUnformatted("Texture");
+			}
+		}
+		else if (RigidBody2D* body = dynamic_cast<RigidBody2D*>(component))
+		{
+			if (DrawComponentHeader("Rigid Body 2D", i, remove, dragFrom, dragTo))
 			{
-				RecordSnapshot();
-				body->SetFixedRotation(fixedRotation);
+				static const char8* bodyTypes[] = { "Static", "Kinematic", "Dynamic" };
+
+				int32 typeIndex = static_cast<int32>(body->GetBodyType());
+				if (ImGui::Combo("Type", &typeIndex, bodyTypes, IM_ARRAYSIZE(bodyTypes)))
+				{
+					RecordSnapshot();
+					body->SetBodyType(static_cast<BodyType>(typeIndex));
+				}
+
+				bool fixedRotation = body->IsFixedRotation();
+				if (ImGui::Checkbox("Fixed Rotation", &fixedRotation))
+				{
+					RecordSnapshot();
+					body->SetFixedRotation(fixedRotation);
+				}
 			}
 		}
-	}
-
-	if (BoxCollider2D* collider = mSelectedEntity->GetComponent<BoxCollider2D>())
-	{
-		if (DrawComponentHeader("Box Collider 2D", removeBox))
+		else if (BoxCollider2D* collider = dynamic_cast<BoxCollider2D*>(component))
 		{
-			float32 width = collider->GetWidth();
-			if (ImGui::DragFloat("Width", &width, 1.0f, 0.0f, 10000.0f)) collider->SetWidth(width);
-			if (ImGui::IsItemActivated()) BeginEdit();
-			if (ImGui::IsItemDeactivatedAfterEdit()) CommitEdit();
+			if (DrawComponentHeader("Box Collider 2D", i, remove, dragFrom, dragTo))
+			{
+				float32 width = collider->GetWidth();
+				if (ImGui::DragFloat("Width", &width, 1.0f, 0.0f, 10000.0f)) collider->SetWidth(width);
+				if (ImGui::IsItemActivated()) BeginEdit();
+				if (ImGui::IsItemDeactivatedAfterEdit()) CommitEdit();
 
-			float32 height = collider->GetHeight();
-			if (ImGui::DragFloat("Height", &height, 1.0f, 0.0f, 10000.0f)) collider->SetHeight(height);
-			if (ImGui::IsItemActivated()) BeginEdit();
-			if (ImGui::IsItemDeactivatedAfterEdit()) CommitEdit();
+				float32 height = collider->GetHeight();
+				if (ImGui::DragFloat("Height", &height, 1.0f, 0.0f, 10000.0f)) collider->SetHeight(height);
+				if (ImGui::IsItemActivated()) BeginEdit();
+				if (ImGui::IsItemDeactivatedAfterEdit()) CommitEdit();
 
-			float32 density = collider->GetDensity();
-			if (ImGui::DragFloat("Density", &density, 0.05f, 0.0f, 100.0f)) collider->SetDensity(density);
-			if (ImGui::IsItemActivated()) BeginEdit();
-			if (ImGui::IsItemDeactivatedAfterEdit()) CommitEdit();
+				float32 density = collider->GetDensity();
+				if (ImGui::DragFloat("Density", &density, 0.05f, 0.0f, 100.0f)) collider->SetDensity(density);
+				if (ImGui::IsItemActivated()) BeginEdit();
+				if (ImGui::IsItemDeactivatedAfterEdit()) CommitEdit();
 
-			float32 friction = collider->GetFriction();
-			if (ImGui::DragFloat("Friction", &friction, 0.01f, 0.0f, 1.0f)) collider->SetFriction(friction);
-			if (ImGui::IsItemActivated()) BeginEdit();
-			if (ImGui::IsItemDeactivatedAfterEdit()) CommitEdit();
+				float32 friction = collider->GetFriction();
+				if (ImGui::DragFloat("Friction", &friction, 0.01f, 0.0f, 1.0f)) collider->SetFriction(friction);
+				if (ImGui::IsItemActivated()) BeginEdit();
+				if (ImGui::IsItemDeactivatedAfterEdit()) CommitEdit();
 
-			float32 restitution = collider->GetRestitution();
-			if (ImGui::DragFloat("Restitution", &restitution, 0.01f, 0.0f, 1.0f)) collider->SetRestitution(restitution);
-			if (ImGui::IsItemActivated()) BeginEdit();
-			if (ImGui::IsItemDeactivatedAfterEdit()) CommitEdit();
+				float32 restitution = collider->GetRestitution();
+				if (ImGui::DragFloat("Restitution", &restitution, 0.01f, 0.0f, 1.0f)) collider->SetRestitution(restitution);
+				if (ImGui::IsItemActivated()) BeginEdit();
+				if (ImGui::IsItemDeactivatedAfterEdit()) CommitEdit();
+			}
 		}
-	}
-
-	if (CircleCollider2D* collider = mSelectedEntity->GetComponent<CircleCollider2D>())
-	{
-		if (DrawComponentHeader("Circle Collider 2D", removeCircle))
+		else if (CircleCollider2D* collider = dynamic_cast<CircleCollider2D*>(component))
 		{
-			float32 radius = collider->GetRadius();
-			if (ImGui::DragFloat("Radius", &radius, 1.0f, 0.0f, 10000.0f)) collider->SetRadius(radius);
-			if (ImGui::IsItemActivated()) BeginEdit();
-			if (ImGui::IsItemDeactivatedAfterEdit()) CommitEdit();
+			if (DrawComponentHeader("Circle Collider 2D", i, remove, dragFrom, dragTo))
+			{
+				float32 radius = collider->GetRadius();
+				if (ImGui::DragFloat("Radius", &radius, 1.0f, 0.0f, 10000.0f)) collider->SetRadius(radius);
+				if (ImGui::IsItemActivated()) BeginEdit();
+				if (ImGui::IsItemDeactivatedAfterEdit()) CommitEdit();
 
-			float32 density = collider->GetDensity();
-			if (ImGui::DragFloat("Density", &density, 0.05f, 0.0f, 100.0f)) collider->SetDensity(density);
-			if (ImGui::IsItemActivated()) BeginEdit();
-			if (ImGui::IsItemDeactivatedAfterEdit()) CommitEdit();
+				float32 density = collider->GetDensity();
+				if (ImGui::DragFloat("Density", &density, 0.05f, 0.0f, 100.0f)) collider->SetDensity(density);
+				if (ImGui::IsItemActivated()) BeginEdit();
+				if (ImGui::IsItemDeactivatedAfterEdit()) CommitEdit();
 
-			float32 friction = collider->GetFriction();
-			if (ImGui::DragFloat("Friction", &friction, 0.01f, 0.0f, 1.0f)) collider->SetFriction(friction);
-			if (ImGui::IsItemActivated()) BeginEdit();
-			if (ImGui::IsItemDeactivatedAfterEdit()) CommitEdit();
+				float32 friction = collider->GetFriction();
+				if (ImGui::DragFloat("Friction", &friction, 0.01f, 0.0f, 1.0f)) collider->SetFriction(friction);
+				if (ImGui::IsItemActivated()) BeginEdit();
+				if (ImGui::IsItemDeactivatedAfterEdit()) CommitEdit();
 
-			float32 restitution = collider->GetRestitution();
-			if (ImGui::DragFloat("Restitution", &restitution, 0.01f, 0.0f, 1.0f)) collider->SetRestitution(restitution);
-			if (ImGui::IsItemActivated()) BeginEdit();
-			if (ImGui::IsItemDeactivatedAfterEdit()) CommitEdit();
+				float32 restitution = collider->GetRestitution();
+				if (ImGui::DragFloat("Restitution", &restitution, 0.01f, 0.0f, 1.0f)) collider->SetRestitution(restitution);
+				if (ImGui::IsItemActivated()) BeginEdit();
+				if (ImGui::IsItemDeactivatedAfterEdit()) CommitEdit();
+			}
 		}
+
+		if (remove)
+			componentToRemove = component;
+
+		ImGui::PopID();
 	}
 
-	// Apply any requested component removal (one per frame is enough for a click).
-	if (removeSprite) { RecordSnapshot(); mSelectedEntity->RemoveComponent<SpriteRenderer>(); }
-	if (removeBody)   { RecordSnapshot(); mSelectedEntity->RemoveComponent<RigidBody2D>(); }
-	if (removeBox)    { RecordSnapshot(); mSelectedEntity->RemoveComponent<BoxCollider2D>(); }
-	if (removeCircle) { RecordSnapshot(); mSelectedEntity->RemoveComponent<CircleCollider2D>(); }
+	// Apply the deferred reorder, then removal. Order is serialized, so a reorder is an undo step.
+	if (dragFrom >= 0 && dragTo >= 0 && dragFrom != dragTo)
+	{
+		RecordSnapshot();
+		mSelectedEntity->MoveComponent(dragFrom, dragTo);
+	}
+
+	if (componentToRemove)
+	{
+		RecordSnapshot();
+		mSelectedEntity->RemoveComponent(componentToRemove);
+	}
 
 	// "Add Component" lists only the component types the entity doesn't already have.
 	ImGui::Separator();
@@ -972,6 +1235,7 @@ void EditorLayer::DrawMenuBar()
 
 		if (ImGui::BeginMenu("View"))
 		{
+			ImGui::MenuItem("Show Colliders", nullptr, &mShowColliders);
 			ImGui::MenuItem("ImGui Demo Window", nullptr, &mShowDemo);
 			ImGui::EndMenu();
 		}
@@ -989,12 +1253,17 @@ void EditorLayer::DrawMenuBar()
 		{
 			ImGui::TextColored(ImVec4(0.45f, 0.85f, 0.50f, 1.0f), "PLAYING");
 			ImGui::SameLine();
-			if (ImGui::SmallButton("Stop (F8)"))
+			if (ImGui::SmallButton("Stop"))
 				StopPlay();
+			if (ImGui::IsItemHovered())
+				ImGui::SetTooltip("Stop the simulation (F8)");
 		}
-		else if (ImGui::SmallButton("Play (F5)"))
+		else
 		{
-			StartPlay();
+			if (ImGui::SmallButton("Play"))
+				StartPlay();
+			if (ImGui::IsItemHovered())
+				ImGui::SetTooltip("Run the scene simulation (F5)");
 		}
 
 		ImGui::EndMainMenuBar();
@@ -1008,14 +1277,17 @@ void EditorLayer::BuildDefaultLayout(unsigned int dockspaceId)
 	ImGui::DockBuilderSetNodeSize(dockspaceId, ImGui::GetMainViewport()->WorkSize);
 
 	ImGuiID center = dockspaceId;
+	ImGuiID right        = ImGui::DockBuilderSplitNode(center, ImGuiDir_Right, 0.25f, nullptr, &center);
 	const ImGuiID left   = ImGui::DockBuilderSplitNode(center, ImGuiDir_Left,  0.20f, nullptr, &center);
-	const ImGuiID right  = ImGui::DockBuilderSplitNode(center, ImGuiDir_Right, 0.25f, nullptr, &center);
 	const ImGuiID bottom = ImGui::DockBuilderSplitNode(center, ImGuiDir_Down,  0.25f, nullptr, &center);
 
+	// Split the right column so Statistics sits on top of Properties.
+	const ImGuiID rightTop = ImGui::DockBuilderSplitNode(right, ImGuiDir_Up, 0.30f, nullptr, &right);
+
 	ImGui::DockBuilderDockWindow("Scene Hierarchy", left);
+	ImGui::DockBuilderDockWindow("Statistics", rightTop);
 	ImGui::DockBuilderDockWindow("Properties", right);
 	ImGui::DockBuilderDockWindow("Console", bottom);
-	ImGui::DockBuilderDockWindow("Statistics", bottom);
 	ImGui::DockBuilderDockWindow("Viewport", center);
 
 	ImGui::DockBuilderFinish(dockspaceId);

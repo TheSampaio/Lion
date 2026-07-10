@@ -17,11 +17,32 @@ public:
 	void OnDetach() override;
 
 private:
+	// Rebindable editor shortcuts. Each action holds a key plus modifier flags; the Shortcuts panel
+	// lets the user change them, and the handlers query them via IsShortcutPressed.
+	enum class ShortcutAction
+	{
+		Undo, Redo, Play, Stop, ToggleShortcuts,
+		GizmoMove, GizmoRotate, GizmoScale, RenameEntity, DeleteEntity,
+		Count
+	};
+
+	struct Keybind
+	{
+		ImGuiKey key = ImGuiKey_None;
+		bool ctrl = false;
+		bool shift = false;
+		bool alt = false;
+	};
+
+	Keybind mBinds[static_cast<int>(ShortcutAction::Count)];
+	int mRebindingIndex = -1;  // Index of the action currently capturing a new key (-1 = none).
+
 	bool mShowDemo = false;
 	bool mShowShortcuts = false;
 	bool mLayoutInitialized = false;
 	bool mConsoleAutoScroll = true;
 	bool mPlaying = false;
+	bool mShowColliders = true;  // Draw collider hitbox outlines over the viewport.
 	bool mRenameFocus = false;  // Request keyboard focus on the inline rename field for one frame.
 	ImGuizmo::OPERATION mGizmoOperation = ImGuizmo::TRANSLATE;
 
@@ -49,15 +70,17 @@ private:
 	void DrawUI();
 	void DrawMenuBar();
 	void DrawViewport();
+	void DrawColliderOverlays(const ImVec2& imageMin, const ImVec2& imageSize);
 	void DrawHierarchy();
 	void DrawProperties();
 	void DrawConsole();
 	void DrawShortcuts();
 	void BuildDefaultLayout(unsigned int dockspaceId);
 
-	// Draws a collapsing header for a component with a right-aligned "X" remove button.
-	// Returns whether the body is open; sets removeRequested when the button is pressed.
-	bool DrawComponentHeader(const char* label, bool& removeRequested);
+	// Draws a collapsing header for a component with a right-aligned "X" remove button and
+	// drag-to-reorder support. Returns whether the body is open; sets removeRequested when the X is
+	// pressed, and sets dragFrom/dragTo when a header is dropped onto this one.
+	bool DrawComponentHeader(const char* label, int index, bool& removeRequested, int& dragFrom, int& dragTo);
 
 	// Draws an X/Y/Z vector editor with red/green/blue axis buttons (Unity/Godot-style). Clicking an
 	// axis button resets that component to resetValue. Returns whether any value changed.
@@ -71,6 +94,14 @@ private:
 	void Undo();
 	void Redo();
 	void HandleShortcuts();
+
+	// Shortcut/keybinding helpers.
+	void InitShortcuts();                                  // Sets defaults, then loads overrides from disk.
+	void ResetShortcutsToDefault();                        // Assigns the built-in default bindings.
+	void LoadShortcuts();                                  // Overrides binds from the on-disk config, if present.
+	void SaveShortcuts() const;                            // Persists the current binds to disk.
+	bool IsShortcutPressed(ShortcutAction action) const;   // True when the bound combo was pressed this frame.
+	std::string KeybindToString(const Keybind& bind) const;
 
 	// Play mode: StartPlay snapshots the edited scene and re-awakes it (creating physics bodies) so
 	// the simulation runs; StopPlay restores the snapshot, returning to the edited state.

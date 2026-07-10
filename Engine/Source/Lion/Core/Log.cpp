@@ -40,12 +40,16 @@ namespace Lion
 
 	const std::vector<LogEntry>& Log::GetHistory()
 	{
-		return sInstance->mHistory;
+		// The Log singleton is not created in Shipping (logging is stripped), so tolerate a null
+		// instance and return an empty, static history.
+		static const std::vector<LogEntry> empty;
+		return sInstance ? sInstance->mHistory : empty;
 	}
 
 	void Log::ClearHistory()
 	{
-		sInstance->mHistory.clear();
+		if (sInstance)
+			sInstance->mHistory.clear();
 	}
 
 	void Log::Console(LogLevel mode, const std::string& message)
