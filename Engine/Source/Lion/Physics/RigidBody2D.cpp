@@ -51,13 +51,14 @@ namespace Lion
 		if (!mWorld)
 			return mBodyId;
 
-		const Vector position = GetTransform()->GetPosition();
-		const Vector rotation = GetTransform()->GetRotation();
+		// Bodies live in world space, so resolve the owner's transform through its parent chain.
+		const Vector position = GetOwner().GetWorldPosition();
+		const float32 rotation = GetOwner().GetWorldRotation();
 
 		b2BodyDef bodyDef = b2DefaultBodyDef();
 		bodyDef.type = ToBox2DBodyType(mType);
 		bodyDef.position = { position.x * PhysicsWorld::MetersPerPixel, position.y * PhysicsWorld::MetersPerPixel };
-		bodyDef.rotation = b2MakeRot(glm::radians(rotation.z));  // Transform rotation is stored in degrees.
+		bodyDef.rotation = b2MakeRot(glm::radians(rotation));  // Transform rotation is stored in degrees.
 		bodyDef.fixedRotation = mFixedRotation;
 		bodyDef.linearVelocity = { mPendingVelocity.x, mPendingVelocity.y };
 		bodyDef.userData = &GetOwner();
@@ -117,11 +118,15 @@ namespace Lion
 		const b2Vec2 position = b2Body_GetPosition(mBodyId);
 		const float32 angle = glm::degrees(b2Rot_GetAngle(b2Body_GetRotation(mBodyId)));
 
-		const Reference<Transform> transform = GetTransform();
-		const Vector current = transform->GetPosition();
+		// The simulation works in world space; writing it back rebases the entity's local transform.
+		Entity& owner = GetOwner();
+		const float32 depth = owner.GetWorldPosition().z;  // Physics does not manage the sprite depth.
 
-		// Preserve the sprite depth (z) that physics does not manage; rotation is stored in degrees.
-		transform->SetPosition(Vector(position.x * PhysicsWorld::PixelsPerMeter, position.y * PhysicsWorld::PixelsPerMeter, current.z));
-		transform->SetRotation(Vector(0.0f, 0.0f, angle));
+		owner.SetWorldPosition(Vector(
+			position.x * PhysicsWorld::PixelsPerMeter,
+			position.y * PhysicsWorld::PixelsPerMeter,
+			depth));
+
+		owner.SetWorldRotation(angle);
 	}
 }

@@ -832,14 +832,15 @@ void EditorLayer::DrawViewport()
 		const glm::mat4 view = mCamera->GetViewMatrix();
 		const glm::mat4 projection = mCamera->GetProjectionMatrix();
 
-		const Reference<Transform> transform = mSelectedEntity->GetTransform();
-		const Vector position = transform->GetPosition();
-		const Vector rotation = transform->GetRotation();
-		const Vector scale = transform->GetScale();
+		// The gizmo manipulates the entity in world space; the results are rebased onto its local
+		// transform, so a child keeps following its parent.
+		const Vector position = mSelectedEntity->GetWorldPosition();
+		const float32 rotationZ = mSelectedEntity->GetWorldRotation();
+		const Vector scale = mSelectedEntity->GetWorldScale();
 
 		// Build the entity's model matrix (rotation in degrees, matching the Transform).
 		float32 translationValues[3] = { position.x, position.y, position.z };
-		float32 rotationValues[3] = { 0.0f, 0.0f, rotation.z };
+		float32 rotationValues[3] = { 0.0f, 0.0f, rotationZ };
 		float32 scaleValues[3] = { scale.x, scale.y, 1.0f };
 
 		float32 model[16];
@@ -856,9 +857,9 @@ void EditorLayer::DrawViewport()
 			float32 newTranslation[3], newRotation[3], newScale[3];
 			ImGuizmo::DecomposeMatrixToComponents(model, newTranslation, newRotation, newScale);
 
-			transform->SetPosition(Vector(newTranslation[0], newTranslation[1], position.z));
-			transform->SetRotation(Vector(0.0f, 0.0f, newRotation[2]));
-			transform->SetScale(Vector(newScale[0], newScale[1], 1.0f));
+			mSelectedEntity->SetWorldPosition(Vector(newTranslation[0], newTranslation[1], position.z));
+			mSelectedEntity->SetWorldRotation(newRotation[2]);
+			mSelectedEntity->SetWorldScale(Vector(newScale[0], newScale[1], scale.z));
 		}
 	}
 
@@ -982,10 +983,10 @@ void EditorLayer::DrawColliderOverlays(const ImVec2& imageMin, const ImVec2& ima
 
 	for (const auto& entity : mScene->GetEntities())
 	{
-		const Reference<Transform> transform = entity->GetTransform();
-		const Vector position = transform->GetPosition();
-		const Vector scale = transform->GetScale();
-		const float32 angle = glm::radians(transform->GetRotation().z);
+		// Hitboxes follow the entity's world transform (including anything inherited from a parent).
+		const Vector position = entity->GetWorldPosition();
+		const Vector scale = entity->GetWorldScale();
+		const float32 angle = glm::radians(entity->GetWorldRotation());
 		const float32 cosAngle = std::cos(angle);
 		const float32 sinAngle = std::sin(angle);
 
@@ -1039,83 +1040,27 @@ void EditorLayer::DrawHierarchy()
 
 	ImGui::Separator();
 
-	Reference<Entity> entityToDelete;
+	// Children are stored as raw pointers; this maps them back to the scene's owning references.
+	mEntityLookup.clear();
+	for (const auto& entity : mScene->GetEntities())
+		mEntityLookup.emplace(entity.get(), entity);
 
-	int32 index = 0;
+	mEntityToDelete = nullptr;
+	mReparentChild = nullptr;
+	mReparentTarget = nullptr;
+	mReparentRequested = false;
+
+	// Only roots are drawn at the top level; each node recurses into its children.
+	int32 count = 0;
 	for (const auto& entity : mScene->GetEntities())
 	{
-		ImGui::PushID(index);
+		if (entity->GetParent() == nullptr)
+			DrawEntityNode(entity);
 
-		if (entity == mRenamingEntity)
-		{
-			// Inline rename field (started via F2, double-click or the context menu).
-			char buffer[128];
-			const std::string& name = entity->GetName();
-			const size_t length = name.copy(buffer, sizeof(buffer) - 1);
-			buffer[length] = '\0';
-
-			if (mRenameFocus)
-			{
-				ImGui::SetKeyboardFocusHere();
-				mRenameFocus = false;
-			}
-
-			ImGui::SetNextItemWidth(-1.0f);
-			const bool committed = ImGui::InputText("##rename", buffer, sizeof(buffer),
-				ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll);
-
-			if (committed || ImGui::IsItemDeactivated())
-			{
-				RecordSnapshot();
-				entity->SetName(buffer);
-				mRenamingEntity = nullptr;
-			}
-		}
-		else
-		{
-			const std::string& name = entity->GetName();
-			if (ImGui::Selectable(name.empty() ? "(unnamed)" : name.c_str(), entity == mSelectedEntity))
-				mSelectedEntity = entity;
-
-			// Double-click a row to rename it in place.
-			if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
-			{
-				mSelectedEntity = entity;
-				mRenamingEntity = entity;
-				mRenameFocus = true;
-			}
-
-			// Right-click a row for its context menu.
-			if (ImGui::BeginPopupContextItem())
-			{
-				mSelectedEntity = entity;
-
-				if (ImGui::MenuItem("Rename", "F2"))
-				{
-					mRenamingEntity = entity;
-					mRenameFocus = true;
-				}
-
-				ImGui::Separator();
-
-				if (ImGui::MenuItem("Copy", "Ctrl+C"))      CopyEntity();
-				if (ImGui::MenuItem("Duplicate", "Ctrl+D")) DuplicateEntity();
-				if (ImGui::MenuItem("Paste", "Ctrl+V", false, !mEntityClipboard.empty())) PasteEntity();
-
-				ImGui::Separator();
-
-				if (ImGui::MenuItem("Delete", "Del"))
-					entityToDelete = entity;
-
-				ImGui::EndPopup();
-			}
-		}
-
-		ImGui::PopID();
-		index++;
+		count++;
 	}
 
-	if (index == 0)
+	if (count == 0)
 		ImGui::TextDisabled("Empty scene — right-click to create an entity.");
 
 	// Right-click empty space in the panel to create an entity (Unity/Hazel-style).
@@ -1142,19 +1087,149 @@ void EditorLayer::DrawHierarchy()
 	if (ImGui::IsWindowHovered() && !ImGui::IsAnyItemHovered() && ImGui::IsMouseClicked(ImGuiMouseButton_Left))
 		mSelectedEntity = nullptr;
 
-	// Deferred deletion (never mutate the entity list while iterating it above).
-	if (entityToDelete)
+	// Deferred hierarchy edits (never mutate the tree while iterating it above).
+	if (mReparentRequested && mReparentChild)
+	{
+		RecordSnapshot();
+		mReparentChild->SetParent(mReparentTarget);
+	}
+
+	if (mEntityToDelete)
 	{
 		RecordSnapshot();
 
-		if (mSelectedEntity == entityToDelete) mSelectedEntity = nullptr;
-		if (mRenamingEntity == entityToDelete) mRenamingEntity = nullptr;
+		if (mSelectedEntity == mEntityToDelete) mSelectedEntity = nullptr;
+		if (mRenamingEntity == mEntityToDelete) mRenamingEntity = nullptr;
 
-		mScene->Remove(entityToDelete);
+		mScene->Remove(mEntityToDelete);
 		mScene->FlushRemovals();
+		mEntityToDelete = nullptr;
 	}
 
 	ImGui::End();
+}
+
+void EditorLayer::DrawEntityNode(const Reference<Entity>& entity)
+{
+	ImGui::PushID(entity->GetId());
+
+	if (entity == mRenamingEntity)
+	{
+		// Inline rename field (started via F2, double-click or the context menu).
+		char buffer[128];
+		const std::string& name = entity->GetName();
+		const size_t length = name.copy(buffer, sizeof(buffer) - 1);
+		buffer[length] = '\0';
+
+		if (mRenameFocus)
+		{
+			ImGui::SetKeyboardFocusHere();
+			mRenameFocus = false;
+		}
+
+		ImGui::SetNextItemWidth(-1.0f);
+		const bool committed = ImGui::InputText("##rename", buffer, sizeof(buffer),
+			ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll);
+
+		if (committed || ImGui::IsItemDeactivated())
+		{
+			RecordSnapshot();
+			entity->SetName(buffer);
+			mRenamingEntity = nullptr;
+		}
+
+		ImGui::PopID();
+		return;
+	}
+
+	ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_SpanAvailWidth;
+
+	if (entity->GetChildren().empty())
+		flags |= ImGuiTreeNodeFlags_Leaf;
+
+	if (entity == mSelectedEntity)
+		flags |= ImGuiTreeNodeFlags_Selected;
+
+	const std::string& name = entity->GetName();
+	const bool open = ImGui::TreeNodeEx("##node", flags, "%s", name.empty() ? "(unnamed)" : name.c_str());
+
+	// Clicking the label (not the expand arrow) selects the entity.
+	if (ImGui::IsItemClicked() && !ImGui::IsItemToggledOpen())
+		mSelectedEntity = entity;
+
+	if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
+	{
+		mSelectedEntity = entity;
+		mRenamingEntity = entity;
+		mRenameFocus = true;
+	}
+
+	// Drag a node onto another to reparent it (the child keeps its world transform).
+	if (ImGui::BeginDragDropSource())
+	{
+		Entity* dragged = entity.get();
+		ImGui::SetDragDropPayload("LN_ENTITY", &dragged, sizeof(Entity*));
+		ImGui::Text("Move %s", name.c_str());
+		ImGui::EndDragDropSource();
+	}
+
+	if (ImGui::BeginDragDropTarget())
+	{
+		if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("LN_ENTITY"))
+		{
+			mReparentChild = *static_cast<Entity* const*>(payload->Data);
+			mReparentTarget = entity.get();
+			mReparentRequested = true;
+		}
+
+		ImGui::EndDragDropTarget();
+	}
+
+	if (ImGui::BeginPopupContextItem())
+	{
+		mSelectedEntity = entity;
+
+		if (ImGui::MenuItem("Rename", "F2"))
+		{
+			mRenamingEntity = entity;
+			mRenameFocus = true;
+		}
+
+		ImGui::Separator();
+
+		if (ImGui::MenuItem("Copy", "Ctrl+C"))      CopyEntity();
+		if (ImGui::MenuItem("Duplicate", "Ctrl+D")) DuplicateEntity();
+		if (ImGui::MenuItem("Paste", "Ctrl+V", false, !mEntityClipboard.empty())) PasteEntity();
+
+		ImGui::Separator();
+
+		if (ImGui::MenuItem("Unparent", nullptr, false, entity->GetParent() != nullptr))
+		{
+			mReparentChild = entity.get();
+			mReparentTarget = nullptr;
+			mReparentRequested = true;
+		}
+
+		if (ImGui::MenuItem("Delete", "Del"))
+			mEntityToDelete = entity;
+
+		ImGui::EndPopup();
+	}
+
+	if (open)
+	{
+		for (Entity* child : entity->GetChildren())
+		{
+			const auto it = mEntityLookup.find(child);
+
+			if (it != mEntityLookup.end())
+				DrawEntityNode(it->second);
+		}
+
+		ImGui::TreePop();
+	}
+
+	ImGui::PopID();
 }
 
 bool EditorLayer::DrawComponentHeader(const char* label, int index, bool& removeRequested, int& dragFrom, int& dragTo)

@@ -73,6 +73,13 @@ private:
 	// Serialized entity held by Ctrl+C, pasted by Ctrl+V.
 	std::string mEntityClipboard;
 
+	// Hierarchy tree state, applied after the tree is drawn (never mutate it mid-iteration).
+	std::unordered_map<Lion::Entity*, Lion::Reference<Lion::Entity>> mEntityLookup;
+	Lion::Reference<Lion::Entity> mEntityToDelete;
+	Lion::Entity* mReparentChild = nullptr;
+	Lion::Entity* mReparentTarget = nullptr;   // Null target with mReparentChild set means "to root".
+	bool mReparentRequested = false;
+
 	static constexpr size_t kMaxUndo = 100;
 
 	void CreateDemoScene();
@@ -82,6 +89,7 @@ private:
 	void DrawViewport();
 	void DrawColliderOverlays(const ImVec2& imageMin, const ImVec2& imageSize);
 	void DrawHierarchy();
+	void DrawEntityNode(const Lion::Reference<Lion::Entity>& entity);
 	void DrawProperties();
 	void DrawConsole();
 	void DrawShortcuts();

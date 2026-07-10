@@ -27,9 +27,9 @@ namespace Lion
 			return;
 		}
 
-		// The collider size is expressed in unscaled pixels, like the sprite: the owner's Transform
-		// scale is applied on top, so the hitbox follows a scaled entity.
-		const Vector scale = GetTransform()->GetScale();
+		// The collider size is expressed in unscaled pixels, like the sprite: the owner's world scale
+		// (including any inherited from a parent) is applied on top, so the hitbox follows the entity.
+		const Vector scale = GetOwner().GetWorldScale();
 		const float32 halfWidth = (mWidth * 0.5f * std::fabs(scale.x)) * PhysicsWorld::MetersPerPixel;
 		const float32 halfHeight = (mHeight * 0.5f * std::fabs(scale.y)) * PhysicsWorld::MetersPerPixel;
 		const b2Polygon box = b2MakeBox(halfWidth, halfHeight);

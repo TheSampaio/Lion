@@ -35,6 +35,10 @@ namespace Lion
         // forwarded to the renderer for editor picking (-1 means "not associated with an entity").
         void LION_API Draw(const Reference<Transform>& transform, int32 entityId = -1);
 
+        // Submits the sprite using an explicit world-space transform (used by SpriteRenderer, which
+        // resolves the owner's transform through the parent chain).
+        void LION_API Draw(const Vector& position, const Vector& rotation, const Vector& scale, int32 entityId = -1);
+
     private:
         // Attributes
         Scope<SpriteInfo> mSpriteInfo;

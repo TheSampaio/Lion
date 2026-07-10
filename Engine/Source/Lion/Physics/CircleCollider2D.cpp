@@ -27,9 +27,9 @@ namespace Lion
 			return;
 		}
 
-		// The radius is expressed in unscaled pixels; the owner's Transform scale is applied on top
+		// The radius is expressed in unscaled pixels; the owner's world scale is applied on top
 		// (using the largest axis, so a non-uniform scale still yields a circle).
-		const Vector scale = GetTransform()->GetScale();
+		const Vector scale = GetOwner().GetWorldScale();
 		const float32 uniformScale = std::max(std::fabs(scale.x), std::fabs(scale.y));
 
 		b2Circle circle;

@@ -23,6 +23,15 @@ namespace Lion
 
     void Scene::Remove(Reference<Entity> entity)
     {
+        if (!entity)
+            return;
+
+        // An entity takes its whole subtree with it.
+        const std::vector<Entity*> children = entity->GetChildren();
+
+        for (Entity* child : children)
+            Remove(child);
+
         // Deferred: the actual removal happens at the end of the frame (see FlushPendingRemoval).
         mPendingRemoval.push_back(std::move(entity));
     }
@@ -34,7 +43,7 @@ namespace Lion
         {
             if (candidate.get() == entity)
             {
-                mPendingRemoval.push_back(candidate);
+                Remove(candidate);
                 return;
             }
         }
@@ -53,7 +62,10 @@ namespace Lion
     void Scene::Clear()
     {
         for (auto& entity : mEntities)
+        {
+            entity->DetachFromHierarchy();
             entity->Destroy();
+        }
 
         mEntities.clear();
         mPendingRemoval.clear();
@@ -96,6 +108,7 @@ namespace Lion
             if (it != mEntities.end())
             {
                 mEntities.erase(it);
+                entity->DetachFromHierarchy();
                 entity->Destroy();
             }
         }

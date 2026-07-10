@@ -34,6 +34,12 @@ namespace Lion
 
 	void SpriteRenderer::OnRender()
 	{
-		mSprite->Draw(GetTransform(), GetOwner().GetId());
+		// Draw with the owner's world transform, so children follow their parent.
+		Entity& owner = GetOwner();
+		mSprite->Draw(
+			owner.GetWorldPosition(),
+			Vector(0.0f, 0.0f, owner.GetWorldRotation()),
+			owner.GetWorldScale(),
+			owner.GetId());
 	}
 }

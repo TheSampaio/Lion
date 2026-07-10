@@ -113,8 +113,22 @@ namespace Lion
 		root["gravity"] = { gravity.x, gravity.y };
 		root["entities"] = Json::array();
 
+		// Parents are stored as an index into this array, so the hierarchy round-trips.
+		std::unordered_map<const Entity*, int32> indices;
+		int32 index = 0;
+
 		for (const auto& entity : scene->GetEntities())
-			root["entities"].push_back(EntityToJson(entity));
+			indices.emplace(entity.get(), index++);
+
+		for (const auto& entity : scene->GetEntities())
+		{
+			Json node = EntityToJson(entity);
+
+			const auto parent = indices.find(entity->GetParent());
+			node["parent"] = (parent != indices.end()) ? parent->second : -1;
+
+			root["entities"].push_back(node);
+		}
 
 		return root.dump(2);
 	}
@@ -161,8 +175,27 @@ namespace Lion
 		if (!root.contains("entities"))
 			return true;
 
+		// Build every entity first, then link parents, and only then add them to the scene: Awake
+		// creates physics bodies from the world transform, which needs the hierarchy in place.
+		std::vector<Reference<Entity>> entities;
+		entities.reserve(root["entities"].size());
+
 		for (const auto& node : root["entities"])
-			scene->Add(EntityFromJson(node));
+			entities.push_back(EntityFromJson(node));
+
+		size_t index = 0;
+		for (const auto& node : root["entities"])
+		{
+			const int32 parent = node.value("parent", -1);
+
+			if (parent >= 0 && parent < static_cast<int32>(entities.size()) && parent != static_cast<int32>(index))
+				entities[index]->SetParent(entities[parent].get(), false);  // Transforms are already local.
+
+			index++;
+		}
+
+		for (const auto& entity : entities)
+			scene->Add(entity);
 
 		return true;
 	}
