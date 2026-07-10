@@ -38,12 +38,17 @@ namespace Lion
 		sInstance = nullptr;
 	}
 
-	const std::vector<LogEntry>& Log::GetHistory()
+	const std::deque<LogEntry>& Log::GetHistory()
 	{
 		// The Log singleton is not created in Shipping (logging is stripped), so tolerate a null
 		// instance and return an empty, static history.
-		static const std::vector<LogEntry> empty;
+		static const std::deque<LogEntry> empty;
 		return sInstance ? sInstance->mHistory : empty;
+	}
+
+	size_t Log::GetTotalCount()
+	{
+		return sInstance ? sInstance->mTotalCount : 0;
 	}
 
 	void Log::ClearHistory()
@@ -60,9 +65,10 @@ namespace Lion
 		if (sInstance)
 		{
 			if (sInstance->mHistory.size() >= kMaxHistory)
-				sInstance->mHistory.erase(sInstance->mHistory.begin());
+				sInstance->mHistory.pop_front();
 
 			sInstance->mHistory.push_back({ mode, CurrentTimeString(), message });
+			++sInstance->mTotalCount;
 		}
 
 		switch (mode)

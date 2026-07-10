@@ -22,6 +22,9 @@
 #include <Lion/Logic/Entity.h>
 #include <Lion/Logic/Scene.h>
 #include <Lion/Logic/SceneSerializer.h>
+#include <Lion/Logic/Script.h>
+#include <Lion/Logic/ScriptComponent.h>
+#include <Lion/Logic/ScriptRegistry.h>
 #include <Lion/Logic/Timer.h>
 
 // Math

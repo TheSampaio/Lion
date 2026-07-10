@@ -29,11 +29,39 @@ namespace Lion
 		LION_API const std::string& GetName() const { return mName; }
 		LION_API void SetName(const std::string& name) { mName = name; }
 
+		// A folder is a purely organizational entity: it holds no components and keeps an identity
+		// transform, so grouping entities under it never moves them.
+		LION_API bool IsFolder() const { return mIsFolder; }
+		LION_API void SetFolder(bool value) { mIsFolder = value; }
+
 		// Returns the scene that currently owns this entity (null while detached).
 		LION_API Reference<Scene> GetScene() const { return mScene; }
 
-		// Returns the entity's Transform, always present and never null.
+		// Returns the entity's Transform, always present and never null. Its position/rotation/scale
+		// are LOCAL to the parent; use the world accessors below for the composed transform.
 		LION_API Reference<Transform> GetTransform() const { return mTransform; }
+
+		// Parent/child hierarchy. Children inherit their parent's transform.
+		LION_API Entity* GetParent() const { return mParent; }
+		LION_API const std::vector<Entity*>& GetChildren() const { return mChildren; }
+
+		// Reparents this entity. By default the world transform is preserved (the local one is
+		// rebased); pass keepWorldTransform = false to link the parent and leave the local transform
+		// untouched, as deserialization does. Ignored when it would create a cycle.
+		LION_API void SetParent(Entity* parent, bool keepWorldTransform = true);
+
+		// True when 'other' is somewhere up this entity's parent chain.
+		LION_API bool IsDescendantOf(const Entity* other) const;
+
+		// World-space transform, composed through the parent chain (rotation in degrees, around z).
+		LION_API Vector GetWorldPosition() const;
+		LION_API float32 GetWorldRotation() const;
+		LION_API Vector GetWorldScale() const;
+
+		// Assign a world-space transform; the local transform is derived from the parent's.
+		LION_API void SetWorldPosition(const Vector& position);
+		LION_API void SetWorldRotation(float32 degrees);
+		LION_API void SetWorldScale(const Vector& scale);
 
 		// Requests removal of this entity from its scene (deferred to the end of the frame).
 		LION_API void RemoveFromScene();
@@ -95,12 +123,21 @@ namespace Lion
 
 	private:
 		const int32 mId;
+		bool mIsFolder = false;
 		std::string mName = "Entity";
 		Reference<Transform> mTransform;
 		Reference<Scene> mScene;
 
+		// Non-owning: the Scene owns every entity, so a parent never outlives its children's removal.
+		Entity* mParent = nullptr;
+		std::vector<Entity*> mChildren;
+
 		std::vector<Scope<Component>> mComponents;
 		std::unordered_map<std::type_index, Component*> mComponentLookup;
+
+		// Unlinks this entity from its parent and orphans its children, without touching transforms.
+		// Used by the Scene when an entity is destroyed, so no dangling pointers remain.
+		void DetachFromHierarchy();
 
 		// Component storage helpers (kept out of line to keep the templates thin).
 		LION_API void RegisterComponent(Scope<Component> component, std::type_index type);

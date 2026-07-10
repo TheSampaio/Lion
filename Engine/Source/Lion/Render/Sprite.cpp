@@ -24,9 +24,14 @@ namespace Lion
 
     void Sprite::Draw(const Reference<Transform>& transform, int32 entityId)
     {
-        mSpriteInfo->position = transform->mPosition;
-        mSpriteInfo->rotation = transform->mRotation;
-        mSpriteInfo->scale = transform->mScale;
+        Draw(transform->mPosition, transform->mRotation, transform->mScale, entityId);
+    }
+
+    void Sprite::Draw(const Vector& position, const Vector& rotation, const Vector& scale, int32 entityId)
+    {
+        mSpriteInfo->position = position;
+        mSpriteInfo->rotation = rotation;
+        mSpriteInfo->scale = scale;
         mSpriteInfo->size = mTexture->GetSize();
         mSpriteInfo->texture = mTexture.get();
         mSpriteInfo->entityId = entityId;

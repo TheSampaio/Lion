@@ -27,9 +27,14 @@ namespace Lion
 			return;
 		}
 
+		// The radius is expressed in unscaled pixels; the owner's world scale is applied on top
+		// (using the largest axis, so a non-uniform scale still yields a circle).
+		const Vector scale = GetOwner().GetWorldScale();
+		const float32 uniformScale = std::max(std::fabs(scale.x), std::fabs(scale.y));
+
 		b2Circle circle;
 		circle.center = { 0.0f, 0.0f };
-		circle.radius = mRadius * PhysicsWorld::MetersPerPixel;
+		circle.radius = mRadius * uniformScale * PhysicsWorld::MetersPerPixel;
 
 		b2ShapeDef shapeDef = b2DefaultShapeDef();
 		shapeDef.density = mDensity;

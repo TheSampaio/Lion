@@ -2,6 +2,7 @@
 
 namespace Lion
 {
+	class Entity;
 	class Scene;
 
 	// Reads and writes scenes as JSON: entity transforms and their components
@@ -20,5 +21,11 @@ namespace Lion
 
 		// Replaces the scene's contents from an in-memory JSON string. Returns false on failure.
 		static LION_API bool DeserializeFromString(const Reference<Scene>& scene, const std::string& text);
+
+		// Serializes a single entity (for the editor's copy/paste/duplicate clipboard).
+		static LION_API std::string SerializeEntityToString(const Reference<Entity>& entity);
+
+		// Rebuilds a single entity from JSON and adds it to the scene. Returns null on failure.
+		static LION_API Reference<Entity> DeserializeEntityFromString(const Reference<Scene>& scene, const std::string& text);
 	};
 }

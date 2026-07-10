@@ -19,12 +19,19 @@ public:
 private:
 	// Rebindable editor shortcuts. Each action holds a key plus modifier flags; the Shortcuts panel
 	// lets the user change them, and the handlers query them via IsShortcutPressed.
+	// New actions are appended so indices already saved in shortcuts.cfg stay valid.
 	enum class ShortcutAction
 	{
 		Undo, Redo, Play, Stop, ToggleShortcuts,
 		GizmoMove, GizmoRotate, GizmoScale, RenameEntity, DeleteEntity,
+		Pause, ToggleColliders,
+		CopyEntity, PasteEntity, DuplicateEntity,
+		ToolSelect,
 		Count
 	};
+
+	// Viewport tools, mirroring the Q/W/E/R row in the top-left corner.
+	enum class Tool { Select, Move, Rotate, Scale };
 
 	struct Keybind
 	{
@@ -41,10 +48,20 @@ private:
 	bool mShowShortcuts = false;
 	bool mLayoutInitialized = false;
 	bool mConsoleAutoScroll = true;
+	bool mConsoleShowErrors = true;    // Console severity filters (Error/Fatal, Warning, everything else).
+	bool mConsoleShowWarnings = true;
+	bool mConsoleShowInfo = true;
+
+	// Console rendering: only the entries passing the filters are indexed here, and a list clipper
+	// draws just the visible slice, so a full history costs the same as a screenful.
+	std::vector<int> mConsoleVisible;
+	int mConsoleSelected = -1;
+	size_t mConsoleLastTotal = 0;   // Total lines logged as of the last drawn frame; drives the tail follow.
 	bool mPlaying = false;
-	bool mShowColliders = true;  // Draw collider hitbox outlines over the viewport.
-	bool mRenameFocus = false;  // Request keyboard focus on the inline rename field for one frame.
-	ImGuizmo::OPERATION mGizmoOperation = ImGuizmo::TRANSLATE;
+	bool mPaused = false;        // In play mode but the simulation is halted.
+	bool mShowColliders = false;  // Collider outlines are a debug view, off until enabled in Settings.
+	bool mRenameFocus = false;   // Request keyboard focus on the inline rename field for one frame.
+	Tool mTool = Tool::Move;
 
 	Lion::Reference<Lion::CameraOrthographic> mCamera;
 	Lion::Reference<Lion::Scene> mScene;
@@ -63,6 +80,19 @@ private:
 	// Snapshot of the edited scene captured when entering Play mode, restored on Stop.
 	std::string mPlaySnapshot;
 
+	// Serialized entity held by Ctrl+C, pasted by Ctrl+V.
+	std::string mEntityClipboard;
+
+	// Project panel: the folder currently being browsed, relative to the resource root.
+	std::string mProjectPath;
+
+	// Hierarchy tree state, applied after the tree is drawn (never mutate it mid-iteration).
+	std::unordered_map<Lion::Entity*, Lion::Reference<Lion::Entity>> mEntityLookup;
+	Lion::Reference<Lion::Entity> mEntityToDelete;
+	Lion::Entity* mReparentChild = nullptr;
+	Lion::Entity* mReparentTarget = nullptr;   // Null target with mReparentChild set means "to root".
+	bool mReparentRequested = false;
+
 	static constexpr size_t kMaxUndo = 100;
 
 	void CreateDemoScene();
@@ -72,8 +102,10 @@ private:
 	void DrawViewport();
 	void DrawColliderOverlays(const ImVec2& imageMin, const ImVec2& imageSize);
 	void DrawHierarchy();
+	void DrawEntityNode(const Lion::Reference<Lion::Entity>& entity);
 	void DrawProperties();
 	void DrawConsole();
+	void DrawProject();
 	void DrawShortcuts();
 	void BuildDefaultLayout(unsigned int dockspaceId);
 
@@ -95,6 +127,15 @@ private:
 	void Redo();
 	void HandleShortcuts();
 
+	// Entity clipboard: copy the selection, paste a new entity from the clipboard, or do both at
+	// once (duplicate). The new entity is appended to the scene and becomes the selection.
+	void CopyEntity();
+	void PasteEntity();
+	void DuplicateEntity();
+
+	// Creates an organizational folder entity (no components, identity transform).
+	void CreateFolder();
+
 	// Shortcut/keybinding helpers.
 	void InitShortcuts();                                  // Sets defaults, then loads overrides from disk.
 	void ResetShortcutsToDefault();                        // Assigns the built-in default bindings.
@@ -104,7 +145,16 @@ private:
 	std::string KeybindToString(const Keybind& bind) const;
 
 	// Play mode: StartPlay snapshots the edited scene and re-awakes it (creating physics bodies) so
-	// the simulation runs; StopPlay restores the snapshot, returning to the edited state.
+	// the simulation runs; StopPlay restores the snapshot, returning to the edited state. Both keep
+	// the current selection by index (the entity list round-trips in order).
 	void StartPlay();
 	void StopPlay();
+	void TogglePause();
+
+	// Play/Stop/Collider controls drawn as an overlay on top of the viewport image.
+	void DrawViewportToolbar(const ImVec2& imageMin, const ImVec2& imageSize);
+
+	// Selection is stored by index across a scene rebuild (serialize/deserialize round-trip).
+	int SelectedEntityIndex() const;
+	void SelectEntityByIndex(int index);
 };

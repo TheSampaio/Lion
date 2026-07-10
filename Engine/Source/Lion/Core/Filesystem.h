@@ -14,4 +14,8 @@ namespace Lion
 	// directory), using forward slashes — suitable for storing in a scene. Returns the input
 	// unchanged when it is not located under the resource root.
 	LION_API std::string ToResourceRelativePath(const std::string& absolutePath);
+
+	// Root the editor browses for assets: the directory the build copies resources into, i.e. the
+	// executable's directory (with a trailing separator). Empty when it cannot be determined.
+	LION_API const std::string& ResourceRootDirectory();
 }
