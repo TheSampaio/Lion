@@ -818,14 +818,16 @@ void EditorLayer::DrawColliderOverlays(const ImVec2& imageMin, const ImVec2& ima
 	{
 		const Reference<Transform> transform = entity->GetTransform();
 		const Vector position = transform->GetPosition();
+		const Vector scale = transform->GetScale();
 		const float32 angle = glm::radians(transform->GetRotation().z);
 		const float32 cosAngle = std::cos(angle);
 		const float32 sinAngle = std::sin(angle);
 
+		// Collider sizes are unscaled pixels; apply the Transform scale, matching the physics shapes.
 		if (const BoxCollider2D* box = entity->GetComponent<BoxCollider2D>())
 		{
-			const float32 halfWidth = box->GetWidth() * 0.5f;
-			const float32 halfHeight = box->GetHeight() * 0.5f;
+			const float32 halfWidth = box->GetWidth() * 0.5f * std::fabs(scale.x);
+			const float32 halfHeight = box->GetHeight() * 0.5f * std::fabs(scale.y);
 
 			const auto corner = [&](float32 offsetX, float32 offsetY)
 			{
@@ -843,8 +845,9 @@ void EditorLayer::DrawColliderOverlays(const ImVec2& imageMin, const ImVec2& ima
 
 		if (const CircleCollider2D* circle = entity->GetComponent<CircleCollider2D>())
 		{
+			const float32 radius = circle->GetRadius() * std::max(std::fabs(scale.x), std::fabs(scale.y));
 			const ImVec2 center = worldToScreen(position.x, position.y);
-			const ImVec2 edge = worldToScreen(position.x + circle->GetRadius(), position.y);
+			const ImVec2 edge = worldToScreen(position.x + radius, position.y);
 			const float32 screenRadius = std::fabs(edge.x - center.x);
 			drawList->AddCircle(center, screenRadius, color, 32, 1.5f);
 		}
@@ -1283,6 +1286,11 @@ void EditorLayer::DrawProperties()
 
 	if (ImGui::BeginPopup("AddComponentPopup"))
 	{
+		// New colliders fit the entity's sprite (Unity-style); without one they get a default size.
+		// Sizes are unscaled, so the Transform scale applies on top.
+		const SpriteRenderer* sprite = mSelectedEntity->GetComponent<SpriteRenderer>();
+		const Size spriteSize = sprite ? sprite->GetSize() : Size(100.0f, 100.0f);
+
 		if (!mSelectedEntity->HasComponent<SpriteRenderer>() && ImGui::MenuItem("Sprite Renderer"))
 		{
 			RecordSnapshot();
@@ -1298,13 +1306,13 @@ void EditorLayer::DrawProperties()
 		if (!mSelectedEntity->HasComponent<BoxCollider2D>() && ImGui::MenuItem("Box Collider 2D"))
 		{
 			RecordSnapshot();
-			mSelectedEntity->AddComponent<BoxCollider2D>(100.0f, 100.0f);
+			mSelectedEntity->AddComponent<BoxCollider2D>(spriteSize.width, spriteSize.height);
 		}
 
 		if (!mSelectedEntity->HasComponent<CircleCollider2D>() && ImGui::MenuItem("Circle Collider 2D"))
 		{
 			RecordSnapshot();
-			mSelectedEntity->AddComponent<CircleCollider2D>(50.0f);
+			mSelectedEntity->AddComponent<CircleCollider2D>(std::max(spriteSize.width, spriteSize.height) * 0.5f);
 		}
 
 		ImGui::EndPopup();

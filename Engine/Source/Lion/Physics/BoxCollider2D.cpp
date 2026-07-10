@@ -27,8 +27,11 @@ namespace Lion
 			return;
 		}
 
-		const float32 halfWidth = (mWidth * 0.5f) * PhysicsWorld::MetersPerPixel;
-		const float32 halfHeight = (mHeight * 0.5f) * PhysicsWorld::MetersPerPixel;
+		// The collider size is expressed in unscaled pixels, like the sprite: the owner's Transform
+		// scale is applied on top, so the hitbox follows a scaled entity.
+		const Vector scale = GetTransform()->GetScale();
+		const float32 halfWidth = (mWidth * 0.5f * std::fabs(scale.x)) * PhysicsWorld::MetersPerPixel;
+		const float32 halfHeight = (mHeight * 0.5f * std::fabs(scale.y)) * PhysicsWorld::MetersPerPixel;
 		const b2Polygon box = b2MakeBox(halfWidth, halfHeight);
 
 		b2ShapeDef shapeDef = b2DefaultShapeDef();
