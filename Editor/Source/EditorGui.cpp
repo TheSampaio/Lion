@@ -16,15 +16,16 @@ static void SetDarkTheme()
 
 	ImGuiStyle& style = ImGui::GetStyle();
 
-	// Layout: generous, consistent spacing and gentle rounding for a modern, calm look.
-	style.WindowPadding     = ImVec2(10.0f, 10.0f);
-	style.FramePadding      = ImVec2(8.0f, 5.0f);
-	style.CellPadding       = ImVec2(6.0f, 5.0f);
-	style.ItemSpacing       = ImVec2(8.0f, 7.0f);
-	style.ItemInnerSpacing  = ImVec2(7.0f, 5.0f);
+	// Layout: generous, consistent spacing and gentle rounding for a modern, calm look. Every metric
+	// sits on a 2px grid, so nested paddings stack into whole pixels instead of drifting half a one.
+	style.WindowPadding     = ImVec2(8.0f, 8.0f);
+	style.FramePadding      = ImVec2(8.0f, 4.0f);
+	style.CellPadding       = ImVec2(6.0f, 4.0f);
+	style.ItemSpacing       = ImVec2(8.0f, 6.0f);
+	style.ItemInnerSpacing  = ImVec2(6.0f, 4.0f);
 	style.IndentSpacing     = 20.0f;
-	style.ScrollbarSize     = 13.0f;
-	style.GrabMinSize       = 9.0f;
+	style.ScrollbarSize     = 12.0f;
+	style.GrabMinSize       = 8.0f;
 
 	style.WindowBorderSize  = 1.0f;
 	style.FrameBorderSize   = 0.0f;
@@ -35,9 +36,9 @@ static void SetDarkTheme()
 	style.ChildRounding     = 6.0f;
 	style.FrameRounding     = 4.0f;
 	style.PopupRounding     = 6.0f;
-	style.ScrollbarRounding = 9.0f;
+	style.ScrollbarRounding = 6.0f;
 	style.GrabRounding      = 4.0f;
-	style.TabRounding       = 5.0f;
+	style.TabRounding       = 4.0f;
 
 	style.WindowTitleAlign  = ImVec2(0.0f, 0.5f);
 	style.WindowMenuButtonPosition = ImGuiDir_None;

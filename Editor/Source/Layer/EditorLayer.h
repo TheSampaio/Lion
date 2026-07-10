@@ -33,6 +33,9 @@ private:
 	// Viewport tools, mirroring the Q/W/E/R row in the top-left corner.
 	enum class Tool { Select, Move, Rotate, Scale };
 
+	// A dock-layout change requested from the menu, deferred to the top of the next frame.
+	enum class LayoutRequest { None, Reset, Load };
+
 	struct Keybind
 	{
 		ImGuiKey key = ImGuiKey_None;
@@ -47,6 +50,15 @@ private:
 	bool mShowDemo = false;
 	bool mShowShortcuts = false;
 	bool mLayoutInitialized = false;
+
+	// Dock layouts, Unity-style: the built-in default plus any the user saved under "Layouts/".
+	// Switching one in tears down every dock node, so the menu only records the request here and
+	// ApplyPendingLayout consumes it before the next frame submits a window.
+	LayoutRequest mLayoutRequest = LayoutRequest::None;
+	std::string mLayoutToLoad;
+	unsigned int mDockspaceId = 0;   // Captured each frame, so the deferred rebuild can address it.
+	bool mOpenSaveLayoutPopup = false;
+	char mLayoutName[64] = {};
 	bool mConsoleAutoScroll = true;
 	bool mConsoleShowErrors = true;    // Console severity filters (Error/Fatal, Warning, everything else).
 	bool mConsoleShowWarnings = true;
@@ -108,6 +120,17 @@ private:
 	void DrawProject();
 	void DrawShortcuts();
 	void BuildDefaultLayout(unsigned int dockspaceId);
+
+	// Dock layout management (Window > Layouts). A layout is just an imgui.ini saved under
+	// "Layouts/<name>.ini", so loading one restores every panel's dock node, position and size.
+	void ApplyPendingLayout();                        // Consumes a pending reset/load, before any window is drawn.
+	void DrawLayoutMenu();                            // The "Layouts" submenu: default, saved ones, save, delete.
+	void DrawLayoutPopups();                          // The "Save Layout" modal, drawn at the root.
+	void SaveLayout(const std::string& name) const;
+	std::vector<std::string> SavedLayouts() const;    // Names of the layouts on disk, sorted.
+
+	static std::string LayoutPath(const std::string& name);
+	static bool IsValidLayoutName(const std::string& name);  // Rejects names that would escape the folder.
 
 	// Draws a collapsing header for a component with a right-aligned "X" remove button and
 	// drag-to-reorder support. Returns whether the body is open; sets removeRequested when the X is
