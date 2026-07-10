@@ -1652,6 +1652,38 @@ void EditorLayer::DrawProperties()
 				if (ImGui::IsItemDeactivatedAfterEdit()) CommitEdit();
 			}
 		}
+		else if (ScriptComponent* script = dynamic_cast<ScriptComponent*>(component))
+		{
+			if (DrawComponentHeader("Script", i, remove, dragFrom, dragTo))
+			{
+				// Only scripts compiled into the editor are listed (native C++ registry).
+				const std::vector<std::string>& names = ScriptRegistry::GetNames();
+				const std::string& bound = script->GetScriptName();
+
+				if (ImGui::BeginCombo("Class", bound.empty() ? "(none)" : bound.c_str()))
+				{
+					if (ImGui::Selectable("(none)", bound.empty()))
+					{
+						RecordSnapshot();
+						script->SetScriptName(std::string());
+					}
+
+					for (const std::string& name : names)
+					{
+						if (ImGui::Selectable(name.c_str(), name == bound))
+						{
+							RecordSnapshot();
+							script->SetScriptName(name);
+						}
+					}
+
+					ImGui::EndCombo();
+				}
+
+				if (names.empty())
+					ImGui::TextDisabled("No scripts registered in this build.");
+			}
+		}
 		else if (CircleCollider2D* collider = dynamic_cast<CircleCollider2D*>(component))
 		{
 			if (DrawComponentHeader("Circle Collider 2D", i, remove, dragFrom, dragTo))
@@ -1732,6 +1764,12 @@ void EditorLayer::DrawProperties()
 		{
 			RecordSnapshot();
 			mSelectedEntity->AddComponent<CircleCollider2D>(std::max(spriteSize.width, spriteSize.height) * 0.5f);
+		}
+
+		if (!mSelectedEntity->HasComponent<ScriptComponent>() && ImGui::MenuItem("Script"))
+		{
+			RecordSnapshot();
+			mSelectedEntity->AddComponent<ScriptComponent>();
 		}
 
 		ImGui::EndPopup();

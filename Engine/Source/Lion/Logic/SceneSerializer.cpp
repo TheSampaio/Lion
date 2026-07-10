@@ -6,6 +6,7 @@
 #include <Lion/Core/Log.h>
 #include <Lion/Logic/Entity.h>
 #include <Lion/Logic/Scene.h>
+#include <Lion/Logic/ScriptComponent.h>
 #include <Lion/Math/Transform.h>
 #include <Lion/Physics/BoxCollider2D.h>
 #include <Lion/Physics/CircleCollider2D.h>
@@ -92,6 +93,11 @@ namespace Lion
 				entry["density"] = collider->GetDensity();
 				entry["friction"] = collider->GetFriction();
 				entry["restitution"] = collider->GetRestitution();
+			}
+			else if (const ScriptComponent* script = dynamic_cast<const ScriptComponent*>(component.get()))
+			{
+				entry["type"] = "ScriptComponent";
+				entry["script"] = script->GetScriptName();
 			}
 			else
 			{
@@ -243,6 +249,8 @@ namespace Lion
 						entity->AddComponent<CircleCollider2D>(
 							entry.value("radius", 1.0f),
 							entry.value("density", 1.0f), entry.value("friction", 0.2f), entry.value("restitution", 0.0f));
+					else if (type == "ScriptComponent")
+						entity->AddComponent<ScriptComponent>(entry.value("script", std::string()));
 				}
 			}
 			else
