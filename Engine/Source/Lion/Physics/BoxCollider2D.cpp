@@ -4,7 +4,9 @@
 #include <box2d/box2d.h>
 
 #include <Lion/Core/Log.h>
+#include <Lion/Logic/ComponentRegistry.h>
 #include <Lion/Logic/Entity.h>
+#include <Lion/Logic/Serializer.h>
 #include <Lion/Physics/PhysicsWorld.h>
 #include <Lion/Physics/RigidBody2D.h>
 
@@ -43,4 +45,24 @@ namespace Lion
 		// EnsureBody so the shape attaches correctly regardless of component order.
 		mShapeId = b2CreatePolygonShape(body->EnsureBody(), &shapeDef, &box);
 	}
+
+	void BoxCollider2D::Serialize(Serializer& serializer) const
+	{
+		serializer.Write("width", mWidth);
+		serializer.Write("height", mHeight);
+		serializer.Write("density", mDensity);
+		serializer.Write("friction", mFriction);
+		serializer.Write("restitution", mRestitution);
+	}
+
+	void BoxCollider2D::Deserialize(const Serializer& serializer)
+	{
+		mWidth = serializer.ReadFloat("width", 1.0f);
+		mHeight = serializer.ReadFloat("height", 1.0f);
+		mDensity = serializer.ReadFloat("density", 1.0f);
+		mFriction = serializer.ReadFloat("friction", 0.2f);
+		mRestitution = serializer.ReadFloat("restitution", 0.0f);
+	}
+
+	LION_REGISTER_COMPONENT(BoxCollider2D)
 }

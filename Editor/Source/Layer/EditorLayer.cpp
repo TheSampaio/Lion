@@ -3,10 +3,15 @@
 #include "../EditorGui.h"
 
 #include <cctype>
+#include <chrono>
+#include <cstdio>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <sstream>
 
 #include <Lion/Core/Filesystem.h>
+#include <Lion/Logic/ComponentRegistry.h>
 
 #include <imgui/imgui_internal.h> // DockBuilder API for the default layout.
 
@@ -26,6 +31,8 @@ void EditorLayer::OnCreate()
 	EditorGui::Init();
 	InitShortcuts();
 
+	LoadGameModule();
+
 	mCamera = MakeReference<CameraOrthographic>();
 	mScene = MakeReference<Scene>();
 
@@ -40,9 +47,26 @@ void EditorLayer::OnCreate()
 
 void EditorLayer::OnUpdate()
 {
-	// Only advance the scene simulation (physics + entity scripts) while playing and not paused.
-	if (mPlaying && !mPaused)
+	PollGameBuild();
+
+	// Advance the scene simulation (physics + entity scripts) while playing and not paused — or for
+	// exactly one frame when a step was requested, which is what makes a paused run inspectable.
+	if (mPlaying && (!mPaused || mStepFrame))
+	{
 		mScene->OnUpdate();
+		mStepFrame = false;
+	}
+}
+
+void EditorLayer::StepOneFrame()
+{
+	if (!mPlaying)
+		return;
+
+	// Stepping only makes sense against a halted simulation, so a running one is paused first: the
+	// frame this schedules is then the only one that advances.
+	mPaused = true;
+	mStepFrame = true;
 }
 
 void EditorLayer::OnDetach()
@@ -260,6 +284,7 @@ void EditorLayer::DrawUI()
 	DrawProject();
 	DrawShortcuts();
 	DrawLayoutPopups();
+	DrawNewComponentPopup();
 
 	// Commit any in-progress continuous edit (gizmo/slider drag) once the mouse is released.
 	if (mHasPending && ImGui::IsMouseReleased(ImGuiMouseButton_Left))
@@ -479,9 +504,132 @@ void EditorLayer::DrawConsole()
 
 namespace
 {
-	// Saved dock layouts, in a folder of their own inside the resource root (where the editor already
-	// keeps imgui.ini and shortcuts.cfg). The Project panel skips it: it is editor state, not an asset.
-	constexpr const char8* kLayoutsDirectory = "Layouts";
+	// The editor keeps its persisted state (UI layout, shortcuts, saved dock layouts) under Data/,
+	// which sits in the resource root. The Project panel skips the whole folder: it is editor state,
+	// not an asset.
+	constexpr const char8* kDataDirectory    = "Data";
+	constexpr const char8* kLayoutsDirectory = "Data/Layouts";
+
+	// Component types the editor adds through a bespoke Add Component entry, because they need
+	// construction arguments (a collider sizes itself to the sprite). Everything else in the registry
+	// comes from the game module and is added generically, by name.
+	constexpr const char8* kBuiltInComponents[] = {
+		"SpriteRenderer", "RigidBody2D", "BoxCollider2D", "CircleCollider2D", "ScriptComponent" };
+
+	bool IsBuiltInComponent(const std::string& name)
+	{
+		for (const char8* entry : kBuiltInComponents)
+			if (name == entry)
+				return true;
+
+		return false;
+	}
+
+	// The project root, found by walking up from the working directory: the editor runs from its build
+	// output, not the project. Empty when the project is not around (a distributed editor), which is
+	// what disables generating and compiling.
+	std::filesystem::path ProjectRootDirectory()
+	{
+		std::error_code error;
+		std::filesystem::path current = std::filesystem::current_path(error);
+
+		if (error)
+			return {};
+
+		for (int32 depth = 0; depth < 8; ++depth)
+		{
+			if (std::filesystem::is_directory(current / "Game" / "Source", error))
+				return current;
+
+			if (!current.has_parent_path() || current.parent_path() == current)
+				break;
+
+			current = current.parent_path();
+		}
+
+		return {};
+	}
+
+	// Where a generated component's source lands.
+	std::filesystem::path GameComponentDirectory()
+	{
+		const std::filesystem::path root = ProjectRootDirectory();
+		return root.empty() ? root : (root / "Game" / "Source" / "Component");
+	}
+
+	// Runs a command, capturing whatever it writes to stdout and stderr, and returns its exit code.
+	// The whole command is wrapped in an extra pair of quotes: cmd.exe otherwise mangles one that
+	// starts with a quoted path.
+	int32 RunCommand(const std::string& command, std::string& output)
+	{
+		const std::string wrapped = "\"" + command + " 2>&1\"";
+
+		FILE* pipe = _popen(wrapped.c_str(), "r");
+
+		if (!pipe)
+			return -1;
+
+		char8 buffer[512];
+
+		while (std::fgets(buffer, sizeof(buffer), pipe))
+			output += buffer;
+
+		return _pclose(pipe);
+	}
+
+	// MSBuild's path is not fixed across Visual Studio installs, so ask the installer's own locator.
+	const std::string& MSBuildPath()
+	{
+		static const std::string path = []
+		{
+			const char8* programFiles = std::getenv("ProgramFiles(x86)");
+
+			if (!programFiles)
+				return std::string();
+
+			const std::string vswhere =
+				"\"" + std::string(programFiles) + "\\Microsoft Visual Studio\\Installer\\vswhere.exe\"";
+
+			std::string output;
+
+			if (RunCommand(vswhere + " -latest -requires Microsoft.Component.MSBuild -find MSBuild\\**\\Bin\\MSBuild.exe", output) != 0)
+				return std::string();
+
+			// vswhere prints one path per line; take the first and strip the newline.
+			const size_t end = output.find_first_of("\r\n");
+			return (end == std::string::npos) ? output : output.substr(0, end);
+		}();
+
+		return path;
+	}
+
+	// The configuration the editor itself was built in: the game module has to match it, or the two
+	// would disagree on the runtime and the module could not be loaded.
+	constexpr const char8* BuildConfiguration()
+	{
+#if defined(LN_DEBUG)
+		return "Debug";
+#elif defined(LN_RELEASE)
+		return "Release";
+#else
+		return "Shipping";
+#endif
+	}
+
+	// A generated type name becomes a class name and a file name, so hold it to a C++ identifier.
+	bool IsValidTypeName(const std::string& name)
+	{
+		if (name.empty() || name.size() > 48)
+			return false;
+
+		if (std::isdigit(static_cast<unsigned char>(name.front())))
+			return false;
+
+		return std::all_of(name.begin(), name.end(), [](char8 character)
+		{
+			return std::isalnum(static_cast<unsigned char>(character)) || character == '_';
+		});
+	}
 
 	// Only asset-like files are listed; the resource root also holds the executable and its DLLs.
 	bool IsAssetFile(const std::filesystem::path& path)
@@ -551,8 +699,8 @@ void EditorLayer::DrawProject()
 
 		const std::string name = entry.path().filename().generic_string();
 
-		// The editor's own layouts folder sits in the resource root, but it holds no assets.
-		if (mProjectPath.empty() && name == kLayoutsDirectory)
+		// The editor's own Data folder sits in the resource root, but it holds no assets.
+		if (mProjectPath.empty() && name == kDataDirectory)
 			continue;
 
 		ImGui::PushID(name.c_str());
@@ -632,7 +780,10 @@ void EditorLayer::DrawShortcuts()
 			{ ShortcutAction::CopyEntity,      "Hierarchy", "Copy selected entity" },
 			{ ShortcutAction::PasteEntity,     "Hierarchy", "Paste entity from clipboard" },
 			{ ShortcutAction::DuplicateEntity, "Hierarchy", "Duplicate selected entity" },
+			{ ShortcutAction::StepFrame,       "Play Mode", "Step one frame" },
 			{ ShortcutAction::ToggleColliders, "Viewport",  "Toggle collider hitboxes" },
+			{ ShortcutAction::CompileModule,   "Game",      "Compile the game module" },
+			{ ShortcutAction::ReloadModule,    "Game",      "Reload the game module" },
 		};
 
 		ImGui::TextDisabled("Click a shortcut to rebind it, then press a key (Esc to cancel).");
@@ -796,8 +947,8 @@ void EditorLayer::Redo()
 
 namespace
 {
-	// Config file for user-customized shortcuts, kept next to imgui.ini (the working directory).
-	constexpr const char8* kShortcutsFile = "shortcuts.cfg";
+	// User-customized shortcuts, kept under Data/ alongside the UI layout (see EditorGui::Init).
+	constexpr const char8* kShortcutsFile = "Data/lion-shortcuts.ini";
 }
 
 void EditorLayer::ResetShortcutsToDefault()
@@ -823,6 +974,11 @@ void EditorLayer::ResetShortcutsToDefault()
 	set(ShortcutAction::PasteEntity, ImGuiKey_V, true);
 	set(ShortcutAction::DuplicateEntity, ImGuiKey_D, true);
 	set(ShortcutAction::ToolSelect, ImGuiKey_Q);
+	set(ShortcutAction::StepFrame, ImGuiKey_F6);
+
+	// Borrowed from Visual Studio, where Ctrl+Shift+B builds; reload sits next to it.
+	set(ShortcutAction::CompileModule, ImGuiKey_B, true, true);
+	set(ShortcutAction::ReloadModule, ImGuiKey_R, true, true);
 }
 
 void EditorLayer::CreateFolder()
@@ -899,6 +1055,10 @@ void EditorLayer::LoadShortcuts()
 
 void EditorLayer::SaveShortcuts() const
 {
+	// Data/ normally already exists (EditorGui::Init makes it), but keep this self-contained.
+	std::error_code error;
+	std::filesystem::create_directories("Data", error);
+
 	std::ofstream file(kShortcutsFile);
 
 	if (!file.is_open())
@@ -946,16 +1106,37 @@ void EditorLayer::HandleShortcuts()
 	if (mRebindingIndex >= 0)
 		return;
 
-	// These are available even while a text field is focused.
+	// A modal owns the keyboard for as long as it is up — whether or not one of its fields happens to
+	// hold focus at that moment. Without this, a class name typed into the New C++ Component dialog
+	// also ran whatever the editor binds those letters to, so an "e" would switch the gizmo tool.
+	//
+	// An active text field owns it for the same reason: any action can be rebound to a plain letter,
+	// so nothing may be exempt from this on the grounds of currently being a function key.
+	if (ImGui::GetTopMostPopupModal() != nullptr || ImGui::GetIO().WantTextInput)
+		return;
+
 	if (IsShortcutPressed(ShortcutAction::Play)) StartPlay();
 	if (IsShortcutPressed(ShortcutAction::Pause)) TogglePause();
 	if (IsShortcutPressed(ShortcutAction::Stop)) StopPlay();
 	if (IsShortcutPressed(ShortcutAction::ToggleShortcuts)) mShowShortcuts = !mShowShortcuts;
 	if (IsShortcutPressed(ShortcutAction::ToggleColliders)) mShowColliders = !mShowColliders;
+	if (IsShortcutPressed(ShortcutAction::StepFrame)) StepOneFrame();
+	if (IsShortcutPressed(ShortcutAction::CompileModule)) CompileGameModule();
+	if (IsShortcutPressed(ShortcutAction::ReloadModule)) ReloadGameModule();
 
-	// The actions below are edit-mode only; ignore them while playing or typing in a text field.
-	if (mPlaying || ImGui::GetIO().WantTextInput)
+	// The actions below are edit-mode only (typing is already ruled out above).
+	if (mPlaying)
 		return;
+
+	// The bound tool keys pick the active viewport tool. A gizmo drag or an active widget owns the
+	// input while it lasts, so the keys do not fire underneath them.
+	if (!ImGuizmo::IsUsing() && !ImGui::IsAnyItemActive())
+	{
+		if (IsShortcutPressed(ShortcutAction::ToolSelect))  mTool = Tool::Select;
+		if (IsShortcutPressed(ShortcutAction::GizmoMove))   mTool = Tool::Move;
+		if (IsShortcutPressed(ShortcutAction::GizmoRotate)) mTool = Tool::Rotate;
+		if (IsShortcutPressed(ShortcutAction::GizmoScale))  mTool = Tool::Scale;
+	}
 
 	if (IsShortcutPressed(ShortcutAction::Undo)) Undo();
 	if (IsShortcutPressed(ShortcutAction::Redo)) Redo();
@@ -997,15 +1178,6 @@ void EditorLayer::DrawViewport()
 	const ImVec2 imageMin = ImGui::GetItemRectMin();
 	const ImVec2 imageSize = ImGui::GetItemRectSize();
 	const bool imageHovered = ImGui::IsItemHovered();
-
-	// The bound tool keys pick the active viewport tool (unless typing, dragging or rebinding).
-	if (!mPlaying && mRebindingIndex < 0 && !ImGuizmo::IsUsing() && !ImGui::IsAnyItemActive())
-	{
-		if (IsShortcutPressed(ShortcutAction::ToolSelect))  mTool = Tool::Select;
-		if (IsShortcutPressed(ShortcutAction::GizmoMove))   mTool = Tool::Move;
-		if (IsShortcutPressed(ShortcutAction::GizmoRotate)) mTool = Tool::Rotate;
-		if (IsShortcutPressed(ShortcutAction::GizmoScale))  mTool = Tool::Scale;
-	}
 
 	// The gizmo is an editing tool; hide it while the simulation is running, for folders (no
 	// meaningful transform), and for the Select tool, which only picks entities.
@@ -1162,12 +1334,13 @@ void EditorLayer::DrawViewportToolbar(const ImVec2& imageMin, const ImVec2& imag
 		ImGui::EndPopup();
 	}
 
-	// Play / Pause / Stop, centered along the viewport's top edge.
+	// Play / Step / Pause / Stop, centered along the viewport's top edge.
 	const char8* pauseLabel = mPaused ? "Resume" : "Pause";
 	const float32 playWidth = ImGui::CalcTextSize("Play").x + style.FramePadding.x * 2.0f;
+	const float32 stepWidth = ImGui::CalcTextSize("Step").x + style.FramePadding.x * 2.0f;
 	const float32 pauseWidth = ImGui::CalcTextSize(pauseLabel).x + style.FramePadding.x * 2.0f;
 	const float32 stopWidth = ImGui::CalcTextSize("Stop").x + style.FramePadding.x * 2.0f;
-	const float32 totalWidth = playWidth + pauseWidth + stopWidth + style.ItemSpacing.x * 2.0f;
+	const float32 totalWidth = playWidth + stepWidth + pauseWidth + stopWidth + style.ItemSpacing.x * 3.0f;
 
 	ImGui::SetCursorScreenPos(ImVec2(imageMin.x + (imageSize.x - totalWidth) * 0.5f, imageMin.y + 8.0f));
 
@@ -1178,6 +1351,15 @@ void EditorLayer::DrawViewportToolbar(const ImVec2& imageMin, const ImVec2& imag
 	ImGui::EndDisabled();
 	if (ImGui::IsItemHovered())
 		ImGui::SetTooltip("Run the scene simulation (F5)");
+
+	// Step advances a halted simulation one frame at a time, so it only means anything while playing.
+	ImGui::SameLine();
+	ImGui::BeginDisabled(!mPlaying);
+	if (ImGui::Button("Step"))
+		StepOneFrame();
+	ImGui::EndDisabled();
+	if (ImGui::IsItemHovered())
+		ImGui::SetTooltip("Advance the simulation by one frame (F6)");
 
 	ImGui::SameLine();
 	ImGui::BeginDisabled(!mPlaying);
@@ -1820,6 +2002,17 @@ void EditorLayer::DrawProperties()
 				if (ImGui::IsItemDeactivatedAfterEdit()) CommitEdit();
 			}
 		}
+		else
+		{
+			// Any other component — a user-defined one from the game module. The editor has no bespoke
+			// UI for it, so it draws a header with the registered type name (empty for an unregistered
+			// type) and, for now, a note; per-field editing waits on reflection.
+			const std::string& typeName = component->GetTypeName();
+			const char8* label = typeName.empty() ? "Component" : typeName.c_str();
+
+			if (DrawComponentHeader(label, i, remove, dragFrom, dragTo))
+				ImGui::TextDisabled("Defined in the game module.");
+		}
 
 		if (remove)
 			componentToRemove = component;
@@ -1882,6 +2075,42 @@ void EditorLayer::DrawProperties()
 			RecordSnapshot();
 			mSelectedEntity->AddComponent<ScriptComponent>();
 		}
+
+		// Components coming from the loaded game module (user-defined ones). They have no special
+		// construction here — created by name, default-constructed, then configured in the Inspector.
+		// The built-in types above are listed explicitly, so they are skipped here.
+		const auto isAttached = [&](const std::string& name)
+		{
+			for (const auto& component : mSelectedEntity->GetComponents())
+				if (component->GetTypeName() == name) return true;
+			return false;
+		};
+
+		bool sawGameComponent = false;
+
+		for (const std::string& name : ComponentRegistry::GetNames())
+		{
+			if (IsBuiltInComponent(name) || isAttached(name))
+				continue;
+
+			if (!sawGameComponent)
+			{
+				ImGui::Separator();
+				sawGameComponent = true;
+			}
+
+			if (ImGui::MenuItem(name.c_str()))
+			{
+				RecordSnapshot();
+				mSelectedEntity->AddComponentByName(name);
+			}
+		}
+
+		// Scaffold a brand new component class into the game's source tree, Unreal-style.
+		ImGui::Separator();
+
+		if (ImGui::MenuItem("New C++ Component..."))
+			mOpenNewComponentPopup = true;
 
 		ImGui::EndPopup();
 	}
@@ -1950,6 +2179,23 @@ void EditorLayer::DrawMenuBar()
 			ImGui::EndMenu();
 		}
 
+		if (ImGui::BeginMenu("Game"))
+		{
+			if (ImGui::MenuItem("Compile", KeybindToString(mBinds[static_cast<int>(ShortcutAction::CompileModule)]).c_str(), false, !mBuilding))
+				CompileGameModule();
+
+			if (ImGui::IsItemHovered())
+				ImGui::SetTooltip("Rebuild the game module and reload it");
+
+			if (ImGui::MenuItem("Reload Module", KeybindToString(mBinds[static_cast<int>(ShortcutAction::ReloadModule)]).c_str(), false, !mBuilding))
+				ReloadGameModule();
+
+			if (ImGui::IsItemHovered())
+				ImGui::SetTooltip("Pick up an already-rebuilt Game.dll without restarting the editor");
+
+			ImGui::EndMenu();
+		}
+
 		if (ImGui::BeginMenu("Window"))
 		{
 			DrawLayoutMenu();
@@ -1960,6 +2206,14 @@ void EditorLayer::DrawMenuBar()
 		{
 			ImGui::MenuItem("Shortcuts", "F1", &mShowShortcuts);
 			ImGui::EndMenu();
+		}
+
+		// A build runs on a worker thread and takes seconds, so say so where it cannot be missed.
+		if (mBuilding)
+		{
+			static const char8* label = "Compiling the game module...";
+			ImGui::SameLine(ImGui::GetWindowWidth() - ImGui::CalcTextSize(label).x - ImGui::GetStyle().ItemSpacing.x * 2.0f);
+			ImGui::TextColored(LogLevelColor(LogLevel::Warning), "%s", label);
 		}
 
 		ImGui::EndMainMenuBar();
@@ -1975,7 +2229,7 @@ void EditorLayer::BuildDefaultLayout(unsigned int dockspaceId)
 	constexpr float32 kLeftWidth        = 300.0f;  // Scene Hierarchy over Project.
 	constexpr float32 kRightWidth       = 400.0f;  // Statistics over Properties: the inspectors need the extra room.
 	constexpr float32 kConsoleHeight    = 256.0f;
-	constexpr float32 kProjectHeight    = 320.0f;
+	constexpr float32 kProjectHeight    = 324.0f;
 	constexpr float32 kStatisticsHeight = 192.0f;
 
 	const ImVec2 work = ImGui::GetMainViewport()->WorkSize;
@@ -2158,6 +2412,358 @@ void EditorLayer::DrawLayoutPopups()
 	if (ImGui::Button("Save", ImVec2(96.0f, 0.0f)) || (submitted && valid))
 	{
 		SaveLayout(mLayoutName);
+		ImGui::CloseCurrentPopup();
+	}
+
+	ImGui::EndDisabled();
+	ImGui::SameLine();
+
+	if (ImGui::Button("Cancel", ImVec2(96.0f, 0.0f)) || ImGui::IsKeyPressed(ImGuiKey_Escape))
+		ImGui::CloseCurrentPopup();
+
+	ImGui::EndPopup();
+}
+
+bool EditorLayer::LoadGameModule()
+{
+	static const std::filesystem::path source = "Game.dll";
+	const std::filesystem::path runtime = std::filesystem::path(kDataDirectory) / "Game.loaded.dll";
+
+	std::error_code error;
+
+	if (!std::filesystem::exists(source, error))
+	{
+		Log::Console(LogLevel::Warning, "[Editor] No game module next to the editor; only the built-in components are available.");
+		return false;
+	}
+
+	std::filesystem::create_directories(kDataDirectory, error);
+
+	// Load a *copy*: Windows locks a loaded library, so leaving the original alone is what lets the
+	// game module be rebuilt while the editor is still running — the whole point of a reload.
+	std::filesystem::copy_file(source, runtime, std::filesystem::copy_options::overwrite_existing, error);
+
+	if (error)
+	{
+		Log::Console(LogLevel::Error, LION_FORMAT_TEXT("[Editor] Could not copy the game module: {}.", error.message()));
+		return false;
+	}
+
+	// Bracket the load: the module's static initializers run inside it, and everything they register
+	// is attributed to the module so a later reload can drop exactly those entries.
+	ComponentRegistry::BeginModule();
+	ScriptRegistry::BeginModule();
+
+	const bool loaded = mGameModule.Load(runtime.generic_string());
+
+	ComponentRegistry::EndModule();
+	ScriptRegistry::EndModule();
+
+	if (loaded)
+		Log::Console(LogLevel::Success, "[Editor] Loaded the game module.");
+
+	return loaded;
+}
+
+void EditorLayer::CompileGameModule()
+{
+	if (mBuilding)
+		return;
+
+	const std::filesystem::path root = ProjectRootDirectory();
+
+	if (root.empty())
+	{
+		Log::Console(LogLevel::Error, "[Editor] Could not locate the project; nothing to compile.");
+		return;
+	}
+
+	if (MSBuildPath().empty())
+	{
+		Log::Console(LogLevel::Error, "[Editor] Could not locate MSBuild; is Visual Studio installed?");
+		return;
+	}
+
+	// Regenerate the projects first: a file that was just scaffolded is not in the .vcxproj yet, and
+	// premake globs the source tree. It runs from the project root, where the workspace script lives.
+	const std::string generate = "cd /d \"" + root.string() + "\" && premake5 vs2022";
+
+	// Build only the game module, by name within the solution (premake files it under the "Misc"
+	// group, which is what the target is called). Building the solution outright would try to relink
+	// the running editor. Nothing else is rebuilt, so the editor's copy of the module — which the
+	// module's own post-build step refreshes — is the one the reload then picks up.
+	const std::string build =
+		"\"" + MSBuildPath() + "\""
+		" \"" + (root / "Lion.sln").string() + "\""
+		" -t:Misc\\Game"
+		" -p:Configuration=" + BuildConfiguration() +
+		" -p:Platform=x64 -v:minimal -nologo";
+
+	Log::Console(LogLevel::Information, "[Editor] Compiling the game module...");
+
+	mBuilding = true;
+	mGameBuild = std::async(std::launch::async, [generate, build]
+	{
+		GameBuild result;
+
+		// A failed regeneration means the build would compile a stale file list, so it stops here.
+		result.exitCode = RunCommand(generate, result.output);
+
+		if (result.exitCode == 0)
+			result.exitCode = RunCommand(build, result.output);
+		else
+			result.output += "[Editor] Could not regenerate the projects; is premake5 on your PATH?\n";
+
+		return result;
+	});
+}
+
+void EditorLayer::PollGameBuild()
+{
+	if (!mBuilding || !mGameBuild.valid())
+		return;
+
+	if (mGameBuild.wait_for(std::chrono::seconds(0)) != std::future_status::ready)
+		return;
+
+	const GameBuild result = mGameBuild.get();
+	mBuilding = false;
+
+	// The compiler's own diagnostics are the useful part, so they go to the console verbatim.
+	std::istringstream lines(result.output);
+	std::string line;
+
+	while (std::getline(lines, line))
+	{
+		while (!line.empty() && (line.back() == '\r' || line.back() == ' '))
+			line.pop_back();
+
+		if (line.empty())
+			continue;
+
+		const bool failed = line.find("error") != std::string::npos;
+		Log::Console(failed ? LogLevel::Error : LogLevel::Information, "[MSBuild] " + line);
+	}
+
+	if (result.exitCode != 0)
+	{
+		Log::Console(LogLevel::Error, "[Editor] The game module failed to compile; the loaded one is unchanged.");
+		return;
+	}
+
+	// Only now, back on the main thread, is it safe to swap the module out.
+	ReloadGameModule();
+}
+
+void EditorLayer::ReloadGameModule()
+{
+	// The simulation holds live instances of the module's types; wind it down first.
+	if (mPlaying)
+		StopPlay();
+
+	// Every component the module defines is about to lose the code behind its vtable, so the scene
+	// makes a round trip through its serialized form: those components are dropped now and recreated
+	// by name from the freshly loaded module. Undo/redo and the clipboard are plain text already.
+	const std::string scene = SceneSerializer::SerializeToString(mScene);
+	const int32 selected = SelectedEntityIndex();
+
+	// Nothing may outlive the module holding a component of its own: an entity kept alive by a stray
+	// reference would run its components' destructors after the code was gone.
+	mSelectedEntity = nullptr;
+	mRenamingEntity = nullptr;
+	mEntityToDelete = nullptr;
+	mReparentChild = nullptr;
+	mReparentTarget = nullptr;
+	mEntityLookup.clear();
+	mScene->Clear();
+
+	// The registry's factories point into the module, so they go before it does.
+	ComponentRegistry::UnloadModule();
+	ScriptRegistry::UnloadModule();
+	mGameModule.Unload();
+
+	const bool loaded = LoadGameModule();
+
+	// Restore the scene either way: without the module its components are simply skipped, which beats
+	// throwing the scene away because a rebuild was broken.
+	SceneSerializer::DeserializeFromString(mScene, scene);
+	SelectEntityByIndex(selected);
+
+	if (loaded)
+		Log::Console(LogLevel::Success, "[Editor] Reloaded the game module.");
+}
+
+std::vector<std::string> EditorLayer::ComponentBaseNames()
+{
+	// Any component class can be a parent: the engine's own (all reachable through the Lion umbrella
+	// header) and any the game already defines. "Component" heads the list as the usual choice.
+	std::vector<std::string> bases;
+	bases.reserve(ComponentRegistry::GetNames().size() + 1);
+	bases.emplace_back("Component");
+
+	for (const std::string& name : ComponentRegistry::GetNames())
+		bases.push_back(name);
+
+	return bases;
+}
+
+bool EditorLayer::GenerateComponent(const std::string& name, const std::string& base)
+{
+	const std::filesystem::path directory = GameComponentDirectory();
+
+	if (directory.empty())
+	{
+		Log::Console(LogLevel::Error, "[Editor] Could not locate the game's source tree; is the project checked out?");
+		return false;
+	}
+
+	std::error_code error;
+	std::filesystem::create_directories(directory, error);
+
+	if (error)
+	{
+		Log::Console(LogLevel::Error, LION_FORMAT_TEXT("[Editor] Could not create '{}': {}.", directory.generic_string(), error.message()));
+		return false;
+	}
+
+	const std::filesystem::path headerPath = directory / (name + ".h");
+	const std::filesystem::path sourcePath = directory / (name + ".cpp");
+
+	if (std::filesystem::exists(headerPath, error) || std::filesystem::exists(sourcePath, error))
+	{
+		Log::Console(LogLevel::Error, LION_FORMAT_TEXT("[Editor] A component named '{}' already exists.", name));
+		return false;
+	}
+
+	// An engine base is reachable through the umbrella header and lives in the Lion namespace; a base
+	// the game defines sits next to the new file and is unqualified.
+	const bool engineBase = (base == "Component") || IsBuiltInComponent(base);
+	const std::string qualifiedBase = engineBase ? ("Lion::" + base) : base;
+	const std::string baseInclude = engineBase ? std::string() : ("#include \"" + base + ".h\"\n");
+
+	std::ofstream header(headerPath);
+	std::ofstream source(sourcePath);
+
+	if (!header.is_open() || !source.is_open())
+	{
+		Log::Console(LogLevel::Error, LION_FORMAT_TEXT("[Editor] Could not write '{}'.", directory.generic_string()));
+		return false;
+	}
+
+	header
+		<< "#pragma once\n\n"
+		<< "#include <Lion/Lion.h>\n"
+		<< "#include <Lion/Logic/Serializer.h>\n"
+		<< baseInclude
+		<< "\n"
+		<< "// Component defined by the game. Being compiled into the game module is all it takes for the\n"
+		<< "// editor to list it under Add Component: loading the module registers it with the engine.\n"
+		<< "//\n"
+		<< "// Override the lifecycle hooks to give it behaviour, and archive any field that should survive\n"
+		<< "// save/load through Serialize/Deserialize.\n"
+		<< "class " << name << " : public " << qualifiedBase << "\n"
+		<< "{\n"
+		<< "public:\n"
+		<< "\tvoid OnAwake() override;\n"
+		<< "\tvoid OnUpdate() override;\n\n"
+		<< "\tvoid Serialize(Lion::Serializer& serializer) const override;\n"
+		<< "\tvoid Deserialize(const Lion::Serializer& serializer) override;\n"
+		<< "};\n";
+
+	source
+		<< "#include \"" << name << ".h\"\n\n"
+		<< "#include <Lion/Logic/ComponentRegistry.h>\n\n"
+		<< "using namespace Lion;\n\n"
+		<< "void " << name << "::OnAwake()\n"
+		<< "{\n"
+		<< "\t" << base << "::OnAwake();\n"
+		<< "}\n\n"
+		<< "void " << name << "::OnUpdate()\n"
+		<< "{\n"
+		<< "\t" << base << "::OnUpdate();\n"
+		<< "}\n\n"
+		<< "void " << name << "::Serialize(Serializer& serializer) const\n"
+		<< "{\n"
+		<< "\t" << base << "::Serialize(serializer);\n"
+		<< "}\n\n"
+		<< "void " << name << "::Deserialize(const Serializer& serializer)\n"
+		<< "{\n"
+		<< "\t" << base << "::Deserialize(serializer);\n"
+		<< "}\n\n"
+		<< "// Binds the class to its name, so scenes can reference it and the editor can list it.\n"
+		<< "LION_REGISTER_COMPONENT(" << name << ")\n";
+
+	header.close();
+	source.close();
+
+	Log::Console(LogLevel::Success, LION_FORMAT_TEXT("[Editor] Created '{}' in {}.", name, directory.generic_string()));
+
+	// Compile straight away: the class is only usable once it is in the module, and making the user
+	// go and build it by hand is the step this whole flow exists to remove.
+	CompileGameModule();
+	return true;
+}
+
+void EditorLayer::DrawNewComponentPopup()
+{
+	// Opened here, at the root: the Add Component popup closes on click, taking its ID scope with it.
+	if (mOpenNewComponentPopup)
+	{
+		mOpenNewComponentPopup = false;
+		mNewComponentName[0] = '\0';
+		ImGui::OpenPopup("New C++ Component");
+	}
+
+	const ImVec2 center = ImGui::GetMainViewport()->GetCenter();
+	ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+
+	if (!ImGui::BeginPopupModal("New C++ Component", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+		return;
+
+	const std::vector<std::string> bases = ComponentBaseNames();
+	mNewComponentBase = std::clamp(mNewComponentBase, 0, static_cast<int32>(bases.size()) - 1);
+
+	ImGui::TextUnformatted("Parent class");
+	ImGui::SetNextItemWidth(320.0f);
+
+	if (ImGui::BeginCombo("##base", bases[mNewComponentBase].c_str()))
+	{
+		for (int32 i = 0; i < static_cast<int32>(bases.size()); ++i)
+			if (ImGui::Selectable(bases[i].c_str(), i == mNewComponentBase))
+				mNewComponentBase = i;
+
+		ImGui::EndCombo();
+	}
+
+	ImGui::Spacing();
+	ImGui::TextUnformatted("Class name");
+
+	if (ImGui::IsWindowAppearing())
+		ImGui::SetKeyboardFocusHere();
+
+	ImGui::SetNextItemWidth(320.0f);
+	const bool submitted = ImGui::InputText("##name", mNewComponentName, IM_ARRAYSIZE(mNewComponentName),
+		ImGuiInputTextFlags_EnterReturnsTrue);
+
+	const std::string name = mNewComponentName;
+	const std::filesystem::path directory = GameComponentDirectory();
+	const bool valid = IsValidTypeName(name) && !directory.empty() && !ComponentRegistry::Contains(name);
+
+	if (directory.empty())
+		ImGui::TextColored(LogLevelColor(LogLevel::Error), "The game's source tree was not found.");
+	else if (!name.empty() && !IsValidTypeName(name))
+		ImGui::TextColored(LogLevelColor(LogLevel::Error), "Letters, digits and _ only, not starting with a digit.");
+	else if (!name.empty() && ComponentRegistry::Contains(name))
+		ImGui::TextColored(LogLevelColor(LogLevel::Error), "A component of that name is already registered.");
+	else
+		ImGui::TextDisabled("%s", (directory / (name.empty() ? "<name>" : name)).generic_string().append(".h/.cpp").c_str());
+
+	ImGui::Spacing();
+	ImGui::BeginDisabled(!valid);
+
+	if (ImGui::Button("Create", ImVec2(96.0f, 0.0f)) || (submitted && valid))
+	{
+		GenerateComponent(name, bases[mNewComponentBase]);
 		ImGui::CloseCurrentPopup();
 	}
 

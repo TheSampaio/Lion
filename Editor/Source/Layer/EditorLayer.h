@@ -1,6 +1,9 @@
 #pragma once
 
+#include <future>
+
 #include <Lion/Lion.h>
+#include <Lion/Core/DynamicLibrary.h>
 
 #include <imgui/imgui.h>
 #include <imguizmo/ImGuizmo.h>
@@ -27,6 +30,8 @@ private:
 		Pause, ToggleColliders,
 		CopyEntity, PasteEntity, DuplicateEntity,
 		ToolSelect,
+		ReloadModule,
+		StepFrame, CompileModule,
 		Count
 	};
 
@@ -59,6 +64,12 @@ private:
 	unsigned int mDockspaceId = 0;   // Captured each frame, so the deferred rebuild can address it.
 	bool mOpenSaveLayoutPopup = false;
 	char mLayoutName[64] = {};
+
+	// "New C++ Component": scaffolds a component class into the game's source tree. The Add Component
+	// popup only records the request, since it closes on click and takes the modal's ID scope with it.
+	bool mOpenNewComponentPopup = false;
+	char mNewComponentName[64] = {};
+	int mNewComponentBase = 0;   // Index into ComponentBaseNames().
 	bool mConsoleAutoScroll = true;
 	bool mConsoleShowErrors = true;    // Console severity filters (Error/Fatal, Warning, everything else).
 	bool mConsoleShowWarnings = true;
@@ -71,9 +82,14 @@ private:
 	size_t mConsoleLastTotal = 0;   // Total lines logged as of the last drawn frame; drives the tail follow.
 	bool mPlaying = false;
 	bool mPaused = false;        // In play mode but the simulation is halted.
+	bool mStepFrame = false;     // Advance the paused simulation by exactly one frame, then halt again.
 	bool mShowColliders = false;  // Collider outlines are a debug view, off until enabled in Settings.
 	bool mRenameFocus = false;   // Request keyboard focus on the inline rename field for one frame.
 	Tool mTool = Tool::Move;
+
+	// The game module, loaded at startup so its components register with the engine and appear in the
+	// Add Component list. Held for the editor's lifetime, so the game's code stays mapped.
+	Lion::DynamicLibrary mGameModule;
 
 	Lion::Reference<Lion::CameraOrthographic> mCamera;
 	Lion::Reference<Lion::Scene> mScene;
@@ -131,6 +147,39 @@ private:
 
 	static std::string LayoutPath(const std::string& name);
 	static bool IsValidLayoutName(const std::string& name);  // Rejects names that would escape the folder.
+
+	// "New C++ Component" (Unreal-style): pick a parent class, name the type, and the editor writes the
+	// .h/.cpp into the game's source tree. The new class is compiled into the game module on the next
+	// build, which is when it starts showing up in Add Component.
+	void DrawNewComponentPopup();
+	bool GenerateComponent(const std::string& name, const std::string& base);
+
+	// Component classes offered as a parent: "Component" plus every registered type.
+	static std::vector<std::string> ComponentBaseNames();
+
+	// Game module lifecycle. LoadGameModule loads a copy of Game.dll, leaving the original writable so
+	// it can be rebuilt while the editor runs; ReloadGameModule swaps in that rebuild, taking the
+	// scene out and back through its serialized form so no object outlives the code behind it.
+	bool LoadGameModule();
+	void ReloadGameModule();
+
+	// Advances a paused simulation by a single frame (entering the paused state if it was running).
+	void StepOneFrame();
+
+	// Rebuilds the game module and reloads it, so a code change lands without leaving the editor. The
+	// build runs on a worker thread; PollGameBuild picks up the result on the main thread, which is
+	// where the reload has to happen. Nothing else may touch the module while a build is in flight.
+	void CompileGameModule();
+	void PollGameBuild();
+
+	struct GameBuild
+	{
+		int exitCode = 0;
+		std::string output;
+	};
+
+	std::future<GameBuild> mGameBuild;
+	bool mBuilding = false;
 
 	// Draws a collapsing header for a component with a right-aligned "X" remove button and
 	// drag-to-reorder support. Returns whether the body is open; sets removeRequested when the X is

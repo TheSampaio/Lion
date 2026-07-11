@@ -15,7 +15,7 @@ namespace Lion
 	class SpriteRenderer : public Component
 	{
 	public:
-		LION_API SpriteRenderer(const std::string& filePath);
+		LION_API SpriteRenderer(const std::string& filePath = std::string());
 		LION_API SpriteRenderer(const Reference<Texture>& texture);
 		LION_API ~SpriteRenderer();
 
@@ -32,6 +32,8 @@ namespace Lion
 		LION_API void SetTexturePath(const std::string& filePath);
 
 		void OnRender() override;
+		void Serialize(Serializer& serializer) const override;
+		void Deserialize(const Serializer& serializer) override;
 
 	private:
 		Scope<Sprite> mSprite;

@@ -1,14 +1,20 @@
 #include "Engine.h"
 #include "SpriteRenderer.h"
 
+#include <Lion/Logic/ComponentRegistry.h>
 #include <Lion/Logic/Entity.h>
+#include <Lion/Logic/Serializer.h>
 #include <Lion/Render/Sprite.h>
 
 namespace Lion
 {
 	SpriteRenderer::SpriteRenderer(const std::string& filePath)
-		: mSprite(MakeScope<Sprite>(filePath)), mTexturePath(filePath)
+		: mTexturePath(filePath)
 	{
+		// An empty path leaves the renderer sprite-less (e.g. a default-constructed instance that
+		// deserialization is about to point at a real texture), so no bogus load of "" is attempted.
+		if (!filePath.empty())
+			mSprite = MakeScope<Sprite>(filePath);
 	}
 
 	SpriteRenderer::SpriteRenderer(const Reference<Texture>& texture)
@@ -20,7 +26,7 @@ namespace Lion
 
 	Size SpriteRenderer::GetSize() const
 	{
-		return mSprite->GetSize();
+		return mSprite ? mSprite->GetSize() : Size(0.0f, 0.0f);
 	}
 
 	void SpriteRenderer::SetTexturePath(const std::string& filePath)
@@ -28,12 +34,15 @@ namespace Lion
 		if (filePath == mTexturePath)
 			return;
 
-		mSprite = MakeScope<Sprite>(filePath);
+		mSprite = filePath.empty() ? nullptr : MakeScope<Sprite>(filePath);
 		mTexturePath = filePath;
 	}
 
 	void SpriteRenderer::OnRender()
 	{
+		if (!mSprite)
+			return;
+
 		// Draw with the owner's world transform, so children follow their parent.
 		Entity& owner = GetOwner();
 		mSprite->Draw(
@@ -42,4 +51,16 @@ namespace Lion
 			owner.GetWorldScale(),
 			owner.GetId());
 	}
+
+	void SpriteRenderer::Serialize(Serializer& serializer) const
+	{
+		serializer.Write("texture", mTexturePath);
+	}
+
+	void SpriteRenderer::Deserialize(const Serializer& serializer)
+	{
+		SetTexturePath(serializer.ReadString("texture"));
+	}
+
+	LION_REGISTER_COMPONENT(SpriteRenderer)
 }

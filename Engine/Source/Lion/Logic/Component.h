@@ -3,6 +3,7 @@
 namespace Lion
 {
 	class Entity;
+	class Serializer;
 	class Transform;
 
 	// Base class for every behaviour or piece of data attached to an Entity.
@@ -21,6 +22,10 @@ namespace Lion
 
 		// Returns the Entity this component is attached to.
 		LION_API Entity& GetOwner() const { return *mOwner; }
+
+		// Registered type name (see LION_REGISTER_COMPONENT), assigned when the component is attached.
+		// Empty for a type that was never registered, in which case serialization skips it.
+		LION_API const std::string& GetTypeName() const { return mTypeName; }
 
 		// Convenience accessor for the owner's Transform.
 		LION_API Reference<Transform> GetTransform() const;
@@ -50,10 +55,17 @@ namespace Lion
 		// Called once, when the owner leaves the scene.
 		virtual void OnDestroy() {}
 
+		// Persists and restores this component's fields through an abstract archive. The base does
+		// nothing; override to make a component's configuration round-trip through save/load. User
+		// components override these the same way the built-in ones do.
+		virtual void Serialize(Serializer&) const {}
+		virtual void Deserialize(const Serializer&) {}
+
 		friend Entity;
 
 	private:
 		Entity* mOwner = nullptr;
 		bool mEnabled = true;
+		std::string mTypeName;  // Set by Entity from the ComponentRegistry when the component is attached.
 	};
 }

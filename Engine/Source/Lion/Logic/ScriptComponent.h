@@ -20,6 +20,8 @@ namespace Lion
 		void OnAwake() override;
 		void OnUpdate() override;
 		void OnDestroy() override;
+		void Serialize(Serializer& serializer) const override;
+		void Deserialize(const Serializer& serializer) override;
 
 		// Name of the bound script class (empty when none is assigned).
 		const std::string& GetScriptName() const { return mScriptName; }

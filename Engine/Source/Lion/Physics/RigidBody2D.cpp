@@ -4,8 +4,10 @@
 #include <box2d/box2d.h>
 
 #include <Lion/Core/Log.h>
+#include <Lion/Logic/ComponentRegistry.h>
 #include <Lion/Logic/Entity.h>
 #include <Lion/Logic/Scene.h>
+#include <Lion/Logic/Serializer.h>
 #include <Lion/Math/Transform.h>
 #include <Lion/Physics/PhysicsWorld.h>
 
@@ -21,6 +23,25 @@ namespace Lion
 		}
 
 		return b2_staticBody;
+	}
+
+	static const char8* BodyTypeToString(BodyType type)
+	{
+		switch (type)
+		{
+			case BodyType::Kinematic: return "Kinematic";
+			case BodyType::Dynamic:   return "Dynamic";
+			case BodyType::Static:    return "Static";
+		}
+
+		return "Static";
+	}
+
+	static BodyType BodyTypeFromString(const std::string& value)
+	{
+		if (value == "Kinematic") return BodyType::Kinematic;
+		if (value == "Dynamic")   return BodyType::Dynamic;
+		return BodyType::Static;
 	}
 
 	RigidBody2D::RigidBody2D(BodyType type, bool fixedRotation)
@@ -129,4 +150,18 @@ namespace Lion
 
 		owner.SetWorldRotation(angle);
 	}
+
+	void RigidBody2D::Serialize(Serializer& serializer) const
+	{
+		serializer.Write("bodyType", std::string(BodyTypeToString(mType)));
+		serializer.Write("fixedRotation", mFixedRotation);
+	}
+
+	void RigidBody2D::Deserialize(const Serializer& serializer)
+	{
+		mType = BodyTypeFromString(serializer.ReadString("bodyType", "Static"));
+		mFixedRotation = serializer.ReadBool("fixedRotation");
+	}
+
+	LION_REGISTER_COMPONENT(RigidBody2D)
 }

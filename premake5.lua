@@ -62,8 +62,8 @@ workspace "Lion"
     }
 
     dependencies["imguizmo"] = {
+        -- Header only: the editor compiles the vendored ImGuizmo.cpp from its own Source/Vendor tree.
         include = "%{wks.location}/Vendor/imguizmo/include",
-        source = "%{wks.location}/Vendor/imguizmo/include/imguizmo/ImGuizmo.cpp",
     }
 
     dependencies["spdlog"] = {
@@ -103,4 +103,5 @@ group ""
 
 group "Misc"
     include "Game"
+    include "Launcher"
 group ""

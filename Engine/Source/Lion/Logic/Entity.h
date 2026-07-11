@@ -78,6 +78,12 @@ namespace Lion
 			return raw;
 		}
 
+		// Creates a component from its registered type name (see LION_REGISTER_COMPONENT), attaches it,
+		// and returns it — or nullptr when the name is unknown. This is how components whose type is
+		// not known at compile time (user-defined ones, or anything driven by data) get added, so it
+		// backs both scene deserialization and the editor's component picker.
+		LION_API Component* AddComponentByName(const std::string& name);
+
 		// Returns the attached component of type T, or nullptr when absent.
 		template<typename T>
 		T* GetComponent() const
