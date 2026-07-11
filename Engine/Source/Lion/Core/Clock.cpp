@@ -7,7 +7,6 @@
 
 namespace Lion
 {
-#ifndef LN_SHIPPING
     static const char8* GraphicsApiName()
     {
         switch (RendererAPI::GetAPI())
@@ -17,17 +16,36 @@ namespace Lion
             default:                  return "None";
         }
     }
+
+    namespace
+    {
+        // The build's default; an application (the editor) may override it.
+        bool& ShowFrameStats()
+        {
+#ifdef LN_SHIPPING
+            static bool show = false;
+#else
+            static bool show = true;
 #endif
+
+            return show;
+        }
+    }
 
     Clock* Clock::sInstance = nullptr;
     float32 Clock::sFrameTime = 0.0f;
-
-#ifndef LN_SHIPPING
     uint32 Clock::sFrameCount = 0;
     float32 Clock::sTotalTime = 0.0f;
 
-#endif // LN_SHIPPING
+    void Clock::SetShowFrameStats(bool show)
+    {
+        ShowFrameStats() = show;
+    }
 
+    bool Clock::GetShowFrameStats()
+    {
+        return ShowFrameStats();
+    }
 
     void Clock::New()
     {
@@ -49,7 +67,9 @@ namespace Lion
     {
         sFrameTime = sInstance->mTimer->Reset();
 
-#ifndef LN_SHIPPING
+        if (!ShowFrameStats())
+            return;
+
         sTotalTime += sFrameTime;
         sFrameCount++;
 
@@ -70,7 +90,5 @@ namespace Lion
             sFrameCount = 0;
             sTotalTime -= 1.0f;
         }
-
-#endif // LN_SHIPPING
     }
 }
