@@ -255,12 +255,17 @@ void EditorLayer::DrawUI()
 	// then no window is being submitted.
 	mDockspaceId = ImGui::GetID("LionEditorDockspace");
 
+	// With no layout on disk, fall back to the default one — but request it rather than building it
+	// here. On the first frame the viewport's work area does not yet exclude the main menu bar (ImGui
+	// only applies that inset on the following frame), so a layout built now would be sized against a
+	// taller area and then rescaled, landing every panel a few pixels off what "Default" gives later.
+	// Deferring puts the boot through the exact same path as the menu, so the two cannot disagree.
 	if (!mLayoutInitialized)
 	{
 		mLayoutInitialized = true;
 
 		if (ImGui::DockBuilderGetNode(mDockspaceId) == nullptr)
-			BuildDefaultLayout(mDockspaceId);
+			mLayoutRequest = LayoutRequest::Reset;
 	}
 
 	ImGui::DockSpace(mDockspaceId);
