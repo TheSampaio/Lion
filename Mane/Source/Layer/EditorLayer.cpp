@@ -512,8 +512,20 @@ namespace
 	// The editor keeps its persisted state (UI layout, shortcuts, saved dock layouts) under Data/,
 	// which sits in the resource root. The Project panel skips the whole folder: it is editor state,
 	// not an asset.
-	constexpr const char8* kDataDirectory    = "Data";
-	constexpr const char8* kLayoutsDirectory = "Data/Layouts";
+	constexpr const char8* kDataDirectory = "Data";
+
+	// The editor's state lives beside the executable, not in whatever directory the editor happened to
+	// be started from — Visual Studio starts it from the project folder, and a shortcut can point
+	// anywhere. Everything below anchors to this rather than to the working directory.
+	std::filesystem::path EditorDataDirectory()
+	{
+		return std::filesystem::path(ResourceRootDirectory()) / kDataDirectory;
+	}
+
+	std::filesystem::path EditorLayoutsDirectory()
+	{
+		return EditorDataDirectory() / "Layouts";
+	}
 
 	// Component types the editor adds through a bespoke Add Component entry, because they need
 	// construction arguments (a collider sizes itself to the sprite). Everything else in the registry
@@ -972,7 +984,10 @@ void EditorLayer::Redo()
 namespace
 {
 	// User-customized shortcuts, kept under Data/ alongside the UI layout (see EditorGui::Init).
-	constexpr const char8* kShortcutsFile = "Data/lion-shortcuts.ini";
+	std::filesystem::path ShortcutsFile()
+	{
+		return EditorDataDirectory() / "lion-shortcuts.ini";
+	}
 }
 
 void EditorLayer::ResetShortcutsToDefault()
@@ -1063,7 +1078,7 @@ void EditorLayer::InitShortcuts()
 
 void EditorLayer::LoadShortcuts()
 {
-	std::ifstream file(kShortcutsFile);
+	std::ifstream file(ShortcutsFile());
 
 	if (!file.is_open())
 		return;
@@ -1081,9 +1096,9 @@ void EditorLayer::SaveShortcuts() const
 {
 	// Data/ normally already exists (EditorGui::Init makes it), but keep this self-contained.
 	std::error_code error;
-	std::filesystem::create_directories("Data", error);
+	std::filesystem::create_directories(EditorDataDirectory(), error);
 
-	std::ofstream file(kShortcutsFile);
+	std::ofstream file(ShortcutsFile());
 
 	if (!file.is_open())
 		return;
@@ -2311,7 +2326,7 @@ void EditorLayer::BuildDefaultLayout(unsigned int dockspaceId)
 
 std::string EditorLayer::LayoutPath(const std::string& name)
 {
-	return std::string(kLayoutsDirectory) + "/" + name + ".ini";
+	return (EditorLayoutsDirectory() / (name + ".ini")).string();
 }
 
 bool EditorLayer::IsValidLayoutName(const std::string& name)
@@ -2332,7 +2347,7 @@ std::vector<std::string> EditorLayer::SavedLayouts() const
 	std::vector<std::string> layouts;
 	std::error_code error;
 
-	for (const std::filesystem::directory_entry& entry : std::filesystem::directory_iterator(kLayoutsDirectory, error))
+	for (const std::filesystem::directory_entry& entry : std::filesystem::directory_iterator(EditorLayoutsDirectory(), error))
 		if (entry.is_regular_file() && entry.path().extension() == ".ini")
 			layouts.push_back(entry.path().stem().string());
 
@@ -2343,7 +2358,7 @@ std::vector<std::string> EditorLayer::SavedLayouts() const
 void EditorLayer::SaveLayout(const std::string& name) const
 {
 	std::error_code error;
-	std::filesystem::create_directories(kLayoutsDirectory, error);
+	std::filesystem::create_directories(EditorLayoutsDirectory(), error);
 
 	if (error)
 	{
@@ -2472,9 +2487,12 @@ void EditorLayer::DrawLayoutPopups()
 
 bool EditorLayer::LoadGameModule()
 {
-	// Both sit next to the editor, alongside the engine's own binaries.
-	const std::filesystem::path source = kGameModuleFile;
-	const std::filesystem::path runtime = kGameModuleLoadedFile;
+	// Anchored to the executable, not to the working directory: the module sits with the editor's own
+	// binaries, and the editor is not always started from that folder (Visual Studio runs it from the
+	// project directory, and a shortcut can point anywhere).
+	const std::filesystem::path root = ResourceRootDirectory();
+	const std::filesystem::path source = root / kGameModuleFile;
+	const std::filesystem::path runtime = root / kGameModuleLoadedFile;
 
 	std::error_code error;
 

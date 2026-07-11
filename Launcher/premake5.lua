@@ -8,6 +8,9 @@ project "Launcher"
     targetdir ("%{wks.location}/Build/Bin/" .. output_dir .. "%{prj.name}")
     objdir    ("%{wks.location}/Build/Obj/" .. output_dir .. "%{prj.name}")
 
+    -- Run from the output folder, where the game module and the assets are.
+    debugdir "%{cfg.targetdir}"
+
     files {
         "%{prj.location}/**.h",
         "%{prj.location}/**.cpp",
