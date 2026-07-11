@@ -1,6 +1,7 @@
 #include "Engine.h"
 #include "Entity.h"
 
+#include <Lion/Logic/ComponentRegistry.h>
 #include <Lion/Logic/Scene.h>
 
 namespace Lion
@@ -164,9 +165,22 @@ namespace Lion
 			parentScale.z != 0.0f ? scale.z / parentScale.z : scale.z));
 	}
 
+	Component* Entity::AddComponentByName(const std::string& name)
+	{
+		Scope<Component> component = ComponentRegistry::Create(name);
+
+		if (!component)
+			return nullptr;
+
+		Component* raw = component.get();
+		RegisterComponent(std::move(component), std::type_index(typeid(*raw)));
+		return raw;
+	}
+
 	void Entity::RegisterComponent(Scope<Component> component, std::type_index type)
 	{
 		component->mOwner = this;
+		component->mTypeName = ComponentRegistry::GetName(type);
 
 		Component* raw = component.get();
 		mComponents.push_back(std::move(component));

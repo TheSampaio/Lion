@@ -4,9 +4,10 @@
 #include <nlohmann/json.hpp>
 
 #include <Lion/Core/Log.h>
+#include <Lion/Logic/Component.h>
 #include <Lion/Logic/Entity.h>
 #include <Lion/Logic/Scene.h>
-#include <Lion/Logic/ScriptComponent.h>
+#include <Lion/Logic/Serializer.h>
 #include <Lion/Math/Transform.h>
 #include <Lion/Physics/BoxCollider2D.h>
 #include <Lion/Physics/CircleCollider2D.h>
@@ -17,17 +18,29 @@ using Json = nlohmann::json;
 
 namespace Lion
 {
-	static const char8* BodyTypeToString(BodyType type)
+	// Concrete Serializer backed by a JSON object, bridging the engine's JSON to the abstract archive
+	// that components (built-in and user-defined) see. Constructed over a mutable node for serialize,
+	// or a const one for deserialize; only the matching direction is exercised in each case.
+	class JsonSerializer : public Serializer
 	{
-		switch (type)
-		{
-			case BodyType::Kinematic: return "Kinematic";
-			case BodyType::Dynamic:   return "Dynamic";
-			case BodyType::Static:    return "Static";
-		}
+	public:
+		explicit JsonSerializer(Json& node) : mWrite(&node), mRead(&node) {}
+		explicit JsonSerializer(const Json& node) : mRead(&node) {}
 
-		return "Static";
-	}
+		void Write(const std::string& key, float32 value) override { (*mWrite)[key] = value; }
+		void Write(const std::string& key, int32 value) override { (*mWrite)[key] = value; }
+		void Write(const std::string& key, bool value) override { (*mWrite)[key] = value; }
+		void Write(const std::string& key, const std::string& value) override { (*mWrite)[key] = value; }
+
+		float32 ReadFloat(const std::string& key, float32 fallback) const override { return mRead->value(key, fallback); }
+		int32 ReadInt(const std::string& key, int32 fallback) const override { return mRead->value(key, fallback); }
+		bool ReadBool(const std::string& key, bool fallback) const override { return mRead->value(key, fallback); }
+		std::string ReadString(const std::string& key, const std::string& fallback) const override { return mRead->value(key, fallback); }
+
+	private:
+		Json* mWrite = nullptr;
+		const Json* mRead = nullptr;
+	};
 
 	static BodyType BodyTypeFromString(const std::string& value)
 	{
@@ -60,49 +73,22 @@ namespace Lion
 		node["transform"]["scale"]    = { scale.x, scale.y, scale.z };
 
 		// Components are written as an ordered array so the editor's display/drag order round-trips.
+		// Each one names its registered type and serializes its own fields, so user-defined components
+		// persist exactly like the built-in ones. Unregistered types carry no name and are skipped.
 		Json components = Json::array();
 
 		for (const auto& component : entity->GetComponents())
 		{
-			Json entry;
+			const std::string& type = component->GetTypeName();
 
-			if (const SpriteRenderer* renderer = dynamic_cast<const SpriteRenderer*>(component.get()))
-			{
-				entry["type"] = "SpriteRenderer";
-				entry["texture"] = renderer->GetTexturePath();
-			}
-			else if (const RigidBody2D* body = dynamic_cast<const RigidBody2D*>(component.get()))
-			{
-				entry["type"] = "RigidBody2D";
-				entry["bodyType"] = BodyTypeToString(body->GetBodyType());
-				entry["fixedRotation"] = body->IsFixedRotation();
-			}
-			else if (const BoxCollider2D* collider = dynamic_cast<const BoxCollider2D*>(component.get()))
-			{
-				entry["type"] = "BoxCollider2D";
-				entry["width"] = collider->GetWidth();
-				entry["height"] = collider->GetHeight();
-				entry["density"] = collider->GetDensity();
-				entry["friction"] = collider->GetFriction();
-				entry["restitution"] = collider->GetRestitution();
-			}
-			else if (const CircleCollider2D* collider = dynamic_cast<const CircleCollider2D*>(component.get()))
-			{
-				entry["type"] = "CircleCollider2D";
-				entry["radius"] = collider->GetRadius();
-				entry["density"] = collider->GetDensity();
-				entry["friction"] = collider->GetFriction();
-				entry["restitution"] = collider->GetRestitution();
-			}
-			else if (const ScriptComponent* script = dynamic_cast<const ScriptComponent*>(component.get()))
-			{
-				entry["type"] = "ScriptComponent";
-				entry["script"] = script->GetScriptName();
-			}
-			else
-			{
+			if (type.empty())
 				continue;
-			}
+
+			Json entry;
+			entry["type"] = type;
+
+			JsonSerializer serializer(entry);
+			component->Serialize(serializer);
 
 			components.push_back(entry);
 		}
@@ -232,25 +218,17 @@ namespace Lion
 			if (components.is_array())
 			{
 				// Ordered format: add components in their saved order (safe in any order because
-				// RigidBody2D::EnsureBody creates the body on demand).
+				// RigidBody2D::EnsureBody creates the body on demand). Each is created from its
+				// registered type name and restores its own fields, so user components load the same way.
 				for (const auto& entry : components)
 				{
 					const std::string type = entry.value("type", std::string());
 
-					if (type == "SpriteRenderer")
-						entity->AddComponent<SpriteRenderer>(entry.value("texture", std::string()));
-					else if (type == "RigidBody2D")
-						entity->AddComponent<RigidBody2D>(BodyTypeFromString(entry.value("bodyType", std::string("Static"))), entry.value("fixedRotation", false));
-					else if (type == "BoxCollider2D")
-						entity->AddComponent<BoxCollider2D>(
-							entry.value("width", 1.0f), entry.value("height", 1.0f),
-							entry.value("density", 1.0f), entry.value("friction", 0.2f), entry.value("restitution", 0.0f));
-					else if (type == "CircleCollider2D")
-						entity->AddComponent<CircleCollider2D>(
-							entry.value("radius", 1.0f),
-							entry.value("density", 1.0f), entry.value("friction", 0.2f), entry.value("restitution", 0.0f));
-					else if (type == "ScriptComponent")
-						entity->AddComponent<ScriptComponent>(entry.value("script", std::string()));
+					if (Component* component = entity->AddComponentByName(type))
+					{
+						JsonSerializer serializer(entry);
+						component->Deserialize(serializer);
+					}
 				}
 			}
 			else

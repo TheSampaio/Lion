@@ -14,10 +14,12 @@ namespace Lion
 	class CircleCollider2D : public Component
 	{
 	public:
-		LION_API CircleCollider2D(float32 radiusPixels,
+		LION_API CircleCollider2D(float32 radiusPixels = 0.0f,
 			float32 density = 1.0f, float32 friction = 0.2f, float32 restitution = 0.0f);
 
 		void OnAwake() override;
+		void Serialize(Serializer& serializer) const override;
+		void Deserialize(const Serializer& serializer) override;
 
 		// Configuration accessors (used by serialization).
 		float32 GetRadius() const { return mRadius; }

@@ -28,6 +28,8 @@ namespace Lion
 
 		void OnAwake() override;
 		void OnDestroy() override;
+		void Serialize(Serializer& serializer) const override;
+		void Deserialize(const Serializer& serializer) override;
 
 		// Linear velocity, expressed in pixels per second.
 		LION_API void SetLinearVelocity(const glm::vec2& pixelsPerSecond);

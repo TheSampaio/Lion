@@ -2,9 +2,11 @@
 #include "ScriptComponent.h"
 
 #include <Lion/Core/Log.h>
+#include <Lion/Logic/ComponentRegistry.h>
 #include <Lion/Logic/Entity.h>
 #include <Lion/Logic/Script.h>
 #include <Lion/Logic/ScriptRegistry.h>
+#include <Lion/Logic/Serializer.h>
 
 namespace Lion
 {
@@ -56,4 +58,16 @@ namespace Lion
 		OnDestroy();
 		mScriptName = name;
 	}
+
+	void ScriptComponent::Serialize(Serializer& serializer) const
+	{
+		serializer.Write("script", mScriptName);
+	}
+
+	void ScriptComponent::Deserialize(const Serializer& serializer)
+	{
+		SetScriptName(serializer.ReadString("script"));
+	}
+
+	LION_REGISTER_COMPONENT(ScriptComponent)
 }
