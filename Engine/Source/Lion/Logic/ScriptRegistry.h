@@ -23,6 +23,12 @@ namespace Lion
 
 		// Registered script names, in registration order.
 		static LION_API const std::vector<std::string>& GetNames();
+
+		// Module scoping for hot reload; see ComponentRegistry for the details. A script's factory
+		// points into the module that registered it, so it has to go before the module does.
+		static LION_API void BeginModule();
+		static LION_API void EndModule();
+		static LION_API void UnloadModule();
 	};
 }
 

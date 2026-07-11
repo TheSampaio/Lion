@@ -66,11 +66,6 @@ workspace "Lion"
         include = "%{wks.location}/Vendor/imguizmo/include",
     }
 
-    dependencies["game"] = {
-        -- The game module, loaded at runtime by the launcher and the editor (see their premakes).
-        dll = "%{wks.location}/.Out/Bin/" .. output_dir .. "Game/Game.dll",
-    }
-
     dependencies["spdlog"] = {
         include = "%{wks.location}/Vendor/spdlog/include",
     }

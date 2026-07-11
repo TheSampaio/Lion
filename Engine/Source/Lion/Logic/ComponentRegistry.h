@@ -31,6 +31,14 @@ namespace Lion
 
 		// Registered component names, in registration order.
 		static LION_API const std::vector<std::string>& GetNames();
+
+		// Module scoping, for hot-reloading a game module. Everything registered between BeginModule
+		// and EndModule is attributed to that module — bracket the library load, whose static
+		// initializers do the registering. UnloadModule drops those entries again, which must happen
+		// before the library is unloaded: their factories point into its code.
+		static LION_API void BeginModule();
+		static LION_API void EndModule();
+		static LION_API void UnloadModule();
 	};
 }
 

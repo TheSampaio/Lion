@@ -27,13 +27,7 @@ void EditorLayer::OnCreate()
 	EditorGui::Init();
 	InitShortcuts();
 
-	// Load the game module: it registers the game's components (and scripts) with the engine just by
-	// being loaded, which is what makes user-defined components appear in Add Component. The editor
-	// still runs on the built-in components alone, so a missing module is only a warning.
-	if (mGameModule.Load("Game.dll"))
-		Log::Console(LogLevel::Success, "[Editor] Loaded the game module 'Game.dll'.");
-	else
-		Log::Console(LogLevel::Warning, "[Editor] Game module 'Game.dll' not found; only built-in components are available.");
+	LoadGameModule();
 
 	mCamera = MakeReference<CameraOrthographic>();
 	mScene = MakeReference<Scene>();
@@ -700,6 +694,7 @@ void EditorLayer::DrawShortcuts()
 			{ ShortcutAction::PasteEntity,     "Hierarchy", "Paste entity from clipboard" },
 			{ ShortcutAction::DuplicateEntity, "Hierarchy", "Duplicate selected entity" },
 			{ ShortcutAction::ToggleColliders, "Viewport",  "Toggle collider hitboxes" },
+			{ ShortcutAction::ReloadModule,    "Game",      "Reload the game module" },
 		};
 
 		ImGui::TextDisabled("Click a shortcut to rebind it, then press a key (Esc to cancel).");
@@ -890,6 +885,7 @@ void EditorLayer::ResetShortcutsToDefault()
 	set(ShortcutAction::PasteEntity, ImGuiKey_V, true);
 	set(ShortcutAction::DuplicateEntity, ImGuiKey_D, true);
 	set(ShortcutAction::ToolSelect, ImGuiKey_Q);
+	set(ShortcutAction::ReloadModule, ImGuiKey_F6);
 }
 
 void EditorLayer::CreateFolder()
@@ -1023,6 +1019,7 @@ void EditorLayer::HandleShortcuts()
 	if (IsShortcutPressed(ShortcutAction::Stop)) StopPlay();
 	if (IsShortcutPressed(ShortcutAction::ToggleShortcuts)) mShowShortcuts = !mShowShortcuts;
 	if (IsShortcutPressed(ShortcutAction::ToggleColliders)) mShowColliders = !mShowColliders;
+	if (IsShortcutPressed(ShortcutAction::ReloadModule)) ReloadGameModule();
 
 	// The actions below are edit-mode only; ignore them while playing or typing in a text field.
 	if (mPlaying || ImGui::GetIO().WantTextInput)
@@ -2068,6 +2065,17 @@ void EditorLayer::DrawMenuBar()
 			ImGui::EndMenu();
 		}
 
+		if (ImGui::BeginMenu("Game"))
+		{
+			if (ImGui::MenuItem("Reload Module", KeybindToString(mBinds[static_cast<int>(ShortcutAction::ReloadModule)]).c_str()))
+				ReloadGameModule();
+
+			if (ImGui::IsItemHovered())
+				ImGui::SetTooltip("Pick up a rebuilt Game.dll without restarting the editor");
+
+			ImGui::EndMenu();
+		}
+
 		if (ImGui::BeginMenu("Window"))
 		{
 			DrawLayoutMenu();
@@ -2286,6 +2294,85 @@ void EditorLayer::DrawLayoutPopups()
 		ImGui::CloseCurrentPopup();
 
 	ImGui::EndPopup();
+}
+
+bool EditorLayer::LoadGameModule()
+{
+	static const std::filesystem::path source = "Game.dll";
+	const std::filesystem::path runtime = std::filesystem::path(kDataDirectory) / "Game.loaded.dll";
+
+	std::error_code error;
+
+	if (!std::filesystem::exists(source, error))
+	{
+		Log::Console(LogLevel::Warning, "[Editor] No game module next to the editor; only the built-in components are available.");
+		return false;
+	}
+
+	std::filesystem::create_directories(kDataDirectory, error);
+
+	// Load a *copy*: Windows locks a loaded library, so leaving the original alone is what lets the
+	// game module be rebuilt while the editor is still running — the whole point of a reload.
+	std::filesystem::copy_file(source, runtime, std::filesystem::copy_options::overwrite_existing, error);
+
+	if (error)
+	{
+		Log::Console(LogLevel::Error, LION_FORMAT_TEXT("[Editor] Could not copy the game module: {}.", error.message()));
+		return false;
+	}
+
+	// Bracket the load: the module's static initializers run inside it, and everything they register
+	// is attributed to the module so a later reload can drop exactly those entries.
+	ComponentRegistry::BeginModule();
+	ScriptRegistry::BeginModule();
+
+	const bool loaded = mGameModule.Load(runtime.generic_string());
+
+	ComponentRegistry::EndModule();
+	ScriptRegistry::EndModule();
+
+	if (loaded)
+		Log::Console(LogLevel::Success, "[Editor] Loaded the game module.");
+
+	return loaded;
+}
+
+void EditorLayer::ReloadGameModule()
+{
+	// The simulation holds live instances of the module's types; wind it down first.
+	if (mPlaying)
+		StopPlay();
+
+	// Every component the module defines is about to lose the code behind its vtable, so the scene
+	// makes a round trip through its serialized form: those components are dropped now and recreated
+	// by name from the freshly loaded module. Undo/redo and the clipboard are plain text already.
+	const std::string scene = SceneSerializer::SerializeToString(mScene);
+	const int32 selected = SelectedEntityIndex();
+
+	// Nothing may outlive the module holding a component of its own: an entity kept alive by a stray
+	// reference would run its components' destructors after the code was gone.
+	mSelectedEntity = nullptr;
+	mRenamingEntity = nullptr;
+	mEntityToDelete = nullptr;
+	mReparentChild = nullptr;
+	mReparentTarget = nullptr;
+	mEntityLookup.clear();
+	mScene->Clear();
+
+	// The registry's factories point into the module, so they go before it does.
+	ComponentRegistry::UnloadModule();
+	ScriptRegistry::UnloadModule();
+	mGameModule.Unload();
+
+	const bool loaded = LoadGameModule();
+
+	// Restore the scene either way: without the module its components are simply skipped, which beats
+	// throwing the scene away because a rebuild was broken.
+	SceneSerializer::DeserializeFromString(mScene, scene);
+	SelectEntityByIndex(selected);
+
+	if (loaded)
+		Log::Console(LogLevel::Success, "[Editor] Reloaded the game module.");
 }
 
 std::vector<std::string> EditorLayer::ComponentBaseNames()

@@ -51,8 +51,6 @@ project "Editor"
             '{COPY} "%{wks.location}/.Out/Bin/' .. output_dir .. 'Lion/Lion.dll" "%{cfg.targetdir}"',
             -- GLFW shared library (the editor's ImGui backend links against it directly).
             '{COPYFILE} "%{dependencies.glfw.dll}" "%{cfg.targetdir}"',
-            -- Game module, loaded at runtime so the editor can list the game's components.
-            '{COPYFILE} "%{dependencies.game.dll}" "%{cfg.targetdir}"',
             -- Shared resources (shader + sprites) flattened next to the executable.
             'xcopy /E /I /Y /Q "%{wks.location}/Game/Resource" "%{cfg.targetdir}"',
         }

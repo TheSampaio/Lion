@@ -20,6 +20,19 @@ namespace Lion
 			static std::vector<std::string> names;
 			return names;
 		}
+
+		// Names registered while a module was loading; dropped again when it is unloaded.
+		bool& InModule()
+		{
+			static bool inModule = false;
+			return inModule;
+		}
+
+		std::vector<std::string>& ModuleNames()
+		{
+			static std::vector<std::string> names;
+			return names;
+		}
 	}
 
 	void ScriptRegistry::Register(const std::string& name, Factory factory)
@@ -31,7 +44,12 @@ namespace Lion
 		Factories()[name] = std::move(factory);
 
 		if (isNew)
+		{
 			RegisteredNames().push_back(name);
+
+			if (InModule())
+				ModuleNames().push_back(name);
+		}
 	}
 
 	Scope<Script> ScriptRegistry::Create(const std::string& name)
@@ -48,5 +66,28 @@ namespace Lion
 	const std::vector<std::string>& ScriptRegistry::GetNames()
 	{
 		return RegisteredNames();
+	}
+
+	void ScriptRegistry::BeginModule()
+	{
+		InModule() = true;
+	}
+
+	void ScriptRegistry::EndModule()
+	{
+		InModule() = false;
+	}
+
+	void ScriptRegistry::UnloadModule()
+	{
+		for (const std::string& name : ModuleNames())
+		{
+			Factories().erase(name);
+
+			auto& names = RegisteredNames();
+			names.erase(std::remove(names.begin(), names.end(), name), names.end());
+		}
+
+		ModuleNames().clear();
 	}
 }

@@ -28,6 +28,7 @@ private:
 		Pause, ToggleColliders,
 		CopyEntity, PasteEntity, DuplicateEntity,
 		ToolSelect,
+		ReloadModule,
 		Count
 	};
 
@@ -151,6 +152,12 @@ private:
 
 	// Component classes offered as a parent: "Component" plus every registered type.
 	static std::vector<std::string> ComponentBaseNames();
+
+	// Game module lifecycle. LoadGameModule loads a copy of Game.dll, leaving the original writable so
+	// it can be rebuilt while the editor runs; ReloadGameModule swaps in that rebuild, taking the
+	// scene out and back through its serialized form so no object outlives the code behind it.
+	bool LoadGameModule();
+	void ReloadGameModule();
 
 	// Draws a collapsing header for a component with a right-aligned "X" remove button and
 	// drag-to-reorder support. Returns whether the body is open; sets removeRequested when the X is

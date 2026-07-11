@@ -34,10 +34,14 @@ project "Game"
         defines "LN_PLATFORM_WIN"
         systemversion "latest"
 
-        -- Ship the module and its resources next to the standalone launcher (Sandbox), which loads
-        -- them from its own directory. The editor copies both into its own directory separately.
+        -- The module ships itself to both of its consumers: the standalone launcher and the editor,
+        -- which each load it from their own directory. Doing it here (rather than in their postbuilds)
+        -- means rebuilding just the game refreshes both — which is what the editor's hot reload needs.
         postbuildcommands {
+            '{MKDIR} "%{wks.location}/.Out/Bin/' .. output_dir .. 'Sandbox"',
+            '{MKDIR} "%{wks.location}/.Out/Bin/' .. output_dir .. 'Editor"',
             '{COPYFILE} "%{cfg.buildtarget.relpath}" "%{wks.location}/.Out/Bin/' .. output_dir .. 'Sandbox/"',
+            '{COPYFILE} "%{cfg.buildtarget.relpath}" "%{wks.location}/.Out/Bin/' .. output_dir .. 'Editor/"',
             'xcopy /E /I /Y /Q "%{prj.location}Resource" "%{wks.location}/.Out/Bin/' .. output_dir .. 'Sandbox/"',
         }
 

@@ -27,6 +27,19 @@ namespace Lion
 			static std::unordered_map<std::type_index, std::string> typeNames;
 			return typeNames;
 		}
+
+		// Names registered while a module was loading; dropped again when it is unloaded.
+		bool& InModule()
+		{
+			static bool inModule = false;
+			return inModule;
+		}
+
+		std::vector<std::string>& ModuleNames()
+		{
+			static std::vector<std::string> names;
+			return names;
+		}
 	}
 
 	void ComponentRegistry::Register(const std::string& name, std::type_index type, Factory factory)
@@ -39,7 +52,14 @@ namespace Lion
 		TypeNames().insert_or_assign(type, name);
 
 		if (isNew)
+		{
 			RegisteredNames().push_back(name);
+
+			// Only a name the module introduces is attributed to it: one that shadows an existing entry
+			// must not take the original down with it when the module unloads.
+			if (InModule())
+				ModuleNames().push_back(name);
+		}
 	}
 
 	Scope<Component> ComponentRegistry::Create(const std::string& name)
@@ -63,5 +83,31 @@ namespace Lion
 	const std::vector<std::string>& ComponentRegistry::GetNames()
 	{
 		return RegisteredNames();
+	}
+
+	void ComponentRegistry::BeginModule()
+	{
+		InModule() = true;
+	}
+
+	void ComponentRegistry::EndModule()
+	{
+		InModule() = false;
+	}
+
+	void ComponentRegistry::UnloadModule()
+	{
+		for (const std::string& name : ModuleNames())
+		{
+			Factories().erase(name);
+
+			auto& names = RegisteredNames();
+			names.erase(std::remove(names.begin(), names.end(), name), names.end());
+
+			for (auto it = TypeNames().begin(); it != TypeNames().end(); )
+				it = (it->second == name) ? TypeNames().erase(it) : std::next(it);
+		}
+
+		ModuleNames().clear();
 	}
 }
