@@ -616,6 +616,21 @@ namespace
 #endif
 	}
 
+	// Inspector rows put the label first, in a fixed column, and the widget after it — ImGui's default
+	// is the other way round, which reads backwards for a property. The column is wide enough for the
+	// longest label in use ("Fixed Rotation"), so every row in every component lines up.
+	constexpr float32 kPropertyLabelWidth = 112.0f;
+
+	// Lays out a property row's label and leaves the cursor on the widget. Pass a width for a widget
+	// that sizes itself; the default fills the rest of the row.
+	void PropertyLabel(const char8* label, float32 widgetWidth = 0.0f)
+	{
+		ImGui::AlignTextToFramePadding();
+		ImGui::TextUnformatted(label);
+		ImGui::SameLine(kPropertyLabelWidth);
+		ImGui::SetNextItemWidth((widgetWidth > 0.0f) ? widgetWidth : ImGui::GetContentRegionAvail().x);
+	}
+
 	// A generated type name becomes a class name and a file name, so hold it to a C++ identifier.
 	bool IsValidTypeName(const std::string& name)
 	{
@@ -1725,18 +1740,30 @@ bool EditorLayer::DrawVec3Control(const char* label, float values[3], float spee
 
 	ImGui::PushID(label);
 
-	// A compact badge, as tall as the drag field next to it. Its frame padding is zeroed below so the
-	// letter is centred in the whole badge instead of inside a rectangle shrunk by the padding
-	// (which, being narrower than the glyph, pushed the letter to the left). The width is rounded
-	// down to an even number of pixels, keeping it on the same grid as the rest of the metrics.
-	const float32 lineHeight = ImGui::GetFontSize() + style.FramePadding.y * 2.0f;
-	const ImVec2 buttonSize(ImFloor(lineHeight * 0.35f) * 2.0f, lineHeight);
+	// A small square badge, rounded like the field beside it. Its frame padding is zeroed so the letter
+	// is centred in the whole badge instead of inside a rectangle shrunk by the padding (which, being
+	// narrower than the glyph, pushed the letter to the left). The side is rounded down to an even
+	// number of pixels, keeping it on the same grid as the rest of the metrics; being shorter than the
+	// field, it is nudged down to sit centred against it.
+	const float32 frameHeight = ImGui::GetFrameHeight();
+	const float32 badge = ImFloor(frameHeight * 0.4f) * 2.0f;
+	const float32 badgeOffset = ImFloor((frameHeight - badge) * 0.5f);
+	const ImVec2 buttonSize(badge, badge);
 
-	// Reserve room for the trailing label, then split the rest across the three axes.
-	const float32 labelWidth = 72.0f;
-	const float32 controlsWidth = ImGui::GetContentRegionAvail().x - labelWidth;
+	const float32 gap = 4.0f;  // Between a badge and its field.
+
+	// The label takes its column, then the rest is split across the three axes.
+	const float32 controlsWidth = ImGui::GetContentRegionAvail().x - kPropertyLabelWidth;
 	const float32 axisWidth = (controlsWidth - 2.0f * style.ItemInnerSpacing.x) / 3.0f;
-	const float32 dragWidth = (axisWidth - buttonSize.x > 12.0f) ? axisWidth - buttonSize.x : 12.0f;
+	const float32 dragWidth = ImMax(axisWidth - badge - gap, 12.0f);
+
+	ImGui::AlignTextToFramePadding();
+	ImGui::TextUnformatted(label);
+	ImGui::SameLine(kPropertyLabelWidth);
+
+	// Every item on this row is placed against this baseline: the badges are offset down from it, and
+	// the fields sit on it, so a SameLine cannot drift them apart.
+	const float32 rowY = ImGui::GetCursorPosY();
 
 	for (int32 i = 0; i < 3; ++i)
 	{
@@ -1746,6 +1773,7 @@ bool EditorLayer::DrawVec3Control(const char* label, float values[3], float spee
 		ImGui::PushID(i);
 
 		// Colored axis badge: click to reset this component.
+		ImGui::SetCursorPosY(rowY + badgeOffset);
 		ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0.0f, 0.0f));
 		ImGui::PushStyleVar(ImGuiStyleVar_ButtonTextAlign, ImVec2(0.5f, 0.5f));
 		ImGui::PushStyleColor(ImGuiCol_Button, axes[i].color);
@@ -1762,18 +1790,16 @@ bool EditorLayer::DrawVec3Control(const char* label, float values[3], float spee
 		ImGui::PopStyleColor(3);
 		ImGui::PopStyleVar(2);
 
-		ImGui::SameLine(0.0f, 0.0f);
+		ImGui::SameLine(0.0f, gap);
+		ImGui::SetCursorPosY(rowY);
 		ImGui::SetNextItemWidth(dragWidth);
-		if (ImGui::DragFloat("##value", &values[i], speed))
+		if (ImGui::DragFloat("##value", &values[i], speed, 0.0f, 0.0f, "%.3f"))
 			changed = true;
 		if (ImGui::IsItemActivated()) BeginEdit();
 		if (ImGui::IsItemDeactivatedAfterEdit()) CommitEdit();
 
 		ImGui::PopID();
 	}
-
-	ImGui::SameLine(0.0f, style.ItemInnerSpacing.x);
-	ImGui::TextUnformatted(label);
 
 	ImGui::PopID();
 	return changed;
@@ -1796,7 +1822,8 @@ void EditorLayer::DrawProperties()
 	const size_t copied = currentName.copy(nameBuffer, sizeof(nameBuffer) - 1);
 	nameBuffer[copied] = '\0';
 
-	if (ImGui::InputText("Name", nameBuffer, sizeof(nameBuffer)))
+	PropertyLabel("Name");
+	if (ImGui::InputText("##name", nameBuffer, sizeof(nameBuffer)))
 		mSelectedEntity->SetName(nameBuffer);
 	if (ImGui::IsItemActivated()) BeginEdit();
 	if (ImGui::IsItemDeactivatedAfterEdit()) CommitEdit();
@@ -1854,11 +1881,12 @@ void EditorLayer::DrawProperties()
 				const size_t length = path.copy(textureBuffer, sizeof(textureBuffer) - 1);
 				textureBuffer[length] = '\0';
 
+				// The field gives up just enough room for the browse button at the end of the row.
 				const ImGuiStyle& style = ImGui::GetStyle();
 				const float32 browseWidth = ImGui::CalcTextSize("...").x + style.FramePadding.x * 2.0f;
-				const float32 labelWidth = 60.0f;
 
-				ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - browseWidth - labelWidth - style.ItemInnerSpacing.x * 2.0f);
+				PropertyLabel("Texture");
+				ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - browseWidth - style.ItemInnerSpacing.x);
 				ImGui::InputText("##texture", textureBuffer, sizeof(textureBuffer));
 				if (ImGui::IsItemActivated()) BeginEdit();
 				if (ImGui::IsItemDeactivatedAfterEdit()) { renderer->SetTexturePath(textureBuffer); CommitEdit(); }
@@ -1889,9 +1917,6 @@ void EditorLayer::DrawProperties()
 				}
 				if (ImGui::IsItemHovered())
 					ImGui::SetTooltip("Browse for a sprite image");
-
-				ImGui::SameLine(0.0f, style.ItemInnerSpacing.x);
-				ImGui::TextUnformatted("Texture");
 			}
 		}
 		else if (RigidBody2D* body = dynamic_cast<RigidBody2D*>(component))
@@ -1901,14 +1926,16 @@ void EditorLayer::DrawProperties()
 				static const char8* bodyTypes[] = { "Static", "Kinematic", "Dynamic" };
 
 				int32 typeIndex = static_cast<int32>(body->GetBodyType());
-				if (ImGui::Combo("Type", &typeIndex, bodyTypes, IM_ARRAYSIZE(bodyTypes)))
+				PropertyLabel("Type");
+				if (ImGui::Combo("##type", &typeIndex, bodyTypes, IM_ARRAYSIZE(bodyTypes)))
 				{
 					RecordSnapshot();
 					body->SetBodyType(static_cast<BodyType>(typeIndex));
 				}
 
 				bool fixedRotation = body->IsFixedRotation();
-				if (ImGui::Checkbox("Fixed Rotation", &fixedRotation))
+				PropertyLabel("Fixed Rotation");
+				if (ImGui::Checkbox("##fixedRotation", &fixedRotation))
 				{
 					RecordSnapshot();
 					body->SetFixedRotation(fixedRotation);
@@ -1920,27 +1947,32 @@ void EditorLayer::DrawProperties()
 			if (DrawComponentHeader("Box Collider 2D", i, remove, dragFrom, dragTo))
 			{
 				float32 width = collider->GetWidth();
-				if (ImGui::DragFloat("Width", &width, 1.0f, 0.0f, 10000.0f)) collider->SetWidth(width);
+				PropertyLabel("Width");
+				if (ImGui::DragFloat("##width", &width, 1.0f, 0.0f, 10000.0f)) collider->SetWidth(width);
 				if (ImGui::IsItemActivated()) BeginEdit();
 				if (ImGui::IsItemDeactivatedAfterEdit()) CommitEdit();
 
 				float32 height = collider->GetHeight();
-				if (ImGui::DragFloat("Height", &height, 1.0f, 0.0f, 10000.0f)) collider->SetHeight(height);
+				PropertyLabel("Height");
+				if (ImGui::DragFloat("##height", &height, 1.0f, 0.0f, 10000.0f)) collider->SetHeight(height);
 				if (ImGui::IsItemActivated()) BeginEdit();
 				if (ImGui::IsItemDeactivatedAfterEdit()) CommitEdit();
 
 				float32 density = collider->GetDensity();
-				if (ImGui::DragFloat("Density", &density, 0.05f, 0.0f, 100.0f)) collider->SetDensity(density);
+				PropertyLabel("Density");
+				if (ImGui::DragFloat("##density", &density, 0.05f, 0.0f, 100.0f)) collider->SetDensity(density);
 				if (ImGui::IsItemActivated()) BeginEdit();
 				if (ImGui::IsItemDeactivatedAfterEdit()) CommitEdit();
 
 				float32 friction = collider->GetFriction();
-				if (ImGui::DragFloat("Friction", &friction, 0.01f, 0.0f, 1.0f)) collider->SetFriction(friction);
+				PropertyLabel("Friction");
+				if (ImGui::DragFloat("##friction", &friction, 0.01f, 0.0f, 1.0f)) collider->SetFriction(friction);
 				if (ImGui::IsItemActivated()) BeginEdit();
 				if (ImGui::IsItemDeactivatedAfterEdit()) CommitEdit();
 
 				float32 restitution = collider->GetRestitution();
-				if (ImGui::DragFloat("Restitution", &restitution, 0.01f, 0.0f, 1.0f)) collider->SetRestitution(restitution);
+				PropertyLabel("Restitution");
+				if (ImGui::DragFloat("##restitution", &restitution, 0.01f, 0.0f, 1.0f)) collider->SetRestitution(restitution);
 				if (ImGui::IsItemActivated()) BeginEdit();
 				if (ImGui::IsItemDeactivatedAfterEdit()) CommitEdit();
 			}
@@ -1953,7 +1985,8 @@ void EditorLayer::DrawProperties()
 				const std::vector<std::string>& names = ScriptRegistry::GetNames();
 				const std::string& bound = script->GetScriptName();
 
-				if (ImGui::BeginCombo("Class", bound.empty() ? "(none)" : bound.c_str()))
+				PropertyLabel("Class");
+				if (ImGui::BeginCombo("##class", bound.empty() ? "(none)" : bound.c_str()))
 				{
 					if (ImGui::Selectable("(none)", bound.empty()))
 					{
@@ -1982,22 +2015,26 @@ void EditorLayer::DrawProperties()
 			if (DrawComponentHeader("Circle Collider 2D", i, remove, dragFrom, dragTo))
 			{
 				float32 radius = collider->GetRadius();
-				if (ImGui::DragFloat("Radius", &radius, 1.0f, 0.0f, 10000.0f)) collider->SetRadius(radius);
+				PropertyLabel("Radius");
+				if (ImGui::DragFloat("##radius", &radius, 1.0f, 0.0f, 10000.0f)) collider->SetRadius(radius);
 				if (ImGui::IsItemActivated()) BeginEdit();
 				if (ImGui::IsItemDeactivatedAfterEdit()) CommitEdit();
 
 				float32 density = collider->GetDensity();
-				if (ImGui::DragFloat("Density", &density, 0.05f, 0.0f, 100.0f)) collider->SetDensity(density);
+				PropertyLabel("Density");
+				if (ImGui::DragFloat("##density", &density, 0.05f, 0.0f, 100.0f)) collider->SetDensity(density);
 				if (ImGui::IsItemActivated()) BeginEdit();
 				if (ImGui::IsItemDeactivatedAfterEdit()) CommitEdit();
 
 				float32 friction = collider->GetFriction();
-				if (ImGui::DragFloat("Friction", &friction, 0.01f, 0.0f, 1.0f)) collider->SetFriction(friction);
+				PropertyLabel("Friction");
+				if (ImGui::DragFloat("##friction", &friction, 0.01f, 0.0f, 1.0f)) collider->SetFriction(friction);
 				if (ImGui::IsItemActivated()) BeginEdit();
 				if (ImGui::IsItemDeactivatedAfterEdit()) CommitEdit();
 
 				float32 restitution = collider->GetRestitution();
-				if (ImGui::DragFloat("Restitution", &restitution, 0.01f, 0.0f, 1.0f)) collider->SetRestitution(restitution);
+				PropertyLabel("Restitution");
+				if (ImGui::DragFloat("##restitution", &restitution, 0.01f, 0.0f, 1.0f)) collider->SetRestitution(restitution);
 				if (ImGui::IsItemActivated()) BeginEdit();
 				if (ImGui::IsItemDeactivatedAfterEdit()) CommitEdit();
 			}
