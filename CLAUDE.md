@@ -65,8 +65,9 @@ Follow the surrounding code; it is consistent. In short:
 
 ## Build
 
-Everything the build produces — the vendored libraries included — lands under `Build/`. Deleting that
-folder is a clean build.
+This project's artefacts land under `Build/`. Each vendored library builds inside its own folder
+(`Vendor/<lib>/Build/`), so a library's output never mixes with the engine's — set from the workspace
+script, not by editing the submodules.
 
 ```sh
 Scripts\Build.bat [Debug|Release|Shipping]   # from a fresh clone: generates, then builds everything

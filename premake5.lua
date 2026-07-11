@@ -30,11 +30,8 @@ workspace "Lion"
 
     output_dir = "%{cfg.buildcfg}/"
 
-    -- Everything the build produces lands under one Build/ tree, including the vendored libraries
-    -- (see the override below). Deleting it is enough for a clean build.
-    binary_dir = "%{wks.location}/Build/Bin/" .. output_dir .. "%{prj.name}"
-    object_dir = "%{wks.location}/Build/Obj/" .. output_dir .. "%{prj.name}"
-
+    -- This project's own artefacts. Each vendored library keeps a Build/ of its own, inside its
+    -- folder (see the override below), so a library's output never mixes with the engine's.
     dependencies = {}
 
     dependencies["box2d"] = {
@@ -50,7 +47,7 @@ workspace "Lion"
     dependencies["glfw"] = {
         include = "%{wks.location}/Vendor/glfw/include",
         lib = "glfw",
-        dll = "%{wks.location}/Build/Bin/" .. output_dir .. "glfw/glfw.dll",
+        dll = "%{wks.location}/Vendor/glfw/Build/Bin/" .. output_dir .. "glfw/glfw.dll",
     }
 
     dependencies["glm"] = {
@@ -89,14 +86,14 @@ group ". External Dependencies"
     include "Vendor/spdlog"
     include "Vendor/stb"
 
-    -- The vendored libraries are submodules, and their own scripts write into a .Out folder inside
-    -- each one. Redirect them here instead of editing the submodules, so every artefact this build
-    -- produces lives under one Build/ tree and the submodules stay pristine.
+    -- Each library builds inside its own folder, so its artefacts never mix with the engine's. Set
+    -- here rather than in the vendored scripts, which are submodules: they keep the name this project
+    -- uses for an output folder without being edited.
     for _, vendor in ipairs { "box2d", "glad", "glfw", "glm", "imgui", "spdlog", "stb" } do
         project(vendor)
             filter {}
-            targetdir (binary_dir)
-            objdir    (object_dir)
+            targetdir ("%{wks.location}/Vendor/" .. vendor .. "/Build/Bin/" .. output_dir .. "%{prj.name}")
+            objdir    ("%{wks.location}/Vendor/" .. vendor .. "/Build/Obj/" .. output_dir .. "%{prj.name}")
     end
 
     -- Override GLFW (a submodule) to build as a shared library without editing the vendored file.
