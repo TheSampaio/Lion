@@ -3,6 +3,7 @@
 .Out/
 .vs/
 .vscode/
+Data/          # Editor state: UI layout, shortcuts and saved dock layouts (generated at runtime).
 
 # Files
 
@@ -11,4 +12,3 @@
 *.sln
 *.user
 *.vcxproj
-shortcuts.cfg

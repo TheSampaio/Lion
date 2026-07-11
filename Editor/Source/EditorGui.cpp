@@ -120,6 +120,15 @@ void EditorGui::Init()
 	io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
 	io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 
+	// Keep the editor's persisted state out of the working directory, under Data/. ImGui only holds
+	// a pointer to the filename, so it lives in a static string, and it will not create the folder
+	// itself. The layouts folder and the shortcuts config live alongside it.
+	std::error_code error;
+	std::filesystem::create_directories("Data", error);
+
+	static const std::string iniPath = "Data/lion-ui.ini";
+	io.IniFilename = iniPath.c_str();
+
 	// Prefer Segoe UI (much more legible than ImGui's built-in font); fall back to the default.
 	if (std::filesystem::exists("C:/Windows/Fonts/segoeui.ttf"))
 		io.Fonts->AddFontFromFileTTF("C:/Windows/Fonts/segoeui.ttf", 18.0f);

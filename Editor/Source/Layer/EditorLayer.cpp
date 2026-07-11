@@ -479,9 +479,11 @@ void EditorLayer::DrawConsole()
 
 namespace
 {
-	// Saved dock layouts, in a folder of their own inside the resource root (where the editor already
-	// keeps imgui.ini and shortcuts.cfg). The Project panel skips it: it is editor state, not an asset.
-	constexpr const char8* kLayoutsDirectory = "Layouts";
+	// The editor keeps its persisted state (UI layout, shortcuts, saved dock layouts) under Data/,
+	// which sits in the resource root. The Project panel skips the whole folder: it is editor state,
+	// not an asset.
+	constexpr const char8* kDataDirectory    = "Data";
+	constexpr const char8* kLayoutsDirectory = "Data/Layouts";
 
 	// Only asset-like files are listed; the resource root also holds the executable and its DLLs.
 	bool IsAssetFile(const std::filesystem::path& path)
@@ -551,8 +553,8 @@ void EditorLayer::DrawProject()
 
 		const std::string name = entry.path().filename().generic_string();
 
-		// The editor's own layouts folder sits in the resource root, but it holds no assets.
-		if (mProjectPath.empty() && name == kLayoutsDirectory)
+		// The editor's own Data folder sits in the resource root, but it holds no assets.
+		if (mProjectPath.empty() && name == kDataDirectory)
 			continue;
 
 		ImGui::PushID(name.c_str());
@@ -796,8 +798,8 @@ void EditorLayer::Redo()
 
 namespace
 {
-	// Config file for user-customized shortcuts, kept next to imgui.ini (the working directory).
-	constexpr const char8* kShortcutsFile = "shortcuts.cfg";
+	// User-customized shortcuts, kept under Data/ alongside the UI layout (see EditorGui::Init).
+	constexpr const char8* kShortcutsFile = "Data/lion-shortcuts.ini";
 }
 
 void EditorLayer::ResetShortcutsToDefault()
@@ -899,6 +901,10 @@ void EditorLayer::LoadShortcuts()
 
 void EditorLayer::SaveShortcuts() const
 {
+	// Data/ normally already exists (EditorGui::Init makes it), but keep this self-contained.
+	std::error_code error;
+	std::filesystem::create_directories("Data", error);
+
 	std::ofstream file(kShortcutsFile);
 
 	if (!file.is_open())
