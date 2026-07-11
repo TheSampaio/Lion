@@ -90,11 +90,22 @@ requires regenerating before building, or the `.vcxproj` still points at the old
 An MSBuild target for a single project is `<solution folder>\<project>`, so **moving a project between
 groups renames its target** — the editor's Compile builds `Runtime\Game` and would break silently.
 
-Verify against **Debug and Shipping** — Shipping strips logging and changes the entry point, so it
-catches things Debug does not.
+**Verify against all three configurations.** They are not variations on a theme; each one exists to
+catch something the others cannot:
 
-Run the editor from `Build/Bin/Debug/Editor/Lion.exe` and the game from
-`Build/Bin/Debug/Launcher/lion-launcher.exe`; both resolve assets relative to the working directory.
+| | Optimised | Symbols | Logging | Why it exists |
+|---|---|---|---|---|
+| **Debug** | no | yes | everything | Day-to-day work. |
+| **Release** | yes | no | Error/Warning/Success only | Measuring performance with the engine still talking. |
+| **Shipping** | yes | no | none | What ships. Strips logging and changes the entry point. |
+
+Release is not "Debug but faster": it strips `Information` and `Trace`, so anything logged at those
+levels is invisible there — and it is optimised, which surfaces bugs Debug hides. Building it is not
+enough; run it.
+
+Run the editor from `Build/Bin/<config>/Editor/Lion.exe` and the game from
+`Build/Bin/<config>/Launcher/lion-launcher.exe`. Both anchor their assets, the game module and the
+editor's own state to the executable, not to the working directory.
 
 ## Architecture notes worth knowing
 
