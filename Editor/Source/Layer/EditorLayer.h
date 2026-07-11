@@ -60,6 +60,12 @@ private:
 	unsigned int mDockspaceId = 0;   // Captured each frame, so the deferred rebuild can address it.
 	bool mOpenSaveLayoutPopup = false;
 	char mLayoutName[64] = {};
+
+	// "New C++ Component": scaffolds a component class into the game's source tree. The Add Component
+	// popup only records the request, since it closes on click and takes the modal's ID scope with it.
+	bool mOpenNewComponentPopup = false;
+	char mNewComponentName[64] = {};
+	int mNewComponentBase = 0;   // Index into ComponentBaseNames().
 	bool mConsoleAutoScroll = true;
 	bool mConsoleShowErrors = true;    // Console severity filters (Error/Fatal, Warning, everything else).
 	bool mConsoleShowWarnings = true;
@@ -136,6 +142,15 @@ private:
 
 	static std::string LayoutPath(const std::string& name);
 	static bool IsValidLayoutName(const std::string& name);  // Rejects names that would escape the folder.
+
+	// "New C++ Component" (Unreal-style): pick a parent class, name the type, and the editor writes the
+	// .h/.cpp into the game's source tree. The new class is compiled into the game module on the next
+	// build, which is when it starts showing up in Add Component.
+	void DrawNewComponentPopup();
+	bool GenerateComponent(const std::string& name, const std::string& base);
+
+	// Component classes offered as a parent: "Component" plus every registered type.
+	static std::vector<std::string> ComponentBaseNames();
 
 	// Draws a collapsing header for a component with a right-aligned "X" remove button and
 	// drag-to-reorder support. Returns whether the body is open; sets removeRequested when the X is

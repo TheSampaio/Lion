@@ -269,6 +269,7 @@ void EditorLayer::DrawUI()
 	DrawProject();
 	DrawShortcuts();
 	DrawLayoutPopups();
+	DrawNewComponentPopup();
 
 	// Commit any in-progress continuous edit (gizmo/slider drag) once the mouse is released.
 	if (mHasPending && ImGui::IsMouseReleased(ImGuiMouseButton_Left))
@@ -493,6 +494,61 @@ namespace
 	// not an asset.
 	constexpr const char8* kDataDirectory    = "Data";
 	constexpr const char8* kLayoutsDirectory = "Data/Layouts";
+
+	// Component types the editor adds through a bespoke Add Component entry, because they need
+	// construction arguments (a collider sizes itself to the sprite). Everything else in the registry
+	// comes from the game module and is added generically, by name.
+	constexpr const char8* kBuiltInComponents[] = {
+		"SpriteRenderer", "RigidBody2D", "BoxCollider2D", "CircleCollider2D", "ScriptComponent" };
+
+	bool IsBuiltInComponent(const std::string& name)
+	{
+		for (const char8* entry : kBuiltInComponents)
+			if (name == entry)
+				return true;
+
+		return false;
+	}
+
+	// Where a generated component's source lands. The editor runs from its build output, not the
+	// project root, so walk up looking for the game's source tree. Empty when it is not around (a
+	// distributed editor without the project), which disables generation.
+	std::filesystem::path GameComponentDirectory()
+	{
+		std::error_code error;
+		std::filesystem::path current = std::filesystem::current_path(error);
+
+		if (error)
+			return {};
+
+		for (int32 depth = 0; depth < 8; ++depth)
+		{
+			if (std::filesystem::is_directory(current / "Game" / "Source", error))
+				return current / "Game" / "Source" / "Component";
+
+			if (!current.has_parent_path() || current.parent_path() == current)
+				break;
+
+			current = current.parent_path();
+		}
+
+		return {};
+	}
+
+	// A generated type name becomes a class name and a file name, so hold it to a C++ identifier.
+	bool IsValidTypeName(const std::string& name)
+	{
+		if (name.empty() || name.size() > 48)
+			return false;
+
+		if (std::isdigit(static_cast<unsigned char>(name.front())))
+			return false;
+
+		return std::all_of(name.begin(), name.end(), [](char8 character)
+		{
+			return std::isalnum(static_cast<unsigned char>(character)) || character == '_';
+		});
+	}
 
 	// Only asset-like files are listed; the resource root also holds the executable and its DLLs.
 	bool IsAssetFile(const std::filesystem::path& path)
@@ -1912,16 +1968,6 @@ void EditorLayer::DrawProperties()
 		// Components coming from the loaded game module (user-defined ones). They have no special
 		// construction here — created by name, default-constructed, then configured in the Inspector.
 		// The built-in types above are listed explicitly, so they are skipped here.
-		static const char8* builtIns[] = {
-			"SpriteRenderer", "RigidBody2D", "BoxCollider2D", "CircleCollider2D", "ScriptComponent" };
-
-		const auto isBuiltIn = [&](const std::string& name)
-		{
-			for (const char8* entry : builtIns)
-				if (name == entry) return true;
-			return false;
-		};
-
 		const auto isAttached = [&](const std::string& name)
 		{
 			for (const auto& component : mSelectedEntity->GetComponents())
@@ -1933,7 +1979,7 @@ void EditorLayer::DrawProperties()
 
 		for (const std::string& name : ComponentRegistry::GetNames())
 		{
-			if (isBuiltIn(name) || isAttached(name))
+			if (IsBuiltInComponent(name) || isAttached(name))
 				continue;
 
 			if (!sawGameComponent)
@@ -1948,6 +1994,12 @@ void EditorLayer::DrawProperties()
 				mSelectedEntity->AddComponentByName(name);
 			}
 		}
+
+		// Scaffold a brand new component class into the game's source tree, Unreal-style.
+		ImGui::Separator();
+
+		if (ImGui::MenuItem("New C++ Component..."))
+			mOpenNewComponentPopup = true;
 
 		ImGui::EndPopup();
 	}
@@ -2224,6 +2276,186 @@ void EditorLayer::DrawLayoutPopups()
 	if (ImGui::Button("Save", ImVec2(96.0f, 0.0f)) || (submitted && valid))
 	{
 		SaveLayout(mLayoutName);
+		ImGui::CloseCurrentPopup();
+	}
+
+	ImGui::EndDisabled();
+	ImGui::SameLine();
+
+	if (ImGui::Button("Cancel", ImVec2(96.0f, 0.0f)) || ImGui::IsKeyPressed(ImGuiKey_Escape))
+		ImGui::CloseCurrentPopup();
+
+	ImGui::EndPopup();
+}
+
+std::vector<std::string> EditorLayer::ComponentBaseNames()
+{
+	// Any component class can be a parent: the engine's own (all reachable through the Lion umbrella
+	// header) and any the game already defines. "Component" heads the list as the usual choice.
+	std::vector<std::string> bases;
+	bases.reserve(ComponentRegistry::GetNames().size() + 1);
+	bases.emplace_back("Component");
+
+	for (const std::string& name : ComponentRegistry::GetNames())
+		bases.push_back(name);
+
+	return bases;
+}
+
+bool EditorLayer::GenerateComponent(const std::string& name, const std::string& base)
+{
+	const std::filesystem::path directory = GameComponentDirectory();
+
+	if (directory.empty())
+	{
+		Log::Console(LogLevel::Error, "[Editor] Could not locate the game's source tree; is the project checked out?");
+		return false;
+	}
+
+	std::error_code error;
+	std::filesystem::create_directories(directory, error);
+
+	if (error)
+	{
+		Log::Console(LogLevel::Error, LION_FORMAT_TEXT("[Editor] Could not create '{}': {}.", directory.generic_string(), error.message()));
+		return false;
+	}
+
+	const std::filesystem::path headerPath = directory / (name + ".h");
+	const std::filesystem::path sourcePath = directory / (name + ".cpp");
+
+	if (std::filesystem::exists(headerPath, error) || std::filesystem::exists(sourcePath, error))
+	{
+		Log::Console(LogLevel::Error, LION_FORMAT_TEXT("[Editor] A component named '{}' already exists.", name));
+		return false;
+	}
+
+	// An engine base is reachable through the umbrella header and lives in the Lion namespace; a base
+	// the game defines sits next to the new file and is unqualified.
+	const bool engineBase = (base == "Component") || IsBuiltInComponent(base);
+	const std::string qualifiedBase = engineBase ? ("Lion::" + base) : base;
+	const std::string baseInclude = engineBase ? std::string() : ("#include \"" + base + ".h\"\n");
+
+	std::ofstream header(headerPath);
+	std::ofstream source(sourcePath);
+
+	if (!header.is_open() || !source.is_open())
+	{
+		Log::Console(LogLevel::Error, LION_FORMAT_TEXT("[Editor] Could not write '{}'.", directory.generic_string()));
+		return false;
+	}
+
+	header
+		<< "#pragma once\n\n"
+		<< "#include <Lion/Lion.h>\n"
+		<< "#include <Lion/Logic/Serializer.h>\n"
+		<< baseInclude
+		<< "\n"
+		<< "// Component defined by the game. Being compiled into the game module is all it takes for the\n"
+		<< "// editor to list it under Add Component: loading the module registers it with the engine.\n"
+		<< "//\n"
+		<< "// Override the lifecycle hooks to give it behaviour, and archive any field that should survive\n"
+		<< "// save/load through Serialize/Deserialize.\n"
+		<< "class " << name << " : public " << qualifiedBase << "\n"
+		<< "{\n"
+		<< "public:\n"
+		<< "\tvoid OnAwake() override;\n"
+		<< "\tvoid OnUpdate() override;\n\n"
+		<< "\tvoid Serialize(Lion::Serializer& serializer) const override;\n"
+		<< "\tvoid Deserialize(const Lion::Serializer& serializer) override;\n"
+		<< "};\n";
+
+	source
+		<< "#include \"" << name << ".h\"\n\n"
+		<< "#include <Lion/Logic/ComponentRegistry.h>\n\n"
+		<< "using namespace Lion;\n\n"
+		<< "void " << name << "::OnAwake()\n"
+		<< "{\n"
+		<< "\t" << base << "::OnAwake();\n"
+		<< "}\n\n"
+		<< "void " << name << "::OnUpdate()\n"
+		<< "{\n"
+		<< "\t" << base << "::OnUpdate();\n"
+		<< "}\n\n"
+		<< "void " << name << "::Serialize(Serializer& serializer) const\n"
+		<< "{\n"
+		<< "\t" << base << "::Serialize(serializer);\n"
+		<< "}\n\n"
+		<< "void " << name << "::Deserialize(const Serializer& serializer)\n"
+		<< "{\n"
+		<< "\t" << base << "::Deserialize(serializer);\n"
+		<< "}\n\n"
+		<< "// Binds the class to its name, so scenes can reference it and the editor can list it.\n"
+		<< "LION_REGISTER_COMPONENT(" << name << ")\n";
+
+	header.close();
+	source.close();
+
+	Log::Console(LogLevel::Success, LION_FORMAT_TEXT("[Editor] Created '{}' in {}.", name, directory.generic_string()));
+	Log::Console(LogLevel::Warning, "[Editor] Regenerate the projects and rebuild the game module to use it.");
+	return true;
+}
+
+void EditorLayer::DrawNewComponentPopup()
+{
+	// Opened here, at the root: the Add Component popup closes on click, taking its ID scope with it.
+	if (mOpenNewComponentPopup)
+	{
+		mOpenNewComponentPopup = false;
+		mNewComponentName[0] = '\0';
+		ImGui::OpenPopup("New C++ Component");
+	}
+
+	const ImVec2 center = ImGui::GetMainViewport()->GetCenter();
+	ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+
+	if (!ImGui::BeginPopupModal("New C++ Component", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+		return;
+
+	const std::vector<std::string> bases = ComponentBaseNames();
+	mNewComponentBase = std::clamp(mNewComponentBase, 0, static_cast<int32>(bases.size()) - 1);
+
+	ImGui::TextUnformatted("Parent class");
+	ImGui::SetNextItemWidth(320.0f);
+
+	if (ImGui::BeginCombo("##base", bases[mNewComponentBase].c_str()))
+	{
+		for (int32 i = 0; i < static_cast<int32>(bases.size()); ++i)
+			if (ImGui::Selectable(bases[i].c_str(), i == mNewComponentBase))
+				mNewComponentBase = i;
+
+		ImGui::EndCombo();
+	}
+
+	ImGui::Spacing();
+	ImGui::TextUnformatted("Class name");
+
+	if (ImGui::IsWindowAppearing())
+		ImGui::SetKeyboardFocusHere();
+
+	ImGui::SetNextItemWidth(320.0f);
+	const bool submitted = ImGui::InputText("##name", mNewComponentName, IM_ARRAYSIZE(mNewComponentName),
+		ImGuiInputTextFlags_EnterReturnsTrue);
+
+	const std::string name = mNewComponentName;
+	const std::filesystem::path directory = GameComponentDirectory();
+	const bool valid = IsValidTypeName(name) && !directory.empty() && !ComponentRegistry::Contains(name);
+
+	if (directory.empty())
+		ImGui::TextColored(LogLevelColor(LogLevel::Error), "The game's source tree was not found.");
+	else if (!name.empty() && !IsValidTypeName(name))
+		ImGui::TextColored(LogLevelColor(LogLevel::Error), "Letters, digits and _ only, not starting with a digit.");
+	else if (!name.empty() && ComponentRegistry::Contains(name))
+		ImGui::TextColored(LogLevelColor(LogLevel::Error), "A component of that name is already registered.");
+	else
+		ImGui::TextDisabled("%s", (directory / (name.empty() ? "<name>" : name)).generic_string().append(".h/.cpp").c_str());
+
+	ImGui::Spacing();
+	ImGui::BeginDisabled(!valid);
+
+	if (ImGui::Button("Create", ImVec2(96.0f, 0.0f)) || (submitted && valid))
+	{
+		GenerateComponent(name, bases[mNewComponentBase]);
 		ImGui::CloseCurrentPopup();
 	}
 
