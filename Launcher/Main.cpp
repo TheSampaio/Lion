@@ -14,18 +14,20 @@ Lion::Application* Lion::Main()
 {
 	static Lion::DynamicLibrary gameModule;
 
-	if (!gameModule.Load("Game.dll"))
+	if (!gameModule.Load(Lion::kGameModuleFile))
 	{
-		Lion::Log::Console(Lion::LogLevel::Fatal, "[Launcher] Could not load the game module 'Game.dll'.");
+		Lion::Log::Console(Lion::LogLevel::Fatal,
+			LION_FORMAT_TEXT("[Launcher] Could not load the game module '{}'.", Lion::kGameModuleFile));
 		return nullptr;
 	}
 
 	using CreateApplication = Lion::Application* (*)();
-	const auto create = gameModule.GetFunction<CreateApplication>("LionCreateApplication");
+	const auto create = gameModule.GetFunction<CreateApplication>(Lion::kGameModuleEntryPoint);
 
 	if (!create)
 	{
-		Lion::Log::Console(Lion::LogLevel::Fatal, "[Launcher] 'Game.dll' does not export LionCreateApplication.");
+		Lion::Log::Console(Lion::LogLevel::Fatal,
+			LION_FORMAT_TEXT("[Launcher] '{}' does not export {}.", Lion::kGameModuleFile, Lion::kGameModuleEntryPoint));
 		return nullptr;
 	}
 

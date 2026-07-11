@@ -5,9 +5,9 @@ namespace Lion
 	// Resolves an asset path for the current run.
 	//
 	// Returns the path unchanged when the file exists relative to the working directory
-	// (a distributed build runs next to its flattened resources), otherwise falls back to a
-	// "Resource/"-prefixed path (development runs from the project folder, where assets live
-	// under Resource/). If neither exists, the original path is returned for error reporting.
+	// (a distributed build runs next to its flattened assets), otherwise falls back to an
+	// "Assets/"-prefixed path (development runs from the project folder, where they live under
+	// Assets/). If neither exists, the original path is returned for error reporting.
 	std::string ResolveResourcePath(const std::string& path);
 
 	// Converts an absolute asset path into one relative to the resource root (the executable

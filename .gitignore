@@ -1,9 +1,17 @@
 # Directories
+# (a pattern must be alone on its line — git does not strip trailing comments)
 
+# Everything the build produces, including the vendored libraries.
+Build/
+
+# Legacy output folder; kept ignored so an old working tree stays clean.
 .Out/
+
+# Editor state: UI layout, shortcuts and saved dock layouts, generated at runtime.
+Data/
+
 .vs/
 .vscode/
-Data/          # Editor state: UI layout, shortcuts and saved dock layouts (generated at runtime).
 
 # Files
 

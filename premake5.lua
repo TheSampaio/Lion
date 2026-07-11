@@ -1,6 +1,6 @@
 workspace "Lion"
     configurations { "Debug", "Release", "Shipping" }
-    startproject "Sandbox"
+    startproject "Editor"  -- The project in Mane/; F5 in Visual Studio opens the editor.
 
     language "C++"
     cppdialect "C++20"
@@ -30,6 +30,11 @@ workspace "Lion"
 
     output_dir = "%{cfg.buildcfg}/"
 
+    -- Everything the build produces lands under one Build/ tree, including the vendored libraries
+    -- (see the override below). Deleting it is enough for a clean build.
+    binary_dir = "%{wks.location}/Build/Bin/" .. output_dir .. "%{prj.name}"
+    object_dir = "%{wks.location}/Build/Obj/" .. output_dir .. "%{prj.name}"
+
     dependencies = {}
 
     dependencies["box2d"] = {
@@ -45,7 +50,7 @@ workspace "Lion"
     dependencies["glfw"] = {
         include = "%{wks.location}/Vendor/glfw/include",
         lib = "glfw",
-        dll = "%{wks.location}/Vendor/glfw/.Out/Bin/" .. output_dir .. "glfw/glfw.dll",
+        dll = "%{wks.location}/Build/Bin/" .. output_dir .. "glfw/glfw.dll",
     }
 
     dependencies["glm"] = {
@@ -84,6 +89,16 @@ group ". External Dependencies"
     include "Vendor/spdlog"
     include "Vendor/stb"
 
+    -- The vendored libraries are submodules, and their own scripts write into a .Out folder inside
+    -- each one. Redirect them here instead of editing the submodules, so every artefact this build
+    -- produces lives under one Build/ tree and the submodules stay pristine.
+    for _, vendor in ipairs { "box2d", "glad", "glfw", "glm", "imgui", "spdlog", "stb" } do
+        project(vendor)
+            filter {}
+            targetdir (binary_dir)
+            objdir    (object_dir)
+    end
+
     -- Override GLFW (a submodule) to build as a shared library without editing the vendored file.
     -- A single shared GLFW keeps one copy of its global state, shared by the engine DLL (which owns
     -- the window) and the editor executable (whose ImGui GLFW backend must act on that same window).
@@ -97,11 +112,14 @@ group "Core"
     include "Engine"
 group ""
 
+-- A folder never carries its project's name, so a path always says which of the two it means:
+-- Mane/ holds the Editor, Sandbox/ holds the Game.
 group "Tools"
-    include "Editor"
+    include "Mane"
+    include "Launcher"
 group ""
 
-group "Misc"
-    include "Game"
-    include "Launcher"
+-- The game is its own thing: the engine and the tools are built against it, never the other way round.
+group "Game"
+    include "Sandbox"
 group ""
