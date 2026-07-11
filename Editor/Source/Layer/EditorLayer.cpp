@@ -1106,7 +1106,15 @@ void EditorLayer::HandleShortcuts()
 	if (mRebindingIndex >= 0)
 		return;
 
-	// These are available even while a text field is focused.
+	// A modal owns the keyboard for as long as it is up — whether or not one of its fields happens to
+	// hold focus at that moment. Without this, a class name typed into the New C++ Component dialog
+	// also ran whatever the editor binds those letters to, so an "e" would switch the gizmo tool.
+	//
+	// An active text field owns it for the same reason: any action can be rebound to a plain letter,
+	// so nothing may be exempt from this on the grounds of currently being a function key.
+	if (ImGui::GetTopMostPopupModal() != nullptr || ImGui::GetIO().WantTextInput)
+		return;
+
 	if (IsShortcutPressed(ShortcutAction::Play)) StartPlay();
 	if (IsShortcutPressed(ShortcutAction::Pause)) TogglePause();
 	if (IsShortcutPressed(ShortcutAction::Stop)) StopPlay();
@@ -1116,9 +1124,19 @@ void EditorLayer::HandleShortcuts()
 	if (IsShortcutPressed(ShortcutAction::CompileModule)) CompileGameModule();
 	if (IsShortcutPressed(ShortcutAction::ReloadModule)) ReloadGameModule();
 
-	// The actions below are edit-mode only; ignore them while playing or typing in a text field.
-	if (mPlaying || ImGui::GetIO().WantTextInput)
+	// The actions below are edit-mode only (typing is already ruled out above).
+	if (mPlaying)
 		return;
+
+	// The bound tool keys pick the active viewport tool. A gizmo drag or an active widget owns the
+	// input while it lasts, so the keys do not fire underneath them.
+	if (!ImGuizmo::IsUsing() && !ImGui::IsAnyItemActive())
+	{
+		if (IsShortcutPressed(ShortcutAction::ToolSelect))  mTool = Tool::Select;
+		if (IsShortcutPressed(ShortcutAction::GizmoMove))   mTool = Tool::Move;
+		if (IsShortcutPressed(ShortcutAction::GizmoRotate)) mTool = Tool::Rotate;
+		if (IsShortcutPressed(ShortcutAction::GizmoScale))  mTool = Tool::Scale;
+	}
 
 	if (IsShortcutPressed(ShortcutAction::Undo)) Undo();
 	if (IsShortcutPressed(ShortcutAction::Redo)) Redo();
@@ -1160,15 +1178,6 @@ void EditorLayer::DrawViewport()
 	const ImVec2 imageMin = ImGui::GetItemRectMin();
 	const ImVec2 imageSize = ImGui::GetItemRectSize();
 	const bool imageHovered = ImGui::IsItemHovered();
-
-	// The bound tool keys pick the active viewport tool (unless typing, dragging or rebinding).
-	if (!mPlaying && mRebindingIndex < 0 && !ImGuizmo::IsUsing() && !ImGui::IsAnyItemActive())
-	{
-		if (IsShortcutPressed(ShortcutAction::ToolSelect))  mTool = Tool::Select;
-		if (IsShortcutPressed(ShortcutAction::GizmoMove))   mTool = Tool::Move;
-		if (IsShortcutPressed(ShortcutAction::GizmoRotate)) mTool = Tool::Rotate;
-		if (IsShortcutPressed(ShortcutAction::GizmoScale))  mTool = Tool::Scale;
-	}
 
 	// The gizmo is an editing tool; hide it while the simulation is running, for folders (no
 	// meaningful transform), and for the Select tool, which only picks entities.
