@@ -1,7 +1,6 @@
 #pragma once
 
 #include <Lion/Lion.h>
-#include <Lion/Launcher.h>
 
 #include "Source/Layer/CoreLayer.h"
 #include "Source/Layer/GameLayer.h"

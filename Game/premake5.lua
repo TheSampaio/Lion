@@ -1,5 +1,6 @@
-project "Sandbox"
-    kind "ConsoleApp"
+project "Game"
+    -- The game is a shared library, loaded at runtime by the standalone launcher and by the editor.
+    kind "SharedLib"
 
     -- Output directories
     targetdir ("%{wks.location}/.Out/Bin/" .. output_dir .. "%{prj.name}")
@@ -28,21 +29,20 @@ project "Sandbox"
         "Lion",
     }
 
-    filter "configurations:Shipping"
-        kind "WindowedApp"
-
     filter "system:windows"
         buildoptions { "/utf-8" }
         defines "LN_PLATFORM_WIN"
         systemversion "latest"
 
-        -- Copy the Resource folder contents next to the executable (Shader/, Sprite/, ... at root).
+        -- Ship the module and its resources next to the standalone launcher (Sandbox), which loads
+        -- them from its own directory. The editor copies both into its own directory separately.
         postbuildcommands {
-            'xcopy /E /I /Y /Q "%{prj.location}Resource" "%{cfg.targetdir}"',
+            '{COPYFILE} "%{cfg.buildtarget.relpath}" "%{wks.location}/.Out/Bin/' .. output_dir .. 'Sandbox/"',
+            'xcopy /E /I /Y /Q "%{prj.location}Resource" "%{wks.location}/.Out/Bin/' .. output_dir .. 'Sandbox/"',
         }
 
     filter { "system:windows", "configurations:Shipping" }
         -- Make shipped shaders unreadable so they cannot be edited in a text editor.
         postbuildcommands {
-            'powershell -NoProfile -ExecutionPolicy Bypass -File "%{wks.location}Scripts/ObfuscateShaders.ps1" "%{cfg.targetdir}"',
+            'powershell -NoProfile -ExecutionPolicy Bypass -File "%{wks.location}Scripts/ObfuscateShaders.ps1" "%{wks.location}/.Out/Bin/' .. output_dir .. 'Sandbox/"',
         }

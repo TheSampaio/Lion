@@ -103,4 +103,5 @@ group ""
 
 group "Misc"
     include "Game"
+    include "Launcher"
 group ""
