@@ -79,11 +79,14 @@ namespace Lion
             text << std::fixed;
             text.precision(1);
 
+            // No labels: a reader does not need to be told that "OpenGL" is the graphics API, and the
+            // units carry the rest. The frame time stays alongside the framerate because it is the one
+            // that is linear, and so the one you optimise against.
             text << Window::GetTitle().c_str()
-                << " | FPS: " << sFrameCount
-                << " | MS: " << sFrameTime * 1000.0f
-                << " | MOD: " << BuildConfiguration()
-                << " | API: " << GraphicsApiName();
+                << " | " << sFrameCount << " fps"
+                << " | " << sFrameTime * 1000.0f << " ms"
+                << " | " << BuildConfiguration()
+                << " | " << GraphicsApiName();
 
             Window::SetDisplayTitle(text.str());
 
