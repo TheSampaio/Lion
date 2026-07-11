@@ -1,9 +1,10 @@
 project "Editor"
     kind "ConsoleApp"
+    targetname "Lion"  -- The editor is the face of the engine, so it is what carries its name.
 
     -- Output directories
-    targetdir ("%{wks.location}/.Out/Bin/" .. output_dir .. "%{prj.name}")
-    objdir    ("%{wks.location}/.Out/Obj/" .. output_dir .. "%{prj.name}")
+    targetdir ("%{wks.location}/Build/Bin/" .. output_dir .. "%{prj.name}")
+    objdir    ("%{wks.location}/Build/Obj/" .. output_dir .. "%{prj.name}")
 
     files {
         "%{prj.location}/**.h",
@@ -48,9 +49,9 @@ project "Editor"
 
         postbuildcommands {
             -- Engine DLL next to the editor executable.
-            '{COPY} "%{wks.location}/.Out/Bin/' .. output_dir .. 'Lion/lion-core.dll" "%{cfg.targetdir}"',
+            '{COPY} "%{wks.location}/Build/Bin/' .. output_dir .. 'Lion/lion-core.dll" "%{cfg.targetdir}"',
             -- GLFW shared library (the editor's ImGui backend links against it directly).
             '{COPYFILE} "%{dependencies.glfw.dll}" "%{cfg.targetdir}"',
             -- Shared resources (shader + sprites) flattened next to the executable.
-            'xcopy /E /I /Y /Q "%{wks.location}/Sandbox/Resource" "%{cfg.targetdir}"',
+            'xcopy /E /I /Y /Q "%{wks.location}/Sandbox/Assets" "%{cfg.targetdir}"',
         }

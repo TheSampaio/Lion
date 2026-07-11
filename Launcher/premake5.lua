@@ -5,8 +5,8 @@ project "Launcher"
     targetname "lion-launcher"
 
     -- Output directories
-    targetdir ("%{wks.location}/.Out/Bin/" .. output_dir .. "%{prj.name}")
-    objdir    ("%{wks.location}/.Out/Obj/" .. output_dir .. "%{prj.name}")
+    targetdir ("%{wks.location}/Build/Bin/" .. output_dir .. "%{prj.name}")
+    objdir    ("%{wks.location}/Build/Obj/" .. output_dir .. "%{prj.name}")
 
     files {
         "%{prj.location}/**.h",

@@ -6,8 +6,8 @@ project "Game"
     targetname "lion-game"
 
     -- Output directories
-    targetdir ("%{wks.location}/.Out/Bin/" .. output_dir .. "%{prj.name}")
-    objdir    ("%{wks.location}/.Out/Obj/" .. output_dir .. "%{prj.name}")
+    targetdir ("%{wks.location}/Build/Bin/" .. output_dir .. "%{prj.name}")
+    objdir    ("%{wks.location}/Build/Obj/" .. output_dir .. "%{prj.name}")
 
     files {
         "%{prj.location}/**.h",
@@ -41,15 +41,15 @@ project "Game"
         -- which each load it from their own directory. Doing it here (rather than in their postbuilds)
         -- means rebuilding just the game refreshes both — which is what the editor's hot reload needs.
         postbuildcommands {
-            '{MKDIR} "%{wks.location}/.Out/Bin/' .. output_dir .. 'Launcher"',
-            '{MKDIR} "%{wks.location}/.Out/Bin/' .. output_dir .. 'Editor"',
-            '{COPYFILE} "%{cfg.buildtarget.relpath}" "%{wks.location}/.Out/Bin/' .. output_dir .. 'Launcher/"',
-            '{COPYFILE} "%{cfg.buildtarget.relpath}" "%{wks.location}/.Out/Bin/' .. output_dir .. 'Editor/"',
-            'xcopy /E /I /Y /Q "%{prj.location}Resource" "%{wks.location}/.Out/Bin/' .. output_dir .. 'Launcher/"',
+            '{MKDIR} "%{wks.location}/Build/Bin/' .. output_dir .. 'Launcher"',
+            '{MKDIR} "%{wks.location}/Build/Bin/' .. output_dir .. 'Editor"',
+            '{COPYFILE} "%{cfg.buildtarget.relpath}" "%{wks.location}/Build/Bin/' .. output_dir .. 'Launcher/"',
+            '{COPYFILE} "%{cfg.buildtarget.relpath}" "%{wks.location}/Build/Bin/' .. output_dir .. 'Editor/"',
+            'xcopy /E /I /Y /Q "%{prj.location}Assets" "%{wks.location}/Build/Bin/' .. output_dir .. 'Launcher/"',
         }
 
     filter { "system:windows", "configurations:Shipping" }
         -- Make shipped shaders unreadable so they cannot be edited in a text editor.
         postbuildcommands {
-            'powershell -NoProfile -ExecutionPolicy Bypass -File "%{wks.location}Scripts/ObfuscateShaders.ps1" "%{wks.location}/.Out/Bin/' .. output_dir .. 'Launcher/"',
+            'powershell -NoProfile -ExecutionPolicy Bypass -File "%{wks.location}Scripts/ObfuscateShaders.ps1" "%{wks.location}/Build/Bin/' .. output_dir .. 'Launcher/"',
         }

@@ -43,8 +43,8 @@ namespace Lion
 		if (FileExists(path))
 			return path;
 
-		// 2. Development fallback: running from the project folder, assets live under "Resource/".
-		const std::string devPath = "Resource/" + path;
+		// 2. Development fallback: running from the project folder, assets live under "Assets/".
+		const std::string devPath = "Assets/" + path;
 
 		if (FileExists(devPath))
 			return devPath;
