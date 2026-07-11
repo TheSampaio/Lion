@@ -15,6 +15,20 @@ IF "%CONFIG%"=="" SET CONFIG=Debug
 
 CD /D "%~dp0.."
 
+:: --- Dependencies -------------------------------------------------------------------------------
+:: The libraries are submodules, and a plain "git clone" leaves them empty — so fetch them rather
+:: than failing on a missing Vendor/ folder. Already-present ones are left alone.
+WHERE git >NUL 2>NUL
+IF ERRORLEVEL 1 (
+    ECHO [Lion] git was not found on your PATH.
+    EXIT /B 1
+)
+
+IF NOT EXIST "Vendor\box2d\premake5.lua" (
+    ECHO [Lion] Fetching the vendored libraries...
+    git submodule update --init --recursive || EXIT /B 1
+)
+
 :: --- Projects -----------------------------------------------------------------------------------
 :: premake globs the source tree, so this has to run before every build: a file added or removed
 :: since the last one is not in the .vcxproj yet.

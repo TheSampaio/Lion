@@ -30,8 +30,8 @@ namespace Lion
 		Size mSize{ 0, 0 };
 		Size mCenter{ 0, 0 };
 
-#if LN_DEBUG
+		// Live texture count, reported through the log. Kept in every build: what the log lets through
+		// is decided at runtime now, so the editor can show this whatever configuration it was built in.
 		static uint32 sAllocationCount;
-#endif
 	};
 }

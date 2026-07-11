@@ -94,15 +94,20 @@ groups renames its target** — the editor's Compile builds `Runtime\Game` and w
 **Verify against all three configurations.** They are not variations on a theme; each one exists to
 catch something the others cannot:
 
-| | Optimised | Symbols | Logging | Why it exists |
+| | Optimised | Symbols | The game logs | Why it exists |
 |---|---|---|---|---|
 | **Debug** | no | yes | everything | Day-to-day work. |
-| **Release** | yes | no | Error/Warning/Success only | Measuring performance with the engine still talking. |
-| **Shipping** | yes | no | none | What ships. Strips logging and changes the entry point. |
+| **Release** | yes | no | Error/Warning/Success | Measuring performance with the engine still talking. |
+| **Shipping** | yes | no | nothing | What reaches a player. Changes the entry point too. |
 
-Release is not "Debug but faster": it strips `Information` and `Trace`, so anything logged at those
-levels is invisible there — and it is optimised, which surfaces bugs Debug hides. Building it is not
-enough; run it.
+Release is not "Debug but faster": it is optimised, which surfaces what Debug hides. Building a
+configuration is not verifying it — run it.
+
+**Those levels are the game's.** The editor is a tool, so it logs everything in every configuration —
+it asks for it in `Lion::Main` before the engine starts. That is why the log's filter is a runtime
+verbosity and not a `#ifdef`: the engine is one DLL shared by both, so a compile-time switch would
+silence the editor along with the game. For the same reason, a call site must not add a guard of its
+own — `Log::IsEnabled` is there to skip building a message, not to decide policy twice.
 
 Run the editor from `Build/Bin/<config>/Editor/Lion.exe` and the game from
 `Build/Bin/<config>/Launcher/lion-launcher.exe`. Both anchor their assets, the game module and the
