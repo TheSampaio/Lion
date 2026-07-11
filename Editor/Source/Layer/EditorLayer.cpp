@@ -975,8 +975,10 @@ void EditorLayer::ResetShortcutsToDefault()
 	set(ShortcutAction::DuplicateEntity, ImGuiKey_D, true);
 	set(ShortcutAction::ToolSelect, ImGuiKey_Q);
 	set(ShortcutAction::StepFrame, ImGuiKey_F6);
-	set(ShortcutAction::CompileModule, ImGuiKey_F7, true);   // Ctrl+F7, so it does not collide with Pause.
-	set(ShortcutAction::ReloadModule, ImGuiKey_F9);
+
+	// Borrowed from Visual Studio, where Ctrl+Shift+B builds; reload sits next to it.
+	set(ShortcutAction::CompileModule, ImGuiKey_B, true, true);
+	set(ShortcutAction::ReloadModule, ImGuiKey_R, true, true);
 }
 
 void EditorLayer::CreateFolder()
@@ -2197,6 +2199,14 @@ void EditorLayer::DrawMenuBar()
 			ImGui::EndMenu();
 		}
 
+		// A build runs on a worker thread and takes seconds, so say so where it cannot be missed.
+		if (mBuilding)
+		{
+			static const char8* label = "Compiling the game module...";
+			ImGui::SameLine(ImGui::GetWindowWidth() - ImGui::CalcTextSize(label).x - ImGui::GetStyle().ItemSpacing.x * 2.0f);
+			ImGui::TextColored(LogLevelColor(LogLevel::Warning), "%s", label);
+		}
+
 		ImGui::EndMainMenuBar();
 	}
 }
@@ -2465,11 +2475,15 @@ void EditorLayer::CompileGameModule()
 		return;
 	}
 
+	// Regenerate the projects first: a file that was just scaffolded is not in the .vcxproj yet, and
+	// premake globs the source tree. It runs from the project root, where the workspace script lives.
+	const std::string generate = "cd /d \"" + root.string() + "\" && premake5 vs2022";
+
 	// Build only the game module, by name within the solution (premake files it under the "Misc"
 	// group, which is what the target is called). Building the solution outright would try to relink
 	// the running editor. Nothing else is rebuilt, so the editor's copy of the module — which the
 	// module's own post-build step refreshes — is the one the reload then picks up.
-	const std::string command =
+	const std::string build =
 		"\"" + MSBuildPath() + "\""
 		" \"" + (root / "Lion.sln").string() + "\""
 		" -t:Misc\\Game"
@@ -2479,10 +2493,18 @@ void EditorLayer::CompileGameModule()
 	Log::Console(LogLevel::Information, "[Editor] Compiling the game module...");
 
 	mBuilding = true;
-	mGameBuild = std::async(std::launch::async, [command]
+	mGameBuild = std::async(std::launch::async, [generate, build]
 	{
 		GameBuild result;
-		result.exitCode = RunCommand(command, result.output);
+
+		// A failed regeneration means the build would compile a stale file list, so it stops here.
+		result.exitCode = RunCommand(generate, result.output);
+
+		if (result.exitCode == 0)
+			result.exitCode = RunCommand(build, result.output);
+		else
+			result.output += "[Editor] Could not regenerate the projects; is premake5 on your PATH?\n";
+
 		return result;
 	});
 }
@@ -2666,7 +2688,10 @@ bool EditorLayer::GenerateComponent(const std::string& name, const std::string& 
 	source.close();
 
 	Log::Console(LogLevel::Success, LION_FORMAT_TEXT("[Editor] Created '{}' in {}.", name, directory.generic_string()));
-	Log::Console(LogLevel::Warning, "[Editor] Regenerate the projects and rebuild the game module to use it.");
+
+	// Compile straight away: the class is only usable once it is in the module, and making the user
+	// go and build it by hand is the step this whole flow exists to remove.
+	CompileGameModule();
 	return true;
 }
 
