@@ -1,6 +1,6 @@
 workspace "Lion"
     configurations { "Debug", "Release", "Shipping" }
-    startproject "Sandbox"
+    startproject "Launcher"
 
     language "C++"
     cppdialect "C++20"
@@ -99,9 +99,10 @@ group ""
 
 group "Tools"
     include "Editor"
+    include "Launcher"
 group ""
 
-group "Misc"
+-- The game is its own thing: the engine and the tools are built against it, never the other way round.
+group "Game"
     include "Game"
-    include "Launcher"
 group ""

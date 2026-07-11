@@ -1,6 +1,8 @@
-project "Sandbox"
-    -- Thin standalone launcher: it links only the engine and loads the game module at runtime.
+project "Launcher"
+    -- Thin standalone launcher: it links only the engine and loads the game module at runtime. It owns
+    -- no game code — that lives in the game module, which the editor loads too.
     kind "ConsoleApp"
+    targetname "lion-launcher"
 
     -- Output directories
     targetdir ("%{wks.location}/.Out/Bin/" .. output_dir .. "%{prj.name}")

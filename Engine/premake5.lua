@@ -1,5 +1,6 @@
 project "Lion"
     kind "SharedLib"
+    targetname "lion-core"  -- The engine's own binary; the project keeps its name, so links still resolve.
 
     defines { "LN_DLL", "GLFW_DLL" }  -- GLFW_DLL: consume GLFW as a shared library (see Vendor/glfw).
 
@@ -39,9 +40,12 @@ project "Lion"
     }
 
     postbuildcommands {
-        "{COPY} %{cfg.buildtarget.relpath} ../.Out/Bin/" .. output_dir .. "/Sandbox",
-        -- GLFW is a shared library; ship it next to the game executable that loads the engine.
-        '{COPYFILE} "%{dependencies.glfw.dll}" "%{wks.location}/.Out/Bin/' .. output_dir .. 'Sandbox/"',
+        -- The launcher's output directory may not exist yet on a clean build, and a plain file copy
+        -- into a missing directory fails rather than creating it.
+        '{MKDIR} "%{wks.location}/.Out/Bin/' .. output_dir .. 'Launcher"',
+        "{COPY} %{cfg.buildtarget.relpath} ../.Out/Bin/" .. output_dir .. "/Launcher",
+        -- GLFW is a shared library; ship it next to the launcher that loads the engine.
+        '{COPYFILE} "%{dependencies.glfw.dll}" "%{wks.location}/.Out/Bin/' .. output_dir .. 'Launcher/"',
     }
 
     filter "system:windows"

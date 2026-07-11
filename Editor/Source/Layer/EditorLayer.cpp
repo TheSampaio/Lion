@@ -2468,8 +2468,9 @@ void EditorLayer::DrawLayoutPopups()
 
 bool EditorLayer::LoadGameModule()
 {
-	static const std::filesystem::path source = "Game.dll";
-	const std::filesystem::path runtime = std::filesystem::path(kDataDirectory) / "Game.loaded.dll";
+	// Both sit next to the editor, alongside the engine's own binaries.
+	const std::filesystem::path source = kGameModuleFile;
+	const std::filesystem::path runtime = kGameModuleLoadedFile;
 
 	std::error_code error;
 
@@ -2478,8 +2479,6 @@ bool EditorLayer::LoadGameModule()
 		Log::Console(LogLevel::Warning, "[Editor] No game module next to the editor; only the built-in components are available.");
 		return false;
 	}
-
-	std::filesystem::create_directories(kDataDirectory, error);
 
 	// Load a *copy*: Windows locks a loaded library, so leaving the original alone is what lets the
 	// game module be rebuilt while the editor is still running — the whole point of a reload.
@@ -2496,7 +2495,7 @@ bool EditorLayer::LoadGameModule()
 	ComponentRegistry::BeginModule();
 	ScriptRegistry::BeginModule();
 
-	const bool loaded = mGameModule.Load(runtime.generic_string());
+	const bool loaded = mGameModule.Load(runtime.string());
 
 	ComponentRegistry::EndModule();
 	ScriptRegistry::EndModule();
@@ -2530,14 +2529,14 @@ void EditorLayer::CompileGameModule()
 	// premake globs the source tree. It runs from the project root, where the workspace script lives.
 	const std::string generate = "cd /d \"" + root.string() + "\" && premake5 vs2022";
 
-	// Build only the game module, by name within the solution (premake files it under the "Misc"
-	// group, which is what the target is called). Building the solution outright would try to relink
-	// the running editor. Nothing else is rebuilt, so the editor's copy of the module — which the
-	// module's own post-build step refreshes — is the one the reload then picks up.
+	// Build only the game module. Its MSBuild target is its solution folder and project name — premake
+	// files it under the "Game" group, hence "Game\Game". Building the solution outright would try to
+	// relink the running editor. Nothing else is rebuilt, so the editor's copy of the module — which
+	// the module's own post-build step refreshes — is the one the reload then picks up.
 	const std::string build =
 		"\"" + MSBuildPath() + "\""
 		" \"" + (root / "Lion.sln").string() + "\""
-		" -t:Misc\\Game"
+		" -t:Game\\Game"
 		" -p:Configuration=" + BuildConfiguration() +
 		" -p:Platform=x64 -v:minimal -nologo";
 

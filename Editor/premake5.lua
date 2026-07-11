@@ -48,7 +48,7 @@ project "Editor"
 
         postbuildcommands {
             -- Engine DLL next to the editor executable.
-            '{COPY} "%{wks.location}/.Out/Bin/' .. output_dir .. 'Lion/Lion.dll" "%{cfg.targetdir}"',
+            '{COPY} "%{wks.location}/.Out/Bin/' .. output_dir .. 'Lion/lion-core.dll" "%{cfg.targetdir}"',
             -- GLFW shared library (the editor's ImGui backend links against it directly).
             '{COPYFILE} "%{dependencies.glfw.dll}" "%{cfg.targetdir}"',
             -- Shared resources (shader + sprites) flattened next to the executable.
