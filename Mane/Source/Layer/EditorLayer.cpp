@@ -2534,13 +2534,14 @@ void EditorLayer::CompileGameModule()
 	const std::string generate = "cd /d \"" + root.string() + "\" && premake5 vs2022";
 
 	// Build only the game module. Its MSBuild target is its solution folder and project name — premake
-	// files it under the "Game" group, hence "Game\Game". Building the solution outright would try to
-	// relink the running editor. Nothing else is rebuilt, so the editor's copy of the module — which
-	// the module's own post-build step refreshes — is the one the reload then picks up.
+	// files it under the "Runtime" group, hence "Runtime\Game", so moving the project between groups
+	// renames this. Building the solution outright would try to relink the running editor. Nothing
+	// else is rebuilt, so the editor's copy of the module — which the module's own post-build step
+	// refreshes — is the one the reload then picks up.
 	const std::string build =
 		"\"" + MSBuildPath() + "\""
 		" \"" + (root / "Lion.sln").string() + "\""
-		" -t:Game\\Game"
+		" -t:Runtime\\Game"
 		" -p:Configuration=" + BuildConfiguration() +
 		" -p:Platform=x64 -v:minimal -nologo";
 

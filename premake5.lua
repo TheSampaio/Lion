@@ -119,7 +119,7 @@ group "Tools"
     include "Launcher"
 group ""
 
--- The game is its own thing: the engine and the tools are built against it, never the other way round.
-group "Game"
+-- The gameplay layer: what the tools load and run, as opposed to the engine underneath them.
+group "Runtime"
     include "Sandbox"
 group ""
