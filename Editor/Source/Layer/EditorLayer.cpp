@@ -1975,7 +1975,7 @@ void EditorLayer::BuildDefaultLayout(unsigned int dockspaceId)
 	constexpr float32 kLeftWidth        = 300.0f;  // Scene Hierarchy over Project.
 	constexpr float32 kRightWidth       = 400.0f;  // Statistics over Properties: the inspectors need the extra room.
 	constexpr float32 kConsoleHeight    = 256.0f;
-	constexpr float32 kProjectHeight    = 320.0f;
+	constexpr float32 kProjectHeight    = 324.0f;
 	constexpr float32 kStatisticsHeight = 192.0f;
 
 	const ImVec2 work = ImGui::GetMainViewport()->WorkSize;
