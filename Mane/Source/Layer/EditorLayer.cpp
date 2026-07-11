@@ -20,7 +20,7 @@ using namespace Lion;
 void EditorLayer::OnAttach()
 {
 	Window::SetSize(1280, 720);
-	Window::SetTitle("Lion Editor");
+	Window::SetTitle("Lion Engine");
 	Window::SetBackgroundColor(0.10f, 0.10f, 0.11f);
 	Window::SetResizable(true);
 	Window::SetMaximized(true);
@@ -624,18 +624,6 @@ namespace
 		return path;
 	}
 
-	// The configuration the editor itself was built in: the game module has to match it, or the two
-	// would disagree on the runtime and the module could not be loaded.
-	constexpr const char8* BuildConfiguration()
-	{
-#if defined(LN_DEBUG)
-		return "Debug";
-#elif defined(LN_RELEASE)
-		return "Release";
-#else
-		return "Shipping";
-#endif
-	}
 
 	// Inspector rows put the label first, in a fixed column, and the widget after it — ImGui's default
 	// is the other way round, which reads backwards for a property. The column is wide enough for the

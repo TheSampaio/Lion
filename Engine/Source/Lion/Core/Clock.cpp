@@ -1,6 +1,7 @@
 #include "Engine.h"
 #include "Clock.h"
 
+#include <Lion/Core/Build.h>
 #include <Lion/Core/Window.h>
 #include <Lion/Render/RendererAPI.h>
 
@@ -61,6 +62,7 @@ namespace Lion
             text << Window::GetTitle().c_str()
                 << " | FPS: " << sFrameCount
                 << " | MS: " << sFrameTime * 1000.0f
+                << " | MOD: " << BuildConfiguration()
                 << " | API: " << GraphicsApiName();
 
             Window::SetDisplayTitle(text.str());
