@@ -97,12 +97,14 @@ group "Core"
     include "Engine"
 group ""
 
+-- A folder never carries its project's name, so a path always says which of the two it means:
+-- Mane/ holds the Editor, Sandbox/ holds the Game.
 group "Tools"
-    include "Editor"
+    include "Mane"
     include "Launcher"
 group ""
 
 -- The game is its own thing: the engine and the tools are built against it, never the other way round.
 group "Game"
-    include "Game"
+    include "Sandbox"
 group ""

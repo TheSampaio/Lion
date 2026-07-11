@@ -52,5 +52,5 @@ project "Editor"
             -- GLFW shared library (the editor's ImGui backend links against it directly).
             '{COPYFILE} "%{dependencies.glfw.dll}" "%{cfg.targetdir}"',
             -- Shared resources (shader + sprites) flattened next to the executable.
-            'xcopy /E /I /Y /Q "%{wks.location}/Game/Resource" "%{cfg.targetdir}"',
+            'xcopy /E /I /Y /Q "%{wks.location}/Sandbox/Resource" "%{cfg.targetdir}"',
         }

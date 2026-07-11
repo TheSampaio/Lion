@@ -530,6 +530,10 @@ namespace
 		return false;
 	}
 
+	// The game's source tree, relative to the project root — the editor writes generated components
+	// into it and recognises the project root by finding it. It is the folder, not the VS project name.
+	constexpr const char8* kGameSourceFolder = "Sandbox";
+
 	// The project root, found by walking up from the working directory: the editor runs from its build
 	// output, not the project. Empty when the project is not around (a distributed editor), which is
 	// what disables generating and compiling.
@@ -543,7 +547,7 @@ namespace
 
 		for (int32 depth = 0; depth < 8; ++depth)
 		{
-			if (std::filesystem::is_directory(current / "Game" / "Source", error))
+			if (std::filesystem::is_directory(current / kGameSourceFolder / "Source", error))
 				return current;
 
 			if (!current.has_parent_path() || current.parent_path() == current)
@@ -559,7 +563,7 @@ namespace
 	std::filesystem::path GameComponentDirectory()
 	{
 		const std::filesystem::path root = ProjectRootDirectory();
-		return root.empty() ? root : (root / "Game" / "Source" / "Component");
+		return root.empty() ? root : (root / kGameSourceFolder / "Source" / "Component");
 	}
 
 	// Runs a command, capturing whatever it writes to stdout and stderr, and returns its exit code.

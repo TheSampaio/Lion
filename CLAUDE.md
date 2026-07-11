@@ -2,12 +2,14 @@
 
 A 2D C++ game engine.
 
+**A folder is never named after its project**, so a path always says which of the two it means.
+
 | Folder | VS project | Group | Output | What it is |
 |---|---|---|---|---|
 | `Engine/` | `Lion` | Core | `lion-core.dll` | The engine. |
-| `Game/` | `Game` | Game | `lion-game.dll` | The game's code, as a module. |
+| `Sandbox/` | `Game` | Game | `lion-game.dll` | The game's code, as a module. |
+| `Mane/` | `Editor` | Tools | `Editor.exe` | Loads the same module, so it can list the game's components. |
 | `Launcher/` | `Launcher` | Tools | `lion-launcher.exe` | Thin exe: loads the module and runs it. Owns no game code. |
-| `Editor/` | `Editor` | Tools | `Editor.exe` | Loads the same module, so it can list the game's components. |
 
 The module's file names are fixed in `Lion/Core/GameModule.h`, not by the project name — the loaders
 must not care what a game calls itself. `lion-game.loaded.dll` is the editor's private copy of the
