@@ -1,5 +1,7 @@
 #pragma once
 
+#include <future>
+
 #include <Lion/Lion.h>
 #include <Lion/Core/DynamicLibrary.h>
 
@@ -29,6 +31,7 @@ private:
 		CopyEntity, PasteEntity, DuplicateEntity,
 		ToolSelect,
 		ReloadModule,
+		StepFrame, CompileModule,
 		Count
 	};
 
@@ -79,6 +82,7 @@ private:
 	size_t mConsoleLastTotal = 0;   // Total lines logged as of the last drawn frame; drives the tail follow.
 	bool mPlaying = false;
 	bool mPaused = false;        // In play mode but the simulation is halted.
+	bool mStepFrame = false;     // Advance the paused simulation by exactly one frame, then halt again.
 	bool mShowColliders = false;  // Collider outlines are a debug view, off until enabled in Settings.
 	bool mRenameFocus = false;   // Request keyboard focus on the inline rename field for one frame.
 	Tool mTool = Tool::Move;
@@ -158,6 +162,24 @@ private:
 	// scene out and back through its serialized form so no object outlives the code behind it.
 	bool LoadGameModule();
 	void ReloadGameModule();
+
+	// Advances a paused simulation by a single frame (entering the paused state if it was running).
+	void StepOneFrame();
+
+	// Rebuilds the game module and reloads it, so a code change lands without leaving the editor. The
+	// build runs on a worker thread; PollGameBuild picks up the result on the main thread, which is
+	// where the reload has to happen. Nothing else may touch the module while a build is in flight.
+	void CompileGameModule();
+	void PollGameBuild();
+
+	struct GameBuild
+	{
+		int exitCode = 0;
+		std::string output;
+	};
+
+	std::future<GameBuild> mGameBuild;
+	bool mBuilding = false;
 
 	// Draws a collapsing header for a component with a right-aligned "X" remove button and
 	// drag-to-reorder support. Returns whether the body is open; sets removeRequested when the X is

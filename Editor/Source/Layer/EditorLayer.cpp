@@ -3,8 +3,12 @@
 #include "../EditorGui.h"
 
 #include <cctype>
+#include <chrono>
+#include <cstdio>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <sstream>
 
 #include <Lion/Core/Filesystem.h>
 #include <Lion/Logic/ComponentRegistry.h>
@@ -43,9 +47,26 @@ void EditorLayer::OnCreate()
 
 void EditorLayer::OnUpdate()
 {
-	// Only advance the scene simulation (physics + entity scripts) while playing and not paused.
-	if (mPlaying && !mPaused)
+	PollGameBuild();
+
+	// Advance the scene simulation (physics + entity scripts) while playing and not paused — or for
+	// exactly one frame when a step was requested, which is what makes a paused run inspectable.
+	if (mPlaying && (!mPaused || mStepFrame))
+	{
 		mScene->OnUpdate();
+		mStepFrame = false;
+	}
+}
+
+void EditorLayer::StepOneFrame()
+{
+	if (!mPlaying)
+		return;
+
+	// Stepping only makes sense against a halted simulation, so a running one is paused first: the
+	// frame this schedules is then the only one that advances.
+	mPaused = true;
+	mStepFrame = true;
 }
 
 void EditorLayer::OnDetach()
@@ -504,10 +525,10 @@ namespace
 		return false;
 	}
 
-	// Where a generated component's source lands. The editor runs from its build output, not the
-	// project root, so walk up looking for the game's source tree. Empty when it is not around (a
-	// distributed editor without the project), which disables generation.
-	std::filesystem::path GameComponentDirectory()
+	// The project root, found by walking up from the working directory: the editor runs from its build
+	// output, not the project. Empty when the project is not around (a distributed editor), which is
+	// what disables generating and compiling.
+	std::filesystem::path ProjectRootDirectory()
 	{
 		std::error_code error;
 		std::filesystem::path current = std::filesystem::current_path(error);
@@ -518,7 +539,7 @@ namespace
 		for (int32 depth = 0; depth < 8; ++depth)
 		{
 			if (std::filesystem::is_directory(current / "Game" / "Source", error))
-				return current / "Game" / "Source" / "Component";
+				return current;
 
 			if (!current.has_parent_path() || current.parent_path() == current)
 				break;
@@ -527,6 +548,72 @@ namespace
 		}
 
 		return {};
+	}
+
+	// Where a generated component's source lands.
+	std::filesystem::path GameComponentDirectory()
+	{
+		const std::filesystem::path root = ProjectRootDirectory();
+		return root.empty() ? root : (root / "Game" / "Source" / "Component");
+	}
+
+	// Runs a command, capturing whatever it writes to stdout and stderr, and returns its exit code.
+	// The whole command is wrapped in an extra pair of quotes: cmd.exe otherwise mangles one that
+	// starts with a quoted path.
+	int32 RunCommand(const std::string& command, std::string& output)
+	{
+		const std::string wrapped = "\"" + command + " 2>&1\"";
+
+		FILE* pipe = _popen(wrapped.c_str(), "r");
+
+		if (!pipe)
+			return -1;
+
+		char8 buffer[512];
+
+		while (std::fgets(buffer, sizeof(buffer), pipe))
+			output += buffer;
+
+		return _pclose(pipe);
+	}
+
+	// MSBuild's path is not fixed across Visual Studio installs, so ask the installer's own locator.
+	const std::string& MSBuildPath()
+	{
+		static const std::string path = []
+		{
+			const char8* programFiles = std::getenv("ProgramFiles(x86)");
+
+			if (!programFiles)
+				return std::string();
+
+			const std::string vswhere =
+				"\"" + std::string(programFiles) + "\\Microsoft Visual Studio\\Installer\\vswhere.exe\"";
+
+			std::string output;
+
+			if (RunCommand(vswhere + " -latest -requires Microsoft.Component.MSBuild -find MSBuild\\**\\Bin\\MSBuild.exe", output) != 0)
+				return std::string();
+
+			// vswhere prints one path per line; take the first and strip the newline.
+			const size_t end = output.find_first_of("\r\n");
+			return (end == std::string::npos) ? output : output.substr(0, end);
+		}();
+
+		return path;
+	}
+
+	// The configuration the editor itself was built in: the game module has to match it, or the two
+	// would disagree on the runtime and the module could not be loaded.
+	constexpr const char8* BuildConfiguration()
+	{
+#if defined(LN_DEBUG)
+		return "Debug";
+#elif defined(LN_RELEASE)
+		return "Release";
+#else
+		return "Shipping";
+#endif
 	}
 
 	// A generated type name becomes a class name and a file name, so hold it to a C++ identifier.
@@ -693,7 +780,9 @@ void EditorLayer::DrawShortcuts()
 			{ ShortcutAction::CopyEntity,      "Hierarchy", "Copy selected entity" },
 			{ ShortcutAction::PasteEntity,     "Hierarchy", "Paste entity from clipboard" },
 			{ ShortcutAction::DuplicateEntity, "Hierarchy", "Duplicate selected entity" },
+			{ ShortcutAction::StepFrame,       "Play Mode", "Step one frame" },
 			{ ShortcutAction::ToggleColliders, "Viewport",  "Toggle collider hitboxes" },
+			{ ShortcutAction::CompileModule,   "Game",      "Compile the game module" },
 			{ ShortcutAction::ReloadModule,    "Game",      "Reload the game module" },
 		};
 
@@ -885,7 +974,9 @@ void EditorLayer::ResetShortcutsToDefault()
 	set(ShortcutAction::PasteEntity, ImGuiKey_V, true);
 	set(ShortcutAction::DuplicateEntity, ImGuiKey_D, true);
 	set(ShortcutAction::ToolSelect, ImGuiKey_Q);
-	set(ShortcutAction::ReloadModule, ImGuiKey_F6);
+	set(ShortcutAction::StepFrame, ImGuiKey_F6);
+	set(ShortcutAction::CompileModule, ImGuiKey_F7, true);   // Ctrl+F7, so it does not collide with Pause.
+	set(ShortcutAction::ReloadModule, ImGuiKey_F9);
 }
 
 void EditorLayer::CreateFolder()
@@ -1019,6 +1110,8 @@ void EditorLayer::HandleShortcuts()
 	if (IsShortcutPressed(ShortcutAction::Stop)) StopPlay();
 	if (IsShortcutPressed(ShortcutAction::ToggleShortcuts)) mShowShortcuts = !mShowShortcuts;
 	if (IsShortcutPressed(ShortcutAction::ToggleColliders)) mShowColliders = !mShowColliders;
+	if (IsShortcutPressed(ShortcutAction::StepFrame)) StepOneFrame();
+	if (IsShortcutPressed(ShortcutAction::CompileModule)) CompileGameModule();
 	if (IsShortcutPressed(ShortcutAction::ReloadModule)) ReloadGameModule();
 
 	// The actions below are edit-mode only; ignore them while playing or typing in a text field.
@@ -1230,12 +1323,13 @@ void EditorLayer::DrawViewportToolbar(const ImVec2& imageMin, const ImVec2& imag
 		ImGui::EndPopup();
 	}
 
-	// Play / Pause / Stop, centered along the viewport's top edge.
+	// Play / Step / Pause / Stop, centered along the viewport's top edge.
 	const char8* pauseLabel = mPaused ? "Resume" : "Pause";
 	const float32 playWidth = ImGui::CalcTextSize("Play").x + style.FramePadding.x * 2.0f;
+	const float32 stepWidth = ImGui::CalcTextSize("Step").x + style.FramePadding.x * 2.0f;
 	const float32 pauseWidth = ImGui::CalcTextSize(pauseLabel).x + style.FramePadding.x * 2.0f;
 	const float32 stopWidth = ImGui::CalcTextSize("Stop").x + style.FramePadding.x * 2.0f;
-	const float32 totalWidth = playWidth + pauseWidth + stopWidth + style.ItemSpacing.x * 2.0f;
+	const float32 totalWidth = playWidth + stepWidth + pauseWidth + stopWidth + style.ItemSpacing.x * 3.0f;
 
 	ImGui::SetCursorScreenPos(ImVec2(imageMin.x + (imageSize.x - totalWidth) * 0.5f, imageMin.y + 8.0f));
 
@@ -1246,6 +1340,15 @@ void EditorLayer::DrawViewportToolbar(const ImVec2& imageMin, const ImVec2& imag
 	ImGui::EndDisabled();
 	if (ImGui::IsItemHovered())
 		ImGui::SetTooltip("Run the scene simulation (F5)");
+
+	// Step advances a halted simulation one frame at a time, so it only means anything while playing.
+	ImGui::SameLine();
+	ImGui::BeginDisabled(!mPlaying);
+	if (ImGui::Button("Step"))
+		StepOneFrame();
+	ImGui::EndDisabled();
+	if (ImGui::IsItemHovered())
+		ImGui::SetTooltip("Advance the simulation by one frame (F6)");
 
 	ImGui::SameLine();
 	ImGui::BeginDisabled(!mPlaying);
@@ -2067,11 +2170,17 @@ void EditorLayer::DrawMenuBar()
 
 		if (ImGui::BeginMenu("Game"))
 		{
-			if (ImGui::MenuItem("Reload Module", KeybindToString(mBinds[static_cast<int>(ShortcutAction::ReloadModule)]).c_str()))
+			if (ImGui::MenuItem("Compile", KeybindToString(mBinds[static_cast<int>(ShortcutAction::CompileModule)]).c_str(), false, !mBuilding))
+				CompileGameModule();
+
+			if (ImGui::IsItemHovered())
+				ImGui::SetTooltip("Rebuild the game module and reload it");
+
+			if (ImGui::MenuItem("Reload Module", KeybindToString(mBinds[static_cast<int>(ShortcutAction::ReloadModule)]).c_str(), false, !mBuilding))
 				ReloadGameModule();
 
 			if (ImGui::IsItemHovered())
-				ImGui::SetTooltip("Pick up a rebuilt Game.dll without restarting the editor");
+				ImGui::SetTooltip("Pick up an already-rebuilt Game.dll without restarting the editor");
 
 			ImGui::EndMenu();
 		}
@@ -2335,6 +2444,84 @@ bool EditorLayer::LoadGameModule()
 		Log::Console(LogLevel::Success, "[Editor] Loaded the game module.");
 
 	return loaded;
+}
+
+void EditorLayer::CompileGameModule()
+{
+	if (mBuilding)
+		return;
+
+	const std::filesystem::path root = ProjectRootDirectory();
+
+	if (root.empty())
+	{
+		Log::Console(LogLevel::Error, "[Editor] Could not locate the project; nothing to compile.");
+		return;
+	}
+
+	if (MSBuildPath().empty())
+	{
+		Log::Console(LogLevel::Error, "[Editor] Could not locate MSBuild; is Visual Studio installed?");
+		return;
+	}
+
+	// Build only the game module, by name within the solution (premake files it under the "Misc"
+	// group, which is what the target is called). Building the solution outright would try to relink
+	// the running editor. Nothing else is rebuilt, so the editor's copy of the module — which the
+	// module's own post-build step refreshes — is the one the reload then picks up.
+	const std::string command =
+		"\"" + MSBuildPath() + "\""
+		" \"" + (root / "Lion.sln").string() + "\""
+		" -t:Misc\\Game"
+		" -p:Configuration=" + BuildConfiguration() +
+		" -p:Platform=x64 -v:minimal -nologo";
+
+	Log::Console(LogLevel::Information, "[Editor] Compiling the game module...");
+
+	mBuilding = true;
+	mGameBuild = std::async(std::launch::async, [command]
+	{
+		GameBuild result;
+		result.exitCode = RunCommand(command, result.output);
+		return result;
+	});
+}
+
+void EditorLayer::PollGameBuild()
+{
+	if (!mBuilding || !mGameBuild.valid())
+		return;
+
+	if (mGameBuild.wait_for(std::chrono::seconds(0)) != std::future_status::ready)
+		return;
+
+	const GameBuild result = mGameBuild.get();
+	mBuilding = false;
+
+	// The compiler's own diagnostics are the useful part, so they go to the console verbatim.
+	std::istringstream lines(result.output);
+	std::string line;
+
+	while (std::getline(lines, line))
+	{
+		while (!line.empty() && (line.back() == '\r' || line.back() == ' '))
+			line.pop_back();
+
+		if (line.empty())
+			continue;
+
+		const bool failed = line.find("error") != std::string::npos;
+		Log::Console(failed ? LogLevel::Error : LogLevel::Information, "[MSBuild] " + line);
+	}
+
+	if (result.exitCode != 0)
+	{
+		Log::Console(LogLevel::Error, "[Editor] The game module failed to compile; the loaded one is unchanged.");
+		return;
+	}
+
+	// Only now, back on the main thread, is it safe to swap the module out.
+	ReloadGameModule();
 }
 
 void EditorLayer::ReloadGameModule()
