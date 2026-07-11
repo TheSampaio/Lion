@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Lion/Lion.h>
+#include <Lion/Core/DynamicLibrary.h>
 
 #include <imgui/imgui.h>
 #include <imguizmo/ImGuizmo.h>
@@ -74,6 +75,10 @@ private:
 	bool mShowColliders = false;  // Collider outlines are a debug view, off until enabled in Settings.
 	bool mRenameFocus = false;   // Request keyboard focus on the inline rename field for one frame.
 	Tool mTool = Tool::Move;
+
+	// The game module, loaded at startup so its components register with the engine and appear in the
+	// Add Component list. Held for the editor's lifetime, so the game's code stays mapped.
+	Lion::DynamicLibrary mGameModule;
 
 	Lion::Reference<Lion::CameraOrthographic> mCamera;
 	Lion::Reference<Lion::Scene> mScene;

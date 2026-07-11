@@ -7,6 +7,7 @@
 #include <fstream>
 
 #include <Lion/Core/Filesystem.h>
+#include <Lion/Logic/ComponentRegistry.h>
 
 #include <imgui/imgui_internal.h> // DockBuilder API for the default layout.
 
@@ -25,6 +26,14 @@ void EditorLayer::OnCreate()
 {
 	EditorGui::Init();
 	InitShortcuts();
+
+	// Load the game module: it registers the game's components (and scripts) with the engine just by
+	// being loaded, which is what makes user-defined components appear in Add Component. The editor
+	// still runs on the built-in components alone, so a missing module is only a warning.
+	if (mGameModule.Load("Game.dll"))
+		Log::Console(LogLevel::Success, "[Editor] Loaded the game module 'Game.dll'.");
+	else
+		Log::Console(LogLevel::Warning, "[Editor] Game module 'Game.dll' not found; only built-in components are available.");
 
 	mCamera = MakeReference<CameraOrthographic>();
 	mScene = MakeReference<Scene>();
@@ -1826,6 +1835,17 @@ void EditorLayer::DrawProperties()
 				if (ImGui::IsItemDeactivatedAfterEdit()) CommitEdit();
 			}
 		}
+		else
+		{
+			// Any other component — a user-defined one from the game module. The editor has no bespoke
+			// UI for it, so it draws a header with the registered type name (empty for an unregistered
+			// type) and, for now, a note; per-field editing waits on reflection.
+			const std::string& typeName = component->GetTypeName();
+			const char8* label = typeName.empty() ? "Component" : typeName.c_str();
+
+			if (DrawComponentHeader(label, i, remove, dragFrom, dragTo))
+				ImGui::TextDisabled("Defined in the game module.");
+		}
 
 		if (remove)
 			componentToRemove = component;
@@ -1887,6 +1907,46 @@ void EditorLayer::DrawProperties()
 		{
 			RecordSnapshot();
 			mSelectedEntity->AddComponent<ScriptComponent>();
+		}
+
+		// Components coming from the loaded game module (user-defined ones). They have no special
+		// construction here — created by name, default-constructed, then configured in the Inspector.
+		// The built-in types above are listed explicitly, so they are skipped here.
+		static const char8* builtIns[] = {
+			"SpriteRenderer", "RigidBody2D", "BoxCollider2D", "CircleCollider2D", "ScriptComponent" };
+
+		const auto isBuiltIn = [&](const std::string& name)
+		{
+			for (const char8* entry : builtIns)
+				if (name == entry) return true;
+			return false;
+		};
+
+		const auto isAttached = [&](const std::string& name)
+		{
+			for (const auto& component : mSelectedEntity->GetComponents())
+				if (component->GetTypeName() == name) return true;
+			return false;
+		};
+
+		bool sawGameComponent = false;
+
+		for (const std::string& name : ComponentRegistry::GetNames())
+		{
+			if (isBuiltIn(name) || isAttached(name))
+				continue;
+
+			if (!sawGameComponent)
+			{
+				ImGui::Separator();
+				sawGameComponent = true;
+			}
+
+			if (ImGui::MenuItem(name.c_str()))
+			{
+				RecordSnapshot();
+				mSelectedEntity->AddComponentByName(name);
+			}
 		}
 
 		ImGui::EndPopup();
