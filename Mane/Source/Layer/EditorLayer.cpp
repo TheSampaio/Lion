@@ -278,7 +278,11 @@ void EditorLayer::DrawUI()
 			mLayoutRequest = LayoutRequest::Reset;
 	}
 
-	ImGui::DockSpace(mDockspaceId);
+	// A closable panel would otherwise carry two close buttons: one on its tab, and one the dock node
+	// draws at the far right of the same row for whichever tab is selected. Two buttons that do the
+	// same thing, a few pixels apart. Keep the one on the tab — it is the one attached to the thing it
+	// closes, and where Unreal puts it — and drop the node's.
+	ImGui::DockSpace(mDockspaceId, ImVec2(0.0f, 0.0f), ImGuiDockNodeFlags_NoCloseButton);
 	ImGui::End();
 
 	// --- Panels -----------------------------------------------------------------------------
