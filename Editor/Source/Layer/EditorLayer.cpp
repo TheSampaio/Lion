@@ -2067,12 +2067,15 @@ void EditorLayer::DrawHierarchy()
 	// scene, so it is always on screen.
 	//
 	// The header is a bar, and a bar that stops short of the edges it is meant to sit against reads as
-	// floating above them. So the tree runs the panel's full width, from its left edge to its right, and
-	// starts where the line above it ends: the child drops the panel's own margin (which is why it is
-	// placed at x = 0 and given the whole window's width) and its own padding with it.
+	// floating above them. So the tree runs the panel's full width, from its left edge to its right: the
+	// child drops the panel's own margin (which is why it is placed at x = 0 and given the whole window's
+	// width) and its own padding with it.
+	//
+	// Only the sides, though. The scene's name keeps the same air under it that it has over it — a line of
+	// text pinned against the bar below reads as belonging to it, and it belongs to what is above.
 	const float32 footerHeight = ImGui::GetFrameHeightWithSpacing();
 
-	ImGui::SetCursorPos(ImVec2(0.0f, ImGui::GetCursorPosY() - style.ItemSpacing.y));
+	ImGui::SetCursorPosX(0.0f);
 	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
 	ImGui::BeginChild("HierarchyTree", ImVec2(ImGui::GetWindowWidth(), -footerHeight), ImGuiChildFlags_None);
 	ImGui::PopStyleVar();
