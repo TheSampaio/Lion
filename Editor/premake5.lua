@@ -1,4 +1,4 @@
-project "Editor"
+project "Mane"
     kind "ConsoleApp"
     targetname "Lion"  -- The editor is the face of the engine, so it is what carries its name.
 
@@ -7,10 +7,11 @@ project "Editor"
     objdir    ("%{wks.location}/Build/Obj/" .. output_dir .. "%{prj.name}")
 
     -- Run from the output folder, not the project one: assets, the game module and the editor's own
-    -- state all sit next to the executable, and Visual Studio would otherwise start it from Mane/.
+    -- state all sit next to the executable, and Visual Studio would otherwise start it from Editor/.
     debugdir "%{cfg.targetdir}"
 
     files {
+        "%{prj.location}/**.rc",   -- The executable's icon.
         "%{prj.location}/**.h",
         "%{prj.location}/**.cpp",  -- includes the vendored ImGuizmo.cpp under Source/Vendor (editor-only)
     }
@@ -56,6 +57,8 @@ project "Editor"
             '{COPY} "%{wks.location}/Build/Bin/' .. output_dir .. 'Lion/lion-core.dll" "%{cfg.targetdir}"',
             -- GLFW shared library (the editor's ImGui backend links against it directly).
             '{COPYFILE} "%{dependencies.glfw.dll}" "%{cfg.targetdir}"',
-            -- Shared resources (shader + sprites) flattened next to the executable.
-            'xcopy /E /I /Y /Q "%{wks.location}/Sandbox/Assets" "%{cfg.targetdir}"',
+            -- Shared resources (shaders + sprites) flattened next to the executable, minus the scripts:
+            -- the editor reads those from the project, and they are compiled into the module anyway.
+            -- The exclude list is named relatively — see the same copy in Sandbox/premake5.lua.
+            'xcopy /E /I /Y /Q /EXCLUDE:..\\Scripts\\AssetCopyExclude.txt "%{wks.location}/Sandbox/Assets" "%{cfg.targetdir}"',
         }

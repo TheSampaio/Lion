@@ -28,6 +28,11 @@ namespace Lion
 
 		void OnAwake() override;
 		void OnDestroy() override;
+
+		// A body follows its entity: switching the entity off takes the body out of the simulation, so a
+		// disabled wall stops being a wall instead of quietly staying one.
+		void OnEnable() override;
+		void OnDisable() override;
 		void Serialize(Serializer& serializer) const override;
 		void Deserialize(const Serializer& serializer) override;
 

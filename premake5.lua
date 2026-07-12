@@ -13,7 +13,7 @@ end)
 
 workspace "Lion"
     configurations { "Debug", "Release", "Shipping" }
-    startproject "Editor"  -- The project in Mane/; F5 in Visual Studio opens the editor.
+    startproject "Mane"  -- The project in Editor/; F5 in Visual Studio opens the editor.
 
     language "C++"
     cppdialect "C++20"
@@ -42,6 +42,12 @@ workspace "Lion"
         defines { "LN_DISABLE_WARNINGS=6294 26495 26498 26800" }
 
     output_dir = "%{cfg.buildcfg}/"
+
+    -- Every project builds into a folder named after itself, so a project that ships something into
+    -- another one's folder needs that project's name — not a second spelling of it. Renaming a tool is
+    -- then a change here, and nowhere else.
+    editor_project = "Mane"
+    launcher_project = "Launcher"
 
     -- This project's own artefacts. Each vendored library keeps a Build/ of its own, inside its
     -- folder (see the override below), so a library's output never mixes with the engine's.
@@ -123,9 +129,9 @@ group "Core"
 group ""
 
 -- A folder never carries its project's name, so a path always says which of the two it means:
--- Mane/ holds the Editor, Sandbox/ holds the Game.
+-- Editor/ holds Mane, Sandbox/ holds the Game.
 group "Tools"
-    include "Mane"
+    include "Editor"
     include "Launcher"
 group ""
 

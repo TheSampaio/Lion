@@ -8,7 +8,11 @@ Lion::Application* Lion::Main()
 	//
 	// Set before the application is constructed, so even the engine's start-up messages are kept.
 	Log::SetVerbosity(LogVerbosity::Verbose);
-	Clock::SetShowFrameStats(true);
+
+	// The title bar stops keeping score. The editor has a Statistics panel that says all of it and more,
+	// and a title that rewrites itself every second is a title nobody can read. A game still keeps them —
+	// it has nowhere else to put them — except when it ships, where nothing is kept.
+	Clock::SetShowFrameStats(false);
 
 	return new Editor();
 }

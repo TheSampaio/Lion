@@ -12,6 +12,7 @@ project "Launcher"
     debugdir "%{cfg.targetdir}"
 
     files {
+        "%{prj.location}/**.rc",   -- The executable's icon.
         "%{prj.location}/**.h",
         "%{prj.location}/**.cpp",
     }

@@ -3,7 +3,7 @@
 
 #include <box2d/box2d.h>
 
-#include <Lion/Logic/Actor.h>
+#include <Lion/Logic/Entity.h>
 #include <Lion/Physics/RigidBody2D.h>
 
 namespace Lion
@@ -82,17 +82,15 @@ namespace Lion
 			const b2BodyId bodyA = b2Shape_GetBody(contact.shapeIdA);
 			const b2BodyId bodyB = b2Shape_GetBody(contact.shapeIdB);
 
-			// User data is the owning Entity; only actors receive collision callbacks.
+			// User data is the owning entity. Both sides hear about the contact, and each entity hands it
+			// to its own components — whichever of them care.
 			auto* entityA = static_cast<Entity*>(b2Body_GetUserData(bodyA));
 			auto* entityB = static_cast<Entity*>(b2Body_GetUserData(bodyB));
 
-			auto* actorA = dynamic_cast<Actor*>(entityA);
-			auto* actorB = dynamic_cast<Actor*>(entityB);
-
-			if (actorA && actorB)
+			if (entityA && entityB)
 			{
-				actorA->OnCollision(*actorB);
-				actorB->OnCollision(*actorA);
+				entityA->Collide(*entityB);
+				entityB->Collide(*entityA);
 			}
 		}
 	}

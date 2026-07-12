@@ -7,8 +7,162 @@
 #include <Lion/Signal/EventInput.h>
 #include <Lion/Signal/EventWindow.h>
 
+#ifdef LN_PLATFORM_WIN
+	#define GLFW_EXPOSE_NATIVE_WIN32
+	#include <GLFW/glfw3native.h>
+
+	#define WIN32_LEAN_AND_MEAN
+	#define NOMINMAX
+	#include <Windows.h>
+	#include <windowsx.h>
+	#include <dwmapi.h>
+
+	// windowsx.h defines IsMaximized as a macro over IsZoomed, which quietly rewrites any method that
+	// happens to be called that — including this backend's own.
+	#undef IsMaximized
+	#undef IsMinimized
+	#undef IsRestored
+
+	#pragma comment(lib, "Dwmapi.lib")
+#endif
+
 namespace Lion
 {
+	namespace
+	{
+#ifdef LN_PLATFORM_WIN
+		// The title bar is the one part of a window the application does not draw, so it is the one part
+		// that can disagree with everything the application does draw. This is the whole of the API for
+		// handing it over, and on a Windows that does not have it, it does nothing.
+		void UseDarkTitleBar(GLFWwindow* window)
+		{
+			constexpr DWORD kUseImmersiveDarkMode = 20;
+			const BOOL dark = TRUE;
+
+			DwmSetWindowAttribute(glfwGetWin32Window(window), kUseImmersiveDarkMode, &dark, sizeof(dark));
+		}
+
+		// A window that draws its own caption still has corners, and on Windows 11 the corners are round.
+		// Taking the caption away is not a reason for the window to stop looking like a window.
+		void UseRoundedCorners(GLFWwindow* window)
+		{
+			constexpr DWORD kCornerPreference = 33;
+			constexpr DWORD kRound = 2;
+
+			DwmSetWindowAttribute(glfwGetWin32Window(window), kCornerPreference, &kRound, sizeof(kRound));
+		}
+
+		// A caption the application draws itself.
+		//
+		// The window keeps its frame — that is what resizing, snapping and the aero shortcuts hang off —
+		// and gives up only the strip Windows would have drawn a caption into, which the client area then
+		// covers. Two messages do it: one hands the strip over, and one answers, for every pixel, whether
+		// it is a border to drag by, the caption to move the window by, or the application's own.
+		//
+		// The state is a single window's, because the engine has a single window.
+		WNDPROC sOriginalProc = nullptr;
+		const WindowData* sChrome = nullptr;
+
+		int32 FrameBorder()
+		{
+			return GetSystemMetrics(SM_CXFRAME) + GetSystemMetrics(SM_CXPADDEDBORDER);
+		}
+
+		// What the cursor has to be within to be resizing rather than clicking. The frame Windows reports is
+		// what it *reserves*, not what a hand can hit — the real one is invisible now, and a border you have
+		// to find is a border that is not there. A corner is given more, because two edges meet in it.
+		constexpr int32 kGrabBorder = 8;
+		constexpr int32 kGrabCorner = 16;
+
+		LRESULT CALLBACK CustomChromeProc(HWND window, UINT message, WPARAM wParam, LPARAM lParam)
+		{
+			switch (message)
+			{
+				case WM_NCCALCSIZE:
+				{
+					if (wParam == FALSE)
+						break;
+
+					// The whole window becomes the client area. Maximised, the frame still hangs off the
+					// screen the way Windows expects, so it has to be taken off here or the window spills
+					// over the taskbar.
+					NCCALCSIZE_PARAMS* params = reinterpret_cast<NCCALCSIZE_PARAMS*>(lParam);
+
+					if (IsZoomed(window))
+					{
+						const int32 border = FrameBorder();
+
+						params->rgrc[0].left += border;
+						params->rgrc[0].right -= border;
+						params->rgrc[0].top += border;
+						params->rgrc[0].bottom -= border;
+					}
+
+					return 0;
+				}
+
+				case WM_NCHITTEST:
+				{
+					// Nothing is non-client anymore, so Windows would call every pixel HTCLIENT and the
+					// window would neither resize nor move. This says which is which.
+					POINT cursor = { GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam) };
+
+					RECT bounds = {};
+					GetWindowRect(window, &bounds);
+
+					const int32 border = FrameBorder();
+					const bool maximized = IsZoomed(window) != 0;
+
+					if (!maximized && sChrome && sChrome->resizable)
+					{
+						// The corners are tested against the wider band, and first: a cursor in the corner is
+						// within both edges, and the diagonal is the one it means.
+						const bool leftCorner = cursor.x < bounds.left + kGrabCorner;
+						const bool rightCorner = cursor.x >= bounds.right - kGrabCorner;
+						const bool topCorner = cursor.y < bounds.top + kGrabCorner;
+						const bool bottomCorner = cursor.y >= bounds.bottom - kGrabCorner;
+
+						if (topCorner && leftCorner)     return HTTOPLEFT;
+						if (topCorner && rightCorner)    return HTTOPRIGHT;
+						if (bottomCorner && leftCorner)  return HTBOTTOMLEFT;
+						if (bottomCorner && rightCorner) return HTBOTTOMRIGHT;
+
+						if (cursor.x < bounds.left + kGrabBorder)    return HTLEFT;
+						if (cursor.x >= bounds.right - kGrabBorder)  return HTRIGHT;
+						if (cursor.y < bounds.top + kGrabBorder)     return HTTOP;
+						if (cursor.y >= bounds.bottom - kGrabBorder) return HTBOTTOM;
+					}
+
+					POINT client = cursor;
+					ScreenToClient(window, &client);
+
+					// The caption is what the application drew and nothing it drew in it: a drag that began
+					// on a menu would open nothing and move everything.
+					if (sChrome && !sChrome->titleBarBlocked &&
+						client.y >= 0 && client.y < static_cast<int32>(sChrome->titleBarHeight))
+						return HTCAPTION;
+
+					return HTCLIENT;
+				}
+			}
+
+			return CallWindowProc(sOriginalProc, window, message, wParam, lParam);
+		}
+
+		void UseCustomTitleBar(GLFWwindow* window, const WindowData* data)
+		{
+			HWND handle = glfwGetWin32Window(window);
+
+			sChrome = data;
+			sOriginalProc = reinterpret_cast<WNDPROC>(
+				SetWindowLongPtr(handle, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(&CustomChromeProc)));
+
+			// The frame is only recalculated when the window is told its frame changed.
+			SetWindowPos(handle, nullptr, 0, 0, 0, 0,
+				SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+		}
+#endif
+	}
 	GlfwWindow::~GlfwWindow()
 	{
 		if (mIcon)
@@ -52,6 +206,18 @@ namespace Lion
 			return false;
 		}
 
+#ifdef LN_PLATFORM_WIN
+		// Only what was asked for: a game's window looks like every other window on the machine.
+		if (mData->darkTitleBar)
+			UseDarkTitleBar(mWindow);
+
+		if (mData->customTitleBar)
+		{
+			UseCustomTitleBar(mWindow, mData);
+			UseRoundedCorners(mWindow);
+		}
+#endif
+
 		glfwSetWindowUserPointer(mWindow, mData);
 		RegisterCallbacks();
 
@@ -94,11 +260,26 @@ namespace Lion
 				data.width = static_cast<uint32>(width);
 				data.height = static_cast<uint32>(height);
 
-				if (!data.eventCallback)
-					return;
+				if (data.eventCallback)
+				{
+					EventWindowResize event(width, height);
+					data.eventCallback(event);
+				}
 
-				EventWindowResize event(width, height);
-				data.eventCallback(event);
+				// Windows keeps the thread for the whole of a resize drag and only lets go through here, so
+				// this is where a frame gets drawn while the edge is being pulled. Without it the window
+				// holds whatever it had when the drag began, or nothing at all.
+				if (data.refreshCallback)
+					data.refreshCallback();
+			});
+
+		// A window that was covered and is uncovered redraws for the same reason, through the same door.
+		glfwSetWindowRefreshCallback(mWindow, [](GLFWwindow* window)
+			{
+				WindowData& data = *static_cast<WindowData*>(glfwGetWindowUserPointer(window));
+
+				if (data.refreshCallback)
+					data.refreshCallback();
 			});
 
 		glfwSetKeyCallback(mWindow, [](GLFWwindow* window, int32 key, int32 scancode, int32 action, int32 mods)
@@ -216,6 +397,24 @@ namespace Lion
 	bool GlfwWindow::IsKeyReleased(int32 keyCode) const
 	{
 		return glfwGetKey(mWindow, keyCode) == GLFW_RELEASE;
+	}
+
+	void GlfwWindow::Minimize()
+	{
+		glfwIconifyWindow(mWindow);
+	}
+
+	void GlfwWindow::ToggleMaximize()
+	{
+		if (IsMaximized())
+			glfwRestoreWindow(mWindow);
+		else
+			glfwMaximizeWindow(mWindow);
+	}
+
+	bool GlfwWindow::IsMaximized() const
+	{
+		return glfwGetWindowAttrib(mWindow, GLFW_MAXIMIZED) == GLFW_TRUE;
 	}
 
 	void* GlfwWindow::GetNativeHandle() const

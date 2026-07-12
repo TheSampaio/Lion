@@ -20,9 +20,24 @@ namespace Lion
     // Batches submitted sprites into a single dynamic vertex buffer, resolves per-frame texture
     // slots and issues one indexed draw call. It is fully backend-agnostic: it only talks to the
     // RHI abstractions (Shader, VertexArray, Buffer, Texture) and RenderCommand.
+    // What one frame cost the renderer. A batcher's whole job is to turn many sprites into few draw
+    // calls, and none of that is visible from the outside — so it says so, and the editor reads it.
+    struct RenderStats
+    {
+        uint32 drawCalls = 0;      // How many times the GPU was actually asked to draw.
+        uint32 sprites = 0;        // Sprites submitted, before batching.
+        uint32 spritesDropped = 0; // Sprites the batch had no texture slot left for.
+        uint32 textureSlots = 0;   // Distinct textures bound for the batch.
+        uint32 vertices = 0;
+        uint32 indices = 0;
+    };
+
     class Renderer
     {
     public:
+        // What the last completed frame cost. Reset when a batch begins, filled when it flushes.
+        static LION_API const RenderStats& GetStats();
+
         // Clears the currently bound framebuffer with the given color.
         static LION_API void Clear(float32 red, float32 green, float32 blue, float32 alpha = 1.0f);
 
@@ -53,6 +68,7 @@ namespace Lion
         std::vector<SpriteInfo*> mSpriteBuffer;   // Sprites submitted this frame.
         std::vector<Texture*> mTextureSlots;      // Slot index -> texture, rebuilt every frame.
         std::vector<Vertex> mVertexData;          // CPU-side staging for the vertex buffer.
+        RenderStats mStats;                       // What the last flush cost (see GetStats).
 
         Renderer() = default;
 

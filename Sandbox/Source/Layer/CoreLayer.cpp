@@ -8,7 +8,7 @@ void CoreLayer::OnAttach()
 	Window::SetResizable(false);
 	Window::SetTitle("Brickout");
 	Window::SetBackgroundColor(0.05f, 0.05f, 0.05f);
-	Window::SetIcon("Sprite/Brickout/tile-3.png");
+	Window::SetIcon("Sprites/Brickout/tile-3.png");
 
 	Graphics::SetVerticalSynchronization(false);
 }

@@ -15,8 +15,21 @@ namespace Lion
 		uint32 width = 0;
 		uint32 height = 0;
 		std::function<void(Event&)> eventCallback;
+
+		// Called when the window has to redraw itself outside the application's own loop — which is every
+		// frame of a resize, because Windows runs that loop and does not give the thread back until it is
+		// over.
+		std::function<void()> refreshCallback;
 		bool resizable = true;
 		bool maximized = false;
+
+		// The window's chrome. A game leaves it alone — its window should look like every other window on
+		// the machine, which is whatever the user told the machine they want. The editor asks for the dark
+		// caption, and then for no caption at all: it draws its own.
+		bool darkTitleBar = false;
+		bool customTitleBar = false;
+		float32 titleBarHeight = 0.0f;   // How tall the drawn caption is, so the platform knows what to drag by.
+		bool titleBarBlocked = false;    // The cursor is over something clickable in it; that click is not a drag.
 	};
 
 	// Platform windowing backend.
@@ -52,6 +65,11 @@ namespace Lion
 
 		// Loads and applies a window icon from an image file.
 		virtual void SetIcon(const std::string& filePath) = 0;
+
+		// The window's own buttons, for a caption the application draws itself.
+		virtual void Minimize() = 0;
+		virtual void ToggleMaximize() = 0;
+		virtual bool IsMaximized() const = 0;
 
 		// Immediate keyboard state, using engine key codes.
 		virtual bool IsKeyPressed(int32 keyCode) const = 0;

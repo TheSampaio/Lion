@@ -177,10 +177,29 @@ namespace Lion
 		return raw;
 	}
 
+	bool Entity::HasComponentByName(const std::string& name) const
+	{
+		for (const auto& component : mComponents)
+			if (component->GetTypeName() == name)
+				return true;
+
+		return false;
+	}
+
 	void Entity::RegisterComponent(Scope<Component> component, std::type_index type)
 	{
 		component->mOwner = this;
 		component->mTypeName = ComponentRegistry::GetName(type);
+
+		// What a component cannot work without goes on before it does. A collider asks its entity for a
+		// body the moment it wakes, so an entity that had to be told twice — once for the trait, once for
+		// what the trait runs on — is an entity you can build wrong, and the editor is where you would.
+		//
+		// A required component that requires something else lands here too, and one that is already
+		// attached is not attached twice.
+		for (const std::string& required : component->GetRequiredComponents())
+			if (!HasComponentByName(required))
+				AddComponentByName(required);
 
 		Component* raw = component.get();
 		mComponents.push_back(std::move(component));
@@ -246,10 +265,37 @@ namespace Lion
 		mComponents.insert(mComponents.begin() + to, std::move(moved));
 	}
 
+	bool Entity::IsActive() const
+	{
+		// Enabling is inherited: switching a parent off switches off everything under it, so an entity
+		// runs only when nothing above it says otherwise.
+		for (const Entity* entity = this; entity != nullptr; entity = entity->mParent)
+			if (!entity->mEnabled)
+				return false;
+
+		return true;
+	}
+
+	void Entity::SetEnabled(bool value)
+	{
+		if (mEnabled == value)
+			return;
+
+		mEnabled = value;
+
+		// Not running a component's callbacks stops it doing anything, but not being anything — a body
+		// left in the physics world would still block whatever ran into it. This is where it lets go.
+		for (const auto& component : mComponents)
+		{
+			if (value)
+				component->OnEnable();
+			else
+				component->OnDisable();
+		}
+	}
+
 	void Entity::Awake()
 	{
-		OnAwake();
-
 		for (const auto& component : mComponents)
 			component->OnAwake();
 	}
@@ -258,13 +304,12 @@ namespace Lion
 	{
 		for (const auto& component : mComponents)
 			component->OnDestroy();
-
-		OnDestroy();
 	}
 
 	void Entity::UpdateBegin()
 	{
-		OnUpdateBegin();
+		if (!IsActive())
+			return;
 
 		for (const auto& component : mComponents)
 			if (component->IsEnabled())
@@ -273,7 +318,8 @@ namespace Lion
 
 	void Entity::Update()
 	{
-		OnUpdate();
+		if (!IsActive())
+			return;
 
 		for (const auto& component : mComponents)
 			if (component->IsEnabled())
@@ -282,7 +328,8 @@ namespace Lion
 
 	void Entity::UpdateEnd()
 	{
-		OnUpdateEnd();
+		if (!IsActive())
+			return;
 
 		for (const auto& component : mComponents)
 			if (component->IsEnabled())
@@ -291,10 +338,23 @@ namespace Lion
 
 	void Entity::Render()
 	{
-		OnRender();
+		// Hidden is not the same as off: an invisible entity still updates and still collides. It is only
+		// here, at the one call that puts something on screen, that the two part ways.
+		if (!IsActive() || !mVisible)
+			return;
 
 		for (const auto& component : mComponents)
 			if (component->IsEnabled())
 				component->OnRender();
+	}
+
+	void Entity::Collide(Entity& other)
+	{
+		if (!IsActive())
+			return;
+
+		for (const auto& component : mComponents)
+			if (component->IsEnabled())
+				component->OnCollision(other);
 	}
 }

@@ -5,18 +5,19 @@
 
 namespace Lion
 {
+	class PhysicsWorld;
 	class Scene;
 
-	// Base game object of the engine.
+	// The engine's game object: a name, a Transform, and the components attached to it.
 	//
-	// Following a Unity-like model, every Entity always owns a Transform and can host any
-	// number of Components. Derive from Entity (or Actor) to add scripted behaviour through
-	// the On* hooks, and attach reusable behaviour or data through Components.
-	class Entity
+	// An Entity is not derived from — it is composed. Everything an entity is beyond a position in the
+	// world comes from its components, which is why this class is final: a trait added by subclassing
+	// would be one the editor cannot list, the scene cannot save and another entity cannot reuse.
+	class Entity final
 	{
 	public:
 		LION_API Entity();
-		virtual LION_API ~Entity() = default;
+		LION_API ~Entity() = default;
 
 		Entity(const Entity&) = delete;
 		Entity& operator=(const Entity&) = delete;
@@ -33,6 +34,19 @@ namespace Lion
 		// transform, so grouping entities under it never moves them.
 		LION_API bool IsFolder() const { return mIsFolder; }
 		LION_API void SetFolder(bool value) { mIsFolder = value; }
+
+		// Whether the entity takes part in the simulation at all: a disabled one is neither updated nor
+		// drawn, and neither is anything under it. Enabling is inherited, so an entity is only really
+		// running when nothing above it is switched off (IsActive).
+		LION_API bool IsEnabled() const { return mEnabled; }
+		LION_API void SetEnabled(bool value);
+		LION_API bool IsActive() const;
+
+		// Whether the entity is drawn. This is *only* about being seen: a hidden entity still updates,
+		// still collides, still runs its components — it is invisible, not switched off. Both the editor's
+		// eye and the game's own code set this, which is the point of it being on the entity.
+		LION_API bool IsVisible() const { return mVisible; }
+		LION_API void SetVisible(bool value) { mVisible = value; }
 
 		// Returns the scene that currently owns this entity (null while detached).
 		LION_API Reference<Scene> GetScene() const { return mScene; }
@@ -98,6 +112,10 @@ namespace Lion
 			return FindComponent(std::type_index(typeid(T))) != nullptr;
 		}
 
+		// The same question asked by registered name, which is how a component states what it requires
+		// without knowing the other one's header (see LION_REQUIRES).
+		LION_API bool HasComponentByName(const std::string& name) const;
+
 		// Removes the attached component of type T, if any.
 		template<typename T>
 		void RemoveComponent()
@@ -115,21 +133,14 @@ namespace Lion
 		// Moves the component at 'from' to index 'to', shifting the others (editor drag-to-reorder).
 		LION_API void MoveComponent(int32 from, int32 to);
 
-		// Override points for scripted behaviour of the entity itself.
-		virtual void OnAwake() {}
-		virtual void OnDestroy() {}
-
-		virtual void OnUpdateBegin() {}
-		virtual void OnUpdate() {}
-		virtual void OnUpdateEnd() {}
-
-		virtual void OnRender() {}
-
 		friend Scene;
+		friend PhysicsWorld;
 
 	private:
 		const int32 mId;
 		bool mIsFolder = false;
+		bool mEnabled = true;
+		bool mVisible = true;
 		std::string mName = "Entity";
 		Reference<Transform> mTransform;
 		Reference<Scene> mScene;
@@ -150,12 +161,14 @@ namespace Lion
 		LION_API Component* FindComponent(std::type_index type) const;
 		LION_API void UnregisterComponent(std::type_index type);
 
-		// Lifecycle dispatchers invoked by the Scene: run the entity hook, then its components.
+		// Lifecycle dispatchers invoked by the Scene, and the contact one invoked by the PhysicsWorld:
+		// each hands the call to every component attached.
 		void Awake();
 		void Destroy();
 		void UpdateBegin();
 		void Update();
 		void UpdateEnd();
 		void Render();
+		void Collide(Entity& other);
 	};
 }

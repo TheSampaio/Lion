@@ -8,13 +8,14 @@ namespace Lion
 	class OpenGLTexture : public Texture
 	{
 	public:
-		explicit OpenGLTexture(const std::string& filePath);
+		explicit OpenGLTexture(const std::string& filePath, TextureFilter filter = TextureFilter::Nearest);
 		~OpenGLTexture() override;
 
 		Size GetSize() const override { return mSize; }
 		Size GetCenter() const override { return mCenter; }
 
 		void Bind(uint32 slot = 0) const override;
+		uint32 GetNativeHandle() const override { return mId; }
 
 	private:
 		uint32 mId = 0;
@@ -32,6 +33,9 @@ namespace Lion
 
 		// Live texture count, reported through the log. Kept in every build: what the log lets through
 		// is decided at runtime now, so the editor can show this whatever configuration it was built in.
+		// How many textures exist right now. Read through Texture::GetLiveCount, which is where anything
+		// outside the backend asks the question.
 		static uint32 sAllocationCount;
+		friend Texture;
 	};
 }

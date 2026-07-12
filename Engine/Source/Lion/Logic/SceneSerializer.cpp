@@ -63,6 +63,14 @@ namespace Lion
 		if (entity->IsFolder())
 			node["folder"] = true;
 
+		// Only what departs from the default is written: an entity is enabled and visible unless it says
+		// otherwise, and a scene file that repeats the obvious is a scene file nobody can read.
+		if (!entity->IsEnabled())
+			node["enabled"] = false;
+
+		if (!entity->IsVisible())
+			node["visible"] = false;
+
 		const Reference<Transform> transform = entity->GetTransform();
 		const Vector position = transform->GetPosition();
 		const Vector rotation = transform->GetRotation();
@@ -200,6 +208,8 @@ namespace Lion
 		auto entity = MakeReference<Entity>();
 		entity->SetName(node.value("name", std::string("Entity")));
 		entity->SetFolder(node.value("folder", false));
+		entity->SetEnabled(node.value("enabled", true));
+		entity->SetVisible(node.value("visible", true));
 
 		if (node.contains("transform"))
 		{

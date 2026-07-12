@@ -8,10 +8,20 @@ namespace Lion
 {
 	uint32 OpenGLTexture::sAllocationCount = 0;
 
-	OpenGLTexture::OpenGLTexture(const std::string& filePath)
-		: mFilterMin(GL_NEAREST),
-		mFilterMag(GL_NEAREST)
+	uint32 Texture::GetLiveCount()
 	{
+		return OpenGLTexture::sAllocationCount;
+	}
+
+	OpenGLTexture::OpenGLTexture(const std::string& filePath, TextureFilter filter)
+	{
+		// A scaled picture asks for the whole mipmap chain on the way down and interpolation on the way up.
+		// A sprite asks for neither: one texel, one pixel, and nothing in between it did not draw.
+		const bool linear = (filter == TextureFilter::Linear);
+
+		mFilterMin = linear ? GL_LINEAR_MIPMAP_LINEAR : GL_NEAREST;
+		mFilterMag = linear ? GL_LINEAR : GL_NEAREST;
+
 		// Images are stored top-down; flip them to match OpenGL's bottom-up convention.
 		stbi_set_flip_vertically_on_load(true);
 
@@ -21,7 +31,7 @@ namespace Lion
 
 		if (!bytes)
 		{
-			Log::Console(LogLevel::Warning, LION_FORMAT_TEXT("[OpenGLTexture] Failed to load image: '{}'.", filename));
+			Log::Console(LogLevel::Warning, LION_FORMAT_TEXT("[Texture] Could not load '{}'.", filename));
 			return;
 		}
 
@@ -36,7 +46,7 @@ namespace Lion
 			case 1: mFormatInternal = GL_RED;  mFormatExternal = GL_RED;  break;
 
 			default:
-				Log::Console(LogLevel::Error, LION_FORMAT_TEXT("[OpenGLTexture] Unsupported image format: '{}'.", filename));
+				Log::Console(LogLevel::Error, LION_FORMAT_TEXT("[Texture] '{}' has an unsupported pixel format.", filename));
 				stbi_image_free(bytes);
 				return;
 		}
@@ -59,12 +69,16 @@ namespace Lion
 		glBindTexture(GL_TEXTURE_2D, 0);
 
 		// Not guarded by the build: the log's verbosity is the single thing that decides whether this is
-		// seen, so the editor can show it whatever configuration it was compiled in. The counter costs
-		// an increment per texture, which is not a per-frame path.
+		// seen, so the editor can show it whatever configuration it was compiled in.
+		//
+		// The line says which texture, and how big it turned out to be — the two things a reader wants
+		// when a scene looks wrong. The running total it used to print is a number, not news, and now
+		// lives on the Statistics panel where the current value is the only one worth having.
 		sAllocationCount++;
 
 		if (Log::IsEnabled(LogLevel::Trace))
-			Log::Console(LogLevel::Trace, LION_FORMAT_TEXT("[OpenGLTexture] Allocated: 1 (Total: {})", sAllocationCount));
+			Log::Console(LogLevel::Trace, LION_FORMAT_TEXT("[Texture] Loaded '{}' ({}x{}, {} channels).",
+				filename, mSize.width, mSize.height, mChannels));
 	}
 
 	OpenGLTexture::~OpenGLTexture()
@@ -72,9 +86,6 @@ namespace Lion
 		glDeleteTextures(1, &mId);
 
 		sAllocationCount--;
-
-		if (Log::IsEnabled(LogLevel::Trace))
-			Log::Console(LogLevel::Trace, LION_FORMAT_TEXT("[OpenGLTexture] Released:  1 (Remaining: {})", sAllocationCount));
 	}
 
 	void OpenGLTexture::Bind(uint32 slot) const

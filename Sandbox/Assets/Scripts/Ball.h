@@ -4,22 +4,20 @@
 
 class Paddle;
 
-class Ball : public Lion::Actor
+// The ball: rests on the paddle until launched, then travels at a constant speed and takes its
+// direction from wherever it lands on the paddle.
+class Ball : public Lion::Component
 {
 public:
-	explicit Ball(Lion::Reference<Paddle> paddle);
-
 	void OnAwake() override;
 	void OnUpdate() override;
-	void OnCollision(Lion::Actor& other) override;
+	void OnCollision(Lion::Entity& other) override;
 
 	// Re-attaches the ball to the paddle, ready to be launched again.
 	void Reset();
 
-	// Freezes the ball in place (used on game over).
+	// Freezes the ball in place, and shows or hides it (both used on game over).
 	void Stop();
-
-	// Shows or hides the ball's sprite.
 	void SetVisible(bool visible);
 
 private:
@@ -29,17 +27,16 @@ private:
 		Launched,  // In play.
 	};
 
-	static constexpr Lion::float32 kSpeed = 430.0f;           // Constant travel speed (pixels/s).
+	static constexpr Lion::float32 kSpeed = 430.0f;            // Constant travel speed (pixels/s).
 	static constexpr Lion::float32 kMinVerticalRatio = 0.35f;  // Keeps the ball from going flat.
 	static constexpr Lion::float32 kMaxBounceDegrees = 60.0f;  // Paddle steering range from vertical.
 	static constexpr Lion::float32 kAttachGap = 2.0f;          // Small gap above the paddle.
 
 	State mState = State::Attached;
-	Lion::Reference<Paddle> mPaddle;
+	Paddle* mPaddle = nullptr;
 	Lion::RigidBody2D* mBody = nullptr;
 	Lion::SpriteRenderer* mRenderer = nullptr;
 	Lion::float32 mAttachOffsetY = 0.0f;
 
-	glm::vec2 LaunchVelocity() const;
 	void FollowPaddle();
 };

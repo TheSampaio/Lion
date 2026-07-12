@@ -1,14 +1,14 @@
 # Obfuscates shipped shader files so they are not human-readable on disk.
 #
 # Called as a post-build step for the Shipping configuration. It XOR-encodes every ".glsl" file
-# under <OutputDir>/Shader with a fixed key; the engine XOR-decodes them at load time (see
+# under <OutputDir>/Shaders with a fixed key; the engine XOR-decodes them at load time (see
 # Engine/Source/Lion/Render/OpenGL/OpenGLShader.cpp). The build copies fresh plaintext shaders
 # before this runs, so it is safe to run on every build (never double-encodes).
 
 param([Parameter(Mandatory = $true)][string]$OutputDir)
 
 $key = 0x5A
-$shaderDir = Join-Path $OutputDir 'Shader'
+$shaderDir = Join-Path $OutputDir 'Shaders'
 
 if (-not (Test-Path $shaderDir)) {
     exit 0

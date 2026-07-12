@@ -1,6 +1,8 @@
 #include "Engine.h"
 #include "Window.h"
 
+#include <Lion/Core/Version.h>
+
 namespace Lion
 {
     Window* Window::sInstance = nullptr;
@@ -28,8 +30,8 @@ namespace Lion
         if (!sInstance->mBackend->Initialize(&sInstance->mData))
             return false;
 
-        if (!sInstance->mIconPath.empty())
-            sInstance->mBackend->SetIcon(sInstance->mIconPath);
+        // A window always has an icon: the engine's, until a game says otherwise.
+        sInstance->mBackend->SetIcon(sInstance->mIconPath.empty() ? kEngineIconFile : sInstance->mIconPath);
 
         return true;
     }
@@ -57,6 +59,42 @@ namespace Lion
     void Window::SetBackgroundColor(float32 red, float32 green, float32 blue)
     {
         sInstance->mBackgroundColor = { red, green, blue };
+    }
+
+    void Window::SetRefreshCallback(const std::function<void()>& callback)
+    {
+        sInstance->mData.refreshCallback = callback;
+    }
+
+    void Window::SetDarkTitleBar(bool enable)
+    {
+        sInstance->mData.darkTitleBar = enable;
+    }
+
+    void Window::SetCustomTitleBar(bool enable, float32 height)
+    {
+        sInstance->mData.customTitleBar = enable;
+        sInstance->mData.titleBarHeight = height;
+    }
+
+    void Window::SetTitleBarBlocked(bool blocked)
+    {
+        sInstance->mData.titleBarBlocked = blocked;
+    }
+
+    void Window::Minimize()
+    {
+        sInstance->mBackend->Minimize();
+    }
+
+    void Window::ToggleMaximize()
+    {
+        sInstance->mBackend->ToggleMaximize();
+    }
+
+    bool Window::IsMaximized()
+    {
+        return sInstance->mBackend->IsMaximized();
     }
 
     void Window::SetIcon(const std::string& icon)

@@ -40,12 +40,17 @@ project "Lion"
     }
 
     postbuildcommands {
-        -- The launcher's output directory may not exist yet on a clean build, and a plain file copy
-        -- into a missing directory fails rather than creating it.
-        '{MKDIR} "%{wks.location}/Build/Bin/' .. output_dir .. 'Launcher"',
-        "{COPY} %{cfg.buildtarget.relpath} ../Build/Bin/" .. output_dir .. "/Launcher",
+        -- The launcher's and the editor's output directories may not exist yet on a clean build, and a
+        -- plain file copy into a missing directory fails rather than creating it.
+        '{MKDIR} "%{wks.location}/Build/Bin/' .. output_dir .. launcher_project .. '"',
+        '{MKDIR} "%{wks.location}/Build/Bin/' .. output_dir .. editor_project .. '"',
+        "{COPY} %{cfg.buildtarget.relpath} ../Build/Bin/" .. output_dir .. "/" .. launcher_project,
         -- GLFW is a shared library; ship it next to the launcher that loads the engine.
-        '{COPYFILE} "%{dependencies.glfw.dll}" "%{wks.location}/Build/Bin/' .. output_dir .. 'Launcher/"',
+        '{COPYFILE} "%{dependencies.glfw.dll}" "%{wks.location}/Build/Bin/' .. output_dir .. launcher_project .. '/"',
+        -- The engine's own assets — its icon — go beside anything it builds: a game that picks no icon of
+        -- its own still wears the engine's, and the editor always does.
+        'xcopy /E /I /Y /Q "%{prj.location}Assets" "%{wks.location}/Build/Bin/' .. output_dir .. launcher_project .. '/"',
+        'xcopy /E /I /Y /Q "%{prj.location}Assets" "%{wks.location}/Build/Bin/' .. output_dir .. editor_project .. '/"',
     }
 
     filter "system:windows"

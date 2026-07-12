@@ -42,7 +42,7 @@ namespace Lion
     {
         Renderer* self = sInstance;
 
-        self->mShader = Shader::Create("Shader/Lit.glsl");
+        self->mShader = Shader::Create("Shaders/Lit.glsl");
 
         // Dynamic vertex buffer streamed once per batch, described by the sprite vertex layout.
         self->mVertexArray = VertexArray::Create();
@@ -104,9 +104,19 @@ namespace Lion
         self->mShader->SetMat4("uProjection", camera->GetProjectionMatrix());
     }
 
+    const RenderStats& Renderer::GetStats()
+    {
+        return sInstance->mStats;
+    }
+
     void Renderer::RenderEnd()
     {
         Renderer* self = sInstance;
+
+        // Counted whether or not anything is drawn: a frame that drew nothing is a fact about the frame,
+        // not a reason to leave the last one's numbers on screen.
+        self->mStats = RenderStats();
+        self->mStats.sprites = static_cast<uint32>(self->mSpriteBuffer.size());
 
         if (self->mSpriteBuffer.empty())
             return;
@@ -141,7 +151,10 @@ namespace Lion
             if (slot < 0)
             {
                 if (textureSlots.size() >= maxTextureCount)
-                    continue;  // Texture budget exhausted for this batch; skip the sprite.
+                {
+                    self->mStats.spritesDropped++;  // Texture budget exhausted for this batch.
+                    continue;
+                }
 
                 slot = static_cast<int32>(textureSlots.size());
                 textureSlots.push_back(texture);
@@ -170,6 +183,11 @@ namespace Lion
             textureSlots[slot]->Bind(slot);
 
         RenderCommand::DrawIndexed(indexCount);
+
+        self->mStats.drawCalls = 1;   // The whole point of the batch: one call, however many sprites.
+        self->mStats.indices = indexCount;
+        self->mStats.vertices = indexCount / 6 * 4;
+        self->mStats.textureSlots = static_cast<uint32>(textureSlots.size() - 1);  // Slot 0 is reserved.
 
         self->mSpriteBuffer.clear();
     }

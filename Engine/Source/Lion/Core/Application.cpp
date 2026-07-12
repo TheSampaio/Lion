@@ -119,35 +119,17 @@ namespace Lion
 		for (Layer* layer : *mStack)
 			layer->OnCreate();
 
+		// The window draws itself while it is being dragged by an edge, because Windows keeps the thread
+		// for the whole of that drag and hands it back only through this.
+		Window::SetRefreshCallback([this] { Frame(); });
+
 		// Show window
 		Window::Show();
 
 		do
 		{
 			Window::PollEvents();
-			Clock::UpdateFrameTime();
-
-			if (!mMinimized)
-			{
-				// Update
-				for (Layer* layer : *mStack)
-					layer->OnUpdateBegin();
-
-				for (Layer* layer : *mStack)
-					layer->OnUpdate();
-
-				for (Layer* layer : *mStack)
-					layer->OnUpdateEnd();
-
-				// Clear
-				Graphics::ClearBuffers();
-
-				// Render
-				for (Layer* layer : *mStack)
-					layer->OnRender();
-
-				Graphics::SwapBuffers();
-			}
+			Frame();
 
 		} while (!Window::Close());
 
@@ -155,6 +137,36 @@ namespace Lion
 		// release GPU/UI resources safely (the stack destructor only deletes them afterwards).
 		for (Layer* layer : *mStack)
 			layer->OnDetach();
+	}
+
+	void Application::Frame()
+	{
+		// PollEvents can call back into here, and does while the window is being resized. One frame at a
+		// time: the second would begin a UI frame the first has not ended.
+		if (mInFrame || mMinimized)
+			return;
+
+		mInFrame = true;
+
+		Clock::UpdateFrameTime();
+
+		for (Layer* layer : *mStack)
+			layer->OnUpdateBegin();
+
+		for (Layer* layer : *mStack)
+			layer->OnUpdate();
+
+		for (Layer* layer : *mStack)
+			layer->OnUpdateEnd();
+
+		Graphics::ClearBuffers();
+
+		for (Layer* layer : *mStack)
+			layer->OnRender();
+
+		Graphics::SwapBuffers();
+
+		mInFrame = false;
 	}
 
 	void Application::Initialize()
