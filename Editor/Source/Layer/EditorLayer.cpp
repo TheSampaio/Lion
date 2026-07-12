@@ -64,6 +64,18 @@ void EditorLayer::OnCreate()
 	// ever be, and it ships beside the executable like the rest of the engine's own assets.
 	mLogo = Texture::Create(kEngineIconFile, TextureFilter::Linear);
 
+	RegisterSceneFiles();
+
+	// A scene handed over on the command line — which is how Windows opens one, by running the editor and
+	// giving it the path. Anything else, and the editor comes up on the scene it always comes up on.
+	const std::string opened = CommandLine::Get(1);
+
+	if (!opened.empty() && SceneSerializer::Deserialize(mScene, opened))
+	{
+		mScenePath = opened;
+		return;
+	}
+
 	CreateDemoScene();
 }
 
@@ -3825,6 +3837,27 @@ void EditorLayer::DrawStatusBar()
 	}
 
 	ImGui::End();
+}
+
+void EditorLayer::RegisterSceneFiles()
+{
+	// Windows learns what a .lscene is the first time the editor runs — the way every editor does it, in
+	// the user's own corner of the registry, with no administrator and no prompt.
+	//
+	// The icon is the one shipped beside the executable rather than the executable's own, so a scene in
+	// Explorer looks like a scene and not like a second copy of the editor.
+	const std::filesystem::path executable = CommandLine::Get(0);
+
+	if (executable.empty())
+		return;
+
+	// Native separators throughout: this string is read by Explorer, not by the engine, and a path with
+	// two kinds of slash in it is a path someone will one day have to explain.
+	std::filesystem::path icon = executable.parent_path() / kEngineIconResource;
+	icon.make_preferred();
+
+	FileAssociation::Register(".lscene", "Lion.Scene", "Lion Scene",
+		icon.string(), executable.string());
 }
 
 void EditorLayer::DrawTitleBar()

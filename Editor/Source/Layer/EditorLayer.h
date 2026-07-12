@@ -198,6 +198,10 @@ private:
 	// tall, which is what gives the mark room to be seen.
 	static constexpr float kTitleBarHeight = 52.0f;
 
+	// Tells Windows what a .lscene is, so Explorer draws it with the engine's icon and a double-click opens
+	// it here. Written once, on the first run, and again only if the editor moves.
+	void RegisterSceneFiles();
+
 	void DrawTitleBar();
 	void DrawMenuBar(const ImVec2& barMin, const ImVec2& barMax);
 	void DrawWindowButtons(const ImVec2& barMin, Lion::float32 barWidth, Lion::float32 rowHeight);
