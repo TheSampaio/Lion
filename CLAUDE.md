@@ -7,8 +7,8 @@ A 2D C++ game engine.
 | Folder | VS project | Group | Output | What it is |
 |---|---|---|---|---|
 | `Engine/` | `Lion` | Core | `lion-core.dll` | The engine. |
-| `Sandbox/` | `Game` | Runtime | `lion-game.dll` | The game's code, as a module. Its assets live in `Sandbox/Assets/`. |
-| `Mane/` | `Editor` | Tools | `Lion.exe` | The editor — the face of the engine, so it carries its name. |
+| `Sandbox/` | `Game` | Runtime | `lion-game.dll` | The game's code, as a module. Its components live in `Sandbox/Assets/Scripts/`. |
+| `Editor/` | `Mane` | Tools | `Lion.exe` | The editor — the face of the engine, so it carries its name. |
 | `Launcher/` | `Launcher` | Tools | `lion-launcher.exe` | Thin exe: loads the module and runs it. Owns no game code. |
 
 The module's file names are fixed in `Lion/Core/GameModule.h`, not by the project name — the loaders
@@ -109,15 +109,22 @@ verbosity and not a `#ifdef`: the engine is one DLL shared by both, so a compile
 silence the editor along with the game. For the same reason, a call site must not add a guard of its
 own — `Log::IsEnabled` is there to skip building a message, not to decide policy twice.
 
-Run the editor from `Build/Bin/<config>/Editor/Lion.exe` and the game from
+Run the editor from `Build/Bin/<config>/Mane/Lion.exe` and the game from
 `Build/Bin/<config>/Launcher/lion-launcher.exe`. Both anchor their assets, the game module and the
 editor's own state to the executable, not to the working directory.
 
 ## Architecture notes worth knowing
 
+- **An entity is composed, never derived.** `Entity` is `final`: a name, a `Transform`, and the
+  components attached to it. Everything else — including collision, through `Component::OnCollision` —
+  is a component, because a trait added by subclassing is one the editor cannot list, the scene cannot
+  save and another entity cannot reuse. A component derives from `Component` and nothing else; one
+  that needs another asks its owner (`GetOwner()`), or the scene, for the trait rather than for the
+  object.
 - **The game is a module.** Components register themselves by name (`LION_REGISTER_COMPONENT`), which
   is what lets the editor list, create and serialize a type it was never compiled against. Loading the
-  DLL runs those static initializers — that is the whole mechanism.
+  DLL runs those static initializers — that is the whole mechanism. `Lion::LoadGameModule` /
+  `UnloadGameModule` own the bookkeeping, so neither loader can forget half of it.
 - **Hot reload is delicate.** Windows locks a loaded library, so the editor loads a *copy* and leaves
   the original writable. The registries' factories are code inside the module, so they are dropped
   before it is unloaded. Live components have their vtables in the module, so the scene round-trips

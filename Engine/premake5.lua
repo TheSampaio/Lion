@@ -42,10 +42,10 @@ project "Lion"
     postbuildcommands {
         -- The launcher's output directory may not exist yet on a clean build, and a plain file copy
         -- into a missing directory fails rather than creating it.
-        '{MKDIR} "%{wks.location}/Build/Bin/' .. output_dir .. 'Launcher"',
-        "{COPY} %{cfg.buildtarget.relpath} ../Build/Bin/" .. output_dir .. "/Launcher",
+        '{MKDIR} "%{wks.location}/Build/Bin/' .. output_dir .. launcher_project .. '"',
+        "{COPY} %{cfg.buildtarget.relpath} ../Build/Bin/" .. output_dir .. "/" .. launcher_project,
         -- GLFW is a shared library; ship it next to the launcher that loads the engine.
-        '{COPYFILE} "%{dependencies.glfw.dll}" "%{wks.location}/Build/Bin/' .. output_dir .. 'Launcher/"',
+        '{COPYFILE} "%{dependencies.glfw.dll}" "%{wks.location}/Build/Bin/' .. output_dir .. launcher_project .. '/"',
     }
 
     filter "system:windows"

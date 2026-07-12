@@ -42,25 +42,25 @@ project "Game"
         -- means rebuilding just the game refreshes both — which is what the editor's hot reload needs.
         -- The symbols travel with the module. They are what lets a debugger step into game code loaded
         -- by either tool, and the editor needs them beside the library to give its own copy a copy of
-        -- them (see Mane/Source/ModuleSymbols.h). An optimised build produces none, hence "if exist".
+        -- them (see Editor/Source/ModuleSymbols.h). An optimised build produces none, hence "if exist".
         postbuildcommands {
-            '{MKDIR} "%{wks.location}/Build/Bin/' .. output_dir .. 'Launcher"',
-            '{MKDIR} "%{wks.location}/Build/Bin/' .. output_dir .. 'Editor"',
-            '{COPYFILE} "%{cfg.buildtarget.relpath}" "%{wks.location}/Build/Bin/' .. output_dir .. 'Launcher/"',
-            '{COPYFILE} "%{cfg.buildtarget.relpath}" "%{wks.location}/Build/Bin/' .. output_dir .. 'Editor/"',
-            'if exist "$(TargetDir)lion-game.pdb" copy /Y "$(TargetDir)lion-game.pdb" "%{wks.location}Build\\Bin\\' .. output_dir:gsub("/", "\\") .. 'Launcher\\"',
-            'if exist "$(TargetDir)lion-game.pdb" copy /Y "$(TargetDir)lion-game.pdb" "%{wks.location}Build\\Bin\\' .. output_dir:gsub("/", "\\") .. 'Editor\\"',
+            '{MKDIR} "%{wks.location}/Build/Bin/' .. output_dir .. launcher_project .. '"',
+            '{MKDIR} "%{wks.location}/Build/Bin/' .. output_dir .. editor_project .. '"',
+            '{COPYFILE} "%{cfg.buildtarget.relpath}" "%{wks.location}/Build/Bin/' .. output_dir .. launcher_project .. '/"',
+            '{COPYFILE} "%{cfg.buildtarget.relpath}" "%{wks.location}/Build/Bin/' .. output_dir .. editor_project .. '/"',
+            'if exist "$(TargetDir)lion-game.pdb" copy /Y "$(TargetDir)lion-game.pdb" "%{wks.location}Build\\Bin\\' .. output_dir:gsub("/", "\\") .. launcher_project .. '\\"',
+            'if exist "$(TargetDir)lion-game.pdb" copy /Y "$(TargetDir)lion-game.pdb" "%{wks.location}Build\\Bin\\' .. output_dir:gsub("/", "\\") .. editor_project .. '\\"',
             -- The assets, minus the scripts: those are the game's code, already compiled into the module,
             -- and shipping the source of a game alongside it is not a thing anyone means to do.
             --
             -- The exclude list is named relatively because xcopy will not take a quoted path for it, so
             -- an absolute one would break on the first clone that lives under a folder with a space. A
             -- post-build runs in the project's folder, one level under the workspace.
-            'xcopy /E /I /Y /Q /EXCLUDE:..\\Scripts\\AssetCopyExclude.txt "%{prj.location}Assets" "%{wks.location}/Build/Bin/' .. output_dir .. 'Launcher/"',
+            'xcopy /E /I /Y /Q /EXCLUDE:..\\Scripts\\AssetCopyExclude.txt "%{prj.location}Assets" "%{wks.location}/Build/Bin/' .. output_dir .. launcher_project .. '/"',
         }
 
     filter { "system:windows", "configurations:Shipping" }
         -- Make shipped shaders unreadable so they cannot be edited in a text editor.
         postbuildcommands {
-            'powershell -NoProfile -ExecutionPolicy Bypass -File "%{wks.location}Scripts/ObfuscateShaders.ps1" "%{wks.location}/Build/Bin/' .. output_dir .. 'Launcher/"',
+            'powershell -NoProfile -ExecutionPolicy Bypass -File "%{wks.location}Scripts/ObfuscateShaders.ps1" "%{wks.location}/Build/Bin/' .. output_dir .. launcher_project .. '/"',
         }

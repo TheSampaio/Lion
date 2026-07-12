@@ -1,4 +1,4 @@
-project "Editor"
+project "Mane"
     kind "ConsoleApp"
     targetname "Lion"  -- The editor is the face of the engine, so it is what carries its name.
 
@@ -7,7 +7,7 @@ project "Editor"
     objdir    ("%{wks.location}/Build/Obj/" .. output_dir .. "%{prj.name}")
 
     -- Run from the output folder, not the project one: assets, the game module and the editor's own
-    -- state all sit next to the executable, and Visual Studio would otherwise start it from Mane/.
+    -- state all sit next to the executable, and Visual Studio would otherwise start it from Editor/.
     debugdir "%{cfg.targetdir}"
 
     files {
