@@ -202,10 +202,10 @@ private:
 	// One button of the three the window ends with, and the room the project's name is given to sit clear of
 	// them. Shared, because the caption places things against the buttons and the buttons are drawn elsewhere.
 	static constexpr float kWindowButton = 46.0f;
-	static constexpr float kProjectGap = 16.0f;
+	static constexpr float kProjectGap = 128.0f;
 
 	// How far after the last menu the scene's name begins on the row below.
-	static constexpr float kSceneGap = 8.0f;
+	static constexpr float kSceneGap = 64.0f;
 
 	// Tells Windows what a .lscene is, so Explorer draws it with the engine's icon and a double-click opens
 	// it here. Written once, on the first run, and again only if the editor moves.

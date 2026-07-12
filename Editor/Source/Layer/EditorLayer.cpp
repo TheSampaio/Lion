@@ -19,6 +19,9 @@
 
 using namespace Lion;
 
+// The editor's name, which is not the engine's: the project is called Mane, and this is the face it wears.
+static const char8* kEditorName = "Lion's Mane";
+
 // What a file dialog offers when a scene is opened or saved. A scene is JSON inside and a .lscene outside:
 // what it is made of is the engine's business, and what it is is the project's.
 static const char8* kSceneFilter = "Lion Scene (*.lscene)\0*.lscene\0";
@@ -3951,6 +3954,13 @@ void EditorLayer::DrawTitleBar()
 		ImVec2(barMin.x + barWidth, barMin.y + (row + menuHeight) * 0.5f));
 
 	DrawWindowButtons(barMin, barWidth, row);
+
+	// The editor's own name, in the middle of the row the window's controls are in — which is where a window
+	// says what it is, whether or not it drew the caption itself.
+	const float32 titleWidth = ImGui::CalcTextSize(kEditorName).x;
+
+	ImGui::SetCursorPos(ImVec2((barWidth - titleWidth) * 0.5f, (row - ImGui::GetTextLineHeight()) * 0.5f));
+	ImGui::TextUnformatted(kEditorName);
 
 	const std::filesystem::path project = ProjectRootDirectory();
 	const std::string projectName = project.empty() ? std::string("No project") : project.filename().generic_string();
