@@ -720,14 +720,33 @@ namespace
 	// Inspector rows put the label first, in a fixed column, and the widget after it — ImGui's default
 	// is the other way round, which reads backwards for a property. The column is wide enough for the
 	// longest label in use ("Fixed Rotation"), so every row in every component lines up.
-	constexpr float32 kPropertyLabelWidth = 112.0f;
+	constexpr float32 kPropertyLabelWidth = 100.0f;
 
-	// Both of the row-end buttons are square and as tall as a field, so a row's widgets stop short of
-	// them by exactly this much, whether it draws them or not — a column that appears and disappears
-	// would drag every field on the row with it.
+	// A Transform's rows carry their own, narrower column: their labels are short words, and the width
+	// the shared column keeps for "Fixed Rotation" is width three axes need far more — it is the
+	// difference between reading three decimals and reading two.
+	constexpr float32 kVectorLabelWidth = 64.0f;
+
+	// The padlock and the revert arrow are glyphs, not buttons, so they are sized like glyphs — a square
+	// the height of the text rather than the height of a field. What they gave back goes to the fields,
+	// which is where it was missing: a Transform's three axes have to fit three decimals.
+	//
+	// A row stops short by exactly one of these, drawn or not: a column that appears and disappears would
+	// drag every field on the row with it.
 	float32 RowEndSlot()
 	{
-		return ImGui::GetFrameHeight();
+		return ImFloor(ImGui::GetFontSize());
+	}
+
+	// The gap before a row-end glyph — tighter than the spacing between fields, because a glyph on its
+	// own does not need the room a field does.
+	constexpr float32 kRowEndGap = 2.0f;
+
+	// Centres a row-end glyph against the fields beside it: it is shorter than they are, so left on the
+	// row's baseline it would sit high.
+	void AlignRowEndGlyph()
+	{
+		ImGui::SetCursorPosY(ImGui::GetCursorPosY() + ImFloor((ImGui::GetFrameHeight() - RowEndSlot()) * 0.5f));
 	}
 
 	// Lays out a property row's label and leaves the cursor on the widget. Pass a width for a widget
@@ -735,7 +754,7 @@ namespace
 	void PropertyLabel(const char8* label, float32 widgetWidth = 0.0f)
 	{
 		const float32 available = ImGui::GetContentRegionAvail().x - kPropertyLabelWidth
-			- RowEndSlot() - ImGui::GetStyle().ItemInnerSpacing.x;
+			- RowEndSlot() - kRowEndGap;
 
 		ImGui::AlignTextToFramePadding();
 		ImGui::TextUnformatted(label);
@@ -747,6 +766,7 @@ namespace
 	void SameLineRowEnd()
 	{
 		ImGui::SameLine(ImGui::GetContentRegionMax().x - RowEndSlot());
+		AlignRowEndGlyph();
 	}
 
 	// The revert arrow, as Unreal draws it: a curved arrow at the end of a row, shown only while the
@@ -773,7 +793,7 @@ namespace
 
 		const ImU32 color = hovered ? IM_COL32(255, 216, 122, 255) : IM_COL32(224, 176, 62, 255);
 		const ImVec2 center(origin.x + size * 0.5f, origin.y + size * 0.5f);
-		const float32 radius = ImFloor(size * 0.26f);
+		const float32 radius = ImFloor(size * 0.32f);
 
 		// Most of a circle, and an arrowhead carried on its tangent: the shape reads as "put it back".
 		ImDrawList* drawList = ImGui::GetWindowDrawList();
@@ -784,7 +804,7 @@ namespace
 		const ImVec2 tip(center.x + radius * ImCos(angle), center.y + radius * ImSin(angle));
 		const ImVec2 along(-ImSin(angle), ImCos(angle));
 		const ImVec2 across(-along.y, along.x);
-		const float32 head = size * 0.20f;
+		const float32 head = size * 0.26f;
 
 		drawList->AddTriangleFilled(
 			ImVec2(tip.x + along.x * head, tip.y + along.y * head),
@@ -811,7 +831,7 @@ namespace
 		const ImU32 color = ImGui::GetColorU32(
 			(locked || hovered) ? ImGuiCol_Text : ImGuiCol_TextDisabled);
 
-		const float32 body = ImFloor(size * 0.44f);
+		const float32 body = ImFloor(size * 0.56f);
 		const ImVec2 center(origin.x + size * 0.5f, origin.y + size * 0.5f);
 		const ImVec2 bodyMin(center.x - body * 0.5f, center.y - body * 0.15f);
 		const ImVec2 bodyMax(bodyMin.x + body, bodyMin.y + body * 0.85f);
@@ -2000,23 +2020,23 @@ bool EditorLayer::DrawVec3Control(const char* label, float values[3], float spee
 	// number of pixels, keeping it on the same grid as the rest of the metrics; being shorter than the
 	// field, it is nudged down to sit centred against it.
 	const float32 frameHeight = ImGui::GetFrameHeight();
-	const float32 badge = ImFloor(frameHeight * 0.4f) * 2.0f;
+	const float32 badge = RowEndSlot();
 	const float32 badgeOffset = ImFloor((frameHeight - badge) * 0.5f);
 	const ImVec2 buttonSize(badge, badge);
 
-	const float32 gap = 4.0f;  // Between a badge and its field.
+	const float32 gap = 2.0f;  // Between a badge and its field, and between one axis and the next.
 
 	// The label takes its column and the row's end keeps two slots — the padlock and the revert arrow —
 	// and what is left is split across the three axes. Position and Rotation have no padlock but still
 	// hold its slot, so the three rows of a Transform stay in one column.
-	const float32 rowEnd = 2.0f * (RowEndSlot() + style.ItemInnerSpacing.x);
-	const float32 controlsWidth = ImGui::GetContentRegionAvail().x - kPropertyLabelWidth - rowEnd;
-	const float32 axisWidth = (controlsWidth - 2.0f * style.ItemInnerSpacing.x) / 3.0f;
+	const float32 rowEnd = 2.0f * (RowEndSlot() + kRowEndGap);
+	const float32 controlsWidth = ImGui::GetContentRegionAvail().x - kVectorLabelWidth - rowEnd;
+	const float32 axisWidth = (controlsWidth - 2.0f * gap) / 3.0f;
 	const float32 dragWidth = ImMax(axisWidth - badge - gap, 12.0f);
 
 	ImGui::AlignTextToFramePadding();
 	ImGui::TextUnformatted(label);
-	ImGui::SameLine(kPropertyLabelWidth);
+	ImGui::SameLine(kVectorLabelWidth);
 
 	// Every item on this row is placed against this baseline: the badges are offset down from it, and
 	// the fields sit on it, so a SameLine cannot drift them apart.
@@ -2025,7 +2045,7 @@ bool EditorLayer::DrawVec3Control(const char* label, float values[3], float spee
 	for (int32 i = 0; i < 3; ++i)
 	{
 		if (i > 0)
-			ImGui::SameLine(0.0f, style.ItemInnerSpacing.x);
+			ImGui::SameLine(0.0f, gap);
 
 		ImGui::PushID(i);
 
@@ -2052,11 +2072,17 @@ bool EditorLayer::DrawVec3Control(const char* label, float values[3], float spee
 		ImGui::PopStyleColor(3);
 		ImGui::PopStyleVar(2);
 
+		// The field's own padding is narrowed: three decimals of a world coordinate is a long number in a
+		// column that is a third of a row, and the padding is room the digits need more than the frame does.
 		ImGui::SameLine(0.0f, gap);
 		ImGui::SetCursorPosY(rowY);
 		ImGui::SetNextItemWidth(dragWidth);
+		ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(2.0f, style.FramePadding.y));
+
 		if (ImGui::DragFloat("##value", &values[i], speed, 0.0f, 0.0f, "%.3f"))
 			axisChanged = true;
+
+		ImGui::PopStyleVar();
 		if (ImGui::IsItemActivated()) BeginEdit();
 		if (ImGui::IsItemDeactivatedAfterEdit()) CommitEdit();
 
@@ -2076,8 +2102,9 @@ bool EditorLayer::DrawVec3Control(const char* label, float values[3], float spee
 
 	// The padlock, then the revert arrow — in that order on every row, so the arrow is always the last
 	// thing on the right.
-	ImGui::SameLine(0.0f, style.ItemInnerSpacing.x);
+	ImGui::SameLine(0.0f, kRowEndGap);
 	ImGui::SetCursorPosY(rowY);
+	AlignRowEndGlyph();
 
 	if (uniform)
 	{
@@ -2091,8 +2118,9 @@ bool EditorLayer::DrawVec3Control(const char* label, float values[3], float spee
 
 	const bool modified = (values[0] != resetValue) || (values[1] != resetValue) || (values[2] != resetValue);
 
-	ImGui::SameLine(0.0f, style.ItemInnerSpacing.x);
+	ImGui::SameLine(0.0f, kRowEndGap);
 	ImGui::SetCursorPosY(rowY);
+	AlignRowEndGlyph();
 
 	if (ResetToDefaultButton("##reset", modified))
 	{
