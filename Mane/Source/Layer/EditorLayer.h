@@ -1,6 +1,7 @@
 #pragma once
 
 #include <future>
+#include <optional>
 
 #include <Lion/Lion.h>
 #include <Lion/Core/DynamicLibrary.h>
@@ -107,6 +108,7 @@ private:
 	bool mStepFrame = false;     // Advance the paused simulation by exactly one frame, then halt again.
 	bool mShowColliders = false;  // Collider outlines are a debug view, off until enabled in Settings.
 	bool mRenameFocus = false;   // Request keyboard focus on the inline rename field for one frame.
+	bool mScaleUniform = false;  // The Transform's scale padlock: the three axes move together.
 	Tool mTool = Tool::Move;
 
 	// The game module, loaded at startup so its components register with the engine and appear in the
@@ -210,9 +212,20 @@ private:
 	// pressed, and sets dragFrom/dragTo when a header is dropped onto this one.
 	bool DrawComponentHeader(const char* label, int index, bool& removeRequested, int& dragFrom, int& dragTo);
 
+	// Draws a scalar property row: the label, the field, and the revert arrow that puts the default
+	// back — which only appears while the value is not it. Pass no default for a field that has none
+	// worth reverting to (a collider's extents), and the row keeps the arrow's slot without one.
+	// Returns whether the value changed.
+	bool DrawFloatProperty(const Lion::char8* label, Lion::float32& value, Lion::float32 speed,
+		Lion::float32 minimum, Lion::float32 maximum, std::optional<Lion::float32> defaultValue);
+
 	// Draws an X/Y/Z vector editor with red/green/blue axis buttons (Unity/Godot-style). Clicking an
-	// axis button resets that component to resetValue. Returns whether any value changed.
-	bool DrawVec3Control(const char* label, float values[3], float speed, float resetValue);
+	// axis button resets that component to resetValue, and the revert arrow at the end of the row resets
+	// all three — it only appears while they are not all resetValue, which is the field's default.
+	//
+	// Pass 'uniform' for a row that can be locked (the Scale): while it is set, editing one axis moves
+	// the other two by the same proportion. Returns whether any value changed.
+	bool DrawVec3Control(const char* label, float values[3], float speed, float resetValue, bool* uniform = nullptr);
 
 	// Undo/redo helpers. RecordSnapshot is for discrete actions (add/delete); BeginEdit/CommitEdit
 	// group a continuous edit (a gizmo or slider drag) into a single undo step.

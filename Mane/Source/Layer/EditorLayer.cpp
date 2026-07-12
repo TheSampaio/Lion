@@ -722,14 +722,111 @@ namespace
 	// longest label in use ("Fixed Rotation"), so every row in every component lines up.
 	constexpr float32 kPropertyLabelWidth = 112.0f;
 
+	// Both of the row-end buttons are square and as tall as a field, so a row's widgets stop short of
+	// them by exactly this much, whether it draws them or not — a column that appears and disappears
+	// would drag every field on the row with it.
+	float32 RowEndSlot()
+	{
+		return ImGui::GetFrameHeight();
+	}
+
 	// Lays out a property row's label and leaves the cursor on the widget. Pass a width for a widget
-	// that sizes itself; the default fills the rest of the row.
+	// that sizes itself; the default fills the rest of the row, minus the slot the revert arrow keeps.
 	void PropertyLabel(const char8* label, float32 widgetWidth = 0.0f)
 	{
+		const float32 available = ImGui::GetContentRegionAvail().x - kPropertyLabelWidth
+			- RowEndSlot() - ImGui::GetStyle().ItemInnerSpacing.x;
+
 		ImGui::AlignTextToFramePadding();
 		ImGui::TextUnformatted(label);
 		ImGui::SameLine(kPropertyLabelWidth);
-		ImGui::SetNextItemWidth((widgetWidth > 0.0f) ? widgetWidth : ImGui::GetContentRegionAvail().x);
+		ImGui::SetNextItemWidth((widgetWidth > 0.0f) ? widgetWidth : ImMax(available, 32.0f));
+	}
+
+	// Puts the cursor on the slot the row keeps at its end, wherever the widget before it stopped.
+	void SameLineRowEnd()
+	{
+		ImGui::SameLine(ImGui::GetContentRegionMax().x - RowEndSlot());
+	}
+
+	// The revert arrow, as Unreal draws it: a curved arrow at the end of a row, shown only while the
+	// field is not what it ships as. Clicking it puts the default back.
+	//
+	// It is drawn rather than written because the editor's font carries no glyph for it, and the slot is
+	// held even when nothing is in it — see RowEndSlot.
+	bool ResetToDefaultButton(const char8* id, bool modified)
+	{
+		const float32 size = RowEndSlot();
+
+		if (!modified)
+		{
+			ImGui::Dummy(ImVec2(size, size));
+			return false;
+		}
+
+		const ImVec2 origin = ImGui::GetCursorScreenPos();
+		const bool clicked = ImGui::InvisibleButton(id, ImVec2(size, size));
+		const bool hovered = ImGui::IsItemHovered();
+
+		if (hovered)
+			ImGui::SetTooltip("Reset to default");
+
+		const ImU32 color = hovered ? IM_COL32(255, 216, 122, 255) : IM_COL32(224, 176, 62, 255);
+		const ImVec2 center(origin.x + size * 0.5f, origin.y + size * 0.5f);
+		const float32 radius = ImFloor(size * 0.26f);
+
+		// Most of a circle, and an arrowhead carried on its tangent: the shape reads as "put it back".
+		ImDrawList* drawList = ImGui::GetWindowDrawList();
+		drawList->PathArcTo(center, radius, IM_PI * 0.35f, IM_PI * 1.70f, 16);
+		drawList->PathStroke(color, ImDrawFlags_None, 1.6f);
+
+		const float32 angle = IM_PI * 1.70f;
+		const ImVec2 tip(center.x + radius * ImCos(angle), center.y + radius * ImSin(angle));
+		const ImVec2 along(-ImSin(angle), ImCos(angle));
+		const ImVec2 across(-along.y, along.x);
+		const float32 head = size * 0.20f;
+
+		drawList->AddTriangleFilled(
+			ImVec2(tip.x + along.x * head, tip.y + along.y * head),
+			ImVec2(tip.x - across.x * head * 0.7f, tip.y - across.y * head * 0.7f),
+			ImVec2(tip.x + across.x * head * 0.7f, tip.y + across.y * head * 0.7f),
+			color);
+
+		return clicked;
+	}
+
+	// The uniform-scale padlock: closed, the three axes move together. Drawn for the same reason as the
+	// arrow above — the font has no padlock — and it says which state it is in rather than which state
+	// it would switch to, because a toggle that shows the other state is a toggle nobody trusts.
+	bool LockButton(const char8* id, bool locked)
+	{
+		const float32 size = RowEndSlot();
+		const ImVec2 origin = ImGui::GetCursorScreenPos();
+		const bool clicked = ImGui::InvisibleButton(id, ImVec2(size, size));
+		const bool hovered = ImGui::IsItemHovered();
+
+		if (hovered)
+			ImGui::SetTooltip(locked ? "Scale the axes together" : "Scale each axis on its own");
+
+		const ImU32 color = ImGui::GetColorU32(
+			(locked || hovered) ? ImGuiCol_Text : ImGuiCol_TextDisabled);
+
+		const float32 body = ImFloor(size * 0.44f);
+		const ImVec2 center(origin.x + size * 0.5f, origin.y + size * 0.5f);
+		const ImVec2 bodyMin(center.x - body * 0.5f, center.y - body * 0.15f);
+		const ImVec2 bodyMax(bodyMin.x + body, bodyMin.y + body * 0.85f);
+
+		ImDrawList* drawList = ImGui::GetWindowDrawList();
+		drawList->AddRectFilled(bodyMin, bodyMax, color, 1.0f);
+
+		// The shackle: closed, it sits on the body; open, it lifts off one side of it.
+		const float32 shackle = body * 0.32f;
+		const ImVec2 hinge(locked ? center.x : center.x + shackle * 0.5f, bodyMin.y);
+
+		drawList->PathArcTo(hinge, shackle, IM_PI, IM_PI * 2.0f, 12);
+		drawList->PathStroke(color, ImDrawFlags_None, 1.4f);
+
+		return clicked;
 	}
 
 	// A generated type name becomes a class name and a file name, so hold it to a C++ identifier.
@@ -1855,7 +1952,35 @@ bool EditorLayer::DrawComponentHeader(const char* label, int index, bool& remove
 	return open;
 }
 
-bool EditorLayer::DrawVec3Control(const char* label, float values[3], float speed, float resetValue)
+bool EditorLayer::DrawFloatProperty(const char8* label, float32& value, float32 speed, float32 minimum,
+	float32 maximum, std::optional<float32> defaultValue)
+{
+	ImGui::PushID(label);
+
+	PropertyLabel(label);
+	const bool changed = ImGui::DragFloat("##value", &value, speed, minimum, maximum);
+
+	if (ImGui::IsItemActivated()) BeginEdit();
+	if (ImGui::IsItemDeactivatedAfterEdit()) CommitEdit();
+
+	// A field with no default still keeps the slot, so every field in a component lines up whether or
+	// not it has an arrow to show.
+	SameLineRowEnd();
+	const bool modified = defaultValue.has_value() && (value != *defaultValue);
+
+	if (ResetToDefaultButton("##reset", modified))
+	{
+		RecordSnapshot();
+		value = *defaultValue;
+		ImGui::PopID();
+		return true;
+	}
+
+	ImGui::PopID();
+	return changed;
+}
+
+bool EditorLayer::DrawVec3Control(const char* label, float values[3], float speed, float resetValue, bool* uniform)
 {
 	struct Axis { const char8* name; ImVec4 color; ImVec4 hovered; };
 	static const Axis axes[3] = {
@@ -1881,8 +2006,11 @@ bool EditorLayer::DrawVec3Control(const char* label, float values[3], float spee
 
 	const float32 gap = 4.0f;  // Between a badge and its field.
 
-	// The label takes its column, then the rest is split across the three axes.
-	const float32 controlsWidth = ImGui::GetContentRegionAvail().x - kPropertyLabelWidth;
+	// The label takes its column and the row's end keeps two slots — the padlock and the revert arrow —
+	// and what is left is split across the three axes. Position and Rotation have no padlock but still
+	// hold its slot, so the three rows of a Transform stay in one column.
+	const float32 rowEnd = 2.0f * (RowEndSlot() + style.ItemInnerSpacing.x);
+	const float32 controlsWidth = ImGui::GetContentRegionAvail().x - kPropertyLabelWidth - rowEnd;
 	const float32 axisWidth = (controlsWidth - 2.0f * style.ItemInnerSpacing.x) / 3.0f;
 	const float32 dragWidth = ImMax(axisWidth - badge - gap, 12.0f);
 
@@ -1909,11 +2037,16 @@ bool EditorLayer::DrawVec3Control(const char* label, float values[3], float spee
 		ImGui::PushStyleColor(ImGuiCol_ButtonHovered, axes[i].hovered);
 		ImGui::PushStyleColor(ImGuiCol_ButtonActive, axes[i].color);
 
+		// Kept from before the row's widgets touch it: with the axes locked together, what one axis was
+		// and what it became is the ratio the other two follow.
+		const float32 before = values[i];
+		bool axisChanged = false;
+
 		if (ImGui::Button(axes[i].name, buttonSize))
 		{
 			RecordSnapshot();
 			values[i] = resetValue;
-			changed = true;
+			axisChanged = true;
 		}
 
 		ImGui::PopStyleColor(3);
@@ -1923,11 +2056,49 @@ bool EditorLayer::DrawVec3Control(const char* label, float values[3], float spee
 		ImGui::SetCursorPosY(rowY);
 		ImGui::SetNextItemWidth(dragWidth);
 		if (ImGui::DragFloat("##value", &values[i], speed, 0.0f, 0.0f, "%.3f"))
-			changed = true;
+			axisChanged = true;
 		if (ImGui::IsItemActivated()) BeginEdit();
 		if (ImGui::IsItemDeactivatedAfterEdit()) CommitEdit();
 
+		if (axisChanged && uniform && *uniform)
+		{
+			// A scale of zero has no proportion to keep, so the axes simply meet where this one went.
+			const float32 factor = (before != 0.0f) ? (values[i] / before) : 0.0f;
+
+			for (int32 other = 0; other < 3; ++other)
+				if (other != i)
+					values[other] = (factor != 0.0f) ? (values[other] * factor) : values[i];
+		}
+
+		changed |= axisChanged;
 		ImGui::PopID();
+	}
+
+	// The padlock, then the revert arrow — in that order on every row, so the arrow is always the last
+	// thing on the right.
+	ImGui::SameLine(0.0f, style.ItemInnerSpacing.x);
+	ImGui::SetCursorPosY(rowY);
+
+	if (uniform)
+	{
+		if (LockButton("##uniform", *uniform))
+			*uniform = !*uniform;
+	}
+	else
+	{
+		ImGui::Dummy(ImVec2(RowEndSlot(), RowEndSlot()));
+	}
+
+	const bool modified = (values[0] != resetValue) || (values[1] != resetValue) || (values[2] != resetValue);
+
+	ImGui::SameLine(0.0f, style.ItemInnerSpacing.x);
+	ImGui::SetCursorPosY(rowY);
+
+	if (ResetToDefaultButton("##reset", modified))
+	{
+		RecordSnapshot();
+		values[0] = values[1] = values[2] = resetValue;
+		changed = true;
 	}
 
 	ImGui::PopID();
@@ -1986,7 +2157,7 @@ void EditorLayer::DrawProperties()
 
 		Vector scale = transform->GetScale();
 		float32 scaleValues[3] = { scale.x, scale.y, scale.z };
-		if (DrawVec3Control("Scale", scaleValues, 0.01f, 1.0f))
+		if (DrawVec3Control("Scale", scaleValues, 0.01f, 1.0f, &mScaleUniform))
 			transform->SetScale(Vector(scaleValues[0], scaleValues[1], scaleValues[2]));
 	}
 
@@ -2056,6 +2227,7 @@ void EditorLayer::DrawProperties()
 			if (DrawComponentHeader("Rigid Body 2D", i, remove, dragFrom, dragTo))
 			{
 				static const char8* bodyTypes[] = { "Static", "Kinematic", "Dynamic" };
+				const int32 defaultType = static_cast<int32>(BodyType::Dynamic);
 
 				int32 typeIndex = static_cast<int32>(body->GetBodyType());
 				PropertyLabel("Type");
@@ -2065,6 +2237,13 @@ void EditorLayer::DrawProperties()
 					body->SetBodyType(static_cast<BodyType>(typeIndex));
 				}
 
+				SameLineRowEnd();
+				if (ResetToDefaultButton("##resetType", typeIndex != defaultType))
+				{
+					RecordSnapshot();
+					body->SetBodyType(BodyType::Dynamic);
+				}
+
 				bool fixedRotation = body->IsFixedRotation();
 				PropertyLabel("Fixed Rotation");
 				if (ImGui::Checkbox("##fixedRotation", &fixedRotation))
@@ -2072,70 +2251,54 @@ void EditorLayer::DrawProperties()
 					RecordSnapshot();
 					body->SetFixedRotation(fixedRotation);
 				}
+
+				SameLineRowEnd();
+				if (ResetToDefaultButton("##resetFixedRotation", fixedRotation))
+				{
+					RecordSnapshot();
+					body->SetFixedRotation(false);
+				}
 			}
 		}
 		else if (BoxCollider2D* collider = dynamic_cast<BoxCollider2D*>(component))
 		{
 			if (DrawComponentHeader("Box Collider 2D", i, remove, dragFrom, dragTo))
 			{
+				// A collider's extents have no default worth going back to: a fresh one is zero-sized, and
+				// what the editor gives it when you add it is the sprite's size, not something the class
+				// knows. So they carry no arrow — one that reverted a box to nothing would be a trap.
 				float32 width = collider->GetWidth();
-				PropertyLabel("Width");
-				if (ImGui::DragFloat("##width", &width, 1.0f, 0.0f, 10000.0f)) collider->SetWidth(width);
-				if (ImGui::IsItemActivated()) BeginEdit();
-				if (ImGui::IsItemDeactivatedAfterEdit()) CommitEdit();
+				if (DrawFloatProperty("Width", width, 1.0f, 0.0f, 10000.0f, std::nullopt)) collider->SetWidth(width);
 
 				float32 height = collider->GetHeight();
-				PropertyLabel("Height");
-				if (ImGui::DragFloat("##height", &height, 1.0f, 0.0f, 10000.0f)) collider->SetHeight(height);
-				if (ImGui::IsItemActivated()) BeginEdit();
-				if (ImGui::IsItemDeactivatedAfterEdit()) CommitEdit();
+				if (DrawFloatProperty("Height", height, 1.0f, 0.0f, 10000.0f, std::nullopt)) collider->SetHeight(height);
 
 				float32 density = collider->GetDensity();
-				PropertyLabel("Density");
-				if (ImGui::DragFloat("##density", &density, 0.05f, 0.0f, 100.0f)) collider->SetDensity(density);
-				if (ImGui::IsItemActivated()) BeginEdit();
-				if (ImGui::IsItemDeactivatedAfterEdit()) CommitEdit();
+				if (DrawFloatProperty("Density", density, 0.05f, 0.0f, 100.0f, 1.0f)) collider->SetDensity(density);
 
 				float32 friction = collider->GetFriction();
-				PropertyLabel("Friction");
-				if (ImGui::DragFloat("##friction", &friction, 0.01f, 0.0f, 1.0f)) collider->SetFriction(friction);
-				if (ImGui::IsItemActivated()) BeginEdit();
-				if (ImGui::IsItemDeactivatedAfterEdit()) CommitEdit();
+				if (DrawFloatProperty("Friction", friction, 0.01f, 0.0f, 1.0f, 0.2f)) collider->SetFriction(friction);
 
 				float32 restitution = collider->GetRestitution();
-				PropertyLabel("Restitution");
-				if (ImGui::DragFloat("##restitution", &restitution, 0.01f, 0.0f, 1.0f)) collider->SetRestitution(restitution);
-				if (ImGui::IsItemActivated()) BeginEdit();
-				if (ImGui::IsItemDeactivatedAfterEdit()) CommitEdit();
+				if (DrawFloatProperty("Restitution", restitution, 0.01f, 0.0f, 1.0f, 0.0f)) collider->SetRestitution(restitution);
 			}
 		}
 		else if (CircleCollider2D* collider = dynamic_cast<CircleCollider2D*>(component))
 		{
 			if (DrawComponentHeader("Circle Collider 2D", i, remove, dragFrom, dragTo))
 			{
+				// The radius has no default to go back to, for the same reason a box's extents do not.
 				float32 radius = collider->GetRadius();
-				PropertyLabel("Radius");
-				if (ImGui::DragFloat("##radius", &radius, 1.0f, 0.0f, 10000.0f)) collider->SetRadius(radius);
-				if (ImGui::IsItemActivated()) BeginEdit();
-				if (ImGui::IsItemDeactivatedAfterEdit()) CommitEdit();
+				if (DrawFloatProperty("Radius", radius, 1.0f, 0.0f, 10000.0f, std::nullopt)) collider->SetRadius(radius);
 
 				float32 density = collider->GetDensity();
-				PropertyLabel("Density");
-				if (ImGui::DragFloat("##density", &density, 0.05f, 0.0f, 100.0f)) collider->SetDensity(density);
-				if (ImGui::IsItemActivated()) BeginEdit();
-				if (ImGui::IsItemDeactivatedAfterEdit()) CommitEdit();
+				if (DrawFloatProperty("Density", density, 0.05f, 0.0f, 100.0f, 1.0f)) collider->SetDensity(density);
 
 				float32 friction = collider->GetFriction();
-				PropertyLabel("Friction");
-				if (ImGui::DragFloat("##friction", &friction, 0.01f, 0.0f, 1.0f)) collider->SetFriction(friction);
-				if (ImGui::IsItemActivated()) BeginEdit();
-				if (ImGui::IsItemDeactivatedAfterEdit()) CommitEdit();
+				if (DrawFloatProperty("Friction", friction, 0.01f, 0.0f, 1.0f, 0.2f)) collider->SetFriction(friction);
 
 				float32 restitution = collider->GetRestitution();
-				PropertyLabel("Restitution");
-				if (ImGui::DragFloat("##restitution", &restitution, 0.01f, 0.0f, 1.0f)) collider->SetRestitution(restitution);
-				if (ImGui::IsItemActivated()) BeginEdit();
-				if (ImGui::IsItemDeactivatedAfterEdit()) CommitEdit();
+				if (DrawFloatProperty("Restitution", restitution, 0.01f, 0.0f, 1.0f, 0.0f)) collider->SetRestitution(restitution);
 			}
 		}
 		else
