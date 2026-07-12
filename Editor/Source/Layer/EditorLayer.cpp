@@ -2050,7 +2050,8 @@ void EditorLayer::DrawHierarchy()
 	if (!mScenePath.empty() && ImGui::IsItemHovered())
 		ImGui::SetTooltip("%s", mScenePath.c_str());
 
-	ImGui::Separator();
+	// No rule above the header: the header is one. A line and a bar drawn against each other are two
+	// dividers where the eye only needed the one it can read.
 
 	// Children are stored as raw pointers; this maps them back to the scene's owning references.
 	mEntityLookup.clear();
@@ -2064,8 +2065,17 @@ void EditorLayer::DrawHierarchy()
 
 	// The tree scrolls; the count below it does not. It is the one number that is always true about a
 	// scene, so it is always on screen.
+	//
+	// The header is a bar, and a bar that stops short of the edges it is meant to sit against reads as
+	// floating above them. So the tree runs the panel's full width, from its left edge to its right, and
+	// starts where the line above it ends: the child drops the panel's own margin (which is why it is
+	// placed at x = 0 and given the whole window's width) and its own padding with it.
 	const float32 footerHeight = ImGui::GetFrameHeightWithSpacing();
-	ImGui::BeginChild("HierarchyTree", ImVec2(0.0f, -footerHeight), ImGuiChildFlags_None);
+
+	ImGui::SetCursorPos(ImVec2(0.0f, ImGui::GetCursorPosY() - style.ItemSpacing.y));
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+	ImGui::BeginChild("HierarchyTree", ImVec2(ImGui::GetWindowWidth(), -footerHeight), ImGuiChildFlags_None);
+	ImGui::PopStyleVar();
 
 	const int32 count = static_cast<int32>(mScene->GetEntities().size());
 
@@ -2078,9 +2088,11 @@ void EditorLayer::DrawHierarchy()
 	// And no room between the rows. A cell's vertical padding is dead space that belongs to neither row,
 	// so the cursor leaves one entity and hovers nothing before it reaches the next. A list of names is
 	// read by running down it — the rows have to touch, the way the console's lines do.
+	// NoPadOuterX: a table keeps a margin at its outer edges, and that margin is what leaves the header
+	// bar hanging inside the panel instead of sitting against it.
 	ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(style.CellPadding.x, 0.0f));
 
-	if (ImGui::BeginTable("Entities", 2, ImGuiTableFlags_None))
+	if (ImGui::BeginTable("Entities", 2, ImGuiTableFlags_NoPadOuterX))
 	{
 		// Wide enough for its own header: a column called Visibility that reads "Visi..." is a column that
 		// gave its name away to save a dozen pixels.
@@ -2089,15 +2101,23 @@ void EditorLayer::DrawHierarchy()
 		ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_WidthStretch);
 		ImGui::TableSetupColumn("Visibility", ImGuiTableColumnFlags_WidthFixed, visibilityWidth);
 
-		// The header row is drawn by hand for one reason: a tree node starts its label past the arrow, so
-		// a header written at the column's edge sits to the left of every name under it.
-		ImGui::TableNextRow(ImGuiTableRowFlags_Headers);
+		// The header row is drawn by hand for two reasons. A tree node starts its label past the arrow, so
+		// a header written at the column's edge sits to the left of every name under it. And the rows carry
+		// no cell padding — they get their height from the node inside them — so the header has to ask for
+		// its own, which it does by naming the height it wants and sitting in the middle of it.
+		const float32 headerHeight = ImGui::GetFrameHeightWithSpacing();
+		const float32 headerText = ImFloor((headerHeight - ImGui::GetFontSize()) * 0.5f);
+
+		ImGui::TableNextRow(ImGuiTableRowFlags_Headers, headerHeight);
 
 		ImGui::TableSetColumnIndex(0);
-		ImGui::SetCursorPosX(ImGui::GetCursorPosX() + ImGui::GetTreeNodeToLabelSpacing());
+		ImGui::SetCursorPos(ImVec2(
+			ImGui::GetCursorPosX() + ImGui::GetTreeNodeToLabelSpacing(),
+			ImGui::GetCursorPosY() + headerText));
 		ImGui::TableHeader("Name");
 
 		ImGui::TableSetColumnIndex(1);
+		ImGui::SetCursorPosY(ImGui::GetCursorPosY() + headerText);
 		ImGui::TableHeader("Visibility");
 
 		for (const auto& entity : mScene->GetEntities())
