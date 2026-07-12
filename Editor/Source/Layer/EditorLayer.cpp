@@ -2090,7 +2090,14 @@ void EditorLayer::DrawHierarchy()
 	// read by running down it — the rows have to touch, the way the console's lines do.
 	// NoPadOuterX: a table keeps a margin at its outer edges, and that margin is what leaves the header
 	// bar hanging inside the panel instead of sitting against it.
+	//
+	// The rows take their height from the node inside them, so this is where that height is set: a couple
+	// of pixels above and below the text, which is enough to stop the list reading as a wall of names and
+	// far short of a field's padding, which a row is not.
+	constexpr float32 kRowPadding = 2.0f;
+
 	ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(style.CellPadding.x, 0.0f));
+	ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(style.FramePadding.x, kRowPadding));
 
 	if (ImGui::BeginTable("Entities", 2, ImGuiTableFlags_NoPadOuterX))
 	{
@@ -2127,7 +2134,7 @@ void EditorLayer::DrawHierarchy()
 		ImGui::EndTable();
 	}
 
-	ImGui::PopStyleVar();
+	ImGui::PopStyleVar(2);
 
 	if (count == 0)
 		ImGui::TextDisabled("Empty scene — right-click to create an entity.");
