@@ -84,11 +84,25 @@ namespace Lion
 		bodyDef.linearVelocity = { mPendingVelocity.x, mPendingVelocity.y };
 		bodyDef.userData = &GetOwner();
 
+		bodyDef.isEnabled = GetOwner().IsActive();  // A body born to a disabled entity is born disabled.
+
 		mBodyId = b2CreateBody(mWorld->GetWorldId(), &bodyDef);
 		mHasBody = true;
 
 		mWorld->Register(this);
 		return mBodyId;
+	}
+
+	void RigidBody2D::OnEnable()
+	{
+		if (mHasBody)
+			b2Body_Enable(mBodyId);
+	}
+
+	void RigidBody2D::OnDisable()
+	{
+		if (mHasBody)
+			b2Body_Disable(mBodyId);
 	}
 
 	void RigidBody2D::OnDestroy()

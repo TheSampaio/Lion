@@ -40,6 +40,12 @@ namespace Lion
 		// Called once, when the owner enters the scene.
 		virtual void OnAwake() {}
 
+		// Called when the owner is switched on or off. Skipping a component's callbacks is enough to stop
+		// it *doing* anything, but not to stop it *being* anything: a rigid body left in the world would
+		// still block whatever ran into it. A component that keeps state outside itself takes it back here.
+		virtual void OnEnable() {}
+		virtual void OnDisable() {}
+
 		// Called every frame, before the main update pass.
 		virtual void OnUpdateBegin() {}
 

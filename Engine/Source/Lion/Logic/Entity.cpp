@@ -246,6 +246,35 @@ namespace Lion
 		mComponents.insert(mComponents.begin() + to, std::move(moved));
 	}
 
+	bool Entity::IsActive() const
+	{
+		// Enabling is inherited: switching a parent off switches off everything under it, so an entity
+		// runs only when nothing above it says otherwise.
+		for (const Entity* entity = this; entity != nullptr; entity = entity->mParent)
+			if (!entity->mEnabled)
+				return false;
+
+		return true;
+	}
+
+	void Entity::SetEnabled(bool value)
+	{
+		if (mEnabled == value)
+			return;
+
+		mEnabled = value;
+
+		// Not running a component's callbacks stops it doing anything, but not being anything — a body
+		// left in the physics world would still block whatever ran into it. This is where it lets go.
+		for (const auto& component : mComponents)
+		{
+			if (value)
+				component->OnEnable();
+			else
+				component->OnDisable();
+		}
+	}
+
 	void Entity::Awake()
 	{
 		for (const auto& component : mComponents)
@@ -260,6 +289,9 @@ namespace Lion
 
 	void Entity::UpdateBegin()
 	{
+		if (!IsActive())
+			return;
+
 		for (const auto& component : mComponents)
 			if (component->IsEnabled())
 				component->OnUpdateBegin();
@@ -267,6 +299,9 @@ namespace Lion
 
 	void Entity::Update()
 	{
+		if (!IsActive())
+			return;
+
 		for (const auto& component : mComponents)
 			if (component->IsEnabled())
 				component->OnUpdate();
@@ -274,6 +309,9 @@ namespace Lion
 
 	void Entity::UpdateEnd()
 	{
+		if (!IsActive())
+			return;
+
 		for (const auto& component : mComponents)
 			if (component->IsEnabled())
 				component->OnUpdateEnd();
@@ -281,6 +319,11 @@ namespace Lion
 
 	void Entity::Render()
 	{
+		// Hidden is not the same as off: an invisible entity still updates and still collides. It is only
+		// here, at the one call that puts something on screen, that the two part ways.
+		if (!IsActive() || !mVisible)
+			return;
+
 		for (const auto& component : mComponents)
 			if (component->IsEnabled())
 				component->OnRender();
@@ -288,6 +331,9 @@ namespace Lion
 
 	void Entity::Collide(Entity& other)
 	{
+		if (!IsActive())
+			return;
+
 		for (const auto& component : mComponents)
 			if (component->IsEnabled())
 				component->OnCollision(other);

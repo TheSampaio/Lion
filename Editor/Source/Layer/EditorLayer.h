@@ -118,9 +118,17 @@ private:
 	Lion::Reference<Lion::CameraOrthographic> mCamera;
 	Lion::Reference<Lion::Scene> mScene;
 	Lion::Reference<Lion::Framebuffer> mFramebuffer;
+	// The selection, and the one entity in it that everything single-target reads: the last one clicked.
+	// The Inspector shows that one and writes to all of them, which is what "editing what they have in
+	// common" means — the others are only touched where they have the same thing to touch.
 	Lion::Reference<Lion::Entity> mSelectedEntity;
+	std::vector<Lion::Reference<Lion::Entity>> mSelection;
+
 	Lion::Reference<Lion::Entity> mRenamingEntity;  // Entity whose name is being edited inline (F2 / context menu).
+	char mHierarchyFilter[64] = {};                 // The Hierarchy's search box: a name, or part of one.
+	std::string mScenePath;                         // The scene on disk, empty until it has been saved once.
 	glm::vec2 mViewportSize{ 0.0f, 0.0f };
+	Lion::Vector mViewportMenuPosition;   // Where the mouse was when the viewport's context menu opened.
 
 	// Undo/redo history of full-scene JSON snapshots. mPendingSnapshot holds the pre-edit state
 	// captured at the start of a continuous edit (gizmo/drag), committed once the edit ends.
@@ -237,14 +245,43 @@ private:
 	void Redo();
 	void HandleShortcuts();
 
+	// Selection. One entity is the primary — the last one clicked — and the rest ride along with it.
+	// Every assignment goes through these, so the two can never disagree about what is selected.
+	void SetSelection(const Lion::Reference<Lion::Entity>& entity);      // Replaces the selection (or clears it, with null).
+	void AddToSelection(const Lion::Reference<Lion::Entity>& entity);    // Ctrl+click: adds, or removes if already in.
+	void SelectRangeTo(const Lion::Reference<Lion::Entity>& entity);     // Shift+click: everything between the primary and this one.
+	bool IsSelected(const Lion::Entity* entity) const;
+
+	// Commits an inline rename. One entity takes the name as typed; a whole selection takes it numbered,
+	// which is what Windows does when several things are given one name.
+	void RenameSelection(const std::string& name, const Lion::Reference<Lion::Entity>& renamed);
+
+	// Runs 'apply' over every selected entity that carries a T, so an edit made on the one being shown
+	// lands on the ones that have the same thing to change.
+	template<typename T, typename Apply>
+	void ApplyToSelection(Apply apply)
+	{
+		for (const auto& entity : mSelection)
+			if (T* component = entity->GetComponent<T>())
+				apply(component);
+	}
+
 	// Entity clipboard: copy the selection, paste a new entity from the clipboard, or do both at
 	// once (duplicate). The new entity is appended to the scene and becomes the selection.
 	void CopyEntity();
 	void PasteEntity();
 	void DuplicateEntity();
 
+	// Creates an entity: under 'parent' when there is one, at 'position' when there is one (which is how
+	// the viewport creates one where the mouse is). It becomes the selection, ready to be named.
+	Lion::Reference<Lion::Entity> CreateEntity(Lion::Entity* parent = nullptr, const Lion::Vector* position = nullptr);
+
 	// Creates an organizational folder entity (no components, identity transform).
 	void CreateFolder();
+
+	// The entity commands shared by the Hierarchy's context menu and the viewport's: they are the same
+	// menu, so they are the same code — one of them showing up in two places is not two menus.
+	void DrawEntityMenuItems(const Lion::Reference<Lion::Entity>& target, const Lion::Vector* position);
 
 	// Shortcut/keybinding helpers.
 	void InitShortcuts();                                  // Sets defaults, then loads overrides from disk.

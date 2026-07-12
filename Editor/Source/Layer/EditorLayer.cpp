@@ -111,7 +111,9 @@ int EditorLayer::SelectedEntityIndex() const
 
 void EditorLayer::SelectEntityByIndex(int index)
 {
-	mSelectedEntity = nullptr;
+	// A scene rebuilt from its serialized form has new entities, so a multi-selection cannot survive it:
+	// what comes back is the one entity that was primary, found again by where it sits.
+	SetSelection(nullptr);
 	mRenamingEntity = nullptr;
 
 	if (index < 0)
@@ -122,7 +124,7 @@ void EditorLayer::SelectEntityByIndex(int index)
 	{
 		if (current == index)
 		{
-			mSelectedEntity = entity;
+			SetSelection(entity);
 			return;
 		}
 
@@ -770,6 +772,112 @@ namespace
 		AlignRowEndGlyph();
 	}
 
+	bool ContainsNoCase(const std::string& haystack, const std::string& needle)
+	{
+		const auto it = std::search(haystack.begin(), haystack.end(), needle.begin(), needle.end(),
+			[](char8 a, char8 b) { return std::tolower(static_cast<unsigned char>(a)) == std::tolower(static_cast<unsigned char>(b)); });
+
+		return it != haystack.end();
+	}
+
+	// A node survives the search when it matches — or when anything under it does. Hiding a branch whose
+	// child matches would answer "not here" about something that is only nested.
+	bool MatchesHierarchyFilter(const Entity* entity, const char8* filter)
+	{
+		if (filter == nullptr || filter[0] == '\0')
+			return true;
+
+		if (ContainsNoCase(entity->GetName(), filter))
+			return true;
+
+		for (const Entity* child : entity->GetChildren())
+			if (MatchesHierarchyFilter(child, filter))
+				return true;
+
+		return false;
+	}
+
+	// Windows' rule: a thing that arrives where its name is taken gets a number, and a second one gets
+	// the next. Renaming a whole selection and duplicating one entity are the same problem, so they ask
+	// the same question — what is the first free number for this name?
+	//
+	// The base is stripped of a number it already carries, so duplicating "Ball (1)" gives "Ball (2)"
+	// rather than "Ball (1) (1)".
+	std::string NumberedName(const Reference<Scene>& scene, const std::string& name)
+	{
+		std::string base = name;
+		const size_t open = base.find_last_of('(');
+
+		if (open != std::string::npos && base.size() > open + 2 && base.back() == ')' && open >= 2 && base[open - 1] == ' ')
+		{
+			const std::string digits = base.substr(open + 1, base.size() - open - 2);
+
+			if (!digits.empty() && std::all_of(digits.begin(), digits.end(), [](unsigned char c) { return std::isdigit(c); }))
+				base.erase(open - 1);
+		}
+
+		const auto taken = [&scene](const std::string& candidate)
+		{
+			for (const auto& entity : scene->GetEntities())
+				if (entity->GetName() == candidate)
+					return true;
+
+			return false;
+		};
+
+		for (int32 number = 1; ; ++number)
+		{
+			const std::string candidate = base + " (" + std::to_string(number) + ")";
+
+			if (!taken(candidate))
+				return candidate;
+		}
+	}
+
+	// The eye in the Hierarchy's Visibility column. Open, the entity is drawn; struck through, it is not
+	// — and that is all it is: a hidden entity still updates and still collides.
+	bool EyeButton(const char8* id, bool visible)
+	{
+		const float32 size = RowEndSlot();
+		const ImVec2 origin = ImGui::GetCursorScreenPos();
+		const bool clicked = ImGui::InvisibleButton(id, ImVec2(size, size));
+		const bool hovered = ImGui::IsItemHovered();
+
+		if (hovered)
+			ImGui::SetTooltip(visible ? "Hide" : "Show");
+
+		const ImU32 color = ImGui::GetColorU32((visible || hovered) ? ImGuiCol_Text : ImGuiCol_TextDisabled);
+		const ImVec2 center(origin.x + size * 0.5f, origin.y + size * 0.5f);
+		const float32 halfWidth = size * 0.42f;
+		const float32 halfHeight = size * 0.26f;
+
+		// Two arcs meeting at the corners of the eye, and a pupil between them.
+		ImDrawList* drawList = ImGui::GetWindowDrawList();
+		drawList->PathClear();
+		drawList->PathArcTo(ImVec2(center.x, center.y + halfHeight * 1.6f), halfWidth * 1.35f, IM_PI * 1.25f, IM_PI * 1.75f, 12);
+		drawList->PathStroke(color, ImDrawFlags_None, 1.4f);
+		drawList->PathArcTo(ImVec2(center.x, center.y - halfHeight * 1.6f), halfWidth * 1.35f, IM_PI * 0.25f, IM_PI * 0.75f, 12);
+		drawList->PathStroke(color, ImDrawFlags_None, 1.4f);
+		drawList->AddCircleFilled(center, size * 0.13f, color, 8);
+
+		if (!visible)
+			drawList->AddLine(ImVec2(center.x - halfWidth, center.y + halfWidth),
+				ImVec2(center.x + halfWidth, center.y - halfWidth), color, 1.4f);
+
+		return clicked;
+	}
+
+	// The plus on the Hierarchy's Add button, drawn beside its label for the same reason everything else
+	// here is drawn: the editor's font has no icons in it.
+	void DrawPlusIcon(const ImVec2& center, float32 size, ImU32 color)
+	{
+		const float32 arm = size * 0.5f;
+
+		ImDrawList* drawList = ImGui::GetWindowDrawList();
+		drawList->AddLine(ImVec2(center.x - arm, center.y), ImVec2(center.x + arm, center.y), color, 1.6f);
+		drawList->AddLine(ImVec2(center.x, center.y - arm), ImVec2(center.x, center.y + arm), color, 1.6f);
+	}
+
 	// The revert arrow, as Unreal draws it: a curved arrow at the end of a row, shown only while the
 	// field is not what it ships as. Clicking it puts the default back.
 	//
@@ -1171,7 +1279,7 @@ void EditorLayer::Undo()
 	mUndoStack.pop_back();
 
 	// The scene is rebuilt from scratch, so any selected-entity pointer becomes stale.
-	mSelectedEntity = nullptr;
+	SetSelection(nullptr);
 	SceneSerializer::DeserializeFromString(mScene, state);
 }
 
@@ -1185,7 +1293,7 @@ void EditorLayer::Redo()
 	const std::string state = mRedoStack.back();
 	mRedoStack.pop_back();
 
-	mSelectedEntity = nullptr;
+	SetSelection(nullptr);
 	SceneSerializer::DeserializeFromString(mScene, state);
 }
 
@@ -1235,6 +1343,127 @@ void EditorLayer::ResetShortcutsToDefault()
 	set(ShortcutAction::ToggleStatistics, ImGuiKey_5, false, false, true);
 }
 
+void EditorLayer::SetSelection(const Reference<Entity>& entity)
+{
+	mSelection.clear();
+
+	if (entity)
+		mSelection.push_back(entity);
+
+	mSelectedEntity = entity;
+}
+
+void EditorLayer::AddToSelection(const Reference<Entity>& entity)
+{
+	if (!entity)
+		return;
+
+	const auto it = std::find(mSelection.begin(), mSelection.end(), entity);
+
+	if (it != mSelection.end())
+	{
+		// Ctrl-clicking something already selected takes it out — including the primary, which then
+		// falls back to whatever is left, because a selection with no primary is a selection with no
+		// Inspector.
+		mSelection.erase(it);
+		mSelectedEntity = mSelection.empty() ? nullptr : mSelection.back();
+		return;
+	}
+
+	mSelection.push_back(entity);
+	mSelectedEntity = entity;
+}
+
+void EditorLayer::SelectRangeTo(const Reference<Entity>& entity)
+{
+	if (!entity || !mSelectedEntity)
+	{
+		SetSelection(entity);
+		return;
+	}
+
+	// A range is a range of *rows*, so it runs over the entities in the order the scene keeps them —
+	// which is the order the Hierarchy lists them. The scene holds them in a list, so the two ends are
+	// found by counting rather than by subtracting one iterator from another.
+	const auto& entities = mScene->GetEntities();
+	int32 anchor = -1;
+	int32 target = -1;
+	int32 index = 0;
+
+	for (const auto& candidate : entities)
+	{
+		if (candidate == mSelectedEntity) anchor = index;
+		if (candidate == entity)          target = index;
+
+		index++;
+	}
+
+	if (anchor < 0 || target < 0)
+	{
+		SetSelection(entity);
+		return;
+	}
+
+	const int32 first = std::min(anchor, target);
+	const int32 last = std::max(anchor, target);
+
+	mSelection.clear();
+	index = 0;
+
+	for (const auto& candidate : entities)
+	{
+		if (index >= first && index <= last)
+			mSelection.push_back(candidate);
+
+		index++;
+	}
+
+	mSelectedEntity = entity;
+}
+
+void EditorLayer::RenameSelection(const std::string& name, const Reference<Entity>& renamed)
+{
+	// Renaming one thing renames one thing. Renaming several gives them all the name that was typed, and
+	// Windows' answer to several things wanting one name is a number after it.
+	if (mSelection.size() <= 1 || !IsSelected(renamed.get()))
+	{
+		renamed->SetName(name);
+		return;
+	}
+
+	for (const auto& entity : mSelection)
+		entity->SetName(NumberedName(mScene, name));
+}
+
+bool EditorLayer::IsSelected(const Entity* entity) const
+{
+	for (const auto& selected : mSelection)
+		if (selected.get() == entity)
+			return true;
+
+	return false;
+}
+
+Reference<Entity> EditorLayer::CreateEntity(Entity* parent, const Vector* position)
+{
+	RecordSnapshot();
+
+	auto entity = MakeReference<Entity>();
+	mScene->Add(entity);
+
+	if (parent)
+		entity->SetParent(parent);
+
+	if (position)
+		entity->SetWorldPosition(*position);
+
+	SetSelection(entity);
+	mRenamingEntity = entity;   // Let the user name it right away.
+	mRenameFocus = true;
+
+	return entity;
+}
+
 void EditorLayer::CreateFolder()
 {
 	RecordSnapshot();
@@ -1244,7 +1473,7 @@ void EditorLayer::CreateFolder()
 	folder->SetName("Folder");
 	mScene->Add(folder);
 
-	mSelectedEntity = folder;
+	SetSelection(folder);
 	mRenamingEntity = folder;   // Let the user name it right away.
 	mRenameFocus = true;
 }
@@ -1264,25 +1493,35 @@ void EditorLayer::PasteEntity()
 
 	if (Reference<Entity> pasted = SceneSerializer::DeserializeEntityFromString(mScene, mEntityClipboard))
 	{
-		pasted->SetName(pasted->GetName() + " (Copy)");
-		mSelectedEntity = pasted;
+		pasted->SetName(NumberedName(mScene, pasted->GetName()));
+		SetSelection(pasted);
 	}
 }
 
 void EditorLayer::DuplicateEntity()
 {
-	if (!mSelectedEntity)
+	if (mSelection.empty())
 		return;
 
 	RecordSnapshot();
 
-	const std::string data = SceneSerializer::SerializeEntityToString(mSelectedEntity);
+	// The whole selection is duplicated, and the copies become the selection — duplicating five things
+	// and being left holding the originals is not what anyone meant by it.
+	const std::vector<Reference<Entity>> originals = mSelection;
+	mSelection.clear();
 
-	if (Reference<Entity> copy = SceneSerializer::DeserializeEntityFromString(mScene, data))
+	for (const auto& original : originals)
 	{
-		copy->SetName(copy->GetName() + " (Copy)");
-		mSelectedEntity = copy;
+		const std::string data = SceneSerializer::SerializeEntityToString(original);
+
+		if (Reference<Entity> copy = SceneSerializer::DeserializeEntityFromString(mScene, data))
+		{
+			copy->SetName(NumberedName(mScene, original->GetName()));
+			mSelection.push_back(copy);
+		}
 	}
+
+	mSelectedEntity = mSelection.empty() ? nullptr : mSelection.back();
 }
 
 void EditorLayer::InitShortcuts()
@@ -1413,9 +1652,13 @@ void EditorLayer::HandleShortcuts()
 	if (mSelectedEntity && IsShortcutPressed(ShortcutAction::DeleteEntity))
 	{
 		RecordSnapshot();
-		mScene->Remove(mSelectedEntity);
+
+		// Del deletes what is selected, all of it — the same rule the context menu follows.
+		for (const auto& entity : mSelection)
+			mScene->Remove(entity);
+
 		mScene->FlushRemovals();
-		mSelectedEntity = nullptr;
+		SetSelection(nullptr);
 	}
 }
 
@@ -1502,6 +1745,28 @@ void EditorLayer::DrawViewport()
 
 	DrawViewportToolbar(imageMin, imageSize);
 
+	// The Hierarchy's menu, opened over the scene itself. Where the mouse was when it opened is captured
+	// then and there — the menu is a window, and the cursor walks away from the spot the moment it opens.
+	if (imageHovered && ImGui::IsMouseClicked(ImGuiMouseButton_Right) && !ImGuizmo::IsOver() && !ImGuizmo::IsUsing())
+	{
+		const ImVec2 mouse = ImGui::GetMousePos();
+		const glm::mat4 inverseViewProjection = glm::inverse(mCamera->GetProjectionMatrix() * mCamera->GetViewMatrix());
+
+		const float32 ndcX = ((mouse.x - imageMin.x) / imageSize.x) * 2.0f - 1.0f;
+		const float32 ndcY = 1.0f - ((mouse.y - imageMin.y) / imageSize.y) * 2.0f;  // Screen space is top-down.
+		const glm::vec4 world = inverseViewProjection * glm::vec4(ndcX, ndcY, 0.0f, 1.0f);
+
+		mViewportMenuPosition = Vector(world.x / world.w, world.y / world.w, 0.0f);
+	}
+
+	// Over the window rather than over the image: the image is an item, and a menu that refuses to open
+	// over items would never open over the one thing this menu is about.
+	if (ImGui::BeginPopupContextWindow("ViewportContext", ImGuiPopupFlags_MouseButtonRight))
+	{
+		DrawEntityMenuItems(nullptr, &mViewportMenuPosition);
+		ImGui::EndPopup();
+	}
+
 	// Pixel-perfect click-to-select: read the entity id under the cursor from the id attachment.
 	// Skipped while over/using the gizmo or the overlay toolbar (those clicks belong to them).
 	if (imageHovered && !ImGui::IsAnyItemHovered() &&
@@ -1515,15 +1780,22 @@ void EditorLayer::DrawViewport()
 		{
 			const int32 id = mFramebuffer->ReadEntityId(static_cast<uint32>(pixelX), static_cast<uint32>(pixelY));
 
-			mSelectedEntity = nullptr;
+			Reference<Entity> picked;
+
 			for (const auto& entity : mScene->GetEntities())
 			{
 				if (entity->GetId() == id)
 				{
-					mSelectedEntity = entity;
+					picked = entity;
 					break;
 				}
 			}
+
+			// The viewport picks the same way the Hierarchy clicks: Ctrl adds to the selection.
+			if (picked && ImGui::GetIO().KeyCtrl)
+				AddToSelection(picked);
+			else
+				SetSelection(picked);
 		}
 	}
 
@@ -1708,18 +1980,36 @@ void EditorLayer::DrawHierarchy()
 
 	ImGui::Begin("Scene Hierarchy", &mShowHierarchy);
 
-	// Compact toolbar: a single "+" create button; everything else is on the context menus.
-	if (ImGui::Button("+ Create"))
-	{
-		RecordSnapshot();
-		auto entity = MakeReference<Entity>();
-		mScene->Add(entity);
-		mSelectedEntity = entity;
-		mRenamingEntity = entity;   // Let the user name it right away.
-		mRenameFocus = true;
-	}
+	const ImGuiStyle& style = ImGui::GetStyle();
+
+	// Add, then what you are looking for, then what you are looking in.
+	const ImVec2 addPosition = ImGui::GetCursorScreenPos();
+	const bool add = ImGui::Button("   Add");
+
+	DrawPlusIcon(
+		ImVec2(addPosition.x + style.FramePadding.x + ImGui::GetFontSize() * 0.35f, addPosition.y + ImGui::GetFrameHeight() * 0.5f),
+		ImGui::GetFontSize() * 0.6f, ImGui::GetColorU32(ImGuiCol_Text));
+
+	if (add)
+		CreateEntity();
+
 	if (ImGui::IsItemHovered())
 		ImGui::SetTooltip("Create an entity");
+
+	ImGui::SameLine();
+	ImGui::SetNextItemWidth(-1.0f);
+	ImGui::InputTextWithHint("##search", "Search...", mHierarchyFilter, IM_ARRAYSIZE(mHierarchyFilter));
+
+	// The scene these entities are in. Untitled until it has been saved, which is the honest name for a
+	// scene that exists nowhere but here.
+	const std::string sceneName = mScenePath.empty()
+		? std::string("Untitled")
+		: std::filesystem::path(mScenePath).filename().generic_string();
+
+	ImGui::TextDisabled("%s", sceneName.c_str());
+
+	if (!mScenePath.empty() && ImGui::IsItemHovered())
+		ImGui::SetTooltip("%s", mScenePath.c_str());
 
 	ImGui::Separator();
 
@@ -1733,14 +2023,32 @@ void EditorLayer::DrawHierarchy()
 	mReparentTarget = nullptr;
 	mReparentRequested = false;
 
-	// Only roots are drawn at the top level; each node recurses into its children.
-	int32 count = 0;
-	for (const auto& entity : mScene->GetEntities())
-	{
-		if (entity->GetParent() == nullptr)
-			DrawEntityNode(entity);
+	// The tree scrolls; the count below it does not. It is the one number that is always true about a
+	// scene, so it is always on screen.
+	const float32 footerHeight = ImGui::GetFrameHeightWithSpacing();
+	ImGui::BeginChild("HierarchyTree", ImVec2(0.0f, -footerHeight), ImGuiChildFlags_None);
 
-		count++;
+	const int32 count = static_cast<int32>(mScene->GetEntities().size());
+
+	// Two columns: what a thing is called, and whether it is drawn. The eye is a property of the entity
+	// and not of the editor, so the game can reach for it too.
+	constexpr ImGuiTableFlags tableFlags = ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersOuterH;
+
+	if (ImGui::BeginTable("Entities", 2, tableFlags))
+	{
+		// Wide enough for its own header: a column called Visibility that reads "Visi..." is a column that
+		// gave its name away to save a dozen pixels.
+		const float32 visibilityWidth = ImMax(ImGui::CalcTextSize("Visibility").x, RowEndSlot()) + style.CellPadding.x * 2.0f;
+
+		ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_WidthStretch);
+		ImGui::TableSetupColumn("Visibility", ImGuiTableColumnFlags_WidthFixed, visibilityWidth);
+		ImGui::TableHeadersRow();
+
+		for (const auto& entity : mScene->GetEntities())
+			if (entity->GetParent() == nullptr)
+				DrawEntityNode(entity);
+
+		ImGui::EndTable();
 	}
 
 	if (count == 0)
@@ -1750,44 +2058,65 @@ void EditorLayer::DrawHierarchy()
 	if (ImGui::BeginPopupContextWindow("HierarchyContext",
 		ImGuiPopupFlags_MouseButtonRight | ImGuiPopupFlags_NoOpenOverItems))
 	{
-		if (ImGui::MenuItem("Create Entity"))
-		{
-			RecordSnapshot();
-			auto entity = MakeReference<Entity>();
-			mScene->Add(entity);
-			mSelectedEntity = entity;
-			mRenamingEntity = entity;
-			mRenameFocus = true;
-		}
-
-		if (ImGui::MenuItem("Create Folder"))
-			CreateFolder();
-
-		if (ImGui::MenuItem("Paste", "Ctrl+V", false, !mEntityClipboard.empty()))
-			PasteEntity();
-
+		DrawEntityMenuItems(nullptr, nullptr);
 		ImGui::EndPopup();
 	}
 
 	// Click empty space inside the panel to deselect.
 	if (ImGui::IsWindowHovered() && !ImGui::IsAnyItemHovered() && ImGui::IsMouseClicked(ImGuiMouseButton_Left))
-		mSelectedEntity = nullptr;
+		SetSelection(nullptr);
+
+	ImGui::EndChild();
+
+	ImGui::Separator();
+	ImGui::TextDisabled("%d %s", count, (count == 1) ? "entity" : "entities");
+
+	if (mSelection.size() > 1)
+	{
+		ImGui::SameLine();
+		ImGui::TextDisabled("— %d selected", static_cast<int32>(mSelection.size()));
+	}
 
 	// Deferred hierarchy edits (never mutate the tree while iterating it above).
 	if (mReparentRequested && mReparentChild)
 	{
 		RecordSnapshot();
-		mReparentChild->SetParent(mReparentTarget);
+
+		// A drag carries the whole selection when the thing dragged is part of it, which is the only
+		// reading of "drag them onto a folder" that does not mean doing it one at a time.
+		const Reference<Entity> dragged = mEntityLookup.count(mReparentChild) ? mEntityLookup[mReparentChild] : nullptr;
+		const bool dragSelection = dragged && IsSelected(mReparentChild);
+
+		if (dragSelection)
+		{
+			for (const auto& entity : mSelection)
+				if (entity.get() != mReparentTarget && !(mReparentTarget && mReparentTarget->IsDescendantOf(entity.get())))
+					entity->SetParent(mReparentTarget);
+		}
+		else
+		{
+			mReparentChild->SetParent(mReparentTarget);
+		}
 	}
 
 	if (mEntityToDelete)
 	{
 		RecordSnapshot();
 
-		if (mSelectedEntity == mEntityToDelete) mSelectedEntity = nullptr;
-		if (mRenamingEntity == mEntityToDelete) mRenamingEntity = nullptr;
+		// Deleting one of several deletes all of them, for the same reason dragging one drags all of them.
+		const std::vector<Reference<Entity>> doomed = IsSelected(mEntityToDelete.get())
+			? mSelection
+			: std::vector<Reference<Entity>>{ mEntityToDelete };
 
-		mScene->Remove(mEntityToDelete);
+		for (const auto& entity : doomed)
+		{
+			if (mRenamingEntity == entity)
+				mRenamingEntity = nullptr;
+
+			mScene->Remove(entity);
+		}
+
+		SetSelection(nullptr);
 		mScene->FlushRemovals();
 		mEntityToDelete = nullptr;
 	}
@@ -1795,9 +2124,68 @@ void EditorLayer::DrawHierarchy()
 	ImGui::End();
 }
 
+void EditorLayer::DrawEntityMenuItems(const Reference<Entity>& target, const Vector* position)
+{
+	// One menu, opened from two places. The Hierarchy's version has no position, so an entity lands at
+	// the origin; the viewport's has one, so it lands under the mouse — which is the only difference
+	// between them, and no reason for a second menu.
+	if (target)
+	{
+		if (ImGui::MenuItem("Rename", "F2"))
+		{
+			mRenamingEntity = target;
+			mRenameFocus = true;
+		}
+
+		ImGui::Separator();
+	}
+
+	if (ImGui::MenuItem("Create Entity"))
+		CreateEntity(nullptr, position);
+
+	if (target && ImGui::MenuItem("Create Entity as Child"))
+		CreateEntity(target.get(), nullptr);
+
+	if (ImGui::MenuItem("Create Folder"))
+		CreateFolder();
+
+	ImGui::Separator();
+
+	if (target)
+	{
+		if (ImGui::MenuItem("Copy", "Ctrl+C"))      CopyEntity();
+		if (ImGui::MenuItem("Duplicate", "Ctrl+D")) DuplicateEntity();
+	}
+
+	if (ImGui::MenuItem("Paste", "Ctrl+V", false, !mEntityClipboard.empty()))
+		PasteEntity();
+
+	if (!target)
+		return;
+
+	ImGui::Separator();
+
+	if (ImGui::MenuItem("Unparent", nullptr, false, target->GetParent() != nullptr))
+	{
+		mReparentChild = target.get();
+		mReparentTarget = nullptr;
+		mReparentRequested = true;
+	}
+
+	if (ImGui::MenuItem("Delete", "Del"))
+		mEntityToDelete = target;
+}
+
 void EditorLayer::DrawEntityNode(const Reference<Entity>& entity)
 {
+	// The search hides what does not match — but never a node whose child does, or a filter would tell
+	// you the thing you are looking for is not there when it is only nested.
+	if (!MatchesHierarchyFilter(entity.get(), mHierarchyFilter))
+		return;
+
 	ImGui::PushID(entity->GetId());
+	ImGui::TableNextRow();
+	ImGui::TableSetColumnIndex(0);
 
 	if (entity == mRenamingEntity)
 	{
@@ -1820,7 +2208,7 @@ void EditorLayer::DrawEntityNode(const Reference<Entity>& entity)
 		if (committed || ImGui::IsItemDeactivated())
 		{
 			RecordSnapshot();
-			entity->SetName(buffer);
+			RenameSelection(buffer, entity);
 			mRenamingEntity = nullptr;
 		}
 
@@ -1828,33 +2216,47 @@ void EditorLayer::DrawEntityNode(const Reference<Entity>& entity)
 		return;
 	}
 
-	ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_SpanAvailWidth;
+	ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_SpanAllColumns;
 
 	if (entity->GetChildren().empty())
 		flags |= ImGuiTreeNodeFlags_Leaf;
 
-	if (entity == mSelectedEntity)
+	if (IsSelected(entity.get()))
 		flags |= ImGuiTreeNodeFlags_Selected;
+
+	// A search that hid the branch would hide the match inside it, so a filtered tree opens itself.
+	if (mHierarchyFilter[0] != '\0')
+		ImGui::SetNextItemOpen(true, ImGuiCond_Always);
 
 	const std::string& name = entity->GetName();
 	const bool folder = entity->IsFolder();
 
-	// Folders are tinted so they read as organizational nodes rather than scene objects.
+	// Folders are tinted so they read as organizational nodes rather than scene objects. A hidden entity
+	// is dimmed: the eye says why, and the name says so at a glance.
 	if (folder)
 		ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.95f, 0.80f, 0.35f, 1.0f));
+	else if (!entity->IsVisible() || !entity->IsEnabled())
+		ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyle().Colors[ImGuiCol_TextDisabled]);
 
+	ImGui::SetNextItemAllowOverlap();   // The eye sits in the row the node spans, and gets its own clicks.
 	const bool open = ImGui::TreeNodeEx("##node", flags, "%s", name.empty() ? "(unnamed)" : name.c_str());
 
-	if (folder)
+	if (folder || !entity->IsVisible() || !entity->IsEnabled())
 		ImGui::PopStyleColor();
 
-	// Clicking the label (not the expand arrow) selects the entity.
+	// Clicking the label (not the expand arrow) selects. Ctrl adds one, Shift takes everything between.
 	if (ImGui::IsItemClicked() && !ImGui::IsItemToggledOpen())
-		mSelectedEntity = entity;
+	{
+		if (ImGui::GetIO().KeyShift)
+			SelectRangeTo(entity);
+		else if (ImGui::GetIO().KeyCtrl)
+			AddToSelection(entity);
+		else
+			SetSelection(entity);
+	}
 
 	if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
 	{
-		mSelectedEntity = entity;
 		mRenamingEntity = entity;
 		mRenameFocus = true;
 	}
@@ -1864,7 +2266,12 @@ void EditorLayer::DrawEntityNode(const Reference<Entity>& entity)
 	{
 		Entity* dragged = entity.get();
 		ImGui::SetDragDropPayload("LN_ENTITY", &dragged, sizeof(Entity*));
-		ImGui::Text("Move %s", name.c_str());
+
+		if (IsSelected(dragged) && mSelection.size() > 1)
+			ImGui::Text("Move %d entities", static_cast<int32>(mSelection.size()));
+		else
+			ImGui::Text("Move %s", name.c_str());
+
 		ImGui::EndDragDropSource();
 	}
 
@@ -1882,33 +2289,31 @@ void EditorLayer::DrawEntityNode(const Reference<Entity>& entity)
 
 	if (ImGui::BeginPopupContextItem())
 	{
-		mSelectedEntity = entity;
+		// Right-clicking outside the selection moves it here; right-clicking inside it keeps it, so a
+		// menu opened on five selected things still acts on five things.
+		if (!IsSelected(entity.get()))
+			SetSelection(entity);
 
-		if (ImGui::MenuItem("Rename", "F2"))
-		{
-			mRenamingEntity = entity;
-			mRenameFocus = true;
-		}
-
-		ImGui::Separator();
-
-		if (ImGui::MenuItem("Copy", "Ctrl+C"))      CopyEntity();
-		if (ImGui::MenuItem("Duplicate", "Ctrl+D")) DuplicateEntity();
-		if (ImGui::MenuItem("Paste", "Ctrl+V", false, !mEntityClipboard.empty())) PasteEntity();
-
-		ImGui::Separator();
-
-		if (ImGui::MenuItem("Unparent", nullptr, false, entity->GetParent() != nullptr))
-		{
-			mReparentChild = entity.get();
-			mReparentTarget = nullptr;
-			mReparentRequested = true;
-		}
-
-		if (ImGui::MenuItem("Delete", "Del"))
-			mEntityToDelete = entity;
-
+		DrawEntityMenuItems(entity, nullptr);
 		ImGui::EndPopup();
+	}
+
+	// The Visibility column. A folder has nothing to draw, so it has no eye.
+	ImGui::TableSetColumnIndex(1);
+	ImGui::SetCursorPosX(ImGui::GetCursorPosX() + ImMax((ImGui::GetContentRegionAvail().x - RowEndSlot()) * 0.5f, 0.0f));
+
+	if (!folder && EyeButton("##visible", entity->IsVisible()))
+	{
+		RecordSnapshot();
+		const bool visible = !entity->IsVisible();
+
+		// The eye follows the selection when the entity is part of it: hiding five selected things by
+		// clicking one of their eyes is the same rule as dragging or deleting them.
+		if (IsSelected(entity.get()))
+			for (const auto& selected : mSelection)
+				selected->SetVisible(visible);
+		else
+			entity->SetVisible(visible);
 	}
 
 	if (open)
@@ -2148,17 +2553,39 @@ void EditorLayer::DrawProperties()
 		return;
 	}
 
+	// Whether the entity is switched on at all — the checkbox Unity puts before the name, and the same
+	// flag the game reads. Hiding is a different thing entirely, and lives on the eye in the Hierarchy.
+	bool enabled = mSelectedEntity->IsEnabled();
+
+	if (ImGui::Checkbox("##enabled", &enabled))
+	{
+		RecordSnapshot();
+
+		for (const auto& entity : mSelection)
+			entity->SetEnabled(enabled);
+	}
+
+	if (ImGui::IsItemHovered())
+		ImGui::SetTooltip(enabled ? "Enabled" : "Disabled — neither updated nor drawn");
+
 	// Editable entity name.
 	char nameBuffer[128];
 	const std::string& currentName = mSelectedEntity->GetName();
 	const size_t copied = currentName.copy(nameBuffer, sizeof(nameBuffer) - 1);
 	nameBuffer[copied] = '\0';
 
-	PropertyLabel("Name");
+	ImGui::SameLine();
+	ImGui::SetNextItemWidth(-1.0f);
+
 	if (ImGui::InputText("##name", nameBuffer, sizeof(nameBuffer)))
 		mSelectedEntity->SetName(nameBuffer);
 	if (ImGui::IsItemActivated()) BeginEdit();
 	if (ImGui::IsItemDeactivatedAfterEdit()) CommitEdit();
+
+	// What the Inspector is looking at, when it is looking at more than one thing. The fields below show
+	// the primary's values and write to every entity that has the same field to write.
+	if (mSelection.size() > 1)
+		ImGui::TextDisabled("%d entities selected — edits apply to all of them.", static_cast<int32>(mSelection.size()));
 
 	ImGui::Separator();
 
@@ -2172,22 +2599,27 @@ void EditorLayer::DrawProperties()
 
 	if (ImGui::CollapsingHeader("Transform", ImGuiTreeNodeFlags_DefaultOpen))
 	{
+		// Every entity has a Transform, so a transform edit is the one edit the whole selection always
+		// has in common. The values shown are the primary's; the value written is written to all of them.
 		const Reference<Transform> transform = mSelectedEntity->GetTransform();
 
 		Vector position = transform->GetPosition();
 		float32 positionValues[3] = { position.x, position.y, position.z };
 		if (DrawVec3Control("Position", positionValues, 1.0f, 0.0f))
-			transform->SetPosition(Vector(positionValues[0], positionValues[1], positionValues[2]));
+			for (const auto& entity : mSelection)
+				entity->GetTransform()->SetPosition(Vector(positionValues[0], positionValues[1], positionValues[2]));
 
 		Vector rotation = transform->GetRotation();
 		float32 rotationValues[3] = { rotation.x, rotation.y, rotation.z };
 		if (DrawVec3Control("Rotation", rotationValues, 0.5f, 0.0f))
-			transform->SetRotation(Vector(rotationValues[0], rotationValues[1], rotationValues[2]));
+			for (const auto& entity : mSelection)
+				entity->GetTransform()->SetRotation(Vector(rotationValues[0], rotationValues[1], rotationValues[2]));
 
 		Vector scale = transform->GetScale();
 		float32 scaleValues[3] = { scale.x, scale.y, scale.z };
 		if (DrawVec3Control("Scale", scaleValues, 0.01f, 1.0f, &mScaleUniform))
-			transform->SetScale(Vector(scaleValues[0], scaleValues[1], scaleValues[2]));
+			for (const auto& entity : mSelection)
+				entity->GetTransform()->SetScale(Vector(scaleValues[0], scaleValues[1], scaleValues[2]));
 	}
 
 	// Draw components in their stored order so a newly added one always appears at the end; headers
@@ -2221,7 +2653,7 @@ void EditorLayer::DrawProperties()
 				ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - browseWidth - style.ItemInnerSpacing.x);
 				ImGui::InputText("##texture", textureBuffer, sizeof(textureBuffer));
 				if (ImGui::IsItemActivated()) BeginEdit();
-				if (ImGui::IsItemDeactivatedAfterEdit()) { renderer->SetTexturePath(textureBuffer); CommitEdit(); }
+				if (ImGui::IsItemDeactivatedAfterEdit()) { ApplyToSelection<SpriteRenderer>([&](SpriteRenderer* target) { target->SetTexturePath(textureBuffer); }); CommitEdit(); }
 
 				// Drop an image from the Project panel to assign it.
 				if (ImGui::BeginDragDropTarget())
@@ -2229,7 +2661,7 @@ void EditorLayer::DrawProperties()
 					if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("LN_ASSET_PATH"))
 					{
 						RecordSnapshot();
-						renderer->SetTexturePath(static_cast<const char8*>(payload->Data));
+						ApplyToSelection<SpriteRenderer>([&](SpriteRenderer* target) { target->SetTexturePath(static_cast<const char8*>(payload->Data)); });
 					}
 
 					ImGui::EndDragDropTarget();
@@ -2247,7 +2679,7 @@ void EditorLayer::DrawProperties()
 					if (!picked.empty())
 					{
 						RecordSnapshot();
-						renderer->SetTexturePath(ToResourceRelativePath(picked));
+						ApplyToSelection<SpriteRenderer>([&](SpriteRenderer* target) { target->SetTexturePath(ToResourceRelativePath(picked)); });
 					}
 				}
 				if (ImGui::IsItemHovered())
@@ -2266,14 +2698,14 @@ void EditorLayer::DrawProperties()
 				if (ImGui::Combo("##type", &typeIndex, bodyTypes, IM_ARRAYSIZE(bodyTypes)))
 				{
 					RecordSnapshot();
-					body->SetBodyType(static_cast<BodyType>(typeIndex));
+					ApplyToSelection<RigidBody2D>([&](RigidBody2D* target) { target->SetBodyType(static_cast<BodyType>(typeIndex)); });
 				}
 
 				SameLineRowEnd();
 				if (ResetToDefaultButton("##resetType", typeIndex != defaultType))
 				{
 					RecordSnapshot();
-					body->SetBodyType(BodyType::Dynamic);
+					ApplyToSelection<RigidBody2D>([](RigidBody2D* target) { target->SetBodyType(BodyType::Dynamic); });
 				}
 
 				bool fixedRotation = body->IsFixedRotation();
@@ -2281,14 +2713,14 @@ void EditorLayer::DrawProperties()
 				if (ImGui::Checkbox("##fixedRotation", &fixedRotation))
 				{
 					RecordSnapshot();
-					body->SetFixedRotation(fixedRotation);
+					ApplyToSelection<RigidBody2D>([&](RigidBody2D* target) { target->SetFixedRotation(fixedRotation); });
 				}
 
 				SameLineRowEnd();
 				if (ResetToDefaultButton("##resetFixedRotation", fixedRotation))
 				{
 					RecordSnapshot();
-					body->SetFixedRotation(false);
+					ApplyToSelection<RigidBody2D>([](RigidBody2D* target) { target->SetFixedRotation(false); });
 				}
 			}
 		}
@@ -2300,19 +2732,19 @@ void EditorLayer::DrawProperties()
 				// what the editor gives it when you add it is the sprite's size, not something the class
 				// knows. So they carry no arrow — one that reverted a box to nothing would be a trap.
 				float32 width = collider->GetWidth();
-				if (DrawFloatProperty("Width", width, 1.0f, 0.0f, 10000.0f, std::nullopt)) collider->SetWidth(width);
+				if (DrawFloatProperty("Width", width, 1.0f, 0.0f, 10000.0f, std::nullopt)) ApplyToSelection<BoxCollider2D>([&](BoxCollider2D* target) { target->SetWidth(width); });
 
 				float32 height = collider->GetHeight();
-				if (DrawFloatProperty("Height", height, 1.0f, 0.0f, 10000.0f, std::nullopt)) collider->SetHeight(height);
+				if (DrawFloatProperty("Height", height, 1.0f, 0.0f, 10000.0f, std::nullopt)) ApplyToSelection<BoxCollider2D>([&](BoxCollider2D* target) { target->SetHeight(height); });
 
 				float32 density = collider->GetDensity();
-				if (DrawFloatProperty("Density", density, 0.05f, 0.0f, 100.0f, 1.0f)) collider->SetDensity(density);
+				if (DrawFloatProperty("Density", density, 0.05f, 0.0f, 100.0f, 1.0f)) ApplyToSelection<BoxCollider2D>([&](BoxCollider2D* target) { target->SetDensity(density); });
 
 				float32 friction = collider->GetFriction();
-				if (DrawFloatProperty("Friction", friction, 0.01f, 0.0f, 1.0f, 0.2f)) collider->SetFriction(friction);
+				if (DrawFloatProperty("Friction", friction, 0.01f, 0.0f, 1.0f, 0.2f)) ApplyToSelection<BoxCollider2D>([&](BoxCollider2D* target) { target->SetFriction(friction); });
 
 				float32 restitution = collider->GetRestitution();
-				if (DrawFloatProperty("Restitution", restitution, 0.01f, 0.0f, 1.0f, 0.0f)) collider->SetRestitution(restitution);
+				if (DrawFloatProperty("Restitution", restitution, 0.01f, 0.0f, 1.0f, 0.0f)) ApplyToSelection<BoxCollider2D>([&](BoxCollider2D* target) { target->SetRestitution(restitution); });
 			}
 		}
 		else if (CircleCollider2D* collider = dynamic_cast<CircleCollider2D*>(component))
@@ -2321,16 +2753,16 @@ void EditorLayer::DrawProperties()
 			{
 				// The radius has no default to go back to, for the same reason a box's extents do not.
 				float32 radius = collider->GetRadius();
-				if (DrawFloatProperty("Radius", radius, 1.0f, 0.0f, 10000.0f, std::nullopt)) collider->SetRadius(radius);
+				if (DrawFloatProperty("Radius", radius, 1.0f, 0.0f, 10000.0f, std::nullopt)) ApplyToSelection<CircleCollider2D>([&](CircleCollider2D* target) { target->SetRadius(radius); });
 
 				float32 density = collider->GetDensity();
-				if (DrawFloatProperty("Density", density, 0.05f, 0.0f, 100.0f, 1.0f)) collider->SetDensity(density);
+				if (DrawFloatProperty("Density", density, 0.05f, 0.0f, 100.0f, 1.0f)) ApplyToSelection<CircleCollider2D>([&](CircleCollider2D* target) { target->SetDensity(density); });
 
 				float32 friction = collider->GetFriction();
-				if (DrawFloatProperty("Friction", friction, 0.01f, 0.0f, 1.0f, 0.2f)) collider->SetFriction(friction);
+				if (DrawFloatProperty("Friction", friction, 0.01f, 0.0f, 1.0f, 0.2f)) ApplyToSelection<CircleCollider2D>([&](CircleCollider2D* target) { target->SetFriction(friction); });
 
 				float32 restitution = collider->GetRestitution();
-				if (DrawFloatProperty("Restitution", restitution, 0.01f, 0.0f, 1.0f, 0.0f)) collider->SetRestitution(restitution);
+				if (DrawFloatProperty("Restitution", restitution, 0.01f, 0.0f, 1.0f, 0.0f)) ApplyToSelection<CircleCollider2D>([&](CircleCollider2D* target) { target->SetRestitution(restitution); });
 			}
 		}
 		else
@@ -2499,27 +2931,32 @@ void EditorLayer::DrawMenuBar()
 			{
 				RecordSnapshot();
 				mScene->Clear();
-				mSelectedEntity = nullptr;
+				SetSelection(nullptr);
+				mScenePath.clear();
 			}
 
 			if (ImGui::MenuItem("Open Scene..."))
 			{
-				const std::string path = FileDialog::Open(sceneFilter);
+				const std::string path = FileDialog::Open(sceneFilter, GameAssetsDirectory().string());
 
 				if (!path.empty())
 				{
 					RecordSnapshot();
-					mSelectedEntity = nullptr;
+					SetSelection(nullptr);
 					SceneSerializer::Deserialize(mScene, path);
+					mScenePath = path;
 				}
 			}
 
 			if (ImGui::MenuItem("Save Scene As..."))
 			{
-				const std::string path = FileDialog::Save(sceneFilter, "json");
+				const std::string path = FileDialog::Save(sceneFilter, "json", GameAssetsDirectory().string());
 
 				if (!path.empty())
+				{
 					SceneSerializer::Serialize(mScene, path);
+					mScenePath = path;
+				}
 			}
 
 			ImGui::Separator();
@@ -2955,7 +3392,7 @@ void EditorLayer::UnloadGameModule()
 
 	// Nothing may outlive the module holding a component of its own: an entity kept alive by a stray
 	// reference would run its components' destructors after the code was gone.
-	mSelectedEntity = nullptr;
+	SetSelection(nullptr);
 	mRenamingEntity = nullptr;
 	mEntityToDelete = nullptr;
 	mReparentChild = nullptr;

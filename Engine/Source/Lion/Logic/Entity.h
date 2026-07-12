@@ -35,6 +35,19 @@ namespace Lion
 		LION_API bool IsFolder() const { return mIsFolder; }
 		LION_API void SetFolder(bool value) { mIsFolder = value; }
 
+		// Whether the entity takes part in the simulation at all: a disabled one is neither updated nor
+		// drawn, and neither is anything under it. Enabling is inherited, so an entity is only really
+		// running when nothing above it is switched off (IsActive).
+		LION_API bool IsEnabled() const { return mEnabled; }
+		LION_API void SetEnabled(bool value);
+		LION_API bool IsActive() const;
+
+		// Whether the entity is drawn. This is *only* about being seen: a hidden entity still updates,
+		// still collides, still runs its components — it is invisible, not switched off. Both the editor's
+		// eye and the game's own code set this, which is the point of it being on the entity.
+		LION_API bool IsVisible() const { return mVisible; }
+		LION_API void SetVisible(bool value) { mVisible = value; }
+
 		// Returns the scene that currently owns this entity (null while detached).
 		LION_API Reference<Scene> GetScene() const { return mScene; }
 
@@ -122,6 +135,8 @@ namespace Lion
 	private:
 		const int32 mId;
 		bool mIsFolder = false;
+		bool mEnabled = true;
+		bool mVisible = true;
 		std::string mName = "Entity";
 		Reference<Transform> mTransform;
 		Reference<Scene> mScene;
