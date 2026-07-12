@@ -3956,11 +3956,16 @@ void EditorLayer::DrawTitleBar()
 	DrawWindowButtons(barMin, barWidth, row);
 
 	// The editor's own name, in the middle of the row the window's controls are in — which is where a window
-	// says what it is, whether or not it drew the caption itself.
+	// says what it is, whether or not it drew the caption itself. Bold, so it reads as the name of the thing
+	// and not as one more label in a bar full of them; measured under the same font it is drawn in.
+	ImGui::PushFont(EditorGui::GetBoldFont());
+
 	const float32 titleWidth = ImGui::CalcTextSize(kEditorName).x;
 
 	ImGui::SetCursorPos(ImVec2((barWidth - titleWidth) * 0.5f, (row - ImGui::GetTextLineHeight()) * 0.5f));
 	ImGui::TextUnformatted(kEditorName);
+
+	ImGui::PopFont();
 
 	const std::filesystem::path project = ProjectRootDirectory();
 	const std::string projectName = project.empty() ? std::string("No project") : project.filename().generic_string();
@@ -3971,10 +3976,14 @@ void EditorLayer::DrawTitleBar()
 	// The project sits in a tab of its own, hanging from the top edge of the window: square where it meets the
 	// edge and round where it leaves it, which is what makes it read as hanging from the edge rather than
 	// floating in front of it.
-	drawList->AddRectFilled(
-		ImVec2(barMin.x + projectLeft - kProjectPadding, barMin.y),
-		ImVec2(barMin.x + projectLeft + projectWidth + kProjectPadding, barMin.y + row),
-		IM_COL32(0x30, 0x30, 0x33, 255), kProjectRounding, ImDrawFlags_RoundCornersBottom);
+	//
+	// The fill alone was nearly the colour of the bar behind it, so the tab had no edge and the name looked
+	// like it was floating; the outline is what says where the tab stops.
+	const ImVec2 boxMin(barMin.x + projectLeft - kProjectPadding, barMin.y);
+	const ImVec2 boxMax(barMin.x + projectLeft + projectWidth + kProjectPadding, barMin.y + row);
+
+	drawList->AddRectFilled(boxMin, boxMax, IM_COL32(0x30, 0x30, 0x33, 255), kProjectRounding, ImDrawFlags_RoundCornersBottom);
+	drawList->AddRect(boxMin, boxMax, IM_COL32(0x4A, 0x4A, 0x4F, 255), kProjectRounding, ImDrawFlags_RoundCornersBottom, 1.0f);
 
 	ImGui::SetCursorPos(ImVec2(projectLeft, (row - ImGui::GetTextLineHeight()) * 0.5f));
 	ImGui::TextUnformatted(projectName.c_str());

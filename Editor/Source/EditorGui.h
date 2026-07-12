@@ -1,5 +1,7 @@
 #pragma once
 
+struct ImFont;
+
 // Dear ImGui lifecycle for the editor (GLFW + OpenGL 3 backends).
 //
 // ImGui lives only in the editor, never in the engine or the shipped game. The editor owns the
@@ -18,4 +20,8 @@ public:
 
 	// Renders the accumulated UI for this frame.
 	static void EndFrame();
+
+	// The bold cut of the UI font, or null when the machine has no bold to give — which ImGui reads as "the
+	// default font", so a caller pushing it is never left holding nothing.
+	static ImFont* GetBoldFont();
 };
