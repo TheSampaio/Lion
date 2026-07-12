@@ -12,7 +12,7 @@
 namespace Lion
 {
 #ifdef LN_PLATFORM_WIN
-	std::string FileDialog::Open(const char8* filter)
+	std::string FileDialog::Open(const char8* filter, const std::string& initialDirectory)
 	{
 		CHAR file[MAX_PATH] = { 0 };
 
@@ -23,6 +23,7 @@ namespace Lion
 		openFileName.nMaxFile = sizeof(file);
 		openFileName.lpstrFilter = filter;
 		openFileName.nFilterIndex = 1;
+		openFileName.lpstrInitialDir = initialDirectory.empty() ? nullptr : initialDirectory.c_str();
 		openFileName.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST | OFN_NOCHANGEDIR;
 
 		if (GetOpenFileNameA(&openFileName) == TRUE)
@@ -31,7 +32,7 @@ namespace Lion
 		return std::string();
 	}
 
-	std::string FileDialog::Save(const char8* filter, const char8* defaultExtension)
+	std::string FileDialog::Save(const char8* filter, const char8* defaultExtension, const std::string& initialDirectory)
 	{
 		CHAR file[MAX_PATH] = { 0 };
 
@@ -43,6 +44,7 @@ namespace Lion
 		openFileName.lpstrFilter = filter;
 		openFileName.nFilterIndex = 1;
 		openFileName.lpstrDefExt = defaultExtension;
+		openFileName.lpstrInitialDir = initialDirectory.empty() ? nullptr : initialDirectory.c_str();
 		openFileName.Flags = OFN_OVERWRITEPROMPT | OFN_NOCHANGEDIR;
 
 		if (GetSaveFileNameA(&openFileName) == TRUE)
@@ -51,7 +53,7 @@ namespace Lion
 		return std::string();
 	}
 #else
-	std::string FileDialog::Open(const char8*) { return std::string(); }
-	std::string FileDialog::Save(const char8*, const char8*) { return std::string(); }
+	std::string FileDialog::Open(const char8*, const std::string&) { return std::string(); }
+	std::string FileDialog::Save(const char8*, const char8*, const std::string&) { return std::string(); }
 #endif
 }

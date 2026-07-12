@@ -11,6 +11,7 @@ project "Mane"
     debugdir "%{cfg.targetdir}"
 
     files {
+        "%{prj.location}/**.rc",   -- The executable's icon.
         "%{prj.location}/**.h",
         "%{prj.location}/**.cpp",  -- includes the vendored ImGuizmo.cpp under Source/Vendor (editor-only)
     }

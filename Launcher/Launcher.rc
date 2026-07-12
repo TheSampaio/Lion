@@ -1,0 +1,4 @@
+// A game that picks no icon of its own still wears the engine's — the same rule the window follows.
+#define LION_ICON 101
+
+LION_ICON ICON "../Engine/Assets/Icons/lion-engine-icon.ico"

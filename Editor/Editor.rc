@@ -1,0 +1,5 @@
+// The executable's icon, as Explorer and the taskbar read it. The window's icon is set at runtime
+// (Window::SetIcon), which is a different thing entirely: this one is baked into the file.
+#define LION_ICON 101
+
+LION_ICON ICON "../Engine/Assets/Icons/lion-engine-icon.ico"

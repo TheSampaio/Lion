@@ -1,6 +1,8 @@
 #include "Engine.h"
 #include "Window.h"
 
+#include <Lion/Core/Version.h>
+
 namespace Lion
 {
     Window* Window::sInstance = nullptr;
@@ -28,8 +30,8 @@ namespace Lion
         if (!sInstance->mBackend->Initialize(&sInstance->mData))
             return false;
 
-        if (!sInstance->mIconPath.empty())
-            sInstance->mBackend->SetIcon(sInstance->mIconPath);
+        // A window always has an icon: the engine's, until a game says otherwise.
+        sInstance->mBackend->SetIcon(sInstance->mIconPath.empty() ? kEngineIconFile : sInstance->mIconPath);
 
         return true;
     }

@@ -24,7 +24,7 @@ using namespace Lion;
 const EditorLayer::Panel EditorLayer::kPanels[5] = {
 	{ "Scene Hierarchy", &EditorLayer::mShowHierarchy,  ShortcutAction::ToggleHierarchy  },
 	{ "Properties",      &EditorLayer::mShowProperties, ShortcutAction::ToggleProperties },
-	{ "Project",         &EditorLayer::mShowProject,    ShortcutAction::ToggleProject    },
+	{ "Content Browser", &EditorLayer::mShowProject,    ShortcutAction::ToggleProject    },
 	{ "Console",         &EditorLayer::mShowConsole,    ShortcutAction::ToggleConsole    },
 	{ "Statistics",      &EditorLayer::mShowStatistics, ShortcutAction::ToggleStatistics },
 };
@@ -260,6 +260,7 @@ void EditorLayer::DrawUI()
 	}
 
 	DrawMenuBar();
+	DrawStatusBar();
 	HandleShortcuts();
 
 	// Fullscreen, borderless host window that holds the dockspace (below the main menu bar).
@@ -890,7 +891,7 @@ void EditorLayer::DrawProject()
 	if (!mShowProject)
 		return;
 
-	ImGui::Begin("Project", &mShowProject);
+	ImGui::Begin("Content Browser", &mShowProject);
 
 	const std::filesystem::path root = ProjectPanelDirectory();
 
@@ -1718,7 +1719,7 @@ void EditorLayer::DrawHierarchy()
 		mRenameFocus = true;
 	}
 	if (ImGui::IsItemHovered())
-		ImGui::SetTooltip("Create an empty entity");
+		ImGui::SetTooltip("Create an entity");
 
 	ImGui::Separator();
 
@@ -1749,7 +1750,7 @@ void EditorLayer::DrawHierarchy()
 	if (ImGui::BeginPopupContextWindow("HierarchyContext",
 		ImGuiPopupFlags_MouseButtonRight | ImGuiPopupFlags_NoOpenOverItems))
 	{
-		if (ImGui::MenuItem("Create Empty Entity"))
+		if (ImGui::MenuItem("Create Entity"))
 		{
 			RecordSnapshot();
 			auto entity = MakeReference<Entity>();
@@ -2234,11 +2235,14 @@ void EditorLayer::DrawProperties()
 					ImGui::EndDragDropTarget();
 				}
 
-				// Browse for a sprite file; store the path relative to the resource root.
+				// Browse for a sprite file; store the path relative to the resource root. The dialog opens
+				// inside the project's assets, which is the only place a sprite can come from.
 				ImGui::SameLine(0.0f, style.ItemInnerSpacing.x);
 				if (ImGui::Button("..."))
 				{
-					const std::string picked = FileDialog::Open("Images (*.png;*.jpg;*.jpeg;*.bmp)\0*.png;*.jpg;*.jpeg;*.bmp\0All Files\0*.*\0");
+					const std::string picked = FileDialog::Open(
+						"Images (*.png;*.jpg;*.jpeg;*.bmp)\0*.png;*.jpg;*.jpeg;*.bmp\0All Files\0*.*\0",
+						GameAssetsDirectory().string());
 
 					if (!picked.empty())
 					{
@@ -2376,7 +2380,7 @@ void EditorLayer::DrawProperties()
 		if (!mSelectedEntity->HasComponent<SpriteRenderer>() && ImGui::MenuItem("Sprite Renderer"))
 		{
 			RecordSnapshot();
-			mSelectedEntity->AddComponent<SpriteRenderer>("Sprites/Brickout/tile-1.png");
+			mSelectedEntity->AddComponent<SpriteRenderer>();
 		}
 
 		if (!mSelectedEntity->HasComponent<RigidBody2D>() && ImGui::MenuItem("Rigid Body 2D"))
@@ -2434,6 +2438,50 @@ void EditorLayer::DrawProperties()
 			mOpenNewComponentPopup = true;
 
 		ImGui::EndPopup();
+	}
+
+	ImGui::End();
+}
+
+void EditorLayer::DrawStatusBar()
+{
+	// A bar along the bottom of the viewport, which is what makes the dockspace above it stop short —
+	// ImGui takes it out of the work area, so no panel has to know the bar is there.
+	ImGuiWindowFlags flags = ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoScrollbar;
+
+	if (!ImGui::BeginViewportSideBar("LionEditorStatusBar", ImGui::GetMainViewport(), ImGuiDir_Down,
+		ImGui::GetFrameHeight(), flags))
+	{
+		ImGui::End();
+		return;
+	}
+
+	if (ImGui::BeginMenuBar())
+	{
+		// What is open, on the left, the way an IDE says it. The name is the project's folder; the path
+		// is what a tooltip is for, because it is what you go looking for and never what you read.
+		const std::filesystem::path root = ProjectRootDirectory();
+
+		if (root.empty())
+		{
+			ImGui::TextDisabled("No project");
+		}
+		else
+		{
+			ImGui::TextUnformatted(root.filename().generic_string().c_str());
+
+			if (ImGui::IsItemHovered())
+				ImGui::SetTooltip("%s", root.generic_string().c_str());
+		}
+
+		// And which engine it is, on the right. The bar has room for more; this is what it starts with.
+		const std::string version = std::string("Lion ") + kVersion;
+		const float32 versionWidth = ImGui::CalcTextSize(version.c_str()).x;
+
+		ImGui::SameLine(ImGui::GetContentRegionMax().x - versionWidth);
+		ImGui::TextDisabled("%s", version.c_str());
+
+		ImGui::EndMenuBar();
 	}
 
 	ImGui::End();
@@ -2601,7 +2649,7 @@ void EditorLayer::BuildDefaultLayout(unsigned int dockspaceId)
 	const ImGuiID rightTop   = ImGui::DockBuilderSplitNode(right, ImGuiDir_Up, ratio(kStatisticsHeight, work.y), nullptr, &right);
 
 	ImGui::DockBuilderDockWindow("Scene Hierarchy", left);
-	ImGui::DockBuilderDockWindow("Project", leftBottom);
+	ImGui::DockBuilderDockWindow("Content Browser", leftBottom);
 	ImGui::DockBuilderDockWindow("Viewport", center);
 	ImGui::DockBuilderDockWindow("Console", bottom);
 	ImGui::DockBuilderDockWindow("Statistics", rightTop);

@@ -151,6 +151,7 @@ private:
 	void RenderScene();
 	void DrawUI();
 	void DrawMenuBar();
+	void DrawStatusBar();   // The bar along the bottom: what is open, and which engine has it open.
 	void DrawViewport();
 	void DrawColliderOverlays(const ImVec2& imageMin, const ImVec2& imageSize);
 	void DrawHierarchy();

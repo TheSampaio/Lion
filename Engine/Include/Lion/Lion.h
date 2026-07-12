@@ -16,6 +16,7 @@
 #include <Lion/Core/Input.h>
 #include <Lion/Core/Layer.h>
 #include <Lion/Core/Log.h>
+#include <Lion/Core/Version.h>
 #include <Lion/Core/Window.h>
 
 // Logic
