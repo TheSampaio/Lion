@@ -13,6 +13,7 @@
 
 #include <Lion/Core/Filesystem.h>
 #include <Lion/Logic/ComponentRegistry.h>
+#include <Lion/Logic/Reflector.h>
 
 #include <imgui/imgui_internal.h> // DockBuilder API for the default layout.
 
@@ -771,6 +772,42 @@ namespace
 		ImGui::SameLine(ImGui::GetContentRegionMax().x - RowEndSlot());
 		AlignRowEndGlyph();
 	}
+
+	// Writes one named field on a component the editor knows nothing about.
+	//
+	// It cannot call a setter, so it walks the component's own description and stops at the field with the
+	// name it was given. Everything else it is shown, it leaves alone — which is how an edit made on one
+	// selected entity reaches the same field on the others without anybody knowing the type.
+	class FieldSetter : public Reflector
+	{
+	public:
+		FieldSetter(const char8* name, float32 value) : mName(name), mKind(Kind::Float), mFloat(value) {}
+		FieldSetter(const char8* name, int32 value) : mName(name), mKind(Kind::Int), mInt(value) {}
+		FieldSetter(const char8* name, bool value) : mName(name), mKind(Kind::Bool), mBool(value) {}
+		FieldSetter(const char8* name, const std::string& value) : mName(name), mKind(Kind::String), mString(value) {}
+		FieldSetter(const char8* name, const Vector& value) : mName(name), mKind(Kind::Vector), mVector(value) {}
+
+		void Field(const char8* name, float32& value) override     { if (Matches(name, Kind::Float))  value = mFloat; }
+		void Field(const char8* name, int32& value) override       { if (Matches(name, Kind::Int))    value = mInt; }
+		void Field(const char8* name, bool& value) override        { if (Matches(name, Kind::Bool))   value = mBool; }
+		void Field(const char8* name, std::string& value) override { if (Matches(name, Kind::String)) value = mString; }
+		void Field(const char8* name, Vector& value) override      { if (Matches(name, Kind::Vector)) value = mVector; }
+		void FieldAsset(const char8* name, std::string& path) override { if (Matches(name, Kind::String)) path = mString; }
+
+	private:
+		enum class Kind { Float, Int, Bool, String, Vector };
+
+		bool Matches(const char8* name, Kind kind) const { return kind == mKind && mName == name; }
+
+		std::string mName;
+		Kind mKind;
+
+		float32 mFloat = 0.0f;
+		int32 mInt = 0;
+		bool mBool = false;
+		std::string mString;
+		Vector mVector;
+	};
 
 	bool ContainsNoCase(const std::string& haystack, const std::string& needle)
 	{
@@ -2565,6 +2602,188 @@ bool EditorLayer::DrawVec3Control(const char* label, float values[3], float spee
 	return changed;
 }
 
+void EditorLayer::ApplyReflectorToSelection(const std::string& typeName, Reflector& setter)
+{
+	if (typeName.empty())
+		return;
+
+	for (const auto& entity : mSelection)
+		for (const auto& component : entity->GetComponents())
+			if (component->GetTypeName() == typeName)
+				component->Reflect(setter);
+}
+
+void EditorLayer::ApplyReflectedField(const std::string& typeName, const char8* field, float32 value)
+{
+	FieldSetter setter(field, value);
+	ApplyReflectorToSelection(typeName, setter);
+}
+
+void EditorLayer::ApplyReflectedField(const std::string& typeName, const char8* field, int32 value)
+{
+	FieldSetter setter(field, value);
+	ApplyReflectorToSelection(typeName, setter);
+}
+
+void EditorLayer::ApplyReflectedField(const std::string& typeName, const char8* field, bool value)
+{
+	FieldSetter setter(field, value);
+	ApplyReflectorToSelection(typeName, setter);
+}
+
+void EditorLayer::ApplyReflectedField(const std::string& typeName, const char8* field, const std::string& value)
+{
+	FieldSetter setter(field, value);
+	ApplyReflectorToSelection(typeName, setter);
+}
+
+void EditorLayer::ApplyReflectedField(const std::string& typeName, const char8* field, const Vector& value)
+{
+	FieldSetter setter(field, value);
+	ApplyReflectorToSelection(typeName, setter);
+}
+
+void EditorLayer::InspectorReflector::Field(const char8* name, float32& value)
+{
+	mDrew = true;
+
+	// No range and no default: the component said it was a number, not what a sensible one would be.
+	if (mEditor.DrawFloatProperty(name, value, 0.1f, 0.0f, 0.0f, std::nullopt))
+		mEditor.ApplyReflectedField(mTypeName, name, value);
+}
+
+void EditorLayer::InspectorReflector::Field(const char8* name, int32& value)
+{
+	mDrew = true;
+
+	ImGui::PushID(name);
+	PropertyLabel(name);
+
+	if (ImGui::DragInt("##value", &value))
+		mEditor.ApplyReflectedField(mTypeName, name, value);
+
+	if (ImGui::IsItemActivated()) mEditor.BeginEdit();
+	if (ImGui::IsItemDeactivatedAfterEdit()) mEditor.CommitEdit();
+
+	SameLineRowEnd();
+	ResetToDefaultButton("##reset", false);   // Keeps the slot, so the row lines up with the ones that have an arrow.
+	ImGui::PopID();
+}
+
+void EditorLayer::InspectorReflector::Field(const char8* name, bool& value)
+{
+	mDrew = true;
+
+	ImGui::PushID(name);
+	PropertyLabel(name);
+
+	if (ImGui::Checkbox("##value", &value))
+	{
+		mEditor.RecordSnapshot();
+		mEditor.ApplyReflectedField(mTypeName, name, value);
+	}
+
+	SameLineRowEnd();
+	ResetToDefaultButton("##reset", false);
+	ImGui::PopID();
+}
+
+void EditorLayer::InspectorReflector::Field(const char8* name, std::string& value)
+{
+	mDrew = true;
+
+	char8 buffer[256];
+	const size_t length = value.copy(buffer, sizeof(buffer) - 1);
+	buffer[length] = '\0';
+
+	ImGui::PushID(name);
+	PropertyLabel(name);
+
+	if (ImGui::InputText("##value", buffer, sizeof(buffer)))
+		value = buffer;
+
+	if (ImGui::IsItemActivated()) mEditor.BeginEdit();
+	if (ImGui::IsItemDeactivatedAfterEdit())
+	{
+		mEditor.ApplyReflectedField(mTypeName, name, value);
+		mEditor.CommitEdit();
+	}
+
+	SameLineRowEnd();
+	ResetToDefaultButton("##reset", false);
+	ImGui::PopID();
+}
+
+void EditorLayer::InspectorReflector::Field(const char8* name, Vector& value)
+{
+	mDrew = true;
+
+	float32 values[3] = { value.x, value.y, value.z };
+
+	if (mEditor.DrawVec3Control(name, values, 0.1f, 0.0f))
+	{
+		value = Vector(values[0], values[1], values[2]);
+		mEditor.ApplyReflectedField(mTypeName, name, value);
+	}
+}
+
+void EditorLayer::InspectorReflector::FieldAsset(const char8* name, std::string& path)
+{
+	mDrew = true;
+
+	char8 buffer[256];
+	const size_t length = path.copy(buffer, sizeof(buffer) - 1);
+	buffer[length] = '\0';
+
+	const ImGuiStyle& style = ImGui::GetStyle();
+	const float32 browseWidth = ImGui::CalcTextSize("...").x + style.FramePadding.x * 2.0f;
+
+	ImGui::PushID(name);
+	PropertyLabel(name);
+	ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - browseWidth - style.ItemInnerSpacing.x - RowEndSlot() - kRowEndGap);
+
+	if (ImGui::InputText("##value", buffer, sizeof(buffer)))
+		path = buffer;
+
+	if (ImGui::IsItemActivated()) mEditor.BeginEdit();
+	if (ImGui::IsItemDeactivatedAfterEdit())
+	{
+		mEditor.ApplyReflectedField(mTypeName, name, path);
+		mEditor.CommitEdit();
+	}
+
+	// The same drop the Sprite Renderer takes, for the same reason: an asset is picked, never spelled.
+	if (ImGui::BeginDragDropTarget())
+	{
+		if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("LN_ASSET_PATH"))
+		{
+			mEditor.RecordSnapshot();
+			path = static_cast<const char8*>(payload->Data);
+			mEditor.ApplyReflectedField(mTypeName, name, path);
+		}
+
+		ImGui::EndDragDropTarget();
+	}
+
+	ImGui::SameLine(0.0f, style.ItemInnerSpacing.x);
+
+	if (ImGui::Button("..."))
+	{
+		const std::string picked = FileDialog::Open("All Files\0*.*\0", GameAssetsDirectory().string());
+
+		if (!picked.empty())
+		{
+			mEditor.RecordSnapshot();
+			path = ToResourceRelativePath(picked);
+			mEditor.ApplyReflectedField(mTypeName, name, path);
+		}
+	}
+
+	SameLineRowEnd();
+	ResetToDefaultButton("##reset", false);
+	ImGui::PopID();
+}
+
 void EditorLayer::DrawProperties()
 {
 	if (!mShowProperties)
@@ -2793,14 +3012,20 @@ void EditorLayer::DrawProperties()
 		}
 		else
 		{
-			// Any other component — a user-defined one from the game module. The editor has no bespoke
-			// UI for it, so it draws a header with the registered type name (empty for an unregistered
-			// type) and, for now, a note; per-field editing waits on reflection.
+			// Any other component — a user-defined one from the game module. The editor was never compiled
+			// against it and has no idea what it holds, so it asks: the component describes its fields, and
+			// the Inspector draws exactly what it was told about, no more.
 			const std::string& typeName = component->GetTypeName();
 			const char8* label = typeName.empty() ? "Component" : typeName.c_str();
 
 			if (DrawComponentHeader(label, i, remove, dragFrom, dragTo))
-				ImGui::TextDisabled("Defined in the game module.");
+			{
+				InspectorReflector reflector(*this, typeName);
+				component->Reflect(reflector);
+
+				if (!reflector.DrewAnything())
+					ImGui::TextDisabled("No fields — describe them in Reflect().");
+			}
 		}
 
 		if (remove)
@@ -3493,26 +3718,27 @@ bool EditorLayer::GenerateComponent(const std::string& name, const std::string& 
 	header
 		<< "#pragma once\n\n"
 		<< "#include <Lion/Lion.h>\n"
-		<< "#include <Lion/Logic/Serializer.h>\n"
 		<< "\n"
 		<< "// Component defined by the game. Being compiled into the game module is all it takes for the\n"
 		<< "// editor to list it under Add Component: loading the module registers it with the engine.\n"
 		<< "//\n"
-		<< "// Override the lifecycle hooks to give it behaviour, and archive any field that should survive\n"
-		<< "// save/load through Serialize/Deserialize. GetOwner() reaches the entity it is attached to, and\n"
-		<< "// through it every other component on the same entity.\n"
+		<< "// Override the lifecycle hooks to give it behaviour, and name a field in Reflect to have it\n"
+		<< "// appear in the Inspector and be saved with the scene — describing it once is describing it.\n"
+		<< "// GetOwner() reaches the entity it is attached to, and through it every other component on it.\n"
 		<< "class " << name << " : public Lion::Component\n"
 		<< "{\n"
 		<< "public:\n"
 		<< "\tvoid OnAwake() override;\n"
 		<< "\tvoid OnUpdate() override;\n\n"
-		<< "\tvoid Serialize(Lion::Serializer& serializer) const override;\n"
-		<< "\tvoid Deserialize(const Lion::Serializer& serializer) override;\n"
+		<< "\tvoid Reflect(Lion::Reflector& reflector) override;\n\n"
+		<< "private:\n"
+		<< "\tLion::float32 mSpeed = 1.0f;\n"
 		<< "};\n";
 
 	source
 		<< "#include \"" << name << ".h\"\n\n"
-		<< "#include <Lion/Logic/ComponentRegistry.h>\n\n"
+		<< "#include <Lion/Logic/ComponentRegistry.h>\n"
+		<< "#include <Lion/Logic/Reflector.h>\n\n"
 		<< "using namespace Lion;\n\n"
 		<< "void " << name << "::OnAwake()\n"
 		<< "{\n"
@@ -3520,11 +3746,10 @@ bool EditorLayer::GenerateComponent(const std::string& name, const std::string& 
 		<< "void " << name << "::OnUpdate()\n"
 		<< "{\n"
 		<< "}\n\n"
-		<< "void " << name << "::Serialize(Serializer& serializer) const\n"
+		<< "// The fields the editor shows and the scene file keeps. One list, both jobs.\n"
+		<< "void " << name << "::Reflect(Reflector& reflector)\n"
 		<< "{\n"
-		<< "}\n\n"
-		<< "void " << name << "::Deserialize(const Serializer& serializer)\n"
-		<< "{\n"
+		<< "\treflector.Field(\"Speed\", mSpeed);\n"
 		<< "}\n\n"
 		<< "// Binds the class to its name, so scenes can reference it and the editor can list it.\n"
 		<< "LION_REGISTER_COMPONENT(" << name << ")\n";

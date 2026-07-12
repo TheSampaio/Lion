@@ -22,6 +22,7 @@
 // Logic
 #include <Lion/Logic/Component.h>
 #include <Lion/Logic/Entity.h>
+#include <Lion/Logic/Reflector.h>
 #include <Lion/Logic/Scene.h>
 #include <Lion/Logic/SceneSerializer.h>
 #include <Lion/Logic/Timer.h>

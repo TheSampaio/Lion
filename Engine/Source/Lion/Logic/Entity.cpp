@@ -177,10 +177,29 @@ namespace Lion
 		return raw;
 	}
 
+	bool Entity::HasComponentByName(const std::string& name) const
+	{
+		for (const auto& component : mComponents)
+			if (component->GetTypeName() == name)
+				return true;
+
+		return false;
+	}
+
 	void Entity::RegisterComponent(Scope<Component> component, std::type_index type)
 	{
 		component->mOwner = this;
 		component->mTypeName = ComponentRegistry::GetName(type);
+
+		// What a component cannot work without goes on before it does. A collider asks its entity for a
+		// body the moment it wakes, so an entity that had to be told twice — once for the trait, once for
+		// what the trait runs on — is an entity you can build wrong, and the editor is where you would.
+		//
+		// A required component that requires something else lands here too, and one that is already
+		// attached is not attached twice.
+		for (const std::string& required : component->GetRequiredComponents())
+			if (!HasComponentByName(required))
+				AddComponentByName(required);
 
 		Component* raw = component.get();
 		mComponents.push_back(std::move(component));

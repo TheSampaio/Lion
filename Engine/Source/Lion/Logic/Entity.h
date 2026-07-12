@@ -112,6 +112,10 @@ namespace Lion
 			return FindComponent(std::type_index(typeid(T))) != nullptr;
 		}
 
+		// The same question asked by registered name, which is how a component states what it requires
+		// without knowing the other one's header (see LION_REQUIRES).
+		LION_API bool HasComponentByName(const std::string& name) const;
+
 		// Removes the attached component of type T, if any.
 		template<typename T>
 		void RemoveComponent()

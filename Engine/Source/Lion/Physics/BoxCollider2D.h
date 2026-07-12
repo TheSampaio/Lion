@@ -17,6 +17,9 @@ namespace Lion
 		LION_API BoxCollider2D(float32 widthPixels = 0.0f, float32 heightPixels = 0.0f,
 			float32 density = 1.0f, float32 friction = 0.2f, float32 restitution = 0.0f);
 
+		// A shape hangs on a body; there is nothing to attach it to without one.
+		LION_REQUIRES("RigidBody2D");
+
 		void OnAwake() override;
 		void Serialize(Serializer& serializer) const override;
 		void Deserialize(const Serializer& serializer) override;

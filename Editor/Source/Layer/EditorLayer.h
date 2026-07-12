@@ -5,6 +5,7 @@
 
 #include <Lion/Lion.h>
 #include <Lion/Core/DynamicLibrary.h>
+#include <Lion/Logic/Reflector.h>
 
 #include <imgui/imgui.h>
 #include <imguizmo/ImGuizmo.h>
@@ -265,6 +266,39 @@ private:
 			if (T* component = entity->GetComponent<T>())
 				apply(component);
 	}
+
+	// The same idea for a component the editor was never compiled against: it cannot call a setter it does
+	// not know the name of, so it hands the other components the field's name and value and lets them find
+	// it themselves. That is what describing a field bought.
+	void ApplyReflectedField(const std::string& typeName, const Lion::char8* field, Lion::float32 value);
+	void ApplyReflectedField(const std::string& typeName, const Lion::char8* field, Lion::int32 value);
+	void ApplyReflectedField(const std::string& typeName, const Lion::char8* field, bool value);
+	void ApplyReflectedField(const std::string& typeName, const Lion::char8* field, const std::string& value);
+	void ApplyReflectedField(const std::string& typeName, const Lion::char8* field, const Lion::Vector& value);
+	void ApplyReflectorToSelection(const std::string& typeName, Lion::Reflector& setter);
+
+	// Draws a component's described fields into the Inspector. The component names them; this puts the
+	// right widget on each and writes the edit through to the rest of the selection.
+	class InspectorReflector : public Lion::Reflector
+	{
+	public:
+		InspectorReflector(EditorLayer& editor, const std::string& typeName)
+			: mEditor(editor), mTypeName(typeName) {}
+
+		void Field(const Lion::char8* name, Lion::float32& value) override;
+		void Field(const Lion::char8* name, Lion::int32& value) override;
+		void Field(const Lion::char8* name, bool& value) override;
+		void Field(const Lion::char8* name, std::string& value) override;
+		void Field(const Lion::char8* name, Lion::Vector& value) override;
+		void FieldAsset(const Lion::char8* name, std::string& path) override;
+
+		bool DrewAnything() const { return mDrew; }
+
+	private:
+		EditorLayer& mEditor;
+		std::string mTypeName;
+		bool mDrew = false;
+	};
 
 	// Entity clipboard: copy the selection, paste a new entity from the clipboard, or do both at
 	// once (duplicate). The new entity is appended to the scene and becomes the selection.
