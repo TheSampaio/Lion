@@ -56,6 +56,8 @@ project "Editor"
             '{COPY} "%{wks.location}/Build/Bin/' .. output_dir .. 'Lion/lion-core.dll" "%{cfg.targetdir}"',
             -- GLFW shared library (the editor's ImGui backend links against it directly).
             '{COPYFILE} "%{dependencies.glfw.dll}" "%{cfg.targetdir}"',
-            -- Shared resources (shader + sprites) flattened next to the executable.
-            'xcopy /E /I /Y /Q "%{wks.location}/Sandbox/Assets" "%{cfg.targetdir}"',
+            -- Shared resources (shaders + sprites) flattened next to the executable, minus the scripts:
+            -- the editor reads those from the project, and they are compiled into the module anyway.
+            -- The exclude list is named relatively — see the same copy in Sandbox/premake5.lua.
+            'xcopy /E /I /Y /Q /EXCLUDE:..\\Scripts\\AssetCopyExclude.txt "%{wks.location}/Sandbox/Assets" "%{cfg.targetdir}"',
         }

@@ -6,7 +6,7 @@ void Paddle::OnAwake()
 {
 	GetTransform()->SetPosition(Vector(0.0f, -260.0f, Depth::Front));
 
-	mRenderer = AddComponent<SpriteRenderer>("Sprite/Brickout/player.png");
+	mRenderer = AddComponent<SpriteRenderer>("Sprites/Brickout/player.png");
 	const Size size = mRenderer->GetSize();
 
 	// Kinematic body: driven by input velocity, unaffected by the ball's impacts.

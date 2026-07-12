@@ -91,6 +91,7 @@ private:
 	// popup only records the request, since it closes on click and takes the modal's ID scope with it.
 	bool mOpenNewComponentPopup = false;
 	char mNewComponentName[64] = {};
+	char mNewComponentFolder[64] = "Scripts";   // Where it lands, under the game's assets.
 	int mNewComponentBase = 0;   // Index into ComponentBaseNames().
 	bool mConsoleAutoScroll = true;
 	bool mConsoleShowErrors = true;    // Console severity filters (Error/Fatal, Warning, everything else).
@@ -174,7 +175,7 @@ private:
 	// .h/.cpp into the game's source tree. The new class is compiled into the game module on the next
 	// build, which is when it starts showing up in Add Component.
 	void DrawNewComponentPopup();
-	bool GenerateComponent(const std::string& name, const std::string& base);
+	bool GenerateComponent(const std::string& name, const std::string& base, const std::string& folder);
 
 	// Component classes offered as a parent: "Component" plus every registered type.
 	static std::vector<std::string> ComponentBaseNames();

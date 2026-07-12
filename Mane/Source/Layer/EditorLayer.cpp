@@ -1,6 +1,7 @@
 #include "EditorLayer.h"
 
 #include "../EditorGui.h"
+#include "../ModuleSymbols.h"
 
 #include <cctype>
 #include <chrono>
@@ -176,7 +177,7 @@ void EditorLayer::CreateDemoScene()
 	auto background = MakeReference<Entity>();
 	background->SetName("Background");
 	background->GetTransform()->SetPosition(Vector(0.0f, 0.0f, Depth::Back));
-	background->AddComponent<SpriteRenderer>("Sprite/Brickout/background.jpg");
+	background->AddComponent<SpriteRenderer>("Sprites/Brickout/background.jpg");
 	mScene->Add(background);
 
 	// A row of bricks.
@@ -185,7 +186,7 @@ void EditorLayer::CreateDemoScene()
 		auto brick = MakeReference<Entity>();
 		brick->SetName("Brick " + std::to_string(i + 1));
 		brick->GetTransform()->SetPosition(Vector(-160.0f + i * 80.0f, 60.0f, Depth::Middle));
-		brick->AddComponent<SpriteRenderer>("Sprite/Brickout/tile-" + std::to_string(i + 1) + ".png");
+		brick->AddComponent<SpriteRenderer>("Sprites/Brickout/tile-" + std::to_string(i + 1) + ".png");
 		mScene->Add(brick);
 	}
 
@@ -193,7 +194,7 @@ void EditorLayer::CreateDemoScene()
 	auto ball = MakeReference<Entity>();
 	ball->SetName("Ball");
 	ball->GetTransform()->SetPosition(Vector(0.0f, 120.0f, Depth::Middle));
-	ball->AddComponent<SpriteRenderer>("Sprite/Brickout/ball.png");
+	ball->AddComponent<SpriteRenderer>("Sprites/Brickout/ball.png");
 	ball->AddComponent<RigidBody2D>(BodyType::Dynamic, false);
 	ball->AddComponent<CircleCollider2D>(16.0f);
 	mScene->Add(ball);
@@ -572,9 +573,9 @@ namespace
 		return false;
 	}
 
-	// The game's source tree, relative to the project root — the editor writes generated components
-	// into it and recognises the project root by finding it. It is the folder, not the VS project name.
-	constexpr const char8* kGameSourceFolder = "Sandbox";
+	// The game's folder, relative to the project root — the editor recognises the root by finding it.
+	// It is the folder, not the VS project name.
+	constexpr const char8* kGameFolder = "Sandbox";
 
 	// The project root, found by walking up from the working directory: the editor runs from its build
 	// output, not the project. Empty when the project is not around (a distributed editor), which is
@@ -589,7 +590,7 @@ namespace
 
 		for (int32 depth = 0; depth < 8; ++depth)
 		{
-			if (std::filesystem::is_directory(current / kGameSourceFolder / "Source", error))
+			if (std::filesystem::is_directory(current / kGameFolder / "Source", error))
 				return current;
 
 			if (!current.has_parent_path() || current.parent_path() == current)
@@ -601,11 +602,66 @@ namespace
 		return {};
 	}
 
-	// Where a generated component's source lands.
-	std::filesystem::path GameComponentDirectory()
+	// The game's assets, in the project. Empty when the project is not around.
+	std::filesystem::path GameAssetsDirectory()
 	{
 		const std::filesystem::path root = ProjectRootDirectory();
-		return root.empty() ? root : (root / kGameSourceFolder / "Source" / "Component");
+		return root.empty() ? root : (root / kGameFolder / "Assets");
+	}
+
+	// The folder a component is generated into, as typed in the New C++ Component popup: a path under
+	// the game's assets. A script is one of the game's own files, so it belongs where its sprites and
+	// shaders are — in the Project panel, the only place the editor ever shows the game's contents. It
+	// is compiled into the module and does not ship beside it (see the asset copy in Sandbox/premake5.lua).
+	//
+	// Empty when the project is not around, or when the path climbs out of the assets folder: the editor
+	// writes where the game keeps its files, and nowhere else.
+	std::filesystem::path ComponentDirectory(const std::string& folder)
+	{
+		const std::filesystem::path assets = GameAssetsDirectory();
+
+		if (assets.empty())
+			return {};
+
+		const std::filesystem::path directory = (assets / folder).lexically_normal();
+		const std::string relative = directory.lexically_relative(assets).generic_string();
+
+		if (relative.empty() || relative.rfind("..", 0) == 0)
+			return {};
+
+		return directory;
+	}
+
+	// What the Project panel browses: the game's assets in the project, not the copy the build leaves
+	// beside the executable. It is what the user actually edits, and it is the only one that holds the
+	// files a build deliberately leaves behind — the scripts. An editor shipped without the project has
+	// nothing but its own folder, so that is what it falls back to.
+	std::filesystem::path ProjectPanelDirectory()
+	{
+		const std::filesystem::path assets = GameAssetsDirectory();
+		return assets.empty() ? std::filesystem::path(ResourceRootDirectory()) : assets;
+	}
+
+	// The symbols follow the module: the editor's copy of the library gets a copy of the PDB and is
+	// pointed at it, so a debugger attached to the editor holds *that* file open and the one the linker
+	// owns stays writable. Without this, rebuilding the game from the editor fails under the debugger —
+	// which is the way the editor is usually run.
+	//
+	// Symbols are optional (an optimised build has none), so failing here costs debugging, not the load.
+	void CopyGameSymbols(const std::filesystem::path& root)
+	{
+		const std::filesystem::path symbols = root / kGameModuleSymbolsFile;
+
+		std::error_code error;
+
+		if (!std::filesystem::exists(symbols, error))
+			return;
+
+		std::filesystem::copy_file(symbols, root / kGameModuleLoadedSymbolsFile,
+			std::filesystem::copy_options::overwrite_existing, error);
+
+		if (error || !RedirectModuleSymbols((root / kGameModuleLoadedFile).string(), kGameModuleLoadedSymbolsFile))
+			Log::Console(LogLevel::Warning, "[Editor] Could not copy the game module's symbols; rebuilding it while debugging the editor will fail.");
 	}
 
 	// Runs a command, capturing whatever it writes to stdout and stderr, and returns its exit code.
@@ -686,9 +742,11 @@ namespace
 	}
 
 	// Only asset-like files are listed; the resource root also holds the executable and its DLLs.
+	// A script is one of the game's files too, so it is listed like any other: the Project panel is
+	// where a component is created, and hiding the result would be a strange way to end that flow.
 	bool IsAssetFile(const std::filesystem::path& path)
 	{
-		static const char8* extensions[] = { ".png", ".jpg", ".jpeg", ".bmp", ".glsl", ".json" };
+		static const char8* extensions[] = { ".png", ".jpg", ".jpeg", ".bmp", ".glsl", ".json", ".h", ".cpp" };
 
 		std::string extension = path.extension().string();
 		std::transform(extension.begin(), extension.end(), extension.begin(),
@@ -711,7 +769,7 @@ void EditorLayer::DrawProject()
 
 	ImGui::Begin("Project", &mShowProject);
 
-	const std::string& root = ResourceRootDirectory();
+	const std::filesystem::path root = ProjectPanelDirectory();
 
 	if (root.empty())
 	{
@@ -720,7 +778,7 @@ void EditorLayer::DrawProject()
 		return;
 	}
 
-	const std::filesystem::path current = std::filesystem::path(root) / mProjectPath;
+	const std::filesystem::path current = root / mProjectPath;
 
 	// --- Breadcrumb toolbar.
 	ImGui::BeginDisabled(mProjectPath.empty());
@@ -2154,7 +2212,7 @@ void EditorLayer::DrawProperties()
 		if (!mSelectedEntity->HasComponent<SpriteRenderer>() && ImGui::MenuItem("Sprite Renderer"))
 		{
 			RecordSnapshot();
-			mSelectedEntity->AddComponent<SpriteRenderer>("Sprite/Brickout/tile-1.png");
+			mSelectedEntity->AddComponent<SpriteRenderer>("Sprites/Brickout/tile-1.png");
 		}
 
 		if (!mSelectedEntity->HasComponent<RigidBody2D>() && ImGui::MenuItem("Rigid Body 2D"))
@@ -2578,6 +2636,8 @@ bool EditorLayer::LoadGameModule()
 		return false;
 	}
 
+	CopyGameSymbols(root);
+
 	// Bracket the load: the module's static initializers run inside it, and everything they register
 	// is attributed to the module so a later reload can drop exactly those entries.
 	ComponentRegistry::BeginModule();
@@ -2737,13 +2797,13 @@ std::vector<std::string> EditorLayer::ComponentBaseNames()
 	return bases;
 }
 
-bool EditorLayer::GenerateComponent(const std::string& name, const std::string& base)
+bool EditorLayer::GenerateComponent(const std::string& name, const std::string& base, const std::string& folder)
 {
-	const std::filesystem::path directory = GameComponentDirectory();
+	const std::filesystem::path directory = ComponentDirectory(folder);
 
 	if (directory.empty())
 	{
-		Log::Console(LogLevel::Error, "[Editor] Could not locate the game's source tree; is the project checked out?");
+		Log::Console(LogLevel::Error, "[Editor] Could not locate the game's assets; is the project checked out?");
 		return false;
 	}
 
@@ -2875,12 +2935,24 @@ void EditorLayer::DrawNewComponentPopup()
 	const bool submitted = ImGui::InputText("##name", mNewComponentName, IM_ARRAYSIZE(mNewComponentName),
 		ImGuiInputTextFlags_EnterReturnsTrue);
 
+	// Where it lands, as a path under the game's assets — the same paths the Project panel browses. It
+	// keeps whatever was typed last: a component rarely arrives alone.
+	ImGui::Spacing();
+	ImGui::TextUnformatted("Folder");
+	ImGui::SetNextItemWidth(320.0f);
+	ImGui::InputText("##folder", mNewComponentFolder, IM_ARRAYSIZE(mNewComponentFolder));
+
 	const std::string name = mNewComponentName;
-	const std::filesystem::path directory = GameComponentDirectory();
+	const std::filesystem::path assets = GameAssetsDirectory();
+	const std::filesystem::path directory = ComponentDirectory(mNewComponentFolder);
 	const bool valid = IsValidTypeName(name) && !directory.empty() && !ComponentRegistry::Contains(name);
 
-	if (directory.empty())
-		ImGui::TextColored(LogLevelColor(LogLevel::Error), "The game's source tree was not found.");
+	ImGui::Spacing();
+
+	if (assets.empty())
+		ImGui::TextColored(LogLevelColor(LogLevel::Error), "The game's assets were not found.");
+	else if (directory.empty())
+		ImGui::TextColored(LogLevelColor(LogLevel::Error), "The folder has to stay inside the game's assets.");
 	else if (!name.empty() && !IsValidTypeName(name))
 		ImGui::TextColored(LogLevelColor(LogLevel::Error), "Letters, digits and _ only, not starting with a digit.");
 	else if (!name.empty() && ComponentRegistry::Contains(name))
@@ -2893,7 +2965,7 @@ void EditorLayer::DrawNewComponentPopup()
 
 	if (ImGui::Button("Create", ImVec2(96.0f, 0.0f)) || (submitted && valid))
 	{
-		GenerateComponent(name, bases[mNewComponentBase]);
+		GenerateComponent(name, bases[mNewComponentBase], mNewComponentFolder);
 		ImGui::CloseCurrentPopup();
 	}
 

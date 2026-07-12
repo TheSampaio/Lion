@@ -13,7 +13,7 @@ void Ball::OnAwake()
 	// The depth is kept by the physics sync, so set it once here.
 	GetTransform()->SetPosition(Vector(0.0f, 0.0f, Depth::Middle));
 
-	mRenderer = AddComponent<SpriteRenderer>("Sprite/Brickout/ball.png");
+	mRenderer = AddComponent<SpriteRenderer>("Sprites/Brickout/ball.png");
 
 	// Dynamic, frictionless, perfectly elastic ball with a fixed rotation and a circular shape.
 	mBody = AddComponent<RigidBody2D>(BodyType::Dynamic, true);

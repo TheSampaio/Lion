@@ -42,7 +42,7 @@ namespace Lion
     {
         Renderer* self = sInstance;
 
-        self->mShader = Shader::Create("Shader/Lit.glsl");
+        self->mShader = Shader::Create("Shaders/Lit.glsl");
 
         // Dynamic vertex buffer streamed once per batch, described by the sprite vertex layout.
         self->mVertexArray = VertexArray::Create();
