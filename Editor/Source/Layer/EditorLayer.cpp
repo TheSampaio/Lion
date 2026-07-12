@@ -1982,13 +1982,15 @@ void EditorLayer::DrawHierarchy()
 
 	const ImGuiStyle& style = ImGui::GetStyle();
 
-	// Add, then what you are looking for, then what you are looking in.
+	// Add, then what you are looking for, then what you are looking in. The label is padded out to leave
+	// the plus its own room: an icon touching the word beside it reads as part of the word.
+	const float32 plusSize = ImGui::GetFontSize() * 0.6f;
 	const ImVec2 addPosition = ImGui::GetCursorScreenPos();
-	const bool add = ImGui::Button("   Add");
+	const bool add = ImGui::Button("     Add");
 
 	DrawPlusIcon(
-		ImVec2(addPosition.x + style.FramePadding.x + ImGui::GetFontSize() * 0.35f, addPosition.y + ImGui::GetFrameHeight() * 0.5f),
-		ImGui::GetFontSize() * 0.6f, ImGui::GetColorU32(ImGuiCol_Text));
+		ImVec2(addPosition.x + style.FramePadding.x + plusSize * 0.5f, addPosition.y + ImGui::GetFrameHeight() * 0.5f),
+		plusSize, ImGui::GetColorU32(ImGuiCol_Text));
 
 	if (add)
 		CreateEntity();
@@ -2032,9 +2034,10 @@ void EditorLayer::DrawHierarchy()
 
 	// Two columns: what a thing is called, and whether it is drawn. The eye is a property of the entity
 	// and not of the editor, so the game can reach for it too.
-	constexpr ImGuiTableFlags tableFlags = ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersOuterH;
-
-	if (ImGui::BeginTable("Entities", 2, tableFlags))
+	//
+	// No banding and no rules: a striped list is a table pretending it has more to say than one column of
+	// names, and the lines around it only fence off what was already fenced by the panel it is in.
+	if (ImGui::BeginTable("Entities", 2, ImGuiTableFlags_None))
 	{
 		// Wide enough for its own header: a column called Visibility that reads "Visi..." is a column that
 		// gave its name away to save a dozen pixels.
@@ -2042,7 +2045,17 @@ void EditorLayer::DrawHierarchy()
 
 		ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_WidthStretch);
 		ImGui::TableSetupColumn("Visibility", ImGuiTableColumnFlags_WidthFixed, visibilityWidth);
-		ImGui::TableHeadersRow();
+
+		// The header row is drawn by hand for one reason: a tree node starts its label past the arrow, so
+		// a header written at the column's edge sits to the left of every name under it.
+		ImGui::TableNextRow(ImGuiTableRowFlags_Headers);
+
+		ImGui::TableSetColumnIndex(0);
+		ImGui::SetCursorPosX(ImGui::GetCursorPosX() + ImGui::GetTreeNodeToLabelSpacing());
+		ImGui::TableHeader("Name");
+
+		ImGui::TableSetColumnIndex(1);
+		ImGui::TableHeader("Visibility");
 
 		for (const auto& entity : mScene->GetEntities())
 			if (entity->GetParent() == nullptr)
@@ -2069,13 +2082,12 @@ void EditorLayer::DrawHierarchy()
 	ImGui::EndChild();
 
 	ImGui::Separator();
-	ImGui::TextDisabled("%d %s", count, (count == 1) ? "entity" : "entities");
 
-	if (mSelection.size() > 1)
-	{
-		ImGui::SameLine();
-		ImGui::TextDisabled("— %d selected", static_cast<int32>(mSelection.size()));
-	}
+	if (mSelection.empty())
+		ImGui::TextDisabled("%d %s", count, (count == 1) ? "Entity" : "Entities");
+	else
+		ImGui::TextDisabled("%d %s : %d Selected", count, (count == 1) ? "Entity" : "Entities",
+			static_cast<int32>(mSelection.size()));
 
 	// Deferred hierarchy edits (never mutate the tree while iterating it above).
 	if (mReparentRequested && mReparentChild)
@@ -2245,14 +2257,28 @@ void EditorLayer::DrawEntityNode(const Reference<Entity>& entity)
 		ImGui::PopStyleColor();
 
 	// Clicking the label (not the expand arrow) selects. Ctrl adds one, Shift takes everything between.
-	if (ImGui::IsItemClicked() && !ImGui::IsItemToggledOpen())
+	//
+	// A press on something already selected changes nothing, because a press is where a drag begins: the
+	// selection has to still be there when it does, or dragging five things would drag the one grabbed.
+	// The press is only answered on release, once it is clear it was a click and not a drag.
+	const ImGuiIO& io = ImGui::GetIO();
+	const bool toggledOpen = ImGui::IsItemToggledOpen();
+
+	if (ImGui::IsItemClicked() && !toggledOpen)
 	{
-		if (ImGui::GetIO().KeyShift)
+		if (io.KeyShift)
 			SelectRangeTo(entity);
-		else if (ImGui::GetIO().KeyCtrl)
+		else if (io.KeyCtrl)
 			AddToSelection(entity);
-		else
+		else if (!IsSelected(entity.get()))
 			SetSelection(entity);
+	}
+
+	if (ImGui::IsItemHovered() && ImGui::IsMouseReleased(ImGuiMouseButton_Left) && !toggledOpen &&
+		!io.KeyShift && !io.KeyCtrl && !ImGui::IsMouseDragPastThreshold(ImGuiMouseButton_Left) &&
+		mSelection.size() > 1 && IsSelected(entity.get()))
+	{
+		SetSelection(entity);
 	}
 
 	if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
