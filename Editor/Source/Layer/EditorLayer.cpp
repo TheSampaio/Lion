@@ -19,6 +19,10 @@
 
 using namespace Lion;
 
+// What a file dialog offers when a scene is opened or saved. A scene is JSON inside and a .lscene outside:
+// what it is made of is the engine's business, and what it is is the project's.
+static const char8* kSceneFilter = "Lion Scene (*.lscene)\0*.lscene\0";
+
 // Ordered by how much they are reached for: what you pick, what you edit on it, where its assets come
 // from, what the engine has to say, and how it is doing. Alt+N follows this, so the numbers you use
 // most are the ones under your fingers.
@@ -1796,7 +1800,11 @@ void EditorLayer::DrawShortcuts()
 		// The rebindable actions, grouped by category (order defines the display order).
 		struct Row { ShortcutAction action; const char8* category; const char8* name; };
 		static const Row rows[] = {
-			{ ShortcutAction::ToggleShortcuts, "General",   "Toggle Shortcuts panel" },
+			{ ShortcutAction::NewScene,        "Scene",     "New scene" },
+				{ ShortcutAction::OpenScene,       "Scene",     "Open a scene" },
+				{ ShortcutAction::SaveScene,       "Scene",     "Save the scene" },
+				{ ShortcutAction::SaveSceneAs,     "Scene",     "Save the scene as..." },
+				{ ShortcutAction::ToggleShortcuts, "General",   "Toggle Shortcuts panel" },
 			{ ShortcutAction::Undo,            "General",   "Undo" },
 			{ ShortcutAction::Redo,            "General",   "Redo" },
 			{ ShortcutAction::Play,            "Play Mode", "Play (run the simulation)" },
@@ -2025,6 +2033,12 @@ void EditorLayer::ResetShortcutsToDefault()
 	set(ShortcutAction::ToggleProject, ImGuiKey_3, false, false, true);
 	set(ShortcutAction::ToggleConsole, ImGuiKey_4, false, false, true);
 	set(ShortcutAction::ToggleStatistics, ImGuiKey_5, false, false, true);
+
+	// The scene keys every editor has, bound where every editor binds them.
+	set(ShortcutAction::NewScene, ImGuiKey_N, true);
+	set(ShortcutAction::OpenScene, ImGuiKey_O, true);
+	set(ShortcutAction::SaveScene, ImGuiKey_S, true);
+	set(ShortcutAction::SaveSceneAs, ImGuiKey_S, true, true);
 }
 
 void EditorLayer::SetSelection(const Reference<Entity>& entity)
@@ -2264,6 +2278,14 @@ bool EditorLayer::IsShortcutPressed(ShortcutAction action) const
 	return ImGui::IsKeyPressed(bind.key, false);
 }
 
+std::string EditorLayer::ShortcutText(ShortcutAction action) const
+{
+	const Keybind& bind = mBinds[static_cast<int>(action)];
+
+	// A menu says nothing where there is nothing to say: an action nobody has bound has no key to show.
+	return bind.key == ImGuiKey_None ? std::string() : KeybindToString(bind);
+}
+
 std::string EditorLayer::KeybindToString(const Keybind& bind) const
 {
 	if (bind.key == ImGuiKey_None)
@@ -2319,6 +2341,11 @@ void EditorLayer::HandleShortcuts()
 		if (IsShortcutPressed(ShortcutAction::GizmoRotate)) mTool = Tool::Rotate;
 		if (IsShortcutPressed(ShortcutAction::GizmoScale))  mTool = Tool::Scale;
 	}
+
+	if (IsShortcutPressed(ShortcutAction::NewScene)) NewScene();
+	if (IsShortcutPressed(ShortcutAction::OpenScene)) OpenScene();
+	if (IsShortcutPressed(ShortcutAction::SaveScene)) SaveScene();
+	if (IsShortcutPressed(ShortcutAction::SaveSceneAs)) SaveSceneAs();
 
 	if (IsShortcutPressed(ShortcutAction::Undo)) Undo();
 	if (IsShortcutPressed(ShortcutAction::Redo)) Redo();
@@ -3827,10 +3854,14 @@ void EditorLayer::DrawStatusBar()
 		// What is open moved to the title bar, where what the window has open belongs. What is left is the
 		// version, on the right, with room to breathe: text against the edge of the screen reads as clipped.
 		// The bar has space for more; this is what it starts with.
+		//
+		// Placed, not aligned: SameLine puts an item next to the one before it, and there is nothing before
+		// this one — it took its vertical position from whatever the last window happened to draw, which is
+		// how the version ended up off the bar entirely.
 		constexpr float32 kEdge = 8.0f;
 		const float32 versionWidth = ImGui::CalcTextSize(kVersion).x;
 
-		ImGui::SameLine(ImGui::GetContentRegionMax().x - versionWidth - kEdge);
+		ImGui::SetCursorPosX(ImGui::GetWindowWidth() - versionWidth - kEdge);
 		ImGui::TextDisabled("%s", kVersion);
 
 		ImGui::EndMenuBar();
@@ -3911,33 +3942,36 @@ void EditorLayer::DrawTitleBar()
 	const float32 contentLeft = kMarkLeft + kMark + 14.0f;
 	const float32 menuHeight = ImGui::GetFrameHeight();
 
-	// --- Top row: the menus, and the window's own buttons at the far end.
-	DrawMenuBar(
+	// --- Top row: the menus, the project, and the window's own buttons at the far end.
+	//
+	// The project sits with the buttons because that is what the window *is* — the thing you closed when you
+	// close it — while the scene sits under the menus, because it is what the menus act on.
+	const float32 menusEnd = DrawMenuBar(
 		ImVec2(barMin.x + contentLeft, barMin.y + (row - menuHeight) * 0.5f),
 		ImVec2(barMin.x + barWidth, barMin.y + (row + menuHeight) * 0.5f));
 
 	DrawWindowButtons(barMin, barWidth, row);
 
-	// --- Bottom row: the project, and the scene open in it. They used to be scattered — the scene named in
-	// the Hierarchy, the project down in the status bar — and neither is a property of the panel it sat in.
-	// They are what this window has open, and this is the window's own bar.
 	const std::filesystem::path project = ProjectRootDirectory();
 	const std::string projectName = project.empty() ? std::string("No project") : project.filename().generic_string();
 
-	const std::string sceneName = mScenePath.empty()
-		? std::string("Untitled")
-		: std::filesystem::path(mScenePath).stem().generic_string();
+	const float32 projectWidth = ImGui::CalcTextSize(projectName.c_str()).x;
+	const float32 projectLeft = barWidth - kWindowButton * 3.0f - kProjectGap - projectWidth;
 
-	ImGui::SetCursorPos(ImVec2(contentLeft, row + (row - ImGui::GetTextLineHeight()) * 0.5f));
-	ImGui::TextDisabled("%s", projectName.c_str());
+	ImGui::SetCursorPos(ImVec2(projectLeft, (row - ImGui::GetTextLineHeight()) * 0.5f));
+	ImGui::TextUnformatted(projectName.c_str());
 
 	if (!project.empty() && ImGui::IsItemHovered())
 		ImGui::SetTooltip("%s", project.generic_string().c_str());
 
-	ImGui::SameLine(0.0f, 8.0f);
-	ImGui::TextDisabled("|");
-	ImGui::SameLine(0.0f, 8.0f);
-	ImGui::TextUnformatted(sceneName.c_str());
+	// --- Bottom row: the scene open in the project, picking up where the menus left off. It used to be named
+	// in the Hierarchy, which is a panel that shows a scene, not the thing that has one open.
+	const std::string sceneName = mScenePath.empty()
+		? std::string("Untitled")
+		: std::filesystem::path(mScenePath).stem().generic_string();
+
+	ImGui::SetCursorPos(ImVec2(menusEnd - barMin.x + kSceneGap, row + (row - ImGui::GetTextLineHeight()) * 0.5f));
+	ImGui::TextDisabled("%s", sceneName.c_str());
 
 	if (!mScenePath.empty() && ImGui::IsItemHovered())
 		ImGui::SetTooltip("%s", mScenePath.c_str());
@@ -3954,28 +3988,27 @@ void EditorLayer::DrawWindowButtons(const ImVec2& barMin, float32 barWidth, floa
 {
 	// Minimise, maximise and close, drawn the way the rest of the editor's glyphs are: the font carries
 	// none of them, and neither does the window anymore.
-	constexpr float32 kButton = 46.0f;
 	constexpr float32 kArm = 5.0f;
 
 	ImDrawList* drawList = ImGui::GetWindowDrawList();
 
 	for (int32 kind = 0; kind < 3; ++kind)
 	{
-		const float32 left = barMin.x + barWidth - kButton * (3 - kind);
+		const float32 left = barMin.x + barWidth - kWindowButton * (3 - kind);
 
 		ImGui::PushID(kind);
 		ImGui::SetCursorScreenPos(ImVec2(left, barMin.y));
 
-		const bool pressed = ImGui::InvisibleButton("##button", ImVec2(kButton, rowHeight));
+		const bool pressed = ImGui::InvisibleButton("##button", ImVec2(kWindowButton, rowHeight));
 		const bool hovered = ImGui::IsItemHovered();
 
 		ImGui::PopID();
 
 		if (hovered)
-			drawList->AddRectFilled(ImVec2(left, barMin.y), ImVec2(left + kButton, barMin.y + rowHeight),
+			drawList->AddRectFilled(ImVec2(left, barMin.y), ImVec2(left + kWindowButton, barMin.y + rowHeight),
 				(kind == 2) ? IM_COL32(196, 43, 28, 255) : IM_COL32(255, 255, 255, 22));
 
-		const ImVec2 center(left + kButton * 0.5f, barMin.y + rowHeight * 0.5f);
+		const ImVec2 center(left + kWindowButton * 0.5f, barMin.y + rowHeight * 0.5f);
 		const ImU32 color = ImGui::GetColorU32(ImGuiCol_Text);
 
 		switch (kind)
@@ -3988,20 +4021,24 @@ void EditorLayer::DrawWindowButtons(const ImVec2& barMin, float32 barWidth, floa
 			{
 				// The button says what pressing it will do, and what it will do depends on where the window
 				// already is: one square makes it fill the screen, two say it will step back off it.
+				//
+				// The two sit on a smaller square than the one does: a pair set apart from each other reads
+				// heavier than a single square of the same size, and the three buttons must weigh the same.
 				const bool maximized = Window::IsMaximized();
 				const float32 offset = maximized ? 2.0f : 0.0f;
+				const float32 arm = maximized ? kArm - 1.5f : kArm;
 
 				if (maximized)
 					drawList->AddRect(
-						ImVec2(center.x - kArm + offset, center.y - kArm - offset),
-						ImVec2(center.x + kArm + offset, center.y + kArm - offset),
+						ImVec2(center.x - arm + offset, center.y - arm - offset),
+						ImVec2(center.x + arm + offset, center.y + arm - offset),
 						color, 0.0f, 0, 1.0f);
 
 				// The front square is filled with what is behind it, so the one behind it stops where it
 				// should. That is the bar, plus the highlight the bar has while the button is hovered —
 				// painting the bar's colour alone would punch a hole in the highlight.
-				const ImVec2 frontMin(center.x - kArm - offset, center.y - kArm + offset);
-				const ImVec2 frontMax(center.x + kArm - offset, center.y + kArm + offset);
+				const ImVec2 frontMin(center.x - arm - offset, center.y - arm + offset);
+				const ImVec2 frontMax(center.x + arm - offset, center.y + arm + offset);
 
 				if (maximized)
 				{
@@ -4034,47 +4071,73 @@ void EditorLayer::DrawWindowButtons(const ImVec2& barMin, float32 barWidth, floa
 	}
 }
 
-void EditorLayer::DrawMenuBar(const ImVec2& barMin, const ImVec2& barMax)
+void EditorLayer::NewScene()
 {
-	// A scene is JSON inside, and a .lscene outside: what it is made of is the engine's business, and what
-	// it is is the project's. The sealed one that ships is neither, and still opens.
-	static const char8* sceneFilter = "Lion Scene (*.lscene)\0*.lscene\0";
+	RecordSnapshot();
+	mScene->Clear();
+	SetSelection(nullptr);
+	mScenePath.clear();
+}
 
-	if (BeginMenuBarAt(barMin, barMax))
+void EditorLayer::OpenScene()
+{
+	const std::string path = FileDialog::Open(kSceneFilter, GameAssetsDirectory().string());
+
+	if (path.empty())
+		return;
+
+	RecordSnapshot();
+	SetSelection(nullptr);
+	SceneSerializer::Deserialize(mScene, path);
+	mScenePath = path;
+}
+
+void EditorLayer::SaveScene()
+{
+	// A scene that has never been anywhere has to be told where to go, so this is Save As until it is not.
+	if (mScenePath.empty())
+	{
+		SaveSceneAs();
+		return;
+	}
+
+	SceneSerializer::Serialize(mScene, mScenePath);
+}
+
+void EditorLayer::SaveSceneAs()
+{
+	const std::string path = FileDialog::Save(kSceneFilter, "lscene", GameAssetsDirectory().string());
+
+	if (path.empty())
+		return;
+
+	SceneSerializer::Serialize(mScene, path);
+	mScenePath = path;
+}
+
+float32 EditorLayer::DrawMenuBar(const ImVec2& barMin, const ImVec2& barMax)
+{
+	if (!BeginMenuBarAt(barMin, barMax))
+		return barMin.x;
+
 	{
 		if (ImGui::BeginMenu("File"))
 		{
-			if (ImGui::MenuItem("New Scene"))
-			{
-				RecordSnapshot();
-				mScene->Clear();
-				SetSelection(nullptr);
-				mScenePath.clear();
-			}
+			// The menu says what the key does and the key does what the menu does, because both call the one
+			// function that does it — a rule written down twice is a rule that will disagree with itself.
+			if (ImGui::MenuItem("New Scene", ShortcutText(ShortcutAction::NewScene).c_str()))
+				NewScene();
 
-			if (ImGui::MenuItem("Open Scene..."))
-			{
-				const std::string path = FileDialog::Open(sceneFilter, GameAssetsDirectory().string());
+			if (ImGui::MenuItem("Open Scene...", ShortcutText(ShortcutAction::OpenScene).c_str()))
+				OpenScene();
 
-				if (!path.empty())
-				{
-					RecordSnapshot();
-					SetSelection(nullptr);
-					SceneSerializer::Deserialize(mScene, path);
-					mScenePath = path;
-				}
-			}
+			ImGui::Separator();
 
-			if (ImGui::MenuItem("Save Scene As..."))
-			{
-				const std::string path = FileDialog::Save(sceneFilter, "lscene", GameAssetsDirectory().string());
+			if (ImGui::MenuItem("Save Scene", ShortcutText(ShortcutAction::SaveScene).c_str()))
+				SaveScene();
 
-				if (!path.empty())
-				{
-					SceneSerializer::Serialize(mScene, path);
-					mScenePath = path;
-				}
-			}
+			if (ImGui::MenuItem("Save Scene As...", ShortcutText(ShortcutAction::SaveSceneAs).c_str()))
+				SaveSceneAs();
 
 			ImGui::Separator();
 
@@ -4126,7 +4189,7 @@ void EditorLayer::DrawMenuBar(const ImVec2& barMin, const ImVec2& barMax)
 
 		if (ImGui::BeginMenu("Game"))
 		{
-			if (ImGui::MenuItem("Compile", KeybindToString(mBinds[static_cast<int>(ShortcutAction::CompileModule)]).c_str(), false, !mBuilding))
+			if (ImGui::MenuItem("Compile", ShortcutText(ShortcutAction::CompileModule).c_str(), false, !mBuilding))
 				CompileGameModule();
 
 			if (ImGui::IsItemHovered())
@@ -4153,9 +4216,15 @@ void EditorLayer::DrawMenuBar(const ImVec2& barMin, const ImVec2& barMax)
 			ImGui::EndMenu();
 		}
 
+		// Where the menus ran out, which is where the caller carries on: the row below begins under the end
+		// of this one. Read before the bar is closed, because closing it puts the cursor back.
+		const float32 menusEnd = ImGui::GetCurrentWindow()->DC.CursorPos.x;
+
 		// A build says so in the toast, which is where it is said properly. It used to say so here as well,
 		// in yellow, which is one thing being reported twice.
 		EndMenuBarAt();
+
+		return menusEnd;
 	}
 }
 

@@ -42,6 +42,18 @@ project "Launcher"
     filter "configurations:Shipping"
         kind "WindowedApp"
 
+        -- A shipped game's assets are sealed; a project's are not. The format lives in the engine
+        -- (Lion/Core/Vault.h) and the editor is what applies it, because building a game is a thing an
+        -- editor does — it used to be a whole executable of its own, which is one project too many.
+        --
+        -- It runs here, and not in the game module's build, because this is the folder the assets are
+        -- copied into: seal them where they land, once they have all landed.
+        dependson { editor_project }
+
+        postbuildcommands {
+            '"%{wks.location}/Build/Bin/' .. output_dir .. editor_project .. '/Lion.exe" --seal "%{cfg.targetdir}" .glsl .lscene',
+        }
+
     filter "system:windows"
         buildoptions { "/utf-8" }
         defines "LN_PLATFORM_WIN"

@@ -153,6 +153,17 @@ void EditorGui::Shutdown()
 
 void EditorGui::BeginFrame()
 {
+	// The window draws its own caption, so the edges it is resized by are inside the area the GUI believes is
+	// entirely its own — and the GUI sets a cursor there every frame, over the double-headed one Windows put
+	// there on the way in. Whoever writes last wins, and the GUI writes last: the edge stops looking like an
+	// edge, and a border you cannot see is a border you cannot grab. Over an edge, the GUI does not get a say.
+	ImGuiIO& io = ImGui::GetIO();
+
+	if (Window::IsPointerOnResizeBorder())
+		io.ConfigFlags |= ImGuiConfigFlags_NoMouseCursorChange;
+	else
+		io.ConfigFlags &= ~ImGuiConfigFlags_NoMouseCursorChange;
+
 	ImGui_ImplOpenGL3_NewFrame();
 	ImGui_ImplGlfw_NewFrame();
 	ImGui::NewFrame();

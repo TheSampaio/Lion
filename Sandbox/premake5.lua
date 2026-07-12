@@ -58,14 +58,3 @@ project "Game"
             -- post-build runs in the project's folder, one level under the workspace.
             'xcopy /E /I /Y /Q /EXCLUDE:..\\Scripts\\AssetCopyExclude.txt "%{prj.location}Assets" "%{wks.location}/Build/Bin/' .. output_dir .. launcher_project .. '/"',
         }
-
-    filter { "system:windows", "configurations:Shipping" }
-        -- A shipped game's assets are sealed: the project keeps text a person can read and edit, and the
-        -- build hands over something nobody opens by accident. The format lives in the engine (Lion/Core/
-        -- Vault.h) and this is the engine being asked to apply it — it used to live a second time, in a
-        -- PowerShell script, which is one copy of a rule too many.
-        dependson { "Sealer" }
-
-        postbuildcommands {
-            '"%{wks.location}/Build/Bin/' .. output_dir .. 'Sealer/lion-seal.exe" "%{wks.location}/Build/Bin/' .. output_dir .. launcher_project .. '" .glsl .lscene',
-        }

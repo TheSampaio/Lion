@@ -10,7 +10,6 @@ A 2D C++ game engine.
 | `Sandbox/` | `Game` | Runtime | `lion-game.dll` | The game's code, as a module. Its components live in `Sandbox/Assets/Scripts/`. |
 | `Editor/` | `Mane` | Tools | `Lion.exe` | The editor — the face of the engine, so it carries its name. |
 | `Launcher/` | `Launcher` | Tools | `lion-launcher.exe` | Thin exe: loads the module and runs it. Owns no game code. |
-| `Packer/` | `Sealer` | Tools | `lion-seal.exe` | Build tool: seals a shipped game's assets. Never shipped itself. |
 
 The module's file names are fixed in `Lion/Core/GameModule.h`, not by the project name — the loaders
 must not care what a game calls itself. `lion-game.loaded.dll` is the editor's private copy of the
@@ -25,6 +24,10 @@ module (see hot reload, below).
 
 - **Always commit, then push to `origin/dev`.** Never merge, and never touch `main` — the user opens
   and merges the PRs.
+- **Bump `kVersion` (`Lion/Core/Version.h`) with the change**, before committing it: the patch for a
+  fix, the minor for something the engine can now do, the major for something it does differently
+  enough to break a game written against the old one. The editor's status bar reads it, so a version
+  that never moves is a version nobody believes.
 - **Only commit what is verified working.** For anything visual or behavioural that means running it
   and looking at it (screenshot), not just a green build. A build that compiles proves nothing about
   whether the feature works.
@@ -116,12 +119,14 @@ editor's own state to the executable, not to the working directory.
 
 ## Architecture notes worth knowing
 
-- **A shipped asset is sealed; a project's asset is not.** `Lion/Core/Vault.h` is the one place the format
-  lives — XOR against `0x07D2`, then URL-safe base64 — and `lion-seal.exe` is the build asking it to.
-  The rule used to live a second time, in a PowerShell script, which is one copy of a rule too many.
-  Loading never has to know which it has: `Vault::Unseal` gives plain content back unchanged, and sealed
-  content is base64 and nothing else, so a `#` or a `{` answers the question. It is obfuscation, not
-  encryption — the key ships with the binary, and a key you ship is a key you gave away.
+- **Sealing lives in one place: `Lion/Core/Vault.h`** — XOR against `0x07D2`, then URL-safe base64. A
+  scene is sealed by the editor that saves it; a shipped game's shaders are sealed by the build, which
+  runs the editor to do it (`Lion.exe --seal <dir> .glsl .lscene`, from the Launcher's Shipping
+  post-build — `Editor/Source/Sealer.h`). The rule used to live a second time in a PowerShell script,
+  and a third time as a whole project, which is two copies of a rule too many. Loading never has to know
+  which kind it has: `Vault::Unseal` gives plain content back unchanged, and sealed content is base64 and
+  nothing else, so a `#` or a `{` answers the question. It is obfuscation, not encryption — the key ships
+  with the binary, and a key you ship is a key you gave away.
 
 - **An entity is composed, never derived.** `Entity` is `final`: a name, a `Transform`, and the
   components attached to it. Everything else — including collision, through `Component::OnCollision` —

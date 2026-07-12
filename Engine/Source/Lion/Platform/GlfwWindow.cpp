@@ -61,7 +61,7 @@ namespace Lion
 		//
 		// The state is a single window's, because the engine has a single window.
 		WNDPROC sOriginalProc = nullptr;
-		const WindowData* sChrome = nullptr;
+		WindowData* sChrome = nullptr;
 
 		int32 FrameBorder()
 		{
@@ -73,6 +73,36 @@ namespace Lion
 		// to find is a border that is not there. A corner is given more, because two edges meet in it.
 		constexpr int32 kGrabBorder = 8;
 		constexpr int32 kGrabCorner = 16;
+
+		// Which edge, if any, the cursor is on. Zero for none, so a caller can ask the question without
+		// spelling out the eight answers — and so the answer is only worked out in one place.
+		LRESULT ResizeBorderAt(HWND window, POINT cursor)
+		{
+			if (!sChrome || !sChrome->resizable || IsZoomed(window))
+				return 0;
+
+			RECT bounds = {};
+			GetWindowRect(window, &bounds);
+
+			// The corners are tested against the wider band, and first: a cursor in the corner is within both
+			// edges, and the diagonal is the one it means.
+			const bool leftCorner = cursor.x < bounds.left + kGrabCorner;
+			const bool rightCorner = cursor.x >= bounds.right - kGrabCorner;
+			const bool topCorner = cursor.y < bounds.top + kGrabCorner;
+			const bool bottomCorner = cursor.y >= bounds.bottom - kGrabCorner;
+
+			if (topCorner && leftCorner)     return HTTOPLEFT;
+			if (topCorner && rightCorner)    return HTTOPRIGHT;
+			if (bottomCorner && leftCorner)  return HTBOTTOMLEFT;
+			if (bottomCorner && rightCorner) return HTBOTTOMRIGHT;
+
+			if (cursor.x < bounds.left + kGrabBorder)    return HTLEFT;
+			if (cursor.x >= bounds.right - kGrabBorder)  return HTRIGHT;
+			if (cursor.y < bounds.top + kGrabBorder)     return HTTOP;
+			if (cursor.y >= bounds.bottom - kGrabBorder) return HTBOTTOM;
+
+			return 0;
+		}
 
 		LRESULT CALLBACK CustomChromeProc(HWND window, UINT message, WPARAM wParam, LPARAM lParam)
 		{
@@ -107,31 +137,15 @@ namespace Lion
 					// window would neither resize nor move. This says which is which.
 					POINT cursor = { GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam) };
 
-					RECT bounds = {};
-					GetWindowRect(window, &bounds);
+					const LRESULT edge = ResizeBorderAt(window, cursor);
 
-					const int32 border = FrameBorder();
-					const bool maximized = IsZoomed(window) != 0;
+					// Remembered, and not merely returned, because the answer is needed by the frame the GUI
+					// is about to draw: it is what tells the GUI not to set a cursor over an edge.
+					if (sChrome)
+						sChrome->pointerOnResizeBorder = (edge != 0);
 
-					if (!maximized && sChrome && sChrome->resizable)
-					{
-						// The corners are tested against the wider band, and first: a cursor in the corner is
-						// within both edges, and the diagonal is the one it means.
-						const bool leftCorner = cursor.x < bounds.left + kGrabCorner;
-						const bool rightCorner = cursor.x >= bounds.right - kGrabCorner;
-						const bool topCorner = cursor.y < bounds.top + kGrabCorner;
-						const bool bottomCorner = cursor.y >= bounds.bottom - kGrabCorner;
-
-						if (topCorner && leftCorner)     return HTTOPLEFT;
-						if (topCorner && rightCorner)    return HTTOPRIGHT;
-						if (bottomCorner && leftCorner)  return HTBOTTOMLEFT;
-						if (bottomCorner && rightCorner) return HTBOTTOMRIGHT;
-
-						if (cursor.x < bounds.left + kGrabBorder)    return HTLEFT;
-						if (cursor.x >= bounds.right - kGrabBorder)  return HTRIGHT;
-						if (cursor.y < bounds.top + kGrabBorder)     return HTTOP;
-						if (cursor.y >= bounds.bottom - kGrabBorder) return HTBOTTOM;
-					}
+					if (edge != 0)
+						return edge;
 
 					POINT client = cursor;
 					ScreenToClient(window, &client);
@@ -149,7 +163,7 @@ namespace Lion
 			return CallWindowProc(sOriginalProc, window, message, wParam, lParam);
 		}
 
-		void UseCustomTitleBar(GLFWwindow* window, const WindowData* data)
+		void UseCustomTitleBar(GLFWwindow* window, WindowData* data)
 		{
 			HWND handle = glfwGetWin32Window(window);
 

@@ -35,6 +35,7 @@ private:
 		ReloadModule,
 		StepFrame, CompileModule,
 		ToggleHierarchy, ToggleProject, ToggleConsole, ToggleStatistics, ToggleProperties,
+		NewScene, OpenScene, SaveScene, SaveSceneAs,
 		Count
 	};
 
@@ -198,12 +199,29 @@ private:
 	// tall, which is what gives the mark room to be seen.
 	static constexpr float kTitleBarHeight = 52.0f;
 
+	// One button of the three the window ends with, and the room the project's name is given to sit clear of
+	// them. Shared, because the caption places things against the buttons and the buttons are drawn elsewhere.
+	static constexpr float kWindowButton = 46.0f;
+	static constexpr float kProjectGap = 16.0f;
+
+	// How far after the last menu the scene's name begins on the row below.
+	static constexpr float kSceneGap = 8.0f;
+
 	// Tells Windows what a .lscene is, so Explorer draws it with the engine's icon and a double-click opens
 	// it here. Written once, on the first run, and again only if the editor moves.
 	void RegisterSceneFiles();
 
+	// What the File menu does, and what its keys do — one function each, called by both.
+	void NewScene();
+	void OpenScene();
+	void SaveScene();
+	void SaveSceneAs();
+
 	void DrawTitleBar();
-	void DrawMenuBar(const ImVec2& barMin, const ImVec2& barMax);
+
+	// Draws the menus in the given rectangle and answers where they ended, which is where the row below picks
+	// up: the scene's name follows the menus, and only the menus know how wide they were.
+	Lion::float32 DrawMenuBar(const ImVec2& barMin, const ImVec2& barMax);
 	void DrawWindowButtons(const ImVec2& barMin, Lion::float32 barWidth, Lion::float32 rowHeight);
 	void DrawStatusBar();   // The bar along the bottom: what is open, and which engine has it open.
 	void DrawViewport();
@@ -386,6 +404,7 @@ private:
 	void SaveShortcuts() const;                            // Persists the current binds to disk.
 	bool IsShortcutPressed(ShortcutAction action) const;   // True when the bound combo was pressed this frame.
 	std::string KeybindToString(const Keybind& bind) const;
+	std::string ShortcutText(ShortcutAction action) const;  // What a menu shows next to the action, if anything.
 
 	// Play mode: StartPlay snapshots the edited scene and re-awakes it (creating physics bodies) so
 	// the simulation runs; StopPlay restores the snapshot, returning to the edited state. Both keep

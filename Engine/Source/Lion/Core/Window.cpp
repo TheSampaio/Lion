@@ -97,6 +97,11 @@ namespace Lion
         return sInstance->mBackend->IsMaximized();
     }
 
+    bool Window::IsPointerOnResizeBorder()
+    {
+        return sInstance->mData.pointerOnResizeBorder;
+    }
+
     void Window::SetIcon(const std::string& icon)
     {
         sInstance->mIconPath = icon;

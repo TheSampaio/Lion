@@ -144,7 +144,7 @@ namespace Lion
 
 	bool SceneSerializer::Serialize(const Reference<Scene>& scene, const std::string& filePath)
 	{
-		std::ofstream file(filePath);
+		std::ofstream file(filePath, std::ios::binary);
 
 		if (!file.is_open())
 		{
@@ -152,7 +152,10 @@ namespace Lion
 			return false;
 		}
 
-		file << SerializeToString(scene);
+		// A scene leaves the editor sealed, and it is JSON again by the time anything reads it — Vault::Unseal
+		// takes plaintext back unchanged, so a scene written by hand still opens. Sealed is what a .lscene is,
+		// not what shipping does to one, which is why nothing has to remember which kind it is holding.
+		file << Vault::Seal(SerializeToString(scene));
 		Log::Console(LogLevel::Success, LION_FORMAT_TEXT("[SceneSerializer] Saved scene: '{}'.", filePath));
 		return true;
 	}
