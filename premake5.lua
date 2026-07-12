@@ -1,3 +1,16 @@
+require("vstudio")
+
+-- Visual Studio keeps "Show All Files" in a project's .user file, which premake already writes (it is
+-- where the debug working directory goes). Adding the flag there means a fresh clone opens with the
+-- whole folder in the tree — premake5.lua, the assets — rather than only the files the glob picked up.
+premake.override(premake.vstudio.vc2010.elements, "user", function(base, cfg)
+    local items = base(cfg)
+    table.insert(items, function(cfg)
+        premake.w('<ShowAllFiles>true</ShowAllFiles>')
+    end)
+    return items
+end)
+
 workspace "Lion"
     configurations { "Debug", "Release", "Shipping" }
     startproject "Editor"  -- The project in Mane/; F5 in Visual Studio opens the editor.
