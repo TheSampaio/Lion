@@ -60,7 +60,12 @@ project "Game"
         }
 
     filter { "system:windows", "configurations:Shipping" }
-        -- Make shipped shaders unreadable so they cannot be edited in a text editor.
+        -- A shipped game's assets are sealed: the project keeps text a person can read and edit, and the
+        -- build hands over something nobody opens by accident. The format lives in the engine (Lion/Core/
+        -- Vault.h) and this is the engine being asked to apply it — it used to live a second time, in a
+        -- PowerShell script, which is one copy of a rule too many.
+        dependson { "Sealer" }
+
         postbuildcommands {
-            'powershell -NoProfile -ExecutionPolicy Bypass -File "%{wks.location}Scripts/ObfuscateShaders.ps1" "%{wks.location}/Build/Bin/' .. output_dir .. launcher_project .. '/"',
+            '"%{wks.location}/Build/Bin/' .. output_dir .. 'Sealer/lion-seal.exe" "%{wks.location}/Build/Bin/' .. output_dir .. launcher_project .. '" .glsl .lscene',
         }

@@ -1461,7 +1461,7 @@ namespace
 	// where a component is created, and hiding the result would be a strange way to end that flow.
 	bool IsAssetFile(const std::filesystem::path& path)
 	{
-		static const char8* extensions[] = { ".png", ".jpg", ".jpeg", ".bmp", ".glsl", ".json", ".h", ".cpp" };
+		static const char8* extensions[] = { ".png", ".jpg", ".jpeg", ".bmp", ".glsl", ".lscene", ".h", ".cpp" };
 
 		std::string extension = path.extension().string();
 		std::transform(extension.begin(), extension.end(), extension.begin(),
@@ -4003,7 +4003,9 @@ void EditorLayer::DrawWindowButtons(const ImVec2& barMin, float32 barWidth, floa
 
 void EditorLayer::DrawMenuBar(const ImVec2& barMin, const ImVec2& barMax)
 {
-	static const char8* sceneFilter = "Lion Scene (*.json)\0*.json\0";
+	// A scene is JSON inside, and a .lscene outside: what it is made of is the engine's business, and what
+	// it is is the project's. The sealed one that ships is neither, and still opens.
+	static const char8* sceneFilter = "Lion Scene (*.lscene)\0*.lscene\0";
 
 	if (BeginMenuBarAt(barMin, barMax))
 	{
@@ -4032,7 +4034,7 @@ void EditorLayer::DrawMenuBar(const ImVec2& barMin, const ImVec2& barMax)
 
 			if (ImGui::MenuItem("Save Scene As..."))
 			{
-				const std::string path = FileDialog::Save(sceneFilter, "json", GameAssetsDirectory().string());
+				const std::string path = FileDialog::Save(sceneFilter, "lscene", GameAssetsDirectory().string());
 
 				if (!path.empty())
 				{

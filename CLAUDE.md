@@ -10,6 +10,7 @@ A 2D C++ game engine.
 | `Sandbox/` | `Game` | Runtime | `lion-game.dll` | The game's code, as a module. Its components live in `Sandbox/Assets/Scripts/`. |
 | `Editor/` | `Mane` | Tools | `Lion.exe` | The editor — the face of the engine, so it carries its name. |
 | `Launcher/` | `Launcher` | Tools | `lion-launcher.exe` | Thin exe: loads the module and runs it. Owns no game code. |
+| `Packer/` | `Sealer` | Tools | `lion-seal.exe` | Build tool: seals a shipped game's assets. Never shipped itself. |
 
 The module's file names are fixed in `Lion/Core/GameModule.h`, not by the project name — the loaders
 must not care what a game calls itself. `lion-game.loaded.dll` is the editor's private copy of the
@@ -114,6 +115,13 @@ Run the editor from `Build/Bin/<config>/Mane/Lion.exe` and the game from
 editor's own state to the executable, not to the working directory.
 
 ## Architecture notes worth knowing
+
+- **A shipped asset is sealed; a project's asset is not.** `Lion/Core/Vault.h` is the one place the format
+  lives — XOR against `0x07D2`, then URL-safe base64 — and `lion-seal.exe` is the build asking it to.
+  The rule used to live a second time, in a PowerShell script, which is one copy of a rule too many.
+  Loading never has to know which it has: `Vault::Unseal` gives plain content back unchanged, and sealed
+  content is base64 and nothing else, so a `#` or a `{` answers the question. It is obfuscation, not
+  encryption — the key ships with the binary, and a key you ship is a key you gave away.
 
 - **An entity is composed, never derived.** `Entity` is `final`: a name, a `Transform`, and the
   components attached to it. Everything else — including collision, through `Component::OnCollision` —

@@ -3,14 +3,10 @@
 
 #include <Lion/Core/Filesystem.h>
 #include <Lion/Core/Log.h>
+#include <Lion/Core/Vault.h>
 
 namespace Lion
 {
-#ifdef LN_SHIPPING
-	// Key used to XOR-obfuscate shader files at build time (see Scripts/ObfuscateShaders.ps1).
-	static constexpr byte kShaderObfuscationKey = 0x5A;
-#endif
-
 	OpenGLShader::OpenGLShader(const std::string& filePath)
 	{
 		const Source source = Parse(filePath);
@@ -87,15 +83,9 @@ namespace Lion
 		buffer << file.rdbuf();
 		std::string content = buffer.str();
 
-#ifdef LN_SHIPPING
-		// Shipped shaders are XOR-obfuscated. A plaintext fallback (e.g. running from the project
-		// folder) still contains "#shader", so only de-obfuscate when it does not.
-		if (content.find("#shader") == std::string::npos)
-		{
-			for (char& character : content)
-				character = static_cast<char>(static_cast<byte>(character) ^ kShaderObfuscationKey);
-		}
-#endif
+		// A shipped shader is sealed and one read from the project is not, and this does not have to know
+		// which: the content says so itself. It is one pass over the file, once, at load.
+		content = Vault::Unseal(content);
 
 		// Normalize line endings so plain and de-obfuscated sources parse identically.
 		content.erase(std::remove(content.begin(), content.end(), '\r'), content.end());

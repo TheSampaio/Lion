@@ -6,6 +6,7 @@
 #include <Lion/Core/Log.h>
 #include <Lion/Logic/Component.h>
 #include <Lion/Logic/Entity.h>
+#include <Lion/Core/Vault.h>
 #include <Lion/Logic/Scene.h>
 #include <Lion/Logic/Serializer.h>
 #include <Lion/Math/Transform.h>
@@ -309,7 +310,9 @@ namespace Lion
 		std::stringstream buffer;
 		buffer << file.rdbuf();
 
-		if (!DeserializeFromString(scene, buffer.str()))
+		// A scene a project keeps is plain JSON; a scene a game ships is sealed. This does not have to know
+		// which it opened — the content says so itself, and unsealing something plain gives it back.
+		if (!DeserializeFromString(scene, Vault::Unseal(buffer.str())))
 			return false;
 
 		Log::Console(LogLevel::Success, LION_FORMAT_TEXT("[SceneSerializer] Loaded scene: '{}'.", filePath));

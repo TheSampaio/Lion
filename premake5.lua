@@ -133,6 +133,7 @@ group ""
 group "Tools"
     include "Editor"
     include "Launcher"
+    include "Packer"
 group ""
 
 -- The gameplay layer: what the tools load and run, as opposed to the engine underneath them.
