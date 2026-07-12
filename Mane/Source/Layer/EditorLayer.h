@@ -92,7 +92,6 @@ private:
 	bool mOpenNewComponentPopup = false;
 	char mNewComponentName[64] = {};
 	char mNewComponentFolder[64] = "Scripts";   // Where it lands, under the game's assets.
-	int mNewComponentBase = 0;   // Index into ComponentBaseNames().
 	bool mConsoleAutoScroll = true;
 	bool mConsoleShowErrors = true;    // Console severity filters (Error/Fatal, Warning, everything else).
 	bool mConsoleShowWarnings = true;
@@ -171,14 +170,11 @@ private:
 	static std::string LayoutPath(const std::string& name);
 	static bool IsValidLayoutName(const std::string& name);  // Rejects names that would escape the folder.
 
-	// "New C++ Component" (Unreal-style): pick a parent class, name the type, and the editor writes the
+	// "New C++ Component" (Unreal-style): name the type, and the editor writes the
 	// .h/.cpp into the game's source tree. The new class is compiled into the game module on the next
 	// build, which is when it starts showing up in Add Component.
 	void DrawNewComponentPopup();
-	bool GenerateComponent(const std::string& name, const std::string& base, const std::string& folder);
-
-	// Component classes offered as a parent: "Component" plus every registered type.
-	static std::vector<std::string> ComponentBaseNames();
+	bool GenerateComponent(const std::string& name, const std::string& folder);
 
 	// Game module lifecycle. LoadGameModule loads a copy of Game.dll, leaving the original writable so
 	// it can be rebuilt while the editor runs; ReloadGameModule swaps in that rebuild, taking the

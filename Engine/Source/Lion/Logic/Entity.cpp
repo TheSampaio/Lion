@@ -248,8 +248,6 @@ namespace Lion
 
 	void Entity::Awake()
 	{
-		OnAwake();
-
 		for (const auto& component : mComponents)
 			component->OnAwake();
 	}
@@ -258,14 +256,10 @@ namespace Lion
 	{
 		for (const auto& component : mComponents)
 			component->OnDestroy();
-
-		OnDestroy();
 	}
 
 	void Entity::UpdateBegin()
 	{
-		OnUpdateBegin();
-
 		for (const auto& component : mComponents)
 			if (component->IsEnabled())
 				component->OnUpdateBegin();
@@ -273,8 +267,6 @@ namespace Lion
 
 	void Entity::Update()
 	{
-		OnUpdate();
-
 		for (const auto& component : mComponents)
 			if (component->IsEnabled())
 				component->OnUpdate();
@@ -282,8 +274,6 @@ namespace Lion
 
 	void Entity::UpdateEnd()
 	{
-		OnUpdateEnd();
-
 		for (const auto& component : mComponents)
 			if (component->IsEnabled())
 				component->OnUpdateEnd();
@@ -291,10 +281,15 @@ namespace Lion
 
 	void Entity::Render()
 	{
-		OnRender();
-
 		for (const auto& component : mComponents)
 			if (component->IsEnabled())
 				component->OnRender();
+	}
+
+	void Entity::Collide(Entity& other)
+	{
+		for (const auto& component : mComponents)
+			if (component->IsEnabled())
+				component->OnCollision(other);
 	}
 }

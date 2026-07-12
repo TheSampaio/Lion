@@ -1,27 +1,19 @@
 #include "Ball.h"
 #include "Paddle.h"
+#include "SceneQuery.h"
+
+#include <Lion/Logic/ComponentRegistry.h>
 
 using namespace Lion;
 
-Ball::Ball(Reference<Paddle> paddle)
-	: mPaddle(std::move(paddle))
-{
-}
-
 void Ball::OnAwake()
 {
-	// The depth is kept by the physics sync, so set it once here.
-	GetTransform()->SetPosition(Vector(0.0f, 0.0f, Depth::Middle));
-
-	mRenderer = AddComponent<SpriteRenderer>("Sprites/Brickout/ball.png");
-
-	// Dynamic, frictionless, perfectly elastic ball with a fixed rotation and a circular shape.
-	mBody = AddComponent<RigidBody2D>(BodyType::Dynamic, true);
-	AddComponent<CircleCollider2D>(mRenderer->GetSize().width * 0.5f, 1.0f, 0.0f, 1.0f);
+	mBody = GetOwner().GetComponent<RigidBody2D>();
+	mRenderer = GetOwner().GetComponent<SpriteRenderer>();
+	mPaddle = FindInScene<Paddle>(GetOwner().GetScene());
 
 	const float32 ballRadius = mRenderer->GetSize().height * 0.5f;
-	const float32 paddleHalfHeight = mPaddle->GetComponent<SpriteRenderer>()->GetSize().height * 0.5f;
-	mAttachOffsetY = paddleHalfHeight + ballRadius + kAttachGap;
+	mAttachOffsetY = mPaddle->GetHalfHeight() + ballRadius + kAttachGap;
 
 	Reset();
 }
@@ -32,11 +24,11 @@ void Ball::OnUpdate()
 	{
 		FollowPaddle();
 
-		// Launch the ball with Space or Enter.
+		// Launch the ball with Space or Enter, mostly upward with a slight rightward lean.
 		if (Input::GetKeyPress(KeyCode::Space) || Input::GetKeyPress(KeyCode::Return))
 		{
 			mState = State::Launched;
-			mBody->SetLinearVelocity(LaunchVelocity());
+			mBody->SetLinearVelocity(glm::normalize(glm::vec2(1.0f, 2.0f)) * kSpeed);
 		}
 
 		return;
@@ -58,24 +50,23 @@ void Ball::OnUpdate()
 	mBody->SetLinearVelocity(glm::normalize(velocity) * kSpeed);
 }
 
-void Ball::OnCollision(Actor& other)
+void Ball::OnCollision(Entity& other)
 {
 	// No steering while the ball is resting on the paddle.
 	if (mState != State::Launched)
 		return;
 
 	// Steering only happens on the paddle; walls and bricks bounce through the physics solver.
-	Paddle* paddle = dynamic_cast<Paddle*>(&other);
+	Paddle* paddle = other.GetComponent<Paddle>();
 
 	if (!paddle)
 		return;
 
 	const float32 ballX = GetTransform()->GetPosition().x;
 	const float32 paddleX = paddle->GetTransform()->GetPosition().x;
-	const float32 paddleHalfWidth = paddle->GetComponent<SpriteRenderer>()->GetSize().width * 0.5f;
 
-	// Offset of the hit from the paddle center, in [-1, 1]; the edges deflect the ball the most.
-	const float32 offset = glm::clamp((ballX - paddleX) / paddleHalfWidth, -1.0f, 1.0f);
+	// Offset of the hit from the paddle's center, in [-1, 1]; the edges deflect the ball the most.
+	const float32 offset = glm::clamp((ballX - paddleX) / paddle->GetHalfWidth(), -1.0f, 1.0f);
 	const float32 angle = glm::radians(offset * kMaxBounceDegrees);
 
 	// Always send the ball upward, angled by where it landed on the paddle.
@@ -99,12 +90,6 @@ void Ball::SetVisible(bool visible)
 	mRenderer->SetEnabled(visible);
 }
 
-glm::vec2 Ball::LaunchVelocity() const
-{
-	// Launch mostly upward with a slight rightward lean, at the constant travel speed.
-	return glm::normalize(glm::vec2(1.0f, 2.0f)) * kSpeed;
-}
-
 void Ball::FollowPaddle()
 {
 	// Sit just above the paddle and move with it while attached.
@@ -113,3 +98,5 @@ void Ball::FollowPaddle()
 	mBody->SetLinearVelocity(glm::vec2(0.0f, 0.0f));
 	mBody->SetPosition(glm::vec2(paddlePosition.x, paddlePosition.y + mAttachOffsetY));
 }
+
+LION_REGISTER_COMPONENT(Ball)

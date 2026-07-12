@@ -52,6 +52,14 @@ namespace Lion
 		// Called every frame, during the render pass.
 		virtual void OnRender() {}
 
+		// Called when the owner starts touching another entity. Both entities need a collider, and both
+		// hear about it — each from its own side of the contact.
+		//
+		// This is where collision lives because this is where behaviour lives: an entity is the thing,
+		// and a component is one trait of it. A trait that cares about being hit says so; the ones that
+		// do not are not asked.
+		virtual void OnCollision(Entity& other) {}
+
 		// Called once, when the owner leaves the scene.
 		virtual void OnDestroy() {}
 

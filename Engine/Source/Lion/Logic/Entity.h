@@ -5,18 +5,19 @@
 
 namespace Lion
 {
+	class PhysicsWorld;
 	class Scene;
 
-	// Base game object of the engine.
+	// The engine's game object: a name, a Transform, and the components attached to it.
 	//
-	// Following a Unity-like model, every Entity always owns a Transform and can host any
-	// number of Components. Derive from Entity (or Actor) to add scripted behaviour through
-	// the On* hooks, and attach reusable behaviour or data through Components.
-	class Entity
+	// An Entity is not derived from — it is composed. Everything an entity is beyond a position in the
+	// world comes from its components, which is why this class is final: a trait added by subclassing
+	// would be one the editor cannot list, the scene cannot save and another entity cannot reuse.
+	class Entity final
 	{
 	public:
 		LION_API Entity();
-		virtual LION_API ~Entity() = default;
+		LION_API ~Entity() = default;
 
 		Entity(const Entity&) = delete;
 		Entity& operator=(const Entity&) = delete;
@@ -115,17 +116,8 @@ namespace Lion
 		// Moves the component at 'from' to index 'to', shifting the others (editor drag-to-reorder).
 		LION_API void MoveComponent(int32 from, int32 to);
 
-		// Override points for scripted behaviour of the entity itself.
-		virtual void OnAwake() {}
-		virtual void OnDestroy() {}
-
-		virtual void OnUpdateBegin() {}
-		virtual void OnUpdate() {}
-		virtual void OnUpdateEnd() {}
-
-		virtual void OnRender() {}
-
 		friend Scene;
+		friend PhysicsWorld;
 
 	private:
 		const int32 mId;
@@ -150,12 +142,14 @@ namespace Lion
 		LION_API Component* FindComponent(std::type_index type) const;
 		LION_API void UnregisterComponent(std::type_index type);
 
-		// Lifecycle dispatchers invoked by the Scene: run the entity hook, then its components.
+		// Lifecycle dispatchers invoked by the Scene, and the contact one invoked by the PhysicsWorld:
+		// each hands the call to every component attached.
 		void Awake();
 		void Destroy();
 		void UpdateBegin();
 		void Update();
 		void UpdateEnd();
 		void Render();
+		void Collide(Entity& other);
 	};
 }

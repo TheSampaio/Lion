@@ -568,7 +568,7 @@ namespace
 	// construction arguments (a collider sizes itself to the sprite). Everything else in the registry
 	// comes from the game module and is added generically, by name.
 	constexpr const char8* kBuiltInComponents[] = {
-		"SpriteRenderer", "RigidBody2D", "BoxCollider2D", "CircleCollider2D", "ScriptComponent" };
+		"SpriteRenderer", "RigidBody2D", "BoxCollider2D", "CircleCollider2D" };
 
 	bool IsBuiltInComponent(const std::string& name)
 	{
@@ -2109,39 +2109,6 @@ void EditorLayer::DrawProperties()
 				if (ImGui::IsItemDeactivatedAfterEdit()) CommitEdit();
 			}
 		}
-		else if (ScriptComponent* script = dynamic_cast<ScriptComponent*>(component))
-		{
-			if (DrawComponentHeader("Script", i, remove, dragFrom, dragTo))
-			{
-				// Only scripts compiled into the editor are listed (native C++ registry).
-				const std::vector<std::string>& names = ScriptRegistry::GetNames();
-				const std::string& bound = script->GetScriptName();
-
-				PropertyLabel("Class");
-				if (ImGui::BeginCombo("##class", bound.empty() ? "(none)" : bound.c_str()))
-				{
-					if (ImGui::Selectable("(none)", bound.empty()))
-					{
-						RecordSnapshot();
-						script->SetScriptName(std::string());
-					}
-
-					for (const std::string& name : names)
-					{
-						if (ImGui::Selectable(name.c_str(), name == bound))
-						{
-							RecordSnapshot();
-							script->SetScriptName(name);
-						}
-					}
-
-					ImGui::EndCombo();
-				}
-
-				if (names.empty())
-					ImGui::TextDisabled("No scripts registered in this build.");
-			}
-		}
 		else if (CircleCollider2D* collider = dynamic_cast<CircleCollider2D*>(component))
 		{
 			if (DrawComponentHeader("Circle Collider 2D", i, remove, dragFrom, dragTo))
@@ -2237,12 +2204,6 @@ void EditorLayer::DrawProperties()
 		{
 			RecordSnapshot();
 			mSelectedEntity->AddComponent<CircleCollider2D>(std::max(spriteSize.width, spriteSize.height) * 0.5f);
-		}
-
-		if (!mSelectedEntity->HasComponent<ScriptComponent>() && ImGui::MenuItem("Script"))
-		{
-			RecordSnapshot();
-			mSelectedEntity->AddComponent<ScriptComponent>();
 		}
 
 		// Components coming from the loaded game module (user-defined ones). They have no special
@@ -2787,21 +2748,7 @@ void EditorLayer::ReloadGameModule()
 		Log::Console(LogLevel::Success, "[Editor] Reloaded the game module.");
 }
 
-std::vector<std::string> EditorLayer::ComponentBaseNames()
-{
-	// Any component class can be a parent: the engine's own (all reachable through the Lion umbrella
-	// header) and any the game already defines. "Component" heads the list as the usual choice.
-	std::vector<std::string> bases;
-	bases.reserve(ComponentRegistry::GetNames().size() + 1);
-	bases.emplace_back("Component");
-
-	for (const std::string& name : ComponentRegistry::GetNames())
-		bases.push_back(name);
-
-	return bases;
-}
-
-bool EditorLayer::GenerateComponent(const std::string& name, const std::string& base, const std::string& folder)
+bool EditorLayer::GenerateComponent(const std::string& name, const std::string& folder)
 {
 	const std::filesystem::path directory = ComponentDirectory(folder);
 
@@ -2829,12 +2776,6 @@ bool EditorLayer::GenerateComponent(const std::string& name, const std::string& 
 		return false;
 	}
 
-	// An engine base is reachable through the umbrella header and lives in the Lion namespace; a base
-	// the game defines sits next to the new file and is unqualified.
-	const bool engineBase = (base == "Component") || IsBuiltInComponent(base);
-	const std::string qualifiedBase = engineBase ? ("Lion::" + base) : base;
-	const std::string baseInclude = engineBase ? std::string() : ("#include \"" + base + ".h\"\n");
-
 	std::ofstream header(headerPath);
 	std::ofstream source(sourcePath);
 
@@ -2844,18 +2785,21 @@ bool EditorLayer::GenerateComponent(const std::string& name, const std::string& 
 		return false;
 	}
 
+	// Always a Component, never another component: an entity is what things are made of, and a component
+	// is one trait of it. A trait that needs another one asks its owner for it — GetOwner() is right
+	// there — and that reads better than a class that is two things at once.
 	header
 		<< "#pragma once\n\n"
 		<< "#include <Lion/Lion.h>\n"
 		<< "#include <Lion/Logic/Serializer.h>\n"
-		<< baseInclude
 		<< "\n"
 		<< "// Component defined by the game. Being compiled into the game module is all it takes for the\n"
 		<< "// editor to list it under Add Component: loading the module registers it with the engine.\n"
 		<< "//\n"
 		<< "// Override the lifecycle hooks to give it behaviour, and archive any field that should survive\n"
-		<< "// save/load through Serialize/Deserialize.\n"
-		<< "class " << name << " : public " << qualifiedBase << "\n"
+		<< "// save/load through Serialize/Deserialize. GetOwner() reaches the entity it is attached to, and\n"
+		<< "// through it every other component on the same entity.\n"
+		<< "class " << name << " : public Lion::Component\n"
 		<< "{\n"
 		<< "public:\n"
 		<< "\tvoid OnAwake() override;\n"
@@ -2870,19 +2814,15 @@ bool EditorLayer::GenerateComponent(const std::string& name, const std::string& 
 		<< "using namespace Lion;\n\n"
 		<< "void " << name << "::OnAwake()\n"
 		<< "{\n"
-		<< "\t" << base << "::OnAwake();\n"
 		<< "}\n\n"
 		<< "void " << name << "::OnUpdate()\n"
 		<< "{\n"
-		<< "\t" << base << "::OnUpdate();\n"
 		<< "}\n\n"
 		<< "void " << name << "::Serialize(Serializer& serializer) const\n"
 		<< "{\n"
-		<< "\t" << base << "::Serialize(serializer);\n"
 		<< "}\n\n"
 		<< "void " << name << "::Deserialize(const Serializer& serializer)\n"
 		<< "{\n"
-		<< "\t" << base << "::Deserialize(serializer);\n"
 		<< "}\n\n"
 		<< "// Binds the class to its name, so scenes can reference it and the editor can list it.\n"
 		<< "LION_REGISTER_COMPONENT(" << name << ")\n";
@@ -2914,22 +2854,6 @@ void EditorLayer::DrawNewComponentPopup()
 	if (!ImGui::BeginPopupModal("New C++ Component", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
 		return;
 
-	const std::vector<std::string> bases = ComponentBaseNames();
-	mNewComponentBase = std::clamp(mNewComponentBase, 0, static_cast<int32>(bases.size()) - 1);
-
-	ImGui::TextUnformatted("Parent class");
-	ImGui::SetNextItemWidth(320.0f);
-
-	if (ImGui::BeginCombo("##base", bases[mNewComponentBase].c_str()))
-	{
-		for (int32 i = 0; i < static_cast<int32>(bases.size()); ++i)
-			if (ImGui::Selectable(bases[i].c_str(), i == mNewComponentBase))
-				mNewComponentBase = i;
-
-		ImGui::EndCombo();
-	}
-
-	ImGui::Spacing();
 	ImGui::TextUnformatted("Class name");
 
 	if (ImGui::IsWindowAppearing())
@@ -2969,7 +2893,7 @@ void EditorLayer::DrawNewComponentPopup()
 
 	if (ImGui::Button("Create", ImVec2(96.0f, 0.0f)) || (submitted && valid))
 	{
-		GenerateComponent(name, bases[mNewComponentBase], mNewComponentFolder);
+		GenerateComponent(name, mNewComponentFolder);
 		ImGui::CloseCurrentPopup();
 	}
 
