@@ -62,7 +62,7 @@ void EditorLayer::OnCreate()
 
 	// The mark the toast wears. Loaded once, because it is the same picture in every toast there will
 	// ever be, and it ships beside the executable like the rest of the engine's own assets.
-	mToastLogo = Texture::Create(kEngineIconFile);
+	mLogo = Texture::Create(kEngineIconFile, TextureFilter::Linear);
 
 	CreateDemoScene();
 }
@@ -423,99 +423,136 @@ void EditorLayer::DrawPanelSizeOverlay()
 	report("Viewport");
 }
 
-void EditorLayer::SetToast(const std::string& message, bool busy)
+void EditorLayer::PushToast(const std::string& message, bool busy)
 {
-	mToastMessage = message;
-	mToastBusy = busy;
-	mToastTime = static_cast<float32>(ImGui::GetTime());
+	Toast toast;
+	toast.message = message;
+	toast.busy = busy;
+	toast.time = static_cast<float32>(ImGui::GetTime());
+	toast.id = mNextToastId++;
+
+	mToasts.push_back(toast);
+}
+
+void EditorLayer::DismissBusyToasts()
+{
+	// A toast that was waiting on something has nothing left to wait for. It goes, and what it was waiting
+	// for gets a toast of its own — which is why the answer never has to shove the question off the screen.
+	mToasts.erase(
+		std::remove_if(mToasts.begin(), mToasts.end(), [](const Toast& toast) { return toast.busy; }),
+		mToasts.end());
 }
 
 void EditorLayer::DrawToast()
 {
-	if (mToastMessage.empty())
+	if (mToasts.empty())
 		return;
 
-	// A toast that is waiting on something stays until that something is done; one that is reporting a
-	// result reads once and leaves. It arrives and it leaves the same way, over the same quarter of a
-	// second — a card that snaps in and then lingers on its way out reads as two different things.
+	// Every toast is the same card: same width, same height, same corner. They are not messages that happen
+	// to be boxed — they are one thing the editor says, and a stack of them has to read as a stack.
+	constexpr float32 kWidth = 340.0f;
+	constexpr float32 kHeight = 68.0f;
+	constexpr float32 kGap = 8.0f;
 	constexpr float32 kLifetime = 3.5f;
 	constexpr float32 kFade = 0.25f;
-
-	const float32 age = static_cast<float32>(ImGui::GetTime()) - mToastTime;
-	float32 alpha = ImMin(1.0f, age / kFade);   // The way in is the same for both.
-
-	if (!mToastBusy)
-	{
-		if (age > kLifetime)
-		{
-			mToastMessage.clear();
-			return;
-		}
-
-		alpha = ImMin(alpha, (kLifetime - age) / kFade);
-	}
-
-	// It comes in from the right, off the edge it will sit against — a card that fades in where it lands
-	// looks like it was always there and you missed it, and the eye follows a thing that moves.
-	const float32 travel = (1.0f - ImMin(1.0f, age / kFade)) * 120.0f;
+	constexpr float32 kSlide = 140.0f;
 
 	const ImGuiViewport* viewport = ImGui::GetMainViewport();
-	const ImVec2 corner(
-		viewport->WorkPos.x + viewport->WorkSize.x - 16.0f + travel,
-		viewport->WorkPos.y + viewport->WorkSize.y - 16.0f);
+	const float32 now = static_cast<float32>(ImGui::GetTime());
 
-	ImGui::SetNextWindowPos(corner, ImGuiCond_Always, ImVec2(1.0f, 1.0f));
-	ImGui::SetNextWindowBgAlpha(0.95f * alpha);
+	// The oldest sits at the bottom and the newest arrives above it, so a toast never has to be pushed out
+	// to make room for the next one.
+	int32 slot = 0;
 
-	constexpr ImGuiWindowFlags flags =
-		ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings |
-		ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoInputs;
-
-	ImGui::PushStyleVar(ImGuiStyleVar_Alpha, alpha);
-	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(16.0f, 14.0f));
-	ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 6.0f);
-
-	if (ImGui::Begin("##toast", nullptr, flags))
+	for (size_t index = 0; index < mToasts.size(); )
 	{
-		// The engine's own face, with the radial running around it: what is spinning is the thing that is
-		// working, which is the whole idea Unreal's throbber is built on.
-		constexpr float32 kMark = 40.0f;
-		constexpr float32 kRing = 26.0f;
+		Toast& toast = mToasts[index];
+		const float32 age = now - toast.time;
 
-		const ImVec2 origin = ImGui::GetCursorScreenPos();
-		const ImVec2 center(origin.x + kMark * 0.5f, origin.y + kMark * 0.5f);
+		float32 alpha = ImMin(1.0f, age / kFade);
 
-		if (mToastLogo)
-			ImGui::GetWindowDrawList()->AddImage(
-				static_cast<ImTextureID>(mToastLogo->GetNativeHandle()),
-				ImVec2(center.x - kMark * 0.5f, center.y - kMark * 0.5f),
-				ImVec2(center.x + kMark * 0.5f, center.y + kMark * 0.5f),
-				ImVec2(0.0f, 1.0f), ImVec2(1.0f, 0.0f),   // The image is bottom-up, as OpenGL loaded it.
-				IM_COL32(255, 255, 255, static_cast<int32>(255 * alpha)));
-
-		if (mToastBusy)
+		if (!toast.busy)
 		{
-			// An arc running around the circle, drawn rather than animated frame by frame: where it is, is
-			// a function of the clock, so it costs one arc and no state at all.
-			const float32 start = static_cast<float32>(ImGui::GetTime()) * 3.5f;
+			if (age > kLifetime)
+			{
+				mToasts.erase(mToasts.begin() + index);
+				continue;
+			}
 
-			ImDrawList* drawList = ImGui::GetWindowDrawList();
-			drawList->PathArcTo(center, kRing, start, start + IM_PI * 1.3f, 32);
-			drawList->PathStroke(IM_COL32(232, 122, 42, static_cast<int32>(255 * alpha)), ImDrawFlags_None, 3.0f);
+			alpha = ImMin(alpha, (kLifetime - age) / kFade);
 		}
 
-		// The mark keeps a square of its own — the ring reaches past it, so the room is the ring's.
-		ImGui::Dummy(ImVec2(kRing * 2.0f, kRing * 2.0f));
-		ImGui::SameLine(0.0f, 12.0f);
+		// It comes in from the right, off the edge it settles against: a card that fades in where it lands
+		// looks like it was always there and you missed it, and the eye follows a thing that moves.
+		const float32 travel = (1.0f - ImMin(1.0f, age / kFade)) * kSlide;
 
-		// The message sits on the middle of that square, not on its top.
-		const float32 text = ImGui::GetTextLineHeight();
-		ImGui::SetCursorPosY(ImGui::GetCursorPosY() + (kRing * 2.0f - text) * 0.5f);
-		ImGui::TextUnformatted(mToastMessage.c_str());
+		const ImVec2 corner(
+			viewport->WorkPos.x + viewport->WorkSize.x - 16.0f + travel,
+			viewport->WorkPos.y + viewport->WorkSize.y - 16.0f - slot * (kHeight + kGap));
+
+		ImGui::SetNextWindowPos(corner, ImGuiCond_Always, ImVec2(1.0f, 1.0f));
+		ImGui::SetNextWindowSize(ImVec2(kWidth, kHeight));
+		ImGui::SetNextWindowBgAlpha(0.95f * alpha);
+
+		constexpr ImGuiWindowFlags flags =
+			ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing |
+			ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoScrollbar;
+
+		ImGui::PushStyleVar(ImGuiStyleVar_Alpha, alpha);
+		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(14.0f, 0.0f));
+		ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 6.0f);
+
+		// A window is identified by its name, and only by its name — pushing an id around it changes
+		// nothing. Two toasts sharing one name are one window that gets drawn twice, and only the last of
+		// them is ever seen.
+		char8 name[24];
+		std::snprintf(name, sizeof(name), "##toast%u", toast.id);
+
+		if (ImGui::Begin(name, nullptr, flags))
+		{
+			// The engine's own face, with the radial running around it: what is spinning is the thing that
+			// is working, which is the idea Unreal's throbber is built on.
+			constexpr float32 kMark = 34.0f;
+			constexpr float32 kRing = 22.0f;
+
+			const ImVec2 windowMin = ImGui::GetWindowPos();
+			const ImVec2 center(windowMin.x + 14.0f + kRing, windowMin.y + kHeight * 0.5f);
+
+			ImDrawList* drawList = ImGui::GetWindowDrawList();
+
+			if (mLogo)
+				drawList->AddImage(
+					static_cast<ImTextureID>(mLogo->GetNativeHandle()),
+					ImVec2(center.x - kMark * 0.5f, center.y - kMark * 0.5f),
+					ImVec2(center.x + kMark * 0.5f, center.y + kMark * 0.5f),
+					ImVec2(0.0f, 1.0f), ImVec2(1.0f, 0.0f),
+					IM_COL32(255, 255, 255, static_cast<int32>(255 * alpha)));
+
+			if (toast.busy)
+			{
+				// An arc running around the circle, drawn rather than animated frame by frame: where it is,
+				// is a function of the clock, so it costs one arc and no state at all.
+				const float32 start = now * 3.5f;
+
+				drawList->PathArcTo(center, kRing, start, start + IM_PI * 1.3f, 32);
+				drawList->PathStroke(IM_COL32(232, 122, 42, static_cast<int32>(255 * alpha)), ImDrawFlags_None, 3.0f);
+			}
+
+			// The message sits on the middle of the card, beside the mark and inside the ring's room.
+			const float32 textLeft = 14.0f + kRing * 2.0f + 14.0f;
+
+			ImGui::SetCursorPos(ImVec2(textLeft, (kHeight - ImGui::GetTextLineHeight()) * 0.5f));
+			ImGui::PushTextWrapPos(kWidth - 14.0f);
+			ImGui::TextUnformatted(toast.message.c_str());
+			ImGui::PopTextWrapPos();
+		}
+
+		ImGui::End();
+		ImGui::PopStyleVar(3);
+
+		slot++;
+		index++;
 	}
-
-	ImGui::End();
-	ImGui::PopStyleVar(3);
 }
 
 void EditorLayer::DrawStatistics()
@@ -2641,19 +2678,8 @@ void EditorLayer::DrawHierarchy()
 	ImGui::SetNextItemWidth(-1.0f);
 	ImGui::InputTextWithHint("##search", "Search...", mHierarchyFilter, IM_ARRAYSIZE(mHierarchyFilter));
 
-	// The scene these entities are in. Untitled until it has been saved, which is the honest name for a
-	// scene that exists nowhere but here.
-	const std::string sceneName = mScenePath.empty()
-		? std::string("Untitled")
-		: std::filesystem::path(mScenePath).filename().generic_string();
-
-	ImGui::TextDisabled("%s", sceneName.c_str());
-
-	if (!mScenePath.empty() && ImGui::IsItemHovered())
-		ImGui::SetTooltip("%s", mScenePath.c_str());
-
-	// No rule above the header: the header is one. A line and a bar drawn against each other are two
-	// dividers where the eye only needed the one it can read.
+	// The scene these entities are in is named in the title bar, where what is open belongs. It was named
+	// here as well, which is a panel answering a question about the window.
 
 	// Children are stored as raw pointers; this maps them back to the scene's owning references.
 	mEntityLookup.clear();
@@ -3786,24 +3812,9 @@ void EditorLayer::DrawStatusBar()
 
 	if (ImGui::BeginMenuBar())
 	{
-		// What is open, on the left, the way an IDE says it. The name is the project's folder; the path
-		// is what a tooltip is for, because it is what you go looking for and never what you read.
-		const std::filesystem::path root = ProjectRootDirectory();
-
-		if (root.empty())
-		{
-			ImGui::TextDisabled("No project");
-		}
-		else
-		{
-			ImGui::TextUnformatted(root.filename().generic_string().c_str());
-
-			if (ImGui::IsItemHovered())
-				ImGui::SetTooltip("%s", root.generic_string().c_str());
-		}
-
-		// And which version it is, on the right, with room to breathe: text against the edge of the screen
-		// reads as clipped. The bar has space for more; this is what it starts with.
+		// What is open moved to the title bar, where what the window has open belongs. What is left is the
+		// version, on the right, with room to breathe: text against the edge of the screen reads as clipped.
+		// The bar has space for more; this is what it starts with.
 		constexpr float32 kEdge = 8.0f;
 		const float32 versionWidth = ImGui::CalcTextSize(kVersion).x;
 
@@ -3818,11 +3829,14 @@ void EditorLayer::DrawStatusBar()
 
 void EditorLayer::DrawTitleBar()
 {
-	// The window has no caption of its own, so this is it: the engine's mark on the left, the menus beside
-	// it, and the window's own buttons on the right. It is two rows tall, which is what makes room for a
-	// mark you can actually see — the way Unreal and Hazel wear theirs.
-	// A side bar, like the status bar: it comes out of the viewport's work area, so the dockspace below it
-	// starts where it ends and no panel has to know it is there.
+	// The window has no caption of its own, so this is it, and it is two rows tall.
+	//
+	// The top row is the window's: the menus and the buttons that minimise, maximise and close it — the
+	// things a caption is *for*, kept where a caption keeps them. The bottom row is the editor's: what is
+	// open, which is the question the title used to answer badly.
+	//
+	// It is a side bar, like the status bar, so it comes out of the viewport's work area and the dockspace
+	// below it starts where it ends.
 	ImGuiViewport* viewport = ImGui::GetMainViewport();
 
 	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
@@ -3842,34 +3856,58 @@ void EditorLayer::DrawTitleBar()
 	}
 
 	const ImVec2 barMin = ImGui::GetWindowPos();
-	ImDrawList* drawList = ImGui::GetWindowDrawList();
-
 	const float32 barWidth = ImGui::GetWindowWidth();
+	const float32 row = kTitleBarHeight * 0.5f;
+
+	ImDrawList* drawList = ImGui::GetWindowDrawList();
 
 	drawList->AddRectFilled(barMin, ImVec2(barMin.x + barWidth, barMin.y + kTitleBarHeight),
 		ImGui::GetColorU32(ImGuiCol_MenuBarBg));
 
-	// The mark: two rows tall, which is the whole point of the bar being two rows tall.
+	// The mark spans both rows, which is the whole reason there are two of them.
 	constexpr float32 kMark = 34.0f;
-	constexpr float32 kMarkLeft = 10.0f;
+	constexpr float32 kMarkLeft = 12.0f;
 
-	if (mToastLogo)
+	if (mLogo)
 		drawList->AddImage(
-			static_cast<ImTextureID>(mToastLogo->GetNativeHandle()),
+			static_cast<ImTextureID>(mLogo->GetNativeHandle()),
 			ImVec2(barMin.x + kMarkLeft, barMin.y + (kTitleBarHeight - kMark) * 0.5f),
 			ImVec2(barMin.x + kMarkLeft + kMark, barMin.y + (kTitleBarHeight + kMark) * 0.5f),
 			ImVec2(0.0f, 1.0f), ImVec2(1.0f, 0.0f));   // Bottom-up, as OpenGL loaded it.
 
-	// The menus, in a bar that begins where the mark ends. ImGui's own menu bar always sits at the top
-	// edge of its window, which is not where this one goes.
-	const float32 menuLeft = kMarkLeft + kMark + 12.0f;
+	const float32 contentLeft = kMarkLeft + kMark + 14.0f;
 	const float32 menuHeight = ImGui::GetFrameHeight();
 
+	// --- Top row: the menus, and the window's own buttons at the far end.
 	DrawMenuBar(
-		ImVec2(barMin.x + menuLeft, barMin.y + (kTitleBarHeight - menuHeight) * 0.5f),
-		ImVec2(barMin.x + barWidth, barMin.y + (kTitleBarHeight + menuHeight) * 0.5f));
+		ImVec2(barMin.x + contentLeft, barMin.y + (row - menuHeight) * 0.5f),
+		ImVec2(barMin.x + barWidth, barMin.y + (row + menuHeight) * 0.5f));
 
-	DrawWindowButtons(barMin, barWidth);
+	DrawWindowButtons(barMin, barWidth, row);
+
+	// --- Bottom row: the project, and the scene open in it. They used to be scattered — the scene named in
+	// the Hierarchy, the project down in the status bar — and neither is a property of the panel it sat in.
+	// They are what this window has open, and this is the window's own bar.
+	const std::filesystem::path project = ProjectRootDirectory();
+	const std::string projectName = project.empty() ? std::string("No project") : project.filename().generic_string();
+
+	const std::string sceneName = mScenePath.empty()
+		? std::string("Untitled")
+		: std::filesystem::path(mScenePath).stem().generic_string();
+
+	ImGui::SetCursorPos(ImVec2(contentLeft, row + (row - ImGui::GetTextLineHeight()) * 0.5f));
+	ImGui::TextDisabled("%s", projectName.c_str());
+
+	if (!project.empty() && ImGui::IsItemHovered())
+		ImGui::SetTooltip("%s", project.generic_string().c_str());
+
+	ImGui::SameLine(0.0f, 8.0f);
+	ImGui::TextDisabled("|");
+	ImGui::SameLine(0.0f, 8.0f);
+	ImGui::TextUnformatted(sceneName.c_str());
+
+	if (!mScenePath.empty() && ImGui::IsItemHovered())
+		ImGui::SetTooltip("%s", mScenePath.c_str());
 
 	// What is left of the bar is what the window is dragged by; what the editor drew in it is not. A drag
 	// that began on a menu would open nothing and move everything.
@@ -3879,7 +3917,7 @@ void EditorLayer::DrawTitleBar()
 	ImGui::End();
 }
 
-void EditorLayer::DrawWindowButtons(const ImVec2& barMin, float32 barWidth)
+void EditorLayer::DrawWindowButtons(const ImVec2& barMin, float32 barWidth, float32 rowHeight)
 {
 	// Minimise, maximise and close, drawn the way the rest of the editor's glyphs are: the font carries
 	// none of them, and neither does the window anymore.
@@ -3895,16 +3933,16 @@ void EditorLayer::DrawWindowButtons(const ImVec2& barMin, float32 barWidth)
 		ImGui::PushID(kind);
 		ImGui::SetCursorScreenPos(ImVec2(left, barMin.y));
 
-		const bool pressed = ImGui::InvisibleButton("##button", ImVec2(kButton, kTitleBarHeight));
+		const bool pressed = ImGui::InvisibleButton("##button", ImVec2(kButton, rowHeight));
 		const bool hovered = ImGui::IsItemHovered();
 
 		ImGui::PopID();
 
 		if (hovered)
-			drawList->AddRectFilled(ImVec2(left, barMin.y), ImVec2(left + kButton, barMin.y + kTitleBarHeight),
+			drawList->AddRectFilled(ImVec2(left, barMin.y), ImVec2(left + kButton, barMin.y + rowHeight),
 				(kind == 2) ? IM_COL32(196, 43, 28, 255) : IM_COL32(255, 255, 255, 22));
 
-		const ImVec2 center(left + kButton * 0.5f, barMin.y + kTitleBarHeight * 0.5f);
+		const ImVec2 center(left + kButton * 0.5f, barMin.y + rowHeight * 0.5f);
 		const ImU32 color = ImGui::GetColorU32(ImGuiCol_Text);
 
 		switch (kind)
@@ -4339,7 +4377,7 @@ void EditorLayer::CompileGameModule()
 		" -p:Platform=x64 -v:minimal -nologo";
 
 	Log::Console(LogLevel::Information, "[Editor] Compiling the game module...");
-	SetToast("Compiling the game module", true);
+	PushToast("Compiling the game module", true);
 
 	mBuilding = true;
 	mGameBuild = std::async(std::launch::async, [generate, build]
@@ -4388,7 +4426,8 @@ void EditorLayer::PollGameBuild()
 	if (result.exitCode != 0)
 	{
 		Log::Console(LogLevel::Error, "[Editor] The game module failed to compile; the loaded one is unchanged.");
-		SetToast("The game module failed to compile", false);
+		DismissBusyToasts();
+		PushToast("The game module failed to compile", false);
 		return;
 	}
 
@@ -4435,7 +4474,8 @@ void EditorLayer::ReloadGameModule()
 	if (loaded)
 	{
 		Log::Console(LogLevel::Success, "[Editor] Reloaded the game module.");
-		SetToast("Reloaded the game module", false);
+		DismissBusyToasts();
+		PushToast("Reloaded the game module", false);
 	}
 }
 

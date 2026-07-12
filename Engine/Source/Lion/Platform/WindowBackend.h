@@ -15,6 +15,11 @@ namespace Lion
 		uint32 width = 0;
 		uint32 height = 0;
 		std::function<void(Event&)> eventCallback;
+
+		// Called when the window has to redraw itself outside the application's own loop — which is every
+		// frame of a resize, because Windows runs that loop and does not give the thread back until it is
+		// over.
+		std::function<void()> refreshCallback;
 		bool resizable = true;
 		bool maximized = false;
 

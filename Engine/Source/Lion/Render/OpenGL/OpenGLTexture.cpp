@@ -13,10 +13,15 @@ namespace Lion
 		return OpenGLTexture::sAllocationCount;
 	}
 
-	OpenGLTexture::OpenGLTexture(const std::string& filePath)
-		: mFilterMin(GL_NEAREST),
-		mFilterMag(GL_NEAREST)
+	OpenGLTexture::OpenGLTexture(const std::string& filePath, TextureFilter filter)
 	{
+		// A scaled picture asks for the whole mipmap chain on the way down and interpolation on the way up.
+		// A sprite asks for neither: one texel, one pixel, and nothing in between it did not draw.
+		const bool linear = (filter == TextureFilter::Linear);
+
+		mFilterMin = linear ? GL_LINEAR_MIPMAP_LINEAR : GL_NEAREST;
+		mFilterMag = linear ? GL_LINEAR : GL_NEAREST;
+
 		// Images are stored top-down; flip them to match OpenGL's bottom-up convention.
 		stbi_set_flip_vertically_on_load(true);
 

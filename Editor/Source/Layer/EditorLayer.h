@@ -139,13 +139,22 @@ private:
 	ImVec2 mViewportImageMin{ 0.0f, 0.0f };
 	ImVec2 mViewportImageMax{ 0.0f, 0.0f };
 
-	// The toast: one message at a time, in the corner. 'busy' spins and stays; anything else fades out.
-	// The engine's mark is loaded once and lives as long as the editor does — it is the same picture in
-	// every toast there will ever be.
-	Lion::Reference<Lion::Texture> mToastLogo;
-	std::string mToastMessage;
-	float mToastTime = 0.0f;
-	bool mToastBusy = false;
+	// The engine's mark. Loaded once and scaled everywhere it is drawn — the title bar, the toasts — so it
+	// is loaded as a picture and not as a sprite: nearest-neighbour is how a scaled logo turns to gravel.
+	Lion::Reference<Lion::Texture> mLogo;
+
+	// The toasts, oldest first. A 'busy' one spins and stays until what it is waiting on answers; the
+	// answer is a toast of its own, stacked above whatever is still on screen rather than in place of it.
+	struct Toast
+	{
+		std::string message;
+		float time = 0.0f;
+		bool busy = false;
+		unsigned int id = 0;   // Its window's name is built from this: ImGui identifies a window by its name.
+	};
+
+	std::vector<Toast> mToasts;
+	unsigned int mNextToastId = 1;
 
 	// A panel reports its size while a split is being dragged, and only then. The sizes are kept from the
 	// last frame so a change can be noticed at all.
@@ -191,7 +200,7 @@ private:
 
 	void DrawTitleBar();
 	void DrawMenuBar(const ImVec2& barMin, const ImVec2& barMax);
-	void DrawWindowButtons(const ImVec2& barMin, Lion::float32 barWidth);
+	void DrawWindowButtons(const ImVec2& barMin, Lion::float32 barWidth, Lion::float32 rowHeight);
 	void DrawStatusBar();   // The bar along the bottom: what is open, and which engine has it open.
 	void DrawViewport();
 	void DrawColliderOverlays(const ImVec2& imageMin, const ImVec2& imageSize);
@@ -215,7 +224,8 @@ private:
 	void DrawPlayModeDim();        // Everything but the game goes dark while the game is running.
 	void DrawPanelSizeOverlay();   // A panel's size, in pixels, while it is being resized.
 	void DrawToast();              // What the editor is doing that takes long enough to say so.
-	void SetToast(const std::string& message, bool busy);
+	void PushToast(const std::string& message, bool busy);
+	void DismissBusyToasts();      // What was being waited on has answered.
 
 	void BuildDefaultLayout(unsigned int dockspaceId);
 

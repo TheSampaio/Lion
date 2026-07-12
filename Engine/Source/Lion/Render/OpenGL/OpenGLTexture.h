@@ -8,7 +8,7 @@ namespace Lion
 	class OpenGLTexture : public Texture
 	{
 	public:
-		explicit OpenGLTexture(const std::string& filePath);
+		explicit OpenGLTexture(const std::string& filePath, TextureFilter filter = TextureFilter::Nearest);
 		~OpenGLTexture() override;
 
 		Size GetSize() const override { return mSize; }

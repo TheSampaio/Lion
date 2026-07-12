@@ -33,6 +33,16 @@ namespace Lion
 
 		void Initialize();
 
+		// One turn of the loop: update, render, present.
+		//
+		// It is also what the window calls back into while the user is dragging its edge. Windows runs a
+		// loop of its own for that and does not give the application its thread back until the drag ends,
+		// so a frame drawn only from Run() is a frame that is not drawn at all for as long as the resize
+		// lasts — which is why the window went white.
+		void Frame();
+
+		bool mInFrame = false;   // A frame drawn from inside a frame would be two frames at once.
+
 #ifndef LN_SHIPPING
 		friend int ::main(int argc, const char* argv[]);
 #else

@@ -4,6 +4,17 @@
 
 namespace Lion
 {
+	// How a texture is sampled when it is not drawn at its own size.
+	//
+	// A sprite is drawn one texel to one pixel and wants none of it — smoothing pixel art is how pixel art
+	// stops being pixel art. A picture that is scaled to fit something (an icon in a toolbar, a mark in a
+	// title bar) wants all of it, or it arrives at its new size in ruins.
+	enum class TextureFilter
+	{
+		Nearest,
+		Linear,
+	};
+
 	// 2D texture abstraction, decoupled from the underlying graphics backend.
 	class Texture
 	{
@@ -24,7 +35,7 @@ namespace Lion
 		virtual uint32 GetNativeHandle() const = 0;
 
 		// Loads a texture from an image file for the selected backend.
-		static LION_API Reference<Texture> Create(const std::string& filePath);
+		static LION_API Reference<Texture> Create(const std::string& filePath, TextureFilter filter = TextureFilter::Nearest);
 
 		// How many textures are alive right now. It used to be a line in the console every time one was
 		// created or destroyed, which is a number pretending to be news: a count belongs on a panel that

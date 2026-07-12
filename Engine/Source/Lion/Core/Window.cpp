@@ -61,6 +61,11 @@ namespace Lion
         sInstance->mBackgroundColor = { red, green, blue };
     }
 
+    void Window::SetRefreshCallback(const std::function<void()>& callback)
+    {
+        sInstance->mData.refreshCallback = callback;
+    }
+
     void Window::SetDarkTitleBar(bool enable)
     {
         sInstance->mData.darkTitleBar = enable;

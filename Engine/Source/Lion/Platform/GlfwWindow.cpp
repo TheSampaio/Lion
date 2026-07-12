@@ -42,6 +42,16 @@ namespace Lion
 			DwmSetWindowAttribute(glfwGetWin32Window(window), kUseImmersiveDarkMode, &dark, sizeof(dark));
 		}
 
+		// A window that draws its own caption still has corners, and on Windows 11 the corners are round.
+		// Taking the caption away is not a reason for the window to stop looking like a window.
+		void UseRoundedCorners(GLFWwindow* window)
+		{
+			constexpr DWORD kCornerPreference = 33;
+			constexpr DWORD kRound = 2;
+
+			DwmSetWindowAttribute(glfwGetWin32Window(window), kCornerPreference, &kRound, sizeof(kRound));
+		}
+
 		// A caption the application draws itself.
 		//
 		// The window keeps its frame — that is what resizing, snapping and the aero shortcuts hang off —
@@ -57,6 +67,12 @@ namespace Lion
 		{
 			return GetSystemMetrics(SM_CXFRAME) + GetSystemMetrics(SM_CXPADDEDBORDER);
 		}
+
+		// What the cursor has to be within to be resizing rather than clicking. The frame Windows reports is
+		// what it *reserves*, not what a hand can hit — the real one is invisible now, and a border you have
+		// to find is a border that is not there. A corner is given more, because two edges meet in it.
+		constexpr int32 kGrabBorder = 8;
+		constexpr int32 kGrabCorner = 16;
 
 		LRESULT CALLBACK CustomChromeProc(HWND window, UINT message, WPARAM wParam, LPARAM lParam)
 		{
@@ -99,19 +115,22 @@ namespace Lion
 
 					if (!maximized && sChrome && sChrome->resizable)
 					{
-						const bool left = cursor.x < bounds.left + border;
-						const bool right = cursor.x >= bounds.right - border;
-						const bool top = cursor.y < bounds.top + border;
-						const bool bottom = cursor.y >= bounds.bottom - border;
+						// The corners are tested against the wider band, and first: a cursor in the corner is
+						// within both edges, and the diagonal is the one it means.
+						const bool leftCorner = cursor.x < bounds.left + kGrabCorner;
+						const bool rightCorner = cursor.x >= bounds.right - kGrabCorner;
+						const bool topCorner = cursor.y < bounds.top + kGrabCorner;
+						const bool bottomCorner = cursor.y >= bounds.bottom - kGrabCorner;
 
-						if (top && left)     return HTTOPLEFT;
-						if (top && right)    return HTTOPRIGHT;
-						if (bottom && left)  return HTBOTTOMLEFT;
-						if (bottom && right) return HTBOTTOMRIGHT;
-						if (left)            return HTLEFT;
-						if (right)           return HTRIGHT;
-						if (top)             return HTTOP;
-						if (bottom)          return HTBOTTOM;
+						if (topCorner && leftCorner)     return HTTOPLEFT;
+						if (topCorner && rightCorner)    return HTTOPRIGHT;
+						if (bottomCorner && leftCorner)  return HTBOTTOMLEFT;
+						if (bottomCorner && rightCorner) return HTBOTTOMRIGHT;
+
+						if (cursor.x < bounds.left + kGrabBorder)    return HTLEFT;
+						if (cursor.x >= bounds.right - kGrabBorder)  return HTRIGHT;
+						if (cursor.y < bounds.top + kGrabBorder)     return HTTOP;
+						if (cursor.y >= bounds.bottom - kGrabBorder) return HTBOTTOM;
 					}
 
 					POINT client = cursor;
@@ -193,7 +212,10 @@ namespace Lion
 			UseDarkTitleBar(mWindow);
 
 		if (mData->customTitleBar)
+		{
 			UseCustomTitleBar(mWindow, mData);
+			UseRoundedCorners(mWindow);
+		}
 #endif
 
 		glfwSetWindowUserPointer(mWindow, mData);
@@ -238,11 +260,26 @@ namespace Lion
 				data.width = static_cast<uint32>(width);
 				data.height = static_cast<uint32>(height);
 
-				if (!data.eventCallback)
-					return;
+				if (data.eventCallback)
+				{
+					EventWindowResize event(width, height);
+					data.eventCallback(event);
+				}
 
-				EventWindowResize event(width, height);
-				data.eventCallback(event);
+				// Windows keeps the thread for the whole of a resize drag and only lets go through here, so
+				// this is where a frame gets drawn while the edge is being pulled. Without it the window
+				// holds whatever it had when the drag began, or nothing at all.
+				if (data.refreshCallback)
+					data.refreshCallback();
+			});
+
+		// A window that was covered and is uncovered redraws for the same reason, through the same door.
+		glfwSetWindowRefreshCallback(mWindow, [](GLFWwindow* window)
+			{
+				WindowData& data = *static_cast<WindowData*>(glfwGetWindowUserPointer(window));
+
+				if (data.refreshCallback)
+					data.refreshCallback();
 			});
 
 		glfwSetKeyCallback(mWindow, [](GLFWwindow* window, int32 key, int32 scancode, int32 action, int32 mods)

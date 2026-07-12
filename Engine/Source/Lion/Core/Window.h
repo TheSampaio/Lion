@@ -44,6 +44,8 @@ namespace Lion
         // 'blocked' is set every frame while the cursor is over something clickable in the drawn caption:
         // the platform drags the window by the rest of it, and a drag that started on a menu would open
         // nothing and move everything.
+        static LION_API void SetRefreshCallback(const std::function<void()>& callback);
+
         static LION_API void SetDarkTitleBar(bool enable);
         static LION_API void SetCustomTitleBar(bool enable, float32 height);
         static LION_API void SetTitleBarBlocked(bool blocked);
