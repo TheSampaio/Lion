@@ -2417,11 +2417,11 @@ void EditorLayer::BuildDefaultLayout(unsigned int dockspaceId)
 	// inspectors on the right. Panel sizes are authored as round pixel counts rather than as
 	// free-floating ratios, so at the usual window sizes the layout lands on the same even grid as
 	// the rest of the UI.
-	constexpr float32 kLeftWidth        = 300.0f;  // Scene Hierarchy over Project.
-	constexpr float32 kRightWidth       = 400.0f;  // Statistics over Properties: the inspectors need the extra room.
-	constexpr float32 kConsoleHeight    = 256.0f;
-	constexpr float32 kProjectHeight    = 324.0f;
-	constexpr float32 kStatisticsHeight = 192.0f;
+	constexpr float32 kLeftWidth        = 287.0f;  // Scene Hierarchy over Project.
+	constexpr float32 kRightWidth       = 349.0f;  // Statistics over Properties: the inspectors need the extra room.
+	constexpr float32 kConsoleHeight    = 235.0f;
+	constexpr float32 kProjectHeight    = 305.0f;
+	constexpr float32 kStatisticsHeight = 191.0f;
 
 	const ImVec2 work = ImGui::GetMainViewport()->WorkSize;
 
