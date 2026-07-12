@@ -3968,6 +3968,14 @@ void EditorLayer::DrawTitleBar()
 	const float32 projectWidth = ImGui::CalcTextSize(projectName.c_str()).x;
 	const float32 projectLeft = barWidth - kWindowButton * 3.0f - kProjectGap - projectWidth;
 
+	// The project sits in a tab of its own, hanging from the top edge of the window: square where it meets the
+	// edge and round where it leaves it, which is what makes it read as hanging from the edge rather than
+	// floating in front of it.
+	drawList->AddRectFilled(
+		ImVec2(barMin.x + projectLeft - kProjectPadding, barMin.y),
+		ImVec2(barMin.x + projectLeft + projectWidth + kProjectPadding, barMin.y + row),
+		IM_COL32(0x30, 0x30, 0x33, 255), kProjectRounding, ImDrawFlags_RoundCornersBottom);
+
 	ImGui::SetCursorPos(ImVec2(projectLeft, (row - ImGui::GetTextLineHeight()) * 0.5f));
 	ImGui::TextUnformatted(projectName.c_str());
 
@@ -3981,6 +3989,8 @@ void EditorLayer::DrawTitleBar()
 		: std::filesystem::path(mScenePath).stem().generic_string();
 
 	ImGui::SetCursorPos(ImVec2(menusEnd - barMin.x + kSceneGap, row + (row - ImGui::GetTextLineHeight()) * 0.5f));
+	ImGui::TextDisabled("|");
+	ImGui::SameLine(0.0f, 8.0f);
 	ImGui::TextDisabled("%s", sceneName.c_str());
 
 	if (!mScenePath.empty() && ImGui::IsItemHovered())

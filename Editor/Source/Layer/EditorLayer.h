@@ -204,6 +204,11 @@ private:
 	static constexpr float kWindowButton = 46.0f;
 	static constexpr float kProjectGap = 128.0f;
 
+	// The tab the project's name sits in: how far its box reaches past the text, and how round it is where it
+	// leaves the window's top edge.
+	static constexpr float kProjectPadding = 14.0f;
+	static constexpr float kProjectRounding = 6.0f;
+
 	// How far after the last menu the scene's name begins on the row below.
 	static constexpr float kSceneGap = 64.0f;
 
