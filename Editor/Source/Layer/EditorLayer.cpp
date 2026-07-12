@@ -3952,8 +3952,36 @@ void EditorLayer::DrawWindowButtons(const ImVec2& barMin, float32 barWidth, floa
 				break;
 
 			case 1:
-				drawList->AddRect(ImVec2(center.x - kArm, center.y - kArm), ImVec2(center.x + kArm, center.y + kArm), color, 0.0f, 0, 1.0f);
+			{
+				// The button says what pressing it will do, and what it will do depends on where the window
+				// already is: one square makes it fill the screen, two say it will step back off it.
+				const bool maximized = Window::IsMaximized();
+				const float32 offset = maximized ? 2.0f : 0.0f;
+
+				if (maximized)
+					drawList->AddRect(
+						ImVec2(center.x - kArm + offset, center.y - kArm - offset),
+						ImVec2(center.x + kArm + offset, center.y + kArm - offset),
+						color, 0.0f, 0, 1.0f);
+
+				// The front square is filled with what is behind it, so the one behind it stops where it
+				// should. That is the bar, plus the highlight the bar has while the button is hovered —
+				// painting the bar's colour alone would punch a hole in the highlight.
+				const ImVec2 frontMin(center.x - kArm - offset, center.y - kArm + offset);
+				const ImVec2 frontMax(center.x + kArm - offset, center.y + kArm + offset);
+
+				if (maximized)
+				{
+					drawList->AddRectFilled(frontMin, frontMax, ImGui::GetColorU32(ImGuiCol_MenuBarBg));
+
+					if (hovered)
+						drawList->AddRectFilled(frontMin, frontMax, IM_COL32(255, 255, 255, 22));
+				}
+
+				drawList->AddRect(frontMin, frontMax, color, 0.0f, 0, 1.0f);
+
 				break;
+			}
 
 			case 2:
 				drawList->AddLine(ImVec2(center.x - kArm, center.y - kArm), ImVec2(center.x + kArm, center.y + kArm), color, 1.2f);
