@@ -4263,11 +4263,11 @@ void EditorLayer::BuildDefaultLayout(unsigned int dockspaceId)
 	// inspectors on the right. Panel sizes are authored as round pixel counts rather than as
 	// free-floating ratios, so at the usual window sizes the layout lands on the same even grid as
 	// the rest of the UI.
-	constexpr float32 kLeftWidth        = 287.0f;  // Scene Hierarchy over Project.
-	constexpr float32 kRightWidth       = 349.0f;  // Statistics over Properties: the inspectors need the extra room.
-	constexpr float32 kConsoleHeight    = 235.0f;
-	constexpr float32 kProjectHeight    = 305.0f;
-	constexpr float32 kStatisticsHeight = 191.0f;
+	constexpr float32 kLeftWidth           = 264.0f;  // Scene Hierarchy over the Content Browser.
+	constexpr float32 kRightWidth          = 372.0f;  // Statistics over Properties: the inspectors need the extra room.
+	constexpr float32 kConsoleHeight       = 206.0f;
+	constexpr float32 kContentBrowserHeight = 274.0f;
+	constexpr float32 kStatisticsHeight    = 226.0f;
 
 	const ImVec2 work = ImGui::GetMainViewport()->WorkSize;
 	const float32 separator = ImGui::GetStyle().DockingSeparatorSize;
@@ -4291,7 +4291,7 @@ void EditorLayer::BuildDefaultLayout(unsigned int dockspaceId)
 	ImGuiID left  = ImGui::DockBuilderSplitNode(center, ImGuiDir_Left, ratio(kLeftWidth, work.x - kRightWidth - separator), nullptr, &center);
 
 	const ImGuiID bottom     = ImGui::DockBuilderSplitNode(center, ImGuiDir_Down, ratio(kConsoleHeight, work.y), nullptr, &center);
-	const ImGuiID leftBottom = ImGui::DockBuilderSplitNode(left, ImGuiDir_Down, ratio(kProjectHeight, work.y), nullptr, &left);
+	const ImGuiID leftBottom = ImGui::DockBuilderSplitNode(left, ImGuiDir_Down, ratio(kContentBrowserHeight, work.y), nullptr, &left);
 	const ImGuiID rightTop   = ImGui::DockBuilderSplitNode(right, ImGuiDir_Up, ratio(kStatisticsHeight, work.y), nullptr, &right);
 
 	ImGui::DockBuilderDockWindow("Scene Hierarchy", left);
