@@ -37,6 +37,11 @@ void EditorLayer::OnAttach()
 	Window::SetBackgroundColor(0.10f, 0.10f, 0.11f);
 	Window::SetResizable(true);
 	Window::SetMaximized(true);
+
+	// The editor draws its own caption, so it asks for the strip Windows would have drawn one into. A game
+	// asks for neither of these: its window should look like every other window on the machine.
+	Window::SetDarkTitleBar(true);
+	Window::SetCustomTitleBar(true, kTitleBarHeight);
 }
 
 void EditorLayer::OnCreate()
@@ -266,7 +271,7 @@ void EditorLayer::DrawUI()
 		ImGui::SetWindowFocus("Viewport");
 	}
 
-	DrawMenuBar();
+	DrawTitleBar();
 	DrawStatusBar();
 	HandleShortcuts();
 
@@ -450,9 +455,13 @@ void EditorLayer::DrawToast()
 		alpha = ImMin(alpha, (kLifetime - age) / kFade);
 	}
 
+	// It comes in from the right, off the edge it will sit against — a card that fades in where it lands
+	// looks like it was always there and you missed it, and the eye follows a thing that moves.
+	const float32 travel = (1.0f - ImMin(1.0f, age / kFade)) * 120.0f;
+
 	const ImGuiViewport* viewport = ImGui::GetMainViewport();
 	const ImVec2 corner(
-		viewport->WorkPos.x + viewport->WorkSize.x - 16.0f,
+		viewport->WorkPos.x + viewport->WorkSize.x - 16.0f + travel,
 		viewport->WorkPos.y + viewport->WorkSize.y - 16.0f);
 
 	ImGui::SetNextWindowPos(corner, ImGuiCond_Always, ImVec2(1.0f, 1.0f));
@@ -1133,6 +1142,56 @@ namespace
 				return true;
 
 		return false;
+	}
+
+	// A menu bar in a rectangle of the caller's choosing.
+	//
+	// ImGui's own menu bar can only be a window's top edge, and this one has to begin after a logo and sit
+	// in the middle of a bar two rows tall. The work is the same either way — a horizontal layout, its own
+	// clip rect and its own nav layer — so this is that work, aimed somewhere else.
+	bool BeginMenuBarAt(const ImVec2& barMin, const ImVec2& barMax)
+	{
+		ImGuiWindow* window = ImGui::GetCurrentWindow();
+
+		if (window->SkipItems)
+			return false;
+
+		ImGui::BeginGroup();
+		ImGui::PushID("##menubar");
+
+		ImRect bar(barMin, barMax);
+		bar.ClipWith(window->Rect());
+		ImGui::PushClipRect(bar.Min, bar.Max, false);
+
+		window->DC.CursorPos = window->DC.CursorMaxPos = barMin;
+		window->DC.LayoutType = ImGuiLayoutType_Horizontal;
+		window->DC.IsSameLine = false;
+		window->DC.NavLayerCurrent = ImGuiNavLayer_Menu;
+		window->DC.MenuBarAppending = true;
+
+		ImGui::AlignTextToFramePadding();
+		return true;
+	}
+
+	void EndMenuBarAt()
+	{
+		ImGuiWindow* window = ImGui::GetCurrentWindow();
+
+		if (window->SkipItems)
+			return;
+
+		ImGui::PopClipRect();
+		ImGui::PopID();
+
+		// The group must not turn into an item of its own: the bar is a place things are drawn in, not a
+		// thing that was drawn. ImGui's own EndMenuBar does exactly this.
+		ImGui::GetCurrentContext()->GroupStack.back().EmitItem = false;
+		ImGui::EndGroup();
+
+		window->DC.LayoutType = ImGuiLayoutType_Vertical;
+		window->DC.IsSameLine = false;
+		window->DC.NavLayerCurrent = ImGuiNavLayer_Main;
+		window->DC.MenuBarAppending = false;
 	}
 
 	// Windows' rule: a thing that arrives where its name is taken gets a number, and a second one gets
@@ -3757,11 +3816,130 @@ void EditorLayer::DrawStatusBar()
 	ImGui::End();
 }
 
-void EditorLayer::DrawMenuBar()
+void EditorLayer::DrawTitleBar()
+{
+	// The window has no caption of its own, so this is it: the engine's mark on the left, the menus beside
+	// it, and the window's own buttons on the right. It is two rows tall, which is what makes room for a
+	// mark you can actually see — the way Unreal and Hazel wear theirs.
+	// A side bar, like the status bar: it comes out of the viewport's work area, so the dockspace below it
+	// starts where it ends and no panel has to know it is there.
+	ImGuiViewport* viewport = ImGui::GetMainViewport();
+
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+
+	constexpr ImGuiWindowFlags flags =
+		ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse |
+		ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus;
+
+	const bool open = ImGui::BeginViewportSideBar("LionEditorTitleBar", viewport, ImGuiDir_Up, kTitleBarHeight, flags);
+	ImGui::PopStyleVar(2);
+
+	if (!open)
+	{
+		ImGui::End();
+		return;
+	}
+
+	const ImVec2 barMin = ImGui::GetWindowPos();
+	ImDrawList* drawList = ImGui::GetWindowDrawList();
+
+	const float32 barWidth = ImGui::GetWindowWidth();
+
+	drawList->AddRectFilled(barMin, ImVec2(barMin.x + barWidth, barMin.y + kTitleBarHeight),
+		ImGui::GetColorU32(ImGuiCol_MenuBarBg));
+
+	// The mark: two rows tall, which is the whole point of the bar being two rows tall.
+	constexpr float32 kMark = 34.0f;
+	constexpr float32 kMarkLeft = 10.0f;
+
+	if (mToastLogo)
+		drawList->AddImage(
+			static_cast<ImTextureID>(mToastLogo->GetNativeHandle()),
+			ImVec2(barMin.x + kMarkLeft, barMin.y + (kTitleBarHeight - kMark) * 0.5f),
+			ImVec2(barMin.x + kMarkLeft + kMark, barMin.y + (kTitleBarHeight + kMark) * 0.5f),
+			ImVec2(0.0f, 1.0f), ImVec2(1.0f, 0.0f));   // Bottom-up, as OpenGL loaded it.
+
+	// The menus, in a bar that begins where the mark ends. ImGui's own menu bar always sits at the top
+	// edge of its window, which is not where this one goes.
+	const float32 menuLeft = kMarkLeft + kMark + 12.0f;
+	const float32 menuHeight = ImGui::GetFrameHeight();
+
+	DrawMenuBar(
+		ImVec2(barMin.x + menuLeft, barMin.y + (kTitleBarHeight - menuHeight) * 0.5f),
+		ImVec2(barMin.x + barWidth, barMin.y + (kTitleBarHeight + menuHeight) * 0.5f));
+
+	DrawWindowButtons(barMin, barWidth);
+
+	// What is left of the bar is what the window is dragged by; what the editor drew in it is not. A drag
+	// that began on a menu would open nothing and move everything.
+	const bool overBar = ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows | ImGuiHoveredFlags_AllowWhenBlockedByPopup);
+	Window::SetTitleBarBlocked(!overBar || ImGui::IsAnyItemHovered());
+
+	ImGui::End();
+}
+
+void EditorLayer::DrawWindowButtons(const ImVec2& barMin, float32 barWidth)
+{
+	// Minimise, maximise and close, drawn the way the rest of the editor's glyphs are: the font carries
+	// none of them, and neither does the window anymore.
+	constexpr float32 kButton = 46.0f;
+	constexpr float32 kArm = 5.0f;
+
+	ImDrawList* drawList = ImGui::GetWindowDrawList();
+
+	for (int32 kind = 0; kind < 3; ++kind)
+	{
+		const float32 left = barMin.x + barWidth - kButton * (3 - kind);
+
+		ImGui::PushID(kind);
+		ImGui::SetCursorScreenPos(ImVec2(left, barMin.y));
+
+		const bool pressed = ImGui::InvisibleButton("##button", ImVec2(kButton, kTitleBarHeight));
+		const bool hovered = ImGui::IsItemHovered();
+
+		ImGui::PopID();
+
+		if (hovered)
+			drawList->AddRectFilled(ImVec2(left, barMin.y), ImVec2(left + kButton, barMin.y + kTitleBarHeight),
+				(kind == 2) ? IM_COL32(196, 43, 28, 255) : IM_COL32(255, 255, 255, 22));
+
+		const ImVec2 center(left + kButton * 0.5f, barMin.y + kTitleBarHeight * 0.5f);
+		const ImU32 color = ImGui::GetColorU32(ImGuiCol_Text);
+
+		switch (kind)
+		{
+			case 0:
+				drawList->AddLine(ImVec2(center.x - kArm, center.y), ImVec2(center.x + kArm, center.y), color, 1.0f);
+				break;
+
+			case 1:
+				drawList->AddRect(ImVec2(center.x - kArm, center.y - kArm), ImVec2(center.x + kArm, center.y + kArm), color, 0.0f, 0, 1.0f);
+				break;
+
+			case 2:
+				drawList->AddLine(ImVec2(center.x - kArm, center.y - kArm), ImVec2(center.x + kArm, center.y + kArm), color, 1.2f);
+				drawList->AddLine(ImVec2(center.x - kArm, center.y + kArm), ImVec2(center.x + kArm, center.y - kArm), color, 1.2f);
+				break;
+		}
+
+		if (!pressed)
+			continue;
+
+		switch (kind)
+		{
+			case 0: Window::Minimize();       break;
+			case 1: Window::ToggleMaximize(); break;
+			case 2: Window::RequestClose();   break;
+		}
+	}
+}
+
+void EditorLayer::DrawMenuBar(const ImVec2& barMin, const ImVec2& barMax)
 {
 	static const char8* sceneFilter = "Lion Scene (*.json)\0*.json\0";
 
-	if (ImGui::BeginMainMenuBar())
+	if (BeginMenuBarAt(barMin, barMax))
 	{
 		if (ImGui::BeginMenu("File"))
 		{
@@ -3876,7 +4054,7 @@ void EditorLayer::DrawMenuBar()
 
 		// A build says so in the toast, which is where it is said properly. It used to say so here as well,
 		// in yellow, which is one thing being reported twice.
-		ImGui::EndMainMenuBar();
+		EndMenuBarAt();
 	}
 }
 

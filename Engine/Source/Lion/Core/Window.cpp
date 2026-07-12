@@ -61,6 +61,37 @@ namespace Lion
         sInstance->mBackgroundColor = { red, green, blue };
     }
 
+    void Window::SetDarkTitleBar(bool enable)
+    {
+        sInstance->mData.darkTitleBar = enable;
+    }
+
+    void Window::SetCustomTitleBar(bool enable, float32 height)
+    {
+        sInstance->mData.customTitleBar = enable;
+        sInstance->mData.titleBarHeight = height;
+    }
+
+    void Window::SetTitleBarBlocked(bool blocked)
+    {
+        sInstance->mData.titleBarBlocked = blocked;
+    }
+
+    void Window::Minimize()
+    {
+        sInstance->mBackend->Minimize();
+    }
+
+    void Window::ToggleMaximize()
+    {
+        sInstance->mBackend->ToggleMaximize();
+    }
+
+    bool Window::IsMaximized()
+    {
+        return sInstance->mBackend->IsMaximized();
+    }
+
     void Window::SetIcon(const std::string& icon)
     {
         sInstance->mIconPath = icon;

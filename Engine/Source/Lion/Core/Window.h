@@ -34,6 +34,24 @@ namespace Lion
         // Sets the title-bar text without changing the stored base title (used for live stats).
         static LION_API void SetDisplayTitle(const std::string& title);
 
+        // The window's chrome, which only the editor has an opinion about.
+        //
+        // A game's window should look like every other window on the machine — that is what the user set
+        // the machine up to look like. The editor is the engine's own face, so it takes the dark caption
+        // and then takes the caption away and draws one: a title bar it draws is a title bar it can put
+        // its logo, its menus and its own buttons in.
+        //
+        // 'blocked' is set every frame while the cursor is over something clickable in the drawn caption:
+        // the platform drags the window by the rest of it, and a drag that started on a menu would open
+        // nothing and move everything.
+        static LION_API void SetDarkTitleBar(bool enable);
+        static LION_API void SetCustomTitleBar(bool enable, float32 height);
+        static LION_API void SetTitleBarBlocked(bool blocked);
+
+        static LION_API void Minimize();
+        static LION_API void ToggleMaximize();
+        static LION_API bool IsMaximized();
+
         // Immediate keyboard state, using engine key codes.
         static LION_API bool IsKeyPressed(int32 keyCode) { return sInstance->mBackend->IsKeyPressed(keyCode); }
         static LION_API bool IsKeyReleased(int32 keyCode) { return sInstance->mBackend->IsKeyReleased(keyCode); }

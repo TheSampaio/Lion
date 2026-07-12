@@ -28,6 +28,10 @@ namespace Lion
 		void SetResizable(bool enable) override;
 		void SetIcon(const std::string& filePath) override;
 
+		void Minimize() override;
+		void ToggleMaximize() override;
+		bool IsMaximized() const override;
+
 		bool IsKeyPressed(int32 keyCode) const override;
 		bool IsKeyReleased(int32 keyCode) const override;
 

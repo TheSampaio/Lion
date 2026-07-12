@@ -185,7 +185,13 @@ private:
 	void CreateDemoScene();
 	void RenderScene();
 	void DrawUI();
-	void DrawMenuBar();
+	// The editor draws its own caption: the engine's mark, the menus and the window's buttons. Two rows
+	// tall, which is what gives the mark room to be seen.
+	static constexpr float kTitleBarHeight = 52.0f;
+
+	void DrawTitleBar();
+	void DrawMenuBar(const ImVec2& barMin, const ImVec2& barMax);
+	void DrawWindowButtons(const ImVec2& barMin, Lion::float32 barWidth);
 	void DrawStatusBar();   // The bar along the bottom: what is open, and which engine has it open.
 	void DrawViewport();
 	void DrawColliderOverlays(const ImVec2& imageMin, const ImVec2& imageSize);
