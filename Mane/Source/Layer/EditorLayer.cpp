@@ -17,14 +17,15 @@
 
 using namespace Lion;
 
-// Numbered as they read on the default layout: down the left column, along the bottom, then down the
-// right one — so Alt+N traces the screen rather than an arbitrary list.
+// Ordered by how much they are reached for: what you pick, what you edit on it, where its assets come
+// from, what the engine has to say, and how it is doing. Alt+N follows this, so the numbers you use
+// most are the ones under your fingers.
 const EditorLayer::Panel EditorLayer::kPanels[5] = {
 	{ "Scene Hierarchy", &EditorLayer::mShowHierarchy,  ShortcutAction::ToggleHierarchy  },
+	{ "Properties",      &EditorLayer::mShowProperties, ShortcutAction::ToggleProperties },
 	{ "Project",         &EditorLayer::mShowProject,    ShortcutAction::ToggleProject    },
 	{ "Console",         &EditorLayer::mShowConsole,    ShortcutAction::ToggleConsole    },
 	{ "Statistics",      &EditorLayer::mShowStatistics, ShortcutAction::ToggleStatistics },
-	{ "Properties",      &EditorLayer::mShowProperties, ShortcutAction::ToggleProperties },
 };
 
 void EditorLayer::OnAttach()
@@ -829,10 +830,10 @@ void EditorLayer::DrawShortcuts()
 			{ ShortcutAction::CompileModule,   "Game",      "Compile the game module" },
 			{ ShortcutAction::ReloadModule,    "Game",      "Reload the game module" },
 			{ ShortcutAction::ToggleHierarchy,  "Panels",   "Show/hide Scene Hierarchy" },
+			{ ShortcutAction::ToggleProperties, "Panels",   "Show/hide Properties" },
 			{ ShortcutAction::ToggleProject,    "Panels",   "Show/hide Project" },
 			{ ShortcutAction::ToggleConsole,    "Panels",   "Show/hide Console" },
 			{ ShortcutAction::ToggleStatistics, "Panels",   "Show/hide Statistics" },
-			{ ShortcutAction::ToggleProperties, "Panels",   "Show/hide Properties" },
 		};
 
 		ImGui::TextDisabled("Click a shortcut to rebind it, then press a key (Esc to cancel).");
@@ -1032,12 +1033,12 @@ void EditorLayer::ResetShortcutsToDefault()
 	set(ShortcutAction::CompileModule, ImGuiKey_B, true, true);
 	set(ShortcutAction::ReloadModule, ImGuiKey_R, true, true);
 
-	// Alt+1..5, numbered as the panels read on the default layout (see kPanels).
+	// Alt+1..5, in the order the panels are listed (see kPanels).
 	set(ShortcutAction::ToggleHierarchy, ImGuiKey_1, false, false, true);
-	set(ShortcutAction::ToggleProject, ImGuiKey_2, false, false, true);
-	set(ShortcutAction::ToggleConsole, ImGuiKey_3, false, false, true);
-	set(ShortcutAction::ToggleStatistics, ImGuiKey_4, false, false, true);
-	set(ShortcutAction::ToggleProperties, ImGuiKey_5, false, false, true);
+	set(ShortcutAction::ToggleProperties, ImGuiKey_2, false, false, true);
+	set(ShortcutAction::ToggleProject, ImGuiKey_3, false, false, true);
+	set(ShortcutAction::ToggleConsole, ImGuiKey_4, false, false, true);
+	set(ShortcutAction::ToggleStatistics, ImGuiKey_5, false, false, true);
 }
 
 void EditorLayer::CreateFolder()
