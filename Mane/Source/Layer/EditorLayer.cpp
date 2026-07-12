@@ -241,6 +241,17 @@ void EditorLayer::RenderScene()
 void EditorLayer::DrawUI()
 {
 	ApplyPendingLayout();
+
+	// A window takes the focus on the frame it appears, so the panels drawn after the viewport steal it
+	// on the way in and the editor opens on whichever one happens to be submitted last. Claiming it back
+	// one frame later — once they have all appeared — starts the session on the scene, which is what the
+	// editor is for.
+	if (mFocusViewport)
+	{
+		mFocusViewport = false;
+		ImGui::SetWindowFocus("Viewport");
+	}
+
 	DrawMenuBar();
 	HandleShortcuts();
 
@@ -274,6 +285,7 @@ void EditorLayer::DrawUI()
 	if (!mLayoutInitialized)
 	{
 		mLayoutInitialized = true;
+		mFocusViewport = true;
 
 		if (ImGui::DockBuilderGetNode(mDockspaceId) == nullptr)
 			mLayoutRequest = LayoutRequest::Reset;

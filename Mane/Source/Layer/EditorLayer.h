@@ -55,6 +55,7 @@ private:
 
 	bool mShowShortcuts = false;
 	bool mLayoutInitialized = false;
+	bool mFocusViewport = false;   // Set at boot, consumed a frame later: focus cannot be claimed while the panels are still appearing.
 
 	// Panels the View menu can hide. The Viewport is not among them: hiding the thing being edited is
 	// not a view option. A panel closed with its own X flips the same flag, so the menu always agrees
