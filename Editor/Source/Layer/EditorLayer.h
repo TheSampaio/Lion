@@ -144,8 +144,13 @@ private:
 	// Serialized entity held by Ctrl+C, pasted by Ctrl+V.
 	std::string mEntityClipboard;
 
-	// Project panel: the folder currently being browsed, relative to the resource root.
+	// Content Browser: the folder currently being browsed, relative to the resource root, and the two
+	// things one can be in the middle of doing to what is in it.
 	std::string mProjectPath;
+	std::string mRenamingAsset;                // Relative path of the entry being renamed in place.
+	char mAssetRenameBuffer[128] = {};
+	bool mAssetRenameFocus = false;
+	std::string mAssetToDelete;                // Relative path awaiting the confirmation modal.
 
 	// Hierarchy tree state, applied after the tree is drawn (never mutate it mid-iteration).
 	std::unordered_map<Lion::Entity*, Lion::Reference<Lion::Entity>> mEntityLookup;
@@ -168,6 +173,14 @@ private:
 	void DrawProperties();
 	void DrawConsole();
 	void DrawProject();
+
+	// One row of the Content Browser — a folder or a file. Returns whether it was activated, which the
+	// caller reads as "enter this folder" when it was a double click.
+	bool DrawAssetEntry(const std::string& name, const std::string& assetPath, bool folder);
+
+	void CreateAssetFolder();
+	void RenameAsset(const std::string& assetPath, const std::string& name);
+	void DrawDeleteAssetPopup();   // Deleting a file is not an undo step, so it is a question first.
 	void DrawShortcuts();
 	void BuildDefaultLayout(unsigned int dockspaceId);
 

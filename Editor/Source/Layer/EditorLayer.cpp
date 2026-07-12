@@ -331,6 +331,7 @@ void EditorLayer::DrawUI()
 	DrawShortcuts();
 	DrawLayoutPopups();
 	DrawNewComponentPopup();
+	DrawDeleteAssetPopup();
 
 	// Commit any in-progress continuous edit (gizmo/slider drag) once the mouse is released.
 	if (mHasPending && ImGui::IsMouseReleased(ImGuiMouseButton_Left))
@@ -1010,8 +1011,57 @@ namespace
 		});
 	}
 
+	// What the engine ships into a project, and what a project cannot be edited into not having.
+	//
+	// The two folders are where an asset of a kind goes: deleting one is not editing a project, it is
+	// breaking it. Lit.glsl is the shader everything is drawn with. And Sprites/Geometries is sealed —
+	// the simple shapes the engine will put there to build with are the engine's, all the way down, so
+	// what is inside it is as protected as the folder around it.
+	constexpr const char8* kEngineAssets[] = { "Shaders", "Shaders/Lit.glsl", "Sprites", "Sprites/Geometries" };
+	constexpr const char8* kSealedAssetFolders[] = { "Sprites/Geometries" };
+
+	bool IsEngineAsset(const std::string& relative)
+	{
+		for (const char8* entry : kEngineAssets)
+			if (relative == entry)
+				return true;
+
+		for (const char8* folder : kSealedAssetFolders)
+			if (relative.rfind(std::string(folder) + "/", 0) == 0)
+				return true;
+
+		return false;
+	}
+
+	// A name the filesystem will take and the project can live with: no separators, and nothing that
+	// climbs out of the folder it was typed in.
+	bool IsValidAssetName(const std::string& name)
+	{
+		if (name.empty() || name == "." || name == "..")
+			return false;
+
+		return name.find_first_of("/\\:*?\"<>|") == std::string::npos;
+	}
+
+	// A folder that does not exist yet, numbered the way Windows numbers one.
+	std::filesystem::path UnusedFolderPath(const std::filesystem::path& parent)
+	{
+		std::error_code error;
+
+		if (!std::filesystem::exists(parent / "New Folder", error))
+			return parent / "New Folder";
+
+		for (int32 number = 1; ; ++number)
+		{
+			const std::filesystem::path candidate = parent / ("New Folder (" + std::to_string(number) + ")");
+
+			if (!std::filesystem::exists(candidate, error))
+				return candidate;
+		}
+	}
+
 	// Only asset-like files are listed; the resource root also holds the executable and its DLLs.
-	// A script is one of the game's files too, so it is listed like any other: the Project panel is
+	// A script is one of the game's files too, so it is listed like any other: the Content Browser is
 	// where a component is created, and hiding the result would be a strange way to end that flow.
 	bool IsAssetFile(const std::filesystem::path& path)
 	{
@@ -1087,13 +1137,12 @@ void EditorLayer::DrawProject()
 		if (mProjectPath.empty() && name == kDataDirectory)
 			continue;
 
-		ImGui::PushID(name.c_str());
-		ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.95f, 0.80f, 0.35f, 1.0f));
-		const bool activated = ImGui::Selectable(name.c_str(), false, ImGuiSelectableFlags_AllowDoubleClick);
-		ImGui::PopStyleColor();
+		const std::string assetPath = mProjectPath.empty() ? name : mProjectPath + "/" + name;
 
-		if (activated && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
-			enterDirectory = mProjectPath.empty() ? name : mProjectPath + "/" + name;
+		ImGui::PushID(name.c_str());
+
+		if (DrawAssetEntry(name, assetPath, true) && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
+			enterDirectory = assetPath;
 
 		ImGui::PopID();
 	}
@@ -1107,7 +1156,7 @@ void EditorLayer::DrawProject()
 		const std::string assetPath = mProjectPath.empty() ? name : mProjectPath + "/" + name;
 
 		ImGui::PushID(name.c_str());
-		ImGui::Selectable(name.c_str());
+		DrawAssetEntry(name, assetPath, false);
 
 		// Drag an asset onto a field that accepts it (e.g. the Sprite Renderer's texture).
 		if (ImGui::BeginDragDropSource())
@@ -1117,24 +1166,214 @@ void EditorLayer::DrawProject()
 			ImGui::EndDragDropSource();
 		}
 
-		if (ImGui::BeginPopupContextItem())
-		{
-			if (ImGui::MenuItem("Copy path"))
-				ImGui::SetClipboardText(assetPath.c_str());
+		ImGui::PopID();
+	}
 
-			ImGui::EndPopup();
+	// Right-clicking the empty space is about the folder being browsed, not about anything in it.
+	if (ImGui::BeginPopupContextWindow("ContentBrowserContext",
+		ImGuiPopupFlags_MouseButtonRight | ImGuiPopupFlags_NoOpenOverItems))
+	{
+		if (ImGui::MenuItem("New Folder"))
+			CreateAssetFolder();
+
+		// The component lands where you are standing: the popup opens with this folder already in it.
+		if (ImGui::MenuItem("New C++ Component..."))
+		{
+			const std::string folder = mProjectPath.empty() ? std::string("Scripts") : mProjectPath;
+			const size_t copied = folder.copy(mNewComponentFolder, sizeof(mNewComponentFolder) - 1);
+			mNewComponentFolder[copied] = '\0';
+			mOpenNewComponentPopup = true;
 		}
 
-		if (ImGui::IsItemHovered())
-			ImGui::SetTooltip("%s", assetPath.c_str());
-
-		ImGui::PopID();
+		ImGui::EndPopup();
 	}
 
 	if (!enterDirectory.empty())
 		mProjectPath = enterDirectory;
 
 	ImGui::End();
+}
+
+bool EditorLayer::DrawAssetEntry(const std::string& name, const std::string& assetPath, bool folder)
+{
+	const std::filesystem::path full = ProjectPanelDirectory() / assetPath;
+	const bool engineOwned = IsEngineAsset(assetPath);
+
+	// Renaming happens where the name is, so the row becomes the field.
+	if (mRenamingAsset == assetPath)
+	{
+		if (mAssetRenameFocus)
+		{
+			ImGui::SetKeyboardFocusHere();
+			mAssetRenameFocus = false;
+		}
+
+		ImGui::SetNextItemWidth(-1.0f);
+		const bool committed = ImGui::InputText("##rename", mAssetRenameBuffer, sizeof(mAssetRenameBuffer),
+			ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll);
+
+		if (committed || ImGui::IsItemDeactivated())
+		{
+			RenameAsset(assetPath, mAssetRenameBuffer);
+			mRenamingAsset.clear();
+		}
+
+		return false;
+	}
+
+	// A folder is tinted; what the engine owns is dimmed, and says so when asked.
+	if (folder)
+		ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.95f, 0.80f, 0.35f, 1.0f));
+	else if (engineOwned)
+		ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyle().Colors[ImGuiCol_TextDisabled]);
+
+	const bool activated = ImGui::Selectable(name.c_str(), false, ImGuiSelectableFlags_AllowDoubleClick);
+
+	if (folder || engineOwned)
+		ImGui::PopStyleColor();
+
+	if (ImGui::IsItemHovered())
+		ImGui::SetTooltip(engineOwned ? "%s\nShipped with the engine — it cannot be renamed or deleted." : "%s",
+			assetPath.c_str());
+
+	if (ImGui::BeginPopupContextItem())
+	{
+		if (ImGui::MenuItem("Copy path"))
+			ImGui::SetClipboardText(assetPath.c_str());
+
+		ImGui::Separator();
+
+		// What the engine ships is listed, browsed and used like anything else — it just cannot be taken
+		// away. The items are shown rather than hidden, because a menu that is missing the entry someone
+		// is looking for teaches them nothing.
+		ImGui::BeginDisabled(engineOwned);
+
+		if (ImGui::MenuItem("Rename"))
+		{
+			mRenamingAsset = assetPath;
+			mAssetRenameFocus = true;
+
+			const size_t copied = name.copy(mAssetRenameBuffer, sizeof(mAssetRenameBuffer) - 1);
+			mAssetRenameBuffer[copied] = '\0';
+		}
+
+		if (ImGui::MenuItem("Delete"))
+			mAssetToDelete = assetPath;
+
+		ImGui::EndDisabled();
+
+		if (engineOwned)
+			ImGui::TextDisabled("Shipped with the engine.");
+
+		ImGui::EndPopup();
+	}
+
+	return activated;
+}
+
+void EditorLayer::CreateAssetFolder()
+{
+	const std::filesystem::path parent = ProjectPanelDirectory() / mProjectPath;
+	const std::filesystem::path created = UnusedFolderPath(parent);
+
+	std::error_code error;
+	std::filesystem::create_directory(created, error);
+
+	if (error)
+	{
+		Log::Console(LogLevel::Error, LION_FORMAT_TEXT("[Editor] Could not create the folder: {}.", error.message()));
+		return;
+	}
+
+	// Straight into a rename, the way every file browser does it: a folder called "New Folder" is a
+	// folder nobody meant to keep.
+	const std::string name = created.filename().generic_string();
+	mRenamingAsset = mProjectPath.empty() ? name : mProjectPath + "/" + name;
+	mAssetRenameFocus = true;
+
+	const size_t copied = name.copy(mAssetRenameBuffer, sizeof(mAssetRenameBuffer) - 1);
+	mAssetRenameBuffer[copied] = '\0';
+}
+
+void EditorLayer::RenameAsset(const std::string& assetPath, const std::string& name)
+{
+	if (IsEngineAsset(assetPath) || !IsValidAssetName(name))
+		return;
+
+	const std::filesystem::path root = ProjectPanelDirectory();
+	const std::filesystem::path from = root / assetPath;
+	const std::filesystem::path to = from.parent_path() / name;
+
+	if (from == to)
+		return;
+
+	std::error_code error;
+
+	if (std::filesystem::exists(to, error))
+	{
+		Log::Console(LogLevel::Warning, LION_FORMAT_TEXT("[Editor] '{}' already exists.", name));
+		return;
+	}
+
+	std::filesystem::rename(from, to, error);
+
+	if (error)
+		Log::Console(LogLevel::Error, LION_FORMAT_TEXT("[Editor] Could not rename '{}': {}.", assetPath, error.message()));
+}
+
+void EditorLayer::DrawDeleteAssetPopup()
+{
+	if (mAssetToDelete.empty())
+		return;
+
+	// Opened here, at the root, and not from the row's context menu: that menu closes on click and takes
+	// its ID scope — and the modal — with it.
+	if (!ImGui::IsPopupOpen("Delete Asset"))
+		ImGui::OpenPopup("Delete Asset");
+
+	const ImVec2 center = ImGui::GetMainViewport()->GetCenter();
+	ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+
+	if (!ImGui::BeginPopupModal("Delete Asset", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+		return;
+
+	const std::filesystem::path full = ProjectPanelDirectory() / mAssetToDelete;
+
+	std::error_code error;
+	const bool folder = std::filesystem::is_directory(full, error);
+
+	ImGui::TextUnformatted(mAssetToDelete.c_str());
+
+	// A file goes to the recycle bin nowhere: this is the project's disk, and the editor's undo history
+	// is about the scene, not about the files under it. Say so before doing it.
+	ImGui::TextDisabled(folder
+		? "The folder and everything in it will be deleted. This cannot be undone."
+		: "The file will be deleted. This cannot be undone.");
+
+	ImGui::Spacing();
+
+	if (ImGui::Button("Delete", ImVec2(96.0f, 0.0f)))
+	{
+		std::filesystem::remove_all(full, error);
+
+		if (error)
+			Log::Console(LogLevel::Error, LION_FORMAT_TEXT("[Editor] Could not delete '{}': {}.", mAssetToDelete, error.message()));
+		else
+			Log::Console(LogLevel::Information, LION_FORMAT_TEXT("[Editor] Deleted '{}'.", mAssetToDelete));
+
+		mAssetToDelete.clear();
+		ImGui::CloseCurrentPopup();
+	}
+
+	ImGui::SameLine();
+
+	if (ImGui::Button("Cancel", ImVec2(96.0f, 0.0f)))
+	{
+		mAssetToDelete.clear();
+		ImGui::CloseCurrentPopup();
+	}
+
+	ImGui::EndPopup();
 }
 
 void EditorLayer::DrawShortcuts()
