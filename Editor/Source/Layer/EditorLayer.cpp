@@ -2074,6 +2074,12 @@ void EditorLayer::DrawHierarchy()
 	//
 	// No banding and no rules: a striped list is a table pretending it has more to say than one column of
 	// names, and the lines around it only fence off what was already fenced by the panel it is in.
+	//
+	// And no room between the rows. A cell's vertical padding is dead space that belongs to neither row,
+	// so the cursor leaves one entity and hovers nothing before it reaches the next. A list of names is
+	// read by running down it — the rows have to touch, the way the console's lines do.
+	ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(style.CellPadding.x, 0.0f));
+
 	if (ImGui::BeginTable("Entities", 2, ImGuiTableFlags_None))
 	{
 		// Wide enough for its own header: a column called Visibility that reads "Visi..." is a column that
@@ -2100,6 +2106,8 @@ void EditorLayer::DrawHierarchy()
 
 		ImGui::EndTable();
 	}
+
+	ImGui::PopStyleVar();
 
 	if (count == 0)
 		ImGui::TextDisabled("Empty scene — right-click to create an entity.");
@@ -2265,7 +2273,11 @@ void EditorLayer::DrawEntityNode(const Reference<Entity>& entity)
 		return;
 	}
 
-	ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_SpanAllColumns;
+	// The row breathes through the node, not around it: FramePadding makes the node itself taller, so the
+	// room it takes is room it can be hovered in. Padding the cell instead would put that room between the
+	// rows, where it belongs to neither of them and the cursor hovers nothing crossing it.
+	ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_SpanAllColumns |
+		ImGuiTreeNodeFlags_FramePadding;
 
 	if (entity->GetChildren().empty())
 		flags |= ImGuiTreeNodeFlags_Leaf;
@@ -2364,6 +2376,7 @@ void EditorLayer::DrawEntityNode(const Reference<Entity>& entity)
 	// The Visibility column. A folder has nothing to draw, so it has no eye.
 	ImGui::TableSetColumnIndex(1);
 	ImGui::SetCursorPosX(ImGui::GetCursorPosX() + ImMax((ImGui::GetContentRegionAvail().x - RowEndSlot()) * 0.5f, 0.0f));
+	AlignRowEndGlyph();   // The row is a frame tall now; the eye is a glyph, and sits in the middle of it.
 
 	if (!folder && EyeButton("##visible", entity->IsVisible()))
 	{
