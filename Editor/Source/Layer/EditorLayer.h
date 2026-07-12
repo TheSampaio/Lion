@@ -99,7 +99,7 @@ private:
 	bool mConsoleShowWarnings = true;
 	bool mConsoleShowInfo = true;
 
-	bool mConsoleCollapse = false;     // Unity's: identical lines become one line with a count.
+	bool mConsoleCollapse = true;      // Unity's: identical lines become one line with a count.
 
 	// Console rendering: only the entries passing the filters are indexed here, and a list clipper
 	// draws just the visible slice, so a full history costs the same as a screenful. When collapsed, the
@@ -140,6 +140,9 @@ private:
 	ImVec2 mViewportImageMax{ 0.0f, 0.0f };
 
 	// The toast: one message at a time, in the corner. 'busy' spins and stays; anything else fades out.
+	// The engine's mark is loaded once and lives as long as the editor does — it is the same picture in
+	// every toast there will ever be.
+	Lion::Reference<Lion::Texture> mToastLogo;
 	std::string mToastMessage;
 	float mToastTime = 0.0f;
 	bool mToastBusy = false;

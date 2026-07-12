@@ -19,8 +19,12 @@ namespace Lion
 		// Binds the texture to the given sampler slot.
 		virtual void Bind(uint32 slot = 0) const = 0;
 
+		// The backend's own handle for this texture. The editor needs it to hand a texture to ImGui, which
+		// is the one place outside the backend that has to name one.
+		virtual uint32 GetNativeHandle() const = 0;
+
 		// Loads a texture from an image file for the selected backend.
-		static Reference<Texture> Create(const std::string& filePath);
+		static LION_API Reference<Texture> Create(const std::string& filePath);
 
 		// How many textures are alive right now. It used to be a line in the console every time one was
 		// created or destroyed, which is a number pretending to be news: a count belongs on a panel that

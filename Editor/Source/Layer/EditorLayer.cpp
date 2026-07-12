@@ -55,6 +55,10 @@ void EditorLayer::OnCreate()
 	spec.hasEntityId = true;   // Secondary attachment for pixel-perfect viewport picking.
 	mFramebuffer = Framebuffer::Create(spec);
 
+	// The mark the toast wears. Loaded once, because it is the same picture in every toast there will
+	// ever be, and it ships beside the executable like the rest of the engine's own assets.
+	mToastLogo = Texture::Create(kEngineIconFile);
+
 	CreateDemoScene();
 }
 
@@ -205,7 +209,7 @@ void EditorLayer::CreateDemoScene()
 	ball->GetTransform()->SetPosition(Vector(0.0f, 120.0f, Depth::Middle));
 	ball->AddComponent<SpriteRenderer>("Sprites/Brickout/ball.png");
 	ball->AddComponent<RigidBody2D>(BodyType::Dynamic, false);
-	ball->AddComponent<CircleCollider2D>(16.0f);
+	ball->AddComponent<CircleCollider2D>(6.0f);
 	mScene->Add(ball);
 }
 
@@ -427,24 +431,23 @@ void EditorLayer::DrawToast()
 		return;
 
 	// A toast that is waiting on something stays until that something is done; one that is reporting a
-	// result reads once and leaves. It fades rather than vanishing — a notification that disappears
-	// between two frames looks like a glitch, not like an answer.
-	constexpr float32 kLifetime = 4.0f;
-	constexpr float32 kFade = 0.6f;
+	// result reads once and leaves. It arrives and it leaves the same way, over the same quarter of a
+	// second — a card that snaps in and then lingers on its way out reads as two different things.
+	constexpr float32 kLifetime = 3.5f;
+	constexpr float32 kFade = 0.25f;
 
-	float32 alpha = 1.0f;
+	const float32 age = static_cast<float32>(ImGui::GetTime()) - mToastTime;
+	float32 alpha = ImMin(1.0f, age / kFade);   // The way in is the same for both.
 
 	if (!mToastBusy)
 	{
-		const float32 age = static_cast<float32>(ImGui::GetTime()) - mToastTime;
-
 		if (age > kLifetime)
 		{
 			mToastMessage.clear();
 			return;
 		}
 
-		alpha = ImMin(1.0f, (kLifetime - age) / kFade);
+		alpha = ImMin(alpha, (kLifetime - age) / kFade);
 	}
 
 	const ImGuiViewport* viewport = ImGui::GetMainViewport();
@@ -453,41 +456,57 @@ void EditorLayer::DrawToast()
 		viewport->WorkPos.y + viewport->WorkSize.y - 16.0f);
 
 	ImGui::SetNextWindowPos(corner, ImGuiCond_Always, ImVec2(1.0f, 1.0f));
-	ImGui::SetNextWindowBgAlpha(0.92f * alpha);
+	ImGui::SetNextWindowBgAlpha(0.95f * alpha);
 
 	constexpr ImGuiWindowFlags flags =
 		ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings |
 		ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoInputs;
 
 	ImGui::PushStyleVar(ImGuiStyleVar_Alpha, alpha);
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(16.0f, 14.0f));
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 6.0f);
 
 	if (ImGui::Begin("##toast", nullptr, flags))
 	{
-		const float32 size = ImGui::GetFontSize();
+		// The engine's own face, with the radial running around it: what is spinning is the thing that is
+		// working, which is the whole idea Unreal's throbber is built on.
+		constexpr float32 kMark = 40.0f;
+		constexpr float32 kRing = 26.0f;
+
+		const ImVec2 origin = ImGui::GetCursorScreenPos();
+		const ImVec2 center(origin.x + kMark * 0.5f, origin.y + kMark * 0.5f);
+
+		if (mToastLogo)
+			ImGui::GetWindowDrawList()->AddImage(
+				static_cast<ImTextureID>(mToastLogo->GetNativeHandle()),
+				ImVec2(center.x - kMark * 0.5f, center.y - kMark * 0.5f),
+				ImVec2(center.x + kMark * 0.5f, center.y + kMark * 0.5f),
+				ImVec2(0.0f, 1.0f), ImVec2(1.0f, 0.0f),   // The image is bottom-up, as OpenGL loaded it.
+				IM_COL32(255, 255, 255, static_cast<int32>(255 * alpha)));
 
 		if (mToastBusy)
 		{
-			// The radial: an arc that runs around the circle, drawn rather than animated frame by frame —
-			// where it is, is a function of the clock, so it costs one arc and no state.
-			const ImVec2 origin = ImGui::GetCursorScreenPos();
-			const ImVec2 center(origin.x + size * 0.5f, origin.y + size * 0.5f);
-			const float32 time = static_cast<float32>(ImGui::GetTime());
-			const float32 start = time * 4.0f;
+			// An arc running around the circle, drawn rather than animated frame by frame: where it is, is
+			// a function of the clock, so it costs one arc and no state at all.
+			const float32 start = static_cast<float32>(ImGui::GetTime()) * 3.5f;
 
 			ImDrawList* drawList = ImGui::GetWindowDrawList();
-			drawList->PathArcTo(center, size * 0.42f, start, start + IM_PI * 1.4f, 24);
-			drawList->PathStroke(ImGui::GetColorU32(ImGuiCol_Text), ImDrawFlags_None, 2.0f);
-
-			ImGui::Dummy(ImVec2(size, size));
-			ImGui::SameLine();
+			drawList->PathArcTo(center, kRing, start, start + IM_PI * 1.3f, 32);
+			drawList->PathStroke(IM_COL32(232, 122, 42, static_cast<int32>(255 * alpha)), ImDrawFlags_None, 3.0f);
 		}
 
-		ImGui::AlignTextToFramePadding();
+		// The mark keeps a square of its own — the ring reaches past it, so the room is the ring's.
+		ImGui::Dummy(ImVec2(kRing * 2.0f, kRing * 2.0f));
+		ImGui::SameLine(0.0f, 12.0f);
+
+		// The message sits on the middle of that square, not on its top.
+		const float32 text = ImGui::GetTextLineHeight();
+		ImGui::SetCursorPosY(ImGui::GetCursorPosY() + (kRing * 2.0f - text) * 0.5f);
 		ImGui::TextUnformatted(mToastMessage.c_str());
 	}
 
 	ImGui::End();
-	ImGui::PopStyleVar();
+	ImGui::PopStyleVar(3);
 }
 
 void EditorLayer::DrawStatistics()
@@ -659,7 +678,7 @@ void EditorLayer::DrawConsole()
 	ImGui::SameLine();
 	static ImGuiTextFilter filter;
 	ImGui::SetNextItemWidth(240.0f);
-	if (ImGui::InputTextWithHint("##search", "Search logs...", filter.InputBuf, IM_ARRAYSIZE(filter.InputBuf)))
+	if (ImGui::InputTextWithHint("##search", "Search...", filter.InputBuf, IM_ARRAYSIZE(filter.InputBuf)))
 		filter.Build();
 
 	ImGui::SameLine();
@@ -1221,7 +1240,7 @@ namespace
 
 		const ImU32 color = hovered ? IM_COL32(255, 216, 122, 255) : IM_COL32(224, 176, 62, 255);
 		const ImVec2 center(origin.x + size * 0.5f, origin.y + size * 0.5f);
-		const float32 radius = ImFloor(size * 0.32f);
+		const float32 radius = ImFloor(size * 0.26f);
 
 		// Most of a circle, and an arrowhead carried on its tangent: the shape reads as "put it back".
 		ImDrawList* drawList = ImGui::GetWindowDrawList();
@@ -1232,7 +1251,7 @@ namespace
 		const ImVec2 tip(center.x + radius * ImCos(angle), center.y + radius * ImSin(angle));
 		const ImVec2 along(-ImSin(angle), ImCos(angle));
 		const ImVec2 across(-along.y, along.x);
-		const float32 head = size * 0.26f;
+		const float32 head = size * 0.22f;
 
 		drawList->AddTriangleFilled(
 			ImVec2(tip.x + along.x * head, tip.y + along.y * head),
@@ -2685,7 +2704,7 @@ void EditorLayer::DrawHierarchy()
 	if (mSelection.empty())
 		ImGui::TextDisabled("%d %s", count, (count == 1) ? "Entity" : "Entities");
 	else
-		ImGui::TextDisabled("%d %s : %d Selected", count, (count == 1) ? "Entity" : "Entities",
+		ImGui::TextDisabled("%d %s | %d Selected", count, (count == 1) ? "Entity" : "Entities",
 			static_cast<int32>(mSelection.size()));
 
 	// Deferred hierarchy edits (never mutate the tree while iterating it above).
@@ -3724,12 +3743,13 @@ void EditorLayer::DrawStatusBar()
 				ImGui::SetTooltip("%s", root.generic_string().c_str());
 		}
 
-		// And which engine it is, on the right. The bar has room for more; this is what it starts with.
-		const std::string version = std::string("Lion ") + kVersion;
-		const float32 versionWidth = ImGui::CalcTextSize(version.c_str()).x;
+		// And which version it is, on the right, with room to breathe: text against the edge of the screen
+		// reads as clipped. The bar has space for more; this is what it starts with.
+		constexpr float32 kEdge = 8.0f;
+		const float32 versionWidth = ImGui::CalcTextSize(kVersion).x;
 
-		ImGui::SameLine(ImGui::GetContentRegionMax().x - versionWidth);
-		ImGui::TextDisabled("%s", version.c_str());
+		ImGui::SameLine(ImGui::GetContentRegionMax().x - versionWidth - kEdge);
+		ImGui::TextDisabled("%s", kVersion);
 
 		ImGui::EndMenuBar();
 	}
@@ -3854,14 +3874,8 @@ void EditorLayer::DrawMenuBar()
 			ImGui::EndMenu();
 		}
 
-		// A build runs on a worker thread and takes seconds, so say so where it cannot be missed.
-		if (mBuilding)
-		{
-			static const char8* label = "Compiling the game module...";
-			ImGui::SameLine(ImGui::GetWindowWidth() - ImGui::CalcTextSize(label).x - ImGui::GetStyle().ItemSpacing.x * 2.0f);
-			ImGui::TextColored(LogLevelColor(LogLevel::Warning), "%s", label);
-		}
-
+		// A build says so in the toast, which is where it is said properly. It used to say so here as well,
+		// in yellow, which is one thing being reported twice.
 		ImGui::EndMainMenuBar();
 	}
 }

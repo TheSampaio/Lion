@@ -7,8 +7,35 @@
 #include <Lion/Signal/EventInput.h>
 #include <Lion/Signal/EventWindow.h>
 
+#ifdef LN_PLATFORM_WIN
+	#define GLFW_EXPOSE_NATIVE_WIN32
+	#include <GLFW/glfw3native.h>
+
+	#define WIN32_LEAN_AND_MEAN
+	#define NOMINMAX
+	#include <Windows.h>
+	#include <dwmapi.h>
+
+	#pragma comment(lib, "Dwmapi.lib")
+#endif
+
 namespace Lion
 {
+	namespace
+	{
+		// The title bar is the one part of the window the application does not draw, so it is the one part
+		// that can disagree with everything the application does draw. Windows will hand it over — this is
+		// the whole of the API for it, and on a build of Windows that does not have it, it is a no-op.
+		void UseDarkTitleBar(GLFWwindow* window)
+		{
+#ifdef LN_PLATFORM_WIN
+			constexpr DWORD kUseImmersiveDarkMode = 20;
+			const BOOL dark = TRUE;
+
+			DwmSetWindowAttribute(glfwGetWin32Window(window), kUseImmersiveDarkMode, &dark, sizeof(dark));
+#endif
+		}
+	}
 	GlfwWindow::~GlfwWindow()
 	{
 		if (mIcon)
@@ -52,6 +79,7 @@ namespace Lion
 			return false;
 		}
 
+		UseDarkTitleBar(mWindow);
 		glfwSetWindowUserPointer(mWindow, mData);
 		RegisterCallbacks();
 

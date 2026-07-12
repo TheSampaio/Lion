@@ -15,6 +15,7 @@ namespace Lion
 		Size GetCenter() const override { return mCenter; }
 
 		void Bind(uint32 slot = 0) const override;
+		uint32 GetNativeHandle() const override { return mId; }
 
 	private:
 		uint32 mId = 0;
