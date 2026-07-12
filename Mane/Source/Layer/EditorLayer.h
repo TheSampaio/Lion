@@ -186,6 +186,11 @@ private:
 	bool LoadGameModule();
 	void ReloadGameModule();
 
+	// Drops the module and everything that is code inside it — the registries' factories, and the
+	// components whose vtables live there. A reload does this before loading the rebuilt module; the
+	// editor does it before closing, because the process would otherwise unmap the library first.
+	void UnloadGameModule();
+
 	// Advances a paused simulation by a single frame (entering the paused state if it was running).
 	void StepOneFrame();
 

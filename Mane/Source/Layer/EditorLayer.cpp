@@ -83,6 +83,12 @@ void EditorLayer::StepOneFrame()
 
 void EditorLayer::OnDetach()
 {
+	// The module goes before the editor does, and for the same reason a reload drops it first: the
+	// registries hold factories that are code inside it, and the scene holds components whose vtables
+	// are. Left to the process to tear down, those are destroyed after the library has been unmapped —
+	// a call into memory that is no longer there, on every close.
+	UnloadGameModule();
+
 	EditorGui::Shutdown();
 }
 
@@ -2638,15 +2644,7 @@ bool EditorLayer::LoadGameModule()
 
 	CopyGameSymbols(root);
 
-	// Bracket the load: the module's static initializers run inside it, and everything they register
-	// is attributed to the module so a later reload can drop exactly those entries.
-	ComponentRegistry::BeginModule();
-	ScriptRegistry::BeginModule();
-
-	const bool loaded = mGameModule.Load(runtime.string());
-
-	ComponentRegistry::EndModule();
-	ScriptRegistry::EndModule();
+	const bool loaded = Lion::LoadGameModule(mGameModule, runtime.string());
 
 	if (loaded)
 		Log::Console(LogLevel::Success, "[Editor] Loaded the game module.");
@@ -2745,17 +2743,11 @@ void EditorLayer::PollGameBuild()
 	ReloadGameModule();
 }
 
-void EditorLayer::ReloadGameModule()
+void EditorLayer::UnloadGameModule()
 {
 	// The simulation holds live instances of the module's types; wind it down first.
 	if (mPlaying)
 		StopPlay();
-
-	// Every component the module defines is about to lose the code behind its vtable, so the scene
-	// makes a round trip through its serialized form: those components are dropped now and recreated
-	// by name from the freshly loaded module. Undo/redo and the clipboard are plain text already.
-	const std::string scene = SceneSerializer::SerializeToString(mScene);
-	const int32 selected = SelectedEntityIndex();
 
 	// Nothing may outlive the module holding a component of its own: an entity kept alive by a stray
 	// reference would run its components' destructors after the code was gone.
@@ -2767,10 +2759,18 @@ void EditorLayer::ReloadGameModule()
 	mEntityLookup.clear();
 	mScene->Clear();
 
-	// The registry's factories point into the module, so they go before it does.
-	ComponentRegistry::UnloadModule();
-	ScriptRegistry::UnloadModule();
-	mGameModule.Unload();
+	Lion::UnloadGameModule(mGameModule);
+}
+
+void EditorLayer::ReloadGameModule()
+{
+	// Every component the module defines is about to lose the code behind its vtable, so the scene
+	// makes a round trip through its serialized form: those components are dropped now and recreated
+	// by name from the freshly loaded module. Undo/redo and the clipboard are plain text already.
+	const std::string scene = SceneSerializer::SerializeToString(mScene);
+	const int32 selected = SelectedEntityIndex();
+
+	UnloadGameModule();
 
 	const bool loaded = LoadGameModule();
 
