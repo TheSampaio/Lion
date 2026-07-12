@@ -32,6 +32,7 @@ private:
 		ToolSelect,
 		ReloadModule,
 		StepFrame, CompileModule,
+		ToggleHierarchy, ToggleProject, ToggleConsole, ToggleStatistics, ToggleProperties,
 		Count
 	};
 
@@ -52,9 +53,30 @@ private:
 	Keybind mBinds[static_cast<int>(ShortcutAction::Count)];
 	int mRebindingIndex = -1;  // Index of the action currently capturing a new key (-1 = none).
 
-	bool mShowDemo = false;
 	bool mShowShortcuts = false;
 	bool mLayoutInitialized = false;
+	bool mFocusViewport = false;   // Set at boot, consumed a frame later: focus cannot be claimed while the panels are still appearing.
+
+	// Panels the View menu can hide. The Viewport is not among them: hiding the thing being edited is
+	// not a view option. A panel closed with its own X flips the same flag, so the menu always agrees
+	// with what is on screen.
+	bool mShowHierarchy = true;
+	bool mShowProject = true;
+	bool mShowConsole = true;
+	bool mShowStatistics = true;
+	bool mShowProperties = true;
+
+	// The panels, in the order the shortcuts number them — which traces the default layout: down the
+	// left column, along the bottom, then down the right one. One table, so the View menu and the
+	// shortcut handler cannot disagree about what exists.
+	struct Panel
+	{
+		const char* name;
+		bool EditorLayer::* visible;
+		ShortcutAction shortcut;
+	};
+
+	static const Panel kPanels[5];
 
 	// Dock layouts, Unity-style: the built-in default plus any the user saved under "Layouts/".
 	// Switching one in tears down every dock node, so the menu only records the request here and

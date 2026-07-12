@@ -10,6 +10,7 @@
 // Core
 #include <Lion/Core/Application.h>
 #include <Lion/Core/Asset.h>
+#include <Lion/Core/Build.h>
 #include <Lion/Core/Clock.h>
 #include <Lion/Core/GameModule.h>
 #include <Lion/Core/Input.h>

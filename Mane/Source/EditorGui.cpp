@@ -3,6 +3,7 @@
 #include <filesystem>
 
 #include <Lion/Lion.h>
+#include <Lion/Core/Filesystem.h>
 
 #include <imgui/imgui.h>
 #include <imgui/backends/imgui_impl_glfw.h>
@@ -120,13 +121,16 @@ void EditorGui::Init()
 	io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
 	io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 
-	// Keep the editor's persisted state out of the working directory, under Data/. ImGui only holds
-	// a pointer to the filename, so it lives in a static string, and it will not create the folder
-	// itself. The layouts folder and the shortcuts config live alongside it.
-	std::error_code error;
-	std::filesystem::create_directories("Data", error);
+	// The editor's persisted state lives in Data/, beside the executable — not in the directory the
+	// editor was started from, which Visual Studio and a shortcut both get wrong. ImGui only holds a
+	// pointer to the filename, so it lives in a static string, and it will not create the folder
+	// itself. The layouts folder and the shortcuts config sit alongside it.
+	const std::filesystem::path dataDirectory = std::filesystem::path(ResourceRootDirectory()) / "Data";
 
-	static const std::string iniPath = "Data/lion-ui.ini";
+	std::error_code error;
+	std::filesystem::create_directories(dataDirectory, error);
+
+	static const std::string iniPath = (dataDirectory / "lion-ui.ini").string();
 	io.IniFilename = iniPath.c_str();
 
 	// Prefer Segoe UI (much more legible than ImGui's built-in font); fall back to the default.

@@ -73,10 +73,9 @@ namespace Lion
 	Application::Application()
 		: mStack(nullptr), mMinimized(false)
 	{
-#ifndef LN_SHIPPING
+		// Created in every configuration: what the log actually emits is decided at runtime, by the
+		// verbosity, since the editor needs it whatever build it was compiled in.
 		Log::New();
-
-#endif // !LN_SHIPPING
 
 		mAsset = MakeScope<Asset>();
 		mStack = MakeScope<Stack>();
@@ -96,10 +95,7 @@ namespace Lion
 		Input::Delete();
 		Window::Delete();
 
-
-#ifndef LN_SHIPPING
 		Log::Delete();
-#endif 
 	}
 
 	void Application::Run()

@@ -17,10 +17,21 @@
 
 using namespace Lion;
 
+// Ordered by how much they are reached for: what you pick, what you edit on it, where its assets come
+// from, what the engine has to say, and how it is doing. Alt+N follows this, so the numbers you use
+// most are the ones under your fingers.
+const EditorLayer::Panel EditorLayer::kPanels[5] = {
+	{ "Scene Hierarchy", &EditorLayer::mShowHierarchy,  ShortcutAction::ToggleHierarchy  },
+	{ "Properties",      &EditorLayer::mShowProperties, ShortcutAction::ToggleProperties },
+	{ "Project",         &EditorLayer::mShowProject,    ShortcutAction::ToggleProject    },
+	{ "Console",         &EditorLayer::mShowConsole,    ShortcutAction::ToggleConsole    },
+	{ "Statistics",      &EditorLayer::mShowStatistics, ShortcutAction::ToggleStatistics },
+};
+
 void EditorLayer::OnAttach()
 {
 	Window::SetSize(1280, 720);
-	Window::SetTitle("Lion Editor");
+	Window::SetTitle("Lion Engine");
 	Window::SetBackgroundColor(0.10f, 0.10f, 0.11f);
 	Window::SetResizable(true);
 	Window::SetMaximized(true);
@@ -230,6 +241,17 @@ void EditorLayer::RenderScene()
 void EditorLayer::DrawUI()
 {
 	ApplyPendingLayout();
+
+	// A window takes the focus on the frame it appears, so the panels drawn after the viewport steal it
+	// on the way in and the editor opens on whichever one happens to be submitted last. Claiming it back
+	// one frame later — once they have all appeared — starts the session on the scene, which is what the
+	// editor is for.
+	if (mFocusViewport)
+	{
+		mFocusViewport = false;
+		ImGui::SetWindowFocus("Viewport");
+	}
+
 	DrawMenuBar();
 	HandleShortcuts();
 
@@ -263,12 +285,17 @@ void EditorLayer::DrawUI()
 	if (!mLayoutInitialized)
 	{
 		mLayoutInitialized = true;
+		mFocusViewport = true;
 
 		if (ImGui::DockBuilderGetNode(mDockspaceId) == nullptr)
 			mLayoutRequest = LayoutRequest::Reset;
 	}
 
-	ImGui::DockSpace(mDockspaceId);
+	// A closable panel would otherwise carry two close buttons: one on its tab, and one the dock node
+	// draws at the far right of the same row for whichever tab is selected. Two buttons that do the
+	// same thing, a few pixels apart. Keep the one on the tab — it is the one attached to the thing it
+	// closes, and where Unreal puts it — and drop the node's.
+	ImGui::DockSpace(mDockspaceId, ImVec2(0.0f, 0.0f), ImGuiDockNodeFlags_NoCloseButton);
 	ImGui::End();
 
 	// --- Panels -----------------------------------------------------------------------------
@@ -277,13 +304,16 @@ void EditorLayer::DrawUI()
 	DrawHierarchy();
 	DrawProperties();
 
-	ImGui::Begin("Statistics");
-	const ImGuiIO& io = ImGui::GetIO();
-	ImGui::Text("FPS:   %.1f", io.Framerate);
-	ImGui::Text("Frame: %.3f ms", 1000.0f / io.Framerate);
-	ImGui::Separator();
-	ImGui::Text("Viewport: %.0f x %.0f", mViewportSize.x, mViewportSize.y);
-	ImGui::End();
+	if (mShowStatistics)
+	{
+		ImGui::Begin("Statistics", &mShowStatistics);
+		const ImGuiIO& io = ImGui::GetIO();
+		ImGui::Text("FPS:   %.1f", io.Framerate);
+		ImGui::Text("Frame: %.3f ms", 1000.0f / io.Framerate);
+		ImGui::Separator();
+		ImGui::Text("Viewport: %.0f x %.0f", mViewportSize.x, mViewportSize.y);
+		ImGui::End();
+	}
 
 	DrawConsole();
 	DrawProject();
@@ -294,9 +324,6 @@ void EditorLayer::DrawUI()
 	// Commit any in-progress continuous edit (gizmo/slider drag) once the mouse is released.
 	if (mHasPending && ImGui::IsMouseReleased(ImGuiMouseButton_Left))
 		CommitEdit();
-
-	if (mShowDemo)
-		ImGui::ShowDemoWindow(&mShowDemo);
 }
 
 namespace
@@ -352,9 +379,12 @@ namespace
 
 void EditorLayer::DrawConsole()
 {
+	if (!mShowConsole)
+		return;
+
 	// While the panel is collapsed or sits behind another dock tab there is no layout to build, and
 	// leaving the tail counter untouched makes it snap to the newest line once it comes back.
-	if (!ImGui::Begin("Console"))
+	if (!ImGui::Begin("Console", &mShowConsole))
 	{
 		ImGui::End();
 		return;
@@ -512,8 +542,20 @@ namespace
 	// The editor keeps its persisted state (UI layout, shortcuts, saved dock layouts) under Data/,
 	// which sits in the resource root. The Project panel skips the whole folder: it is editor state,
 	// not an asset.
-	constexpr const char8* kDataDirectory    = "Data";
-	constexpr const char8* kLayoutsDirectory = "Data/Layouts";
+	constexpr const char8* kDataDirectory = "Data";
+
+	// The editor's state lives beside the executable, not in whatever directory the editor happened to
+	// be started from — Visual Studio starts it from the project folder, and a shortcut can point
+	// anywhere. Everything below anchors to this rather than to the working directory.
+	std::filesystem::path EditorDataDirectory()
+	{
+		return std::filesystem::path(ResourceRootDirectory()) / kDataDirectory;
+	}
+
+	std::filesystem::path EditorLayoutsDirectory()
+	{
+		return EditorDataDirectory() / "Layouts";
+	}
 
 	// Component types the editor adds through a bespoke Add Component entry, because they need
 	// construction arguments (a collider sizes itself to the sprite). Everything else in the registry
@@ -612,18 +654,6 @@ namespace
 		return path;
 	}
 
-	// The configuration the editor itself was built in: the game module has to match it, or the two
-	// would disagree on the runtime and the module could not be loaded.
-	constexpr const char8* BuildConfiguration()
-	{
-#if defined(LN_DEBUG)
-		return "Debug";
-#elif defined(LN_RELEASE)
-		return "Release";
-#else
-		return "Shipping";
-#endif
-	}
 
 	// Inspector rows put the label first, in a fixed column, and the widget after it — ImGui's default
 	// is the other way round, which reads backwards for a property. The column is wide enough for the
@@ -676,7 +706,10 @@ namespace
 
 void EditorLayer::DrawProject()
 {
-	ImGui::Begin("Project");
+	if (!mShowProject)
+		return;
+
+	ImGui::Begin("Project", &mShowProject);
 
 	const std::string& root = ResourceRootDirectory();
 
@@ -808,6 +841,11 @@ void EditorLayer::DrawShortcuts()
 			{ ShortcutAction::ToggleColliders, "Viewport",  "Toggle collider hitboxes" },
 			{ ShortcutAction::CompileModule,   "Game",      "Compile the game module" },
 			{ ShortcutAction::ReloadModule,    "Game",      "Reload the game module" },
+			{ ShortcutAction::ToggleHierarchy,  "Panels",   "Show/hide Scene Hierarchy" },
+			{ ShortcutAction::ToggleProperties, "Panels",   "Show/hide Properties" },
+			{ ShortcutAction::ToggleProject,    "Panels",   "Show/hide Project" },
+			{ ShortcutAction::ToggleConsole,    "Panels",   "Show/hide Console" },
+			{ ShortcutAction::ToggleStatistics, "Panels",   "Show/hide Statistics" },
 		};
 
 		ImGui::TextDisabled("Click a shortcut to rebind it, then press a key (Esc to cancel).");
@@ -972,7 +1010,10 @@ void EditorLayer::Redo()
 namespace
 {
 	// User-customized shortcuts, kept under Data/ alongside the UI layout (see EditorGui::Init).
-	constexpr const char8* kShortcutsFile = "Data/lion-shortcuts.ini";
+	std::filesystem::path ShortcutsFile()
+	{
+		return EditorDataDirectory() / "lion-shortcuts.ini";
+	}
 }
 
 void EditorLayer::ResetShortcutsToDefault()
@@ -1003,6 +1044,13 @@ void EditorLayer::ResetShortcutsToDefault()
 	// Borrowed from Visual Studio, where Ctrl+Shift+B builds; reload sits next to it.
 	set(ShortcutAction::CompileModule, ImGuiKey_B, true, true);
 	set(ShortcutAction::ReloadModule, ImGuiKey_R, true, true);
+
+	// Alt+1..5, in the order the panels are listed (see kPanels).
+	set(ShortcutAction::ToggleHierarchy, ImGuiKey_1, false, false, true);
+	set(ShortcutAction::ToggleProperties, ImGuiKey_2, false, false, true);
+	set(ShortcutAction::ToggleProject, ImGuiKey_3, false, false, true);
+	set(ShortcutAction::ToggleConsole, ImGuiKey_4, false, false, true);
+	set(ShortcutAction::ToggleStatistics, ImGuiKey_5, false, false, true);
 }
 
 void EditorLayer::CreateFolder()
@@ -1063,7 +1111,7 @@ void EditorLayer::InitShortcuts()
 
 void EditorLayer::LoadShortcuts()
 {
-	std::ifstream file(kShortcutsFile);
+	std::ifstream file(ShortcutsFile());
 
 	if (!file.is_open())
 		return;
@@ -1081,9 +1129,9 @@ void EditorLayer::SaveShortcuts() const
 {
 	// Data/ normally already exists (EditorGui::Init makes it), but keep this self-contained.
 	std::error_code error;
-	std::filesystem::create_directories("Data", error);
+	std::filesystem::create_directories(EditorDataDirectory(), error);
 
-	std::ofstream file(kShortcutsFile);
+	std::ofstream file(ShortcutsFile());
 
 	if (!file.is_open())
 		return;
@@ -1147,6 +1195,11 @@ void EditorLayer::HandleShortcuts()
 	if (IsShortcutPressed(ShortcutAction::StepFrame)) StepOneFrame();
 	if (IsShortcutPressed(ShortcutAction::CompileModule)) CompileGameModule();
 	if (IsShortcutPressed(ShortcutAction::ReloadModule)) ReloadGameModule();
+
+	// Panel visibility, from the same table the View menu is built from.
+	for (const Panel& panel : kPanels)
+		if (IsShortcutPressed(panel.shortcut))
+			this->*panel.visible = !(this->*panel.visible);
 
 	// The actions below are edit-mode only (typing is already ruled out above).
 	if (mPlaying)
@@ -1468,7 +1521,10 @@ void EditorLayer::DrawColliderOverlays(const ImVec2& imageMin, const ImVec2& ima
 
 void EditorLayer::DrawHierarchy()
 {
-	ImGui::Begin("Scene Hierarchy");
+	if (!mShowHierarchy)
+		return;
+
+	ImGui::Begin("Scene Hierarchy", &mShowHierarchy);
 
 	// Compact toolbar: a single "+" create button; everything else is on the context menus.
 	if (ImGui::Button("+ Create"))
@@ -1816,7 +1872,10 @@ bool EditorLayer::DrawVec3Control(const char* label, float values[3], float spee
 
 void EditorLayer::DrawProperties()
 {
-	ImGui::Begin("Properties");
+	if (!mShowProperties)
+		return;
+
+	ImGui::Begin("Properties", &mShowProperties);
 
 	if (!mSelectedEntity)
 	{
@@ -2218,10 +2277,32 @@ void EditorLayer::DrawMenuBar()
 			ImGui::EndMenu();
 		}
 
+		// Which panels are on screen. A real checkbox rather than ImGui's bare tick, so a hidden panel
+		// still reads as a box waiting to be clicked instead of an empty row.
 		if (ImGui::BeginMenu("View"))
 		{
-			ImGui::MenuItem("Show Colliders", nullptr, &mShowColliders);
-			ImGui::MenuItem("ImGui Demo Window", nullptr, &mShowDemo);
+			const ImGuiStyle& style = ImGui::GetStyle();
+			float32 labelWidth = 0.0f;
+			float32 shortcutWidth = 0.0f;
+
+			for (const Panel& panel : kPanels)
+			{
+				const std::string shortcut = KeybindToString(mBinds[static_cast<int>(panel.shortcut)]);
+				labelWidth = ImMax(labelWidth, ImGui::CalcTextSize(panel.name).x);
+				shortcutWidth = ImMax(shortcutWidth, ImGui::CalcTextSize(shortcut.c_str()).x);
+			}
+
+			// Room for the checkbox, the longest label and the longest shortcut, so the column lines up.
+			const float32 checkboxWidth = ImGui::GetFrameHeight() + style.ItemInnerSpacing.x;
+
+			for (const Panel& panel : kPanels)
+			{
+				ImGui::Checkbox(panel.name, &(this->*panel.visible));
+
+				ImGui::SameLine(checkboxWidth + labelWidth + style.ItemSpacing.x * 3.0f);
+				ImGui::TextDisabled("%s", KeybindToString(mBinds[static_cast<int>(panel.shortcut)]).c_str());
+			}
+
 			ImGui::EndMenu();
 		}
 
@@ -2311,7 +2392,7 @@ void EditorLayer::BuildDefaultLayout(unsigned int dockspaceId)
 
 std::string EditorLayer::LayoutPath(const std::string& name)
 {
-	return std::string(kLayoutsDirectory) + "/" + name + ".ini";
+	return (EditorLayoutsDirectory() / (name + ".ini")).string();
 }
 
 bool EditorLayer::IsValidLayoutName(const std::string& name)
@@ -2332,7 +2413,7 @@ std::vector<std::string> EditorLayer::SavedLayouts() const
 	std::vector<std::string> layouts;
 	std::error_code error;
 
-	for (const std::filesystem::directory_entry& entry : std::filesystem::directory_iterator(kLayoutsDirectory, error))
+	for (const std::filesystem::directory_entry& entry : std::filesystem::directory_iterator(EditorLayoutsDirectory(), error))
 		if (entry.is_regular_file() && entry.path().extension() == ".ini")
 			layouts.push_back(entry.path().stem().string());
 
@@ -2343,7 +2424,7 @@ std::vector<std::string> EditorLayer::SavedLayouts() const
 void EditorLayer::SaveLayout(const std::string& name) const
 {
 	std::error_code error;
-	std::filesystem::create_directories(kLayoutsDirectory, error);
+	std::filesystem::create_directories(EditorLayoutsDirectory(), error);
 
 	if (error)
 	{
@@ -2472,9 +2553,12 @@ void EditorLayer::DrawLayoutPopups()
 
 bool EditorLayer::LoadGameModule()
 {
-	// Both sit next to the editor, alongside the engine's own binaries.
-	const std::filesystem::path source = kGameModuleFile;
-	const std::filesystem::path runtime = kGameModuleLoadedFile;
+	// Anchored to the executable, not to the working directory: the module sits with the editor's own
+	// binaries, and the editor is not always started from that folder (Visual Studio runs it from the
+	// project directory, and a shortcut can point anywhere).
+	const std::filesystem::path root = ResourceRootDirectory();
+	const std::filesystem::path source = root / kGameModuleFile;
+	const std::filesystem::path runtime = root / kGameModuleLoadedFile;
 
 	std::error_code error;
 
@@ -2534,13 +2618,14 @@ void EditorLayer::CompileGameModule()
 	const std::string generate = "cd /d \"" + root.string() + "\" && premake5 vs2022";
 
 	// Build only the game module. Its MSBuild target is its solution folder and project name — premake
-	// files it under the "Game" group, hence "Game\Game". Building the solution outright would try to
-	// relink the running editor. Nothing else is rebuilt, so the editor's copy of the module — which
-	// the module's own post-build step refreshes — is the one the reload then picks up.
+	// files it under the "Runtime" group, hence "Runtime\Game", so moving the project between groups
+	// renames this. Building the solution outright would try to relink the running editor. Nothing
+	// else is rebuilt, so the editor's copy of the module — which the module's own post-build step
+	// refreshes — is the one the reload then picks up.
 	const std::string build =
 		"\"" + MSBuildPath() + "\""
 		" \"" + (root / "Lion.sln").string() + "\""
-		" -t:Game\\Game"
+		" -t:Runtime\\Game"
 		" -p:Configuration=" + BuildConfiguration() +
 		" -p:Platform=x64 -v:minimal -nologo";
 

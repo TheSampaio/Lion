@@ -6,9 +6,7 @@
 
 namespace Lion
 {
-#if LN_DEBUG
 	uint32 OpenGLTexture::sAllocationCount = 0;
-#endif
 
 	OpenGLTexture::OpenGLTexture(const std::string& filePath)
 		: mFilterMin(GL_NEAREST),
@@ -60,20 +58,23 @@ namespace Lion
 		stbi_image_free(bytes);
 		glBindTexture(GL_TEXTURE_2D, 0);
 
-#if LN_DEBUG
+		// Not guarded by the build: the log's verbosity is the single thing that decides whether this is
+		// seen, so the editor can show it whatever configuration it was compiled in. The counter costs
+		// an increment per texture, which is not a per-frame path.
 		sAllocationCount++;
-		Log::Console(LogLevel::Trace, LION_FORMAT_TEXT("[OpenGLTexture] Allocated: 1 (Total: {})", sAllocationCount));
-#endif
+
+		if (Log::IsEnabled(LogLevel::Trace))
+			Log::Console(LogLevel::Trace, LION_FORMAT_TEXT("[OpenGLTexture] Allocated: 1 (Total: {})", sAllocationCount));
 	}
 
 	OpenGLTexture::~OpenGLTexture()
 	{
 		glDeleteTextures(1, &mId);
 
-#if LN_DEBUG
 		sAllocationCount--;
-		Log::Console(LogLevel::Trace, LION_FORMAT_TEXT("[OpenGLTexture] Released:  1 (Remaining: {})", sAllocationCount));
-#endif
+
+		if (Log::IsEnabled(LogLevel::Trace))
+			Log::Console(LogLevel::Trace, LION_FORMAT_TEXT("[OpenGLTexture] Released:  1 (Remaining: {})", sAllocationCount));
 	}
 
 	void OpenGLTexture::Bind(uint32 slot) const

@@ -25,6 +25,55 @@ namespace Lion
 			std::strftime(buffer, sizeof(buffer), "%H:%M:%S", &local);
 			return buffer;
 		}
+
+		// Kept outside the Log instance, so an application can set it before the engine starts and even
+		// the start-up messages obey it.
+		LogVerbosity& Verbosity()
+		{
+			static LogVerbosity verbosity =
+#if defined(LN_DEBUG)
+				LogVerbosity::Verbose;
+#elif defined(LN_RELEASE)
+				LogVerbosity::Normal;
+#else
+				LogVerbosity::None;
+#endif
+
+			return verbosity;
+		}
+
+		// The lowest verbosity that still lets this level through.
+		LogVerbosity RequiredVerbosity(LogLevel level)
+		{
+			switch (level)
+			{
+				case LogLevel::Error:
+				case LogLevel::Fatal:       return LogVerbosity::Errors;
+
+				case LogLevel::Warning:
+				case LogLevel::Success:     return LogVerbosity::Normal;
+
+				case LogLevel::Information:
+				case LogLevel::Trace:       return LogVerbosity::Verbose;
+			}
+
+			return LogVerbosity::Verbose;
+		}
+	}
+
+	void Log::SetVerbosity(LogVerbosity verbosity)
+	{
+		Verbosity() = verbosity;
+	}
+
+	LogVerbosity Log::GetVerbosity()
+	{
+		return Verbosity();
+	}
+
+	bool Log::IsEnabled(LogLevel level)
+	{
+		return static_cast<int32>(Verbosity()) >= static_cast<int32>(RequiredVerbosity(level));
 	}
 
 	void Log::New()
@@ -59,9 +108,12 @@ namespace Lion
 
 	void Log::Console(LogLevel mode, const std::string& message)
 	{
-#ifndef LN_SHIPPING
-		// Retain every line in memory so the editor Console can display the full history, regardless
-		// of which severities are routed to spdlog in the current configuration.
+		// The verbosity is the only filter. spdlog is left wide open below, so the two cannot disagree
+		// about what was meant to be logged.
+		if (!IsEnabled(mode))
+			return;
+
+		// Retain every line in memory so the editor's Console panel can display the full history.
 		if (sInstance)
 		{
 			if (sInstance->mHistory.size() >= kMaxHistory)
@@ -79,7 +131,9 @@ namespace Lion
 
 		case LogLevel::Fatal:
 			spdlog::critical(message);
-			
+
+			// Halting on a fatal is a development aid: it only makes sense while someone is watching
+			// the log, which is exactly what the verbosity says.
 #if LN_PLATFORM_WIN
 			system("PAUSE");
 
@@ -99,7 +153,6 @@ namespace Lion
 			spdlog::warn(message);
 			break;
 
-	#ifndef LN_RELEASE
 		case LogLevel::Information:
 			spdlog::debug(message);
 			break;
@@ -107,23 +160,15 @@ namespace Lion
 		case LogLevel::Trace:
 			spdlog::trace(message);
 			break;
-
-	#endif // !LN_RELEASE
 		}
-
-#endif // !LN_SHIPPING
 	}
 
 	Log::Log()
 	{
-#ifndef LN_SHIPPING
 		spdlog::set_pattern("%^[%T] %v%$");
 
-	#ifndef LN_RELEASE
+		// Wide open on purpose: the verbosity above is the single filter, and a second one here could
+		// only drift from it.
 		spdlog::set_level(spdlog::level::trace);
-
-	#endif // !LN_RELEASE
-
-#endif // !LN_SHIPPING
 	}
 }

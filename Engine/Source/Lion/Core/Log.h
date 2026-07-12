@@ -14,6 +14,20 @@ namespace Lion
 		Warning,
 	};
 
+	// How much of the log gets through, in increasing order.
+	//
+	// This is a runtime setting rather than a compile-time one, and it has to be: the engine is a
+	// single DLL shared by the editor and the game, so a #ifdef would silence both at once. The editor
+	// turns everything on whatever build it was compiled in — a tool that cannot say what happened is
+	// not a tool — while a game keeps its build's default, which for an exported one is nothing.
+	enum class LogVerbosity
+	{
+		None,      // Nothing at all.
+		Errors,    // Error and Fatal.
+		Normal,    // ...and Warning and Success.
+		Verbose,   // ...and Information and Trace. Everything.
+	};
+
 	// A single captured log line, retained in memory so tools (e.g. the editor Console panel) can
 	// display the engine's and game's log output.
 	struct LogEntry
@@ -27,6 +41,15 @@ namespace Lion
 	{
 	public:
 		static LION_API void Console(LogLevel mode, const std::string& message);
+
+		// Defaults to what the build asks for — everything in Debug, warnings and successes in Release,
+		// nothing in Shipping. An application overrides it at start-up; the editor asks for everything.
+		static LION_API void SetVerbosity(LogVerbosity verbosity);
+		static LION_API LogVerbosity GetVerbosity();
+
+		// Whether a level is currently let through, so a caller can skip building a message that would
+		// only be thrown away.
+		static LION_API bool IsEnabled(LogLevel level);
 
 		// In-memory history of every logged line (oldest first), for editor/tooling consumption.
 		// A deque so dropping the oldest entry at the cap is O(1) instead of shifting the whole

@@ -6,6 +6,10 @@ project "Editor"
     targetdir ("%{wks.location}/Build/Bin/" .. output_dir .. "%{prj.name}")
     objdir    ("%{wks.location}/Build/Obj/" .. output_dir .. "%{prj.name}")
 
+    -- Run from the output folder, not the project one: assets, the game module and the editor's own
+    -- state all sit next to the executable, and Visual Studio would otherwise start it from Mane/.
+    debugdir "%{cfg.targetdir}"
+
     files {
         "%{prj.location}/**.h",
         "%{prj.location}/**.cpp",  -- includes the vendored ImGuizmo.cpp under Source/Vendor (editor-only)

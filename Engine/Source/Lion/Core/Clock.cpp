@@ -1,12 +1,12 @@
 #include "Engine.h"
 #include "Clock.h"
 
+#include <Lion/Core/Build.h>
 #include <Lion/Core/Window.h>
 #include <Lion/Render/RendererAPI.h>
 
 namespace Lion
 {
-#ifndef LN_SHIPPING
     static const char8* GraphicsApiName()
     {
         switch (RendererAPI::GetAPI())
@@ -16,17 +16,36 @@ namespace Lion
             default:                  return "None";
         }
     }
+
+    namespace
+    {
+        // The build's default; an application (the editor) may override it.
+        bool& ShowFrameStats()
+        {
+#ifdef LN_SHIPPING
+            static bool show = false;
+#else
+            static bool show = true;
 #endif
+
+            return show;
+        }
+    }
 
     Clock* Clock::sInstance = nullptr;
     float32 Clock::sFrameTime = 0.0f;
-
-#ifndef LN_SHIPPING
     uint32 Clock::sFrameCount = 0;
     float32 Clock::sTotalTime = 0.0f;
 
-#endif // LN_SHIPPING
+    void Clock::SetShowFrameStats(bool show)
+    {
+        ShowFrameStats() = show;
+    }
 
+    bool Clock::GetShowFrameStats()
+    {
+        return ShowFrameStats();
+    }
 
     void Clock::New()
     {
@@ -48,7 +67,9 @@ namespace Lion
     {
         sFrameTime = sInstance->mTimer->Reset();
 
-#ifndef LN_SHIPPING
+        if (!ShowFrameStats())
+            return;
+
         sTotalTime += sFrameTime;
         sFrameCount++;
 
@@ -58,17 +79,19 @@ namespace Lion
             text << std::fixed;
             text.precision(1);
 
+            // No labels: a reader does not need to be told that "OpenGL" is the graphics API, and the
+            // units carry the rest. The frame time stays alongside the framerate because it is the one
+            // that is linear, and so the one you optimise against.
             text << Window::GetTitle().c_str()
-                << " | FPS: " << sFrameCount
-                << " | MS: " << sFrameTime * 1000.0f
-                << " | API: " << GraphicsApiName();
+                << " | " << sFrameCount << " fps"
+                << " | " << sFrameTime * 1000.0f << " ms"
+                << " | " << BuildConfiguration()
+                << " | " << GraphicsApiName();
 
             Window::SetDisplayTitle(text.str());
 
             sFrameCount = 0;
             sTotalTime -= 1.0f;
         }
-
-#endif // LN_SHIPPING
     }
 }
