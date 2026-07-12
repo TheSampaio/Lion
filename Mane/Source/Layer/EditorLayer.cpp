@@ -2424,21 +2424,25 @@ void EditorLayer::BuildDefaultLayout(unsigned int dockspaceId)
 	constexpr float32 kStatisticsHeight = 191.0f;
 
 	const ImVec2 work = ImGui::GetMainViewport()->WorkSize;
+	const float32 separator = ImGui::GetStyle().DockingSeparatorSize;
 
-	// A split ratio is relative to the node being split, and each split shrinks what is left over.
-	// Clamping keeps a small window degrading into thinner panels instead of swallowing the viewport.
-	const auto ratio = [](float32 size, float32 extent)
+	// A split ratio is a fraction of what the two sides actually share, and the separator between them
+	// belongs to neither — so it comes off the extent before the division. Measured against the whole
+	// node instead, a panel rounds down by a pixel, and the pixel it gives up lands in the viewport:
+	// the one panel whose size has to be exact, because the game is rendered at it.
+	const auto ratio = [separator](float32 size, float32 extent)
 	{
-		return ImClamp(size / ImMax(extent, 1.0f), 0.05f, 0.5f);
+		return ImClamp(size / ImMax(extent - separator, 1.0f), 0.05f, 0.5f);
 	};
 
 	ImGui::DockBuilderRemoveNode(dockspaceId);
 	ImGui::DockBuilderAddNode(dockspaceId, ImGuiDockNodeFlags_DockSpace);
 	ImGui::DockBuilderSetNodeSize(dockspaceId, work);
 
+	// Each split measures against what the one before it left behind — its panel and its separator both.
 	ImGuiID center = dockspaceId;
 	ImGuiID right = ImGui::DockBuilderSplitNode(center, ImGuiDir_Right, ratio(kRightWidth, work.x), nullptr, &center);
-	ImGuiID left  = ImGui::DockBuilderSplitNode(center, ImGuiDir_Left, ratio(kLeftWidth, work.x - kRightWidth), nullptr, &center);
+	ImGuiID left  = ImGui::DockBuilderSplitNode(center, ImGuiDir_Left, ratio(kLeftWidth, work.x - kRightWidth - separator), nullptr, &center);
 
 	const ImGuiID bottom     = ImGui::DockBuilderSplitNode(center, ImGuiDir_Down, ratio(kConsoleHeight, work.y), nullptr, &center);
 	const ImGuiID leftBottom = ImGui::DockBuilderSplitNode(left, ImGuiDir_Down, ratio(kProjectHeight, work.y), nullptr, &left);
