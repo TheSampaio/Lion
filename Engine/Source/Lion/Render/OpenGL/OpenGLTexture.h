@@ -32,6 +32,9 @@ namespace Lion
 
 		// Live texture count, reported through the log. Kept in every build: what the log lets through
 		// is decided at runtime now, so the editor can show this whatever configuration it was built in.
+		// How many textures exist right now. Read through Texture::GetLiveCount, which is where anything
+		// outside the backend asks the question.
 		static uint32 sAllocationCount;
+		friend Texture;
 	};
 }

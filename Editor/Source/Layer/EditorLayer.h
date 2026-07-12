@@ -99,9 +99,13 @@ private:
 	bool mConsoleShowWarnings = true;
 	bool mConsoleShowInfo = true;
 
+	bool mConsoleCollapse = false;     // Unity's: identical lines become one line with a count.
+
 	// Console rendering: only the entries passing the filters are indexed here, and a list clipper
-	// draws just the visible slice, so a full history costs the same as a screenful.
+	// draws just the visible slice, so a full history costs the same as a screenful. When collapsed, the
+	// index is the last occurrence of a message and the count beside it is how many there were.
 	std::vector<int> mConsoleVisible;
+	std::vector<int> mConsoleCounts;
 	int mConsoleSelected = -1;
 	size_t mConsoleLastTotal = 0;   // Total lines logged as of the last drawn frame; drives the tail follow.
 	bool mPlaying = false;
@@ -130,6 +134,20 @@ private:
 	std::string mScenePath;                         // The scene on disk, empty until it has been saved once.
 	glm::vec2 mViewportSize{ 0.0f, 0.0f };
 	Lion::Vector mViewportMenuPosition;   // Where the mouse was when the viewport's context menu opened.
+
+	// Where the viewport's image landed on screen. The play-mode dim darkens everything but this.
+	ImVec2 mViewportImageMin{ 0.0f, 0.0f };
+	ImVec2 mViewportImageMax{ 0.0f, 0.0f };
+
+	// The toast: one message at a time, in the corner. 'busy' spins and stays; anything else fades out.
+	std::string mToastMessage;
+	float mToastTime = 0.0f;
+	bool mToastBusy = false;
+
+	// A panel reports its size while a split is being dragged, and only then. The sizes are kept from the
+	// last frame so a change can be noticed at all.
+	std::unordered_map<std::string, ImVec2> mPanelSizes;
+	std::vector<std::string> mResizingPanels;
 
 	// Undo/redo history of full-scene JSON snapshots. mPendingSnapshot holds the pre-edit state
 	// captured at the start of a continuous edit (gizmo/drag), committed once the edit ends.
@@ -171,6 +189,7 @@ private:
 	void DrawHierarchy();
 	void DrawEntityNode(const Lion::Reference<Lion::Entity>& entity);
 	void DrawProperties();
+	void DrawStatistics();
 	void DrawConsole();
 	void DrawProject();
 
@@ -182,6 +201,13 @@ private:
 	void RenameAsset(const std::string& assetPath, const std::string& name);
 	void DrawDeleteAssetPopup();   // Deleting a file is not an undo step, so it is a question first.
 	void DrawShortcuts();
+
+	// Drawn over the panels rather than in one of them.
+	void DrawPlayModeDim();        // Everything but the game goes dark while the game is running.
+	void DrawPanelSizeOverlay();   // A panel's size, in pixels, while it is being resized.
+	void DrawToast();              // What the editor is doing that takes long enough to say so.
+	void SetToast(const std::string& message, bool busy);
+
 	void BuildDefaultLayout(unsigned int dockspaceId);
 
 	// Dock layout management (Window > Layouts). A layout is just an imgui.ini saved under

@@ -315,17 +315,7 @@ void EditorLayer::DrawUI()
 	DrawHierarchy();
 	DrawProperties();
 
-	if (mShowStatistics)
-	{
-		ImGui::Begin("Statistics", &mShowStatistics);
-		const ImGuiIO& io = ImGui::GetIO();
-		ImGui::Text("FPS:   %.1f", io.Framerate);
-		ImGui::Text("Frame: %.3f ms", 1000.0f / io.Framerate);
-		ImGui::Separator();
-		ImGui::Text("Viewport: %.0f x %.0f", mViewportSize.x, mViewportSize.y);
-		ImGui::End();
-	}
-
+	DrawStatistics();
 	DrawConsole();
 	DrawProject();
 	DrawShortcuts();
@@ -333,9 +323,254 @@ void EditorLayer::DrawUI()
 	DrawNewComponentPopup();
 	DrawDeleteAssetPopup();
 
+	// Drawn over everything, because that is what they are: the dim that says the game is running, the
+	// size a panel reports while it is being dragged, and the toast that says the module is building.
+	DrawPlayModeDim();
+	DrawPanelSizeOverlay();
+	DrawToast();
+
 	// Commit any in-progress continuous edit (gizmo/slider drag) once the mouse is released.
 	if (mHasPending && ImGui::IsMouseReleased(ImGuiMouseButton_Left))
 		CommitEdit();
+}
+
+void EditorLayer::DrawPlayModeDim()
+{
+	if (!mPlaying || mViewportImageMax.x <= mViewportImageMin.x)
+		return;
+
+	// Four rectangles around the viewport's image, over everything: the editor goes dark and the game
+	// does not. Four quads a frame is what it costs, which is the cheap way to say "this is running" —
+	// the expensive way is re-theming the UI, which means touching every colour ImGui has and paying for
+	// it again in every widget that reads one.
+	const ImGuiViewport* viewport = ImGui::GetMainViewport();
+	const ImVec2 min = viewport->Pos;
+	const ImVec2 max = ImVec2(min.x + viewport->Size.x, min.y + viewport->Size.y);
+	const ImU32 dim = IM_COL32(0, 0, 0, 56);
+
+	ImDrawList* drawList = ImGui::GetForegroundDrawList();
+
+	drawList->AddRectFilled(min, ImVec2(max.x, mViewportImageMin.y), dim);
+	drawList->AddRectFilled(ImVec2(min.x, mViewportImageMax.y), max, dim);
+	drawList->AddRectFilled(ImVec2(min.x, mViewportImageMin.y), ImVec2(mViewportImageMin.x, mViewportImageMax.y), dim);
+	drawList->AddRectFilled(ImVec2(mViewportImageMax.x, mViewportImageMin.y), ImVec2(max.x, mViewportImageMax.y), dim);
+}
+
+void EditorLayer::DrawPanelSizeOverlay()
+{
+	// A panel says how big it is while it is being dragged, and says nothing the rest of the time. The
+	// size is the one the layout file keeps, so what is read here is what can be typed back there.
+	if (!ImGui::IsMouseDown(ImGuiMouseButton_Left))
+	{
+		mResizingPanels.clear();
+		mPanelSizes.clear();
+		return;
+	}
+
+	ImDrawList* drawList = ImGui::GetForegroundDrawList();
+
+	const auto report = [&](const char8* name)
+	{
+		ImGuiWindow* window = ImGui::FindWindowByName(name);
+
+		if (!window || window->Hidden || !window->WasActive)
+			return;
+
+		const auto previous = mPanelSizes.find(name);
+		const bool resizing = std::find(mResizingPanels.begin(), mResizingPanels.end(), name) != mResizingPanels.end();
+
+		// A panel is being resized when its size changed while the button is held. Once it has, it keeps
+		// reporting until the mouse comes up — a number that flickered off between two drag frames would
+		// be worse than no number.
+		if (!resizing && previous != mPanelSizes.end() &&
+			(previous->second.x != window->Size.x || previous->second.y != window->Size.y))
+		{
+			mResizingPanels.push_back(name);
+		}
+
+		mPanelSizes[name] = window->Size;
+
+		if (!resizing && std::find(mResizingPanels.begin(), mResizingPanels.end(), name) == mResizingPanels.end())
+			return;
+
+		char8 text[32];
+		std::snprintf(text, sizeof(text), "%d x %d", static_cast<int32>(window->Size.x), static_cast<int32>(window->Size.y));
+
+		const ImVec2 size = ImGui::CalcTextSize(text);
+		const ImVec2 center(window->Pos.x + window->Size.x * 0.5f, window->Pos.y + window->Size.y * 0.5f);
+		const ImVec2 padding(8.0f, 4.0f);
+
+		drawList->AddRectFilled(
+			ImVec2(center.x - size.x * 0.5f - padding.x, center.y - size.y * 0.5f - padding.y),
+			ImVec2(center.x + size.x * 0.5f + padding.x, center.y + size.y * 0.5f + padding.y),
+			IM_COL32(20, 20, 22, 230), 4.0f);
+
+		drawList->AddText(ImVec2(center.x - size.x * 0.5f, center.y - size.y * 0.5f), IM_COL32_WHITE, text);
+	};
+
+	for (const Panel& panel : kPanels)
+		report(panel.name);
+
+	report("Viewport");
+}
+
+void EditorLayer::SetToast(const std::string& message, bool busy)
+{
+	mToastMessage = message;
+	mToastBusy = busy;
+	mToastTime = static_cast<float32>(ImGui::GetTime());
+}
+
+void EditorLayer::DrawToast()
+{
+	if (mToastMessage.empty())
+		return;
+
+	// A toast that is waiting on something stays until that something is done; one that is reporting a
+	// result reads once and leaves. It fades rather than vanishing — a notification that disappears
+	// between two frames looks like a glitch, not like an answer.
+	constexpr float32 kLifetime = 4.0f;
+	constexpr float32 kFade = 0.6f;
+
+	float32 alpha = 1.0f;
+
+	if (!mToastBusy)
+	{
+		const float32 age = static_cast<float32>(ImGui::GetTime()) - mToastTime;
+
+		if (age > kLifetime)
+		{
+			mToastMessage.clear();
+			return;
+		}
+
+		alpha = ImMin(1.0f, (kLifetime - age) / kFade);
+	}
+
+	const ImGuiViewport* viewport = ImGui::GetMainViewport();
+	const ImVec2 corner(
+		viewport->WorkPos.x + viewport->WorkSize.x - 16.0f,
+		viewport->WorkPos.y + viewport->WorkSize.y - 16.0f);
+
+	ImGui::SetNextWindowPos(corner, ImGuiCond_Always, ImVec2(1.0f, 1.0f));
+	ImGui::SetNextWindowBgAlpha(0.92f * alpha);
+
+	constexpr ImGuiWindowFlags flags =
+		ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings |
+		ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoInputs;
+
+	ImGui::PushStyleVar(ImGuiStyleVar_Alpha, alpha);
+
+	if (ImGui::Begin("##toast", nullptr, flags))
+	{
+		const float32 size = ImGui::GetFontSize();
+
+		if (mToastBusy)
+		{
+			// The radial: an arc that runs around the circle, drawn rather than animated frame by frame —
+			// where it is, is a function of the clock, so it costs one arc and no state.
+			const ImVec2 origin = ImGui::GetCursorScreenPos();
+			const ImVec2 center(origin.x + size * 0.5f, origin.y + size * 0.5f);
+			const float32 time = static_cast<float32>(ImGui::GetTime());
+			const float32 start = time * 4.0f;
+
+			ImDrawList* drawList = ImGui::GetWindowDrawList();
+			drawList->PathArcTo(center, size * 0.42f, start, start + IM_PI * 1.4f, 24);
+			drawList->PathStroke(ImGui::GetColorU32(ImGuiCol_Text), ImDrawFlags_None, 2.0f);
+
+			ImGui::Dummy(ImVec2(size, size));
+			ImGui::SameLine();
+		}
+
+		ImGui::AlignTextToFramePadding();
+		ImGui::TextUnformatted(mToastMessage.c_str());
+	}
+
+	ImGui::End();
+	ImGui::PopStyleVar();
+}
+
+void EditorLayer::DrawStatistics()
+{
+	if (!mShowStatistics)
+		return;
+
+	ImGui::Begin("Statistics", &mShowStatistics);
+
+	const ImGuiIO& io = ImGui::GetIO();
+	const RenderStats& stats = Renderer::GetStats();
+
+	// A row of two: what it is, and what it is worth. A panel of numbers is read down the left and
+	// compared down the right, so the two are columns and not one string.
+	const auto row = [](const char8* label, const char8* format, ...)
+	{
+		ImGui::TableNextRow();
+		ImGui::TableSetColumnIndex(0);
+		ImGui::TextUnformatted(label);
+		ImGui::TableSetColumnIndex(1);
+
+		va_list arguments;
+		va_start(arguments, format);
+		ImGui::TextV(format, arguments);
+		va_end(arguments);
+	};
+
+	constexpr ImGuiTableFlags tableFlags = ImGuiTableFlags_SizingStretchProp;
+
+	if (ImGui::CollapsingHeader("Frame", ImGuiTreeNodeFlags_DefaultOpen) && ImGui::BeginTable("Frame", 2, tableFlags))
+	{
+		row("FPS", "%.1f", io.Framerate);
+		row("Frame time", "%.3f ms", 1000.0f / io.Framerate);
+		row("Build", "%s", BuildConfiguration());
+		ImGui::EndTable();
+	}
+
+	if (ImGui::CollapsingHeader("Renderer", ImGuiTreeNodeFlags_DefaultOpen) && ImGui::BeginTable("Renderer", 2, tableFlags))
+	{
+		// The batch's whole job is to turn many sprites into few draw calls, and none of that shows from
+		// the outside. These are the numbers that say whether it is doing it.
+		row("Draw calls", "%u", stats.drawCalls);
+		row("Sprites", "%u", stats.sprites);
+		row("Texture slots", "%u", stats.textureSlots);
+		row("Textures alive", "%u", Texture::GetLiveCount());
+		row("Vertices", "%u", stats.vertices);
+		row("Indices", "%u", stats.indices);
+
+		if (stats.spritesDropped > 0)
+			row("Dropped", "%u (out of texture slots)", stats.spritesDropped);
+
+		ImGui::EndTable();
+	}
+
+	if (ImGui::CollapsingHeader("Scene", ImGuiTreeNodeFlags_DefaultOpen) && ImGui::BeginTable("Scene", 2, tableFlags))
+	{
+		int32 components = 0;
+		int32 bodies = 0;
+
+		for (const auto& entity : mScene->GetEntities())
+		{
+			components += static_cast<int32>(entity->GetComponents().size());
+
+			if (entity->HasComponent<RigidBody2D>())
+				bodies++;
+		}
+
+		row("Entities", "%d", static_cast<int32>(mScene->GetEntities().size()));
+		row("Components", "%d", components);
+		row("Rigid bodies", "%d", bodies);
+		row("Selected", "%d", static_cast<int32>(mSelection.size()));
+		row("State", "%s", mPlaying ? (mPaused ? "Paused" : "Playing") : "Editing");
+		ImGui::EndTable();
+	}
+
+	if (ImGui::CollapsingHeader("Viewport", ImGuiTreeNodeFlags_DefaultOpen) && ImGui::BeginTable("Viewport", 2, tableFlags))
+	{
+		row("Render target", "%.0f x %.0f", mViewportSize.x, mViewportSize.y);
+		row("Window", "%d x %d", static_cast<int32>(io.DisplaySize.x), static_cast<int32>(io.DisplaySize.y));
+		ImGui::EndTable();
+	}
+
+	ImGui::End();
 }
 
 namespace
@@ -430,6 +665,12 @@ void EditorLayer::DrawConsole()
 	ImGui::SameLine();
 	ImGui::Checkbox("Auto-scroll", &mConsoleAutoScroll);
 
+	ImGui::SameLine();
+	ImGui::Checkbox("Collapse", &mConsoleCollapse);
+
+	if (ImGui::IsItemHovered())
+		ImGui::SetTooltip("Show one line per distinct message, with how many times it was logged");
+
 	const std::string errorText = "ERROR  " + std::to_string(errorCount);
 	const std::string warnText = "WARN  " + std::to_string(warningCount);
 	const std::string infoText = "INFO  " + std::to_string(infoCount);
@@ -447,7 +688,14 @@ void EditorLayer::DrawConsole()
 	ImGui::Separator();
 
 	// --- Collect the entries that pass the filters; the list below indexes into this.
+	//
+	// Collapsed, a message that was logged a hundred times is one line that says so. The pass is over the
+	// history, which is capped — the same order the filter pass already costs — and the clipper still
+	// draws only what is on screen, so the panel does not get more expensive for saying less.
 	mConsoleVisible.clear();
+	mConsoleCounts.clear();
+
+	std::unordered_map<std::string, int> collapsed;   // Message -> row already emitted for it.
 
 	for (int index = 0; index < static_cast<int>(history.size()); ++index)
 	{
@@ -461,7 +709,23 @@ void EditorLayer::DrawConsole()
 		if (!filter.PassFilter(history[index].message.c_str()))
 			continue;
 
+		if (mConsoleCollapse)
+		{
+			const auto existing = collapsed.find(history[index].message);
+
+			// The row keeps the latest occurrence, so its timestamp answers "when did this last happen".
+			if (existing != collapsed.end())
+			{
+				mConsoleVisible[existing->second] = index;
+				mConsoleCounts[existing->second]++;
+				continue;
+			}
+
+			collapsed.emplace(history[index].message, static_cast<int>(mConsoleVisible.size()));
+		}
+
 		mConsoleVisible.push_back(index);
+		mConsoleCounts.push_back(1);
 	}
 
 	// --- Message list: a severity dot, a dimmed timestamp and the message. The clipper submits only
@@ -515,6 +779,23 @@ void EditorLayer::DrawConsole()
 
 			if (tinted)
 				ImGui::PopStyleColor();
+
+			// How many times this one line happened, pinned to the right edge where a count goes.
+			if (mConsoleCounts[row] > 1)
+			{
+				char8 count[16];
+				std::snprintf(count, sizeof(count), "%d", mConsoleCounts[row]);
+
+				const ImVec2 size = ImGui::CalcTextSize(count);
+				const ImVec2 badge(rowMin.x + ImGui::GetContentRegionMax().x - size.x - 12.0f, rowMin.y);
+
+				drawList->AddRectFilled(
+					ImVec2(badge.x - 6.0f, badge.y),
+					ImVec2(badge.x + size.x + 6.0f, badge.y + ImGui::GetTextLineHeight()),
+					ImGui::GetColorU32(ImGuiCol_Button), 3.0f);
+
+				drawList->AddText(badge, ImGui::GetColorU32(ImGuiCol_Text), count);
+			}
 
 			ImGui::PopID();
 		}
@@ -1956,6 +2237,10 @@ void EditorLayer::DrawViewport()
 	const ImVec2 imageMin = ImGui::GetItemRectMin();
 	const ImVec2 imageSize = ImGui::GetItemRectSize();
 	const bool imageHovered = ImGui::IsItemHovered();
+
+	// Kept for the dim: it darkens everything the game is not.
+	mViewportImageMin = imageMin;
+	mViewportImageMax = ImVec2(imageMin.x + imageSize.x, imageMin.y + imageSize.y);
 
 	// The gizmo is an editing tool; hide it while the simulation is running, for folders (no
 	// meaningful transform), and for the Select tool, which only picks entities.
@@ -3862,6 +4147,7 @@ void EditorLayer::CompileGameModule()
 		" -p:Platform=x64 -v:minimal -nologo";
 
 	Log::Console(LogLevel::Information, "[Editor] Compiling the game module...");
+	SetToast("Compiling the game module", true);
 
 	mBuilding = true;
 	mGameBuild = std::async(std::launch::async, [generate, build]
@@ -3910,6 +4196,7 @@ void EditorLayer::PollGameBuild()
 	if (result.exitCode != 0)
 	{
 		Log::Console(LogLevel::Error, "[Editor] The game module failed to compile; the loaded one is unchanged.");
+		SetToast("The game module failed to compile", false);
 		return;
 	}
 
@@ -3954,7 +4241,10 @@ void EditorLayer::ReloadGameModule()
 	SelectEntityByIndex(selected);
 
 	if (loaded)
+	{
 		Log::Console(LogLevel::Success, "[Editor] Reloaded the game module.");
+		SetToast("Reloaded the game module", false);
+	}
 }
 
 bool EditorLayer::GenerateComponent(const std::string& name, const std::string& folder)
