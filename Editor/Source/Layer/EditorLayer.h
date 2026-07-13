@@ -36,6 +36,7 @@ private:
 		StepFrame, CompileModule,
 		ToggleHierarchy, ToggleProject, ToggleConsole, ToggleStatistics, ToggleProperties,
 		NewScene, OpenScene, SaveScene, SaveSceneAs,
+		Deselect,
 		Count
 	};
 

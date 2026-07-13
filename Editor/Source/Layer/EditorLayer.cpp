@@ -1817,7 +1817,8 @@ void EditorLayer::DrawShortcuts()
 			{ ShortcutAction::GizmoMove,       "Tools",     "Move tool (translate)" },
 			{ ShortcutAction::GizmoRotate,     "Tools",     "Rotate tool" },
 			{ ShortcutAction::GizmoScale,      "Tools",     "Scale tool" },
-			{ ShortcutAction::RenameEntity,    "Hierarchy", "Rename selected entity" },
+			{ ShortcutAction::Deselect,        "Hierarchy", "Clear the selection" },
+				{ ShortcutAction::RenameEntity,    "Hierarchy", "Rename selected entity" },
 			{ ShortcutAction::DeleteEntity,    "Hierarchy", "Delete selected entity" },
 			{ ShortcutAction::CopyEntity,      "Hierarchy", "Copy selected entity" },
 			{ ShortcutAction::PasteEntity,     "Hierarchy", "Paste entity from clipboard" },
@@ -2036,6 +2037,8 @@ void EditorLayer::ResetShortcutsToDefault()
 	set(ShortcutAction::ToggleProject, ImGuiKey_3, false, false, true);
 	set(ShortcutAction::ToggleConsole, ImGuiKey_4, false, false, true);
 	set(ShortcutAction::ToggleStatistics, ImGuiKey_5, false, false, true);
+
+	set(ShortcutAction::Deselect, ImGuiKey_Escape);
 
 	// The scene keys every editor has, bound where every editor binds them.
 	set(ShortcutAction::NewScene, ImGuiKey_N, true);
@@ -2330,6 +2333,14 @@ void EditorLayer::HandleShortcuts()
 	for (const Panel& panel : kPanels)
 		if (IsShortcutPressed(panel.shortcut))
 			this->*panel.visible = !(this->*panel.visible);
+
+	// Escape drops the selection — but only when it has nothing else to do. It is also what closes a popup
+	// and what abandons a rename, and a key that does two things at once does neither of them predictably:
+	// the context menu would vanish and take the selection with it. A rename is a text field, so it has
+	// already been ruled out above.
+	if (IsShortcutPressed(ShortcutAction::Deselect) && !mSelection.empty() &&
+		!ImGui::IsPopupOpen(nullptr, ImGuiPopupFlags_AnyPopupId | ImGuiPopupFlags_AnyPopupLevel))
+		SetSelection(nullptr);
 
 	// The actions below are edit-mode only (typing is already ruled out above).
 	if (mPlaying)
