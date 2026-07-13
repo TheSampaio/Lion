@@ -1,7 +1,16 @@
 #include "Editor.h"
 
+#include <cstdlib>
+
+#include "Source/Sealer.h"
+
 Lion::Application* Lion::Main()
 {
+	// The build runs the editor to seal a shipped game's assets, and for nothing else — so it seals them and
+	// the process is over, before a window is opened or a scene is loaded.
+	if (const std::optional<int32> code = Sealer::RunFromCommandLine())
+		std::exit(*code);
+
 	// The editor is a tool, and a tool that cannot tell you what happened is not one — so it keeps
 	// every diagnostic the engine has, whatever configuration it was built in. The build's own levels
 	// are meant for a game that ships, not for the thing you debug with.

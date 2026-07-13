@@ -6,6 +6,7 @@
 #include <Lion/Core/Log.h>
 #include <Lion/Logic/Component.h>
 #include <Lion/Logic/Entity.h>
+#include <Lion/Core/Vault.h>
 #include <Lion/Logic/Scene.h>
 #include <Lion/Logic/Serializer.h>
 #include <Lion/Math/Transform.h>
@@ -143,7 +144,7 @@ namespace Lion
 
 	bool SceneSerializer::Serialize(const Reference<Scene>& scene, const std::string& filePath)
 	{
-		std::ofstream file(filePath);
+		std::ofstream file(filePath, std::ios::binary);
 
 		if (!file.is_open())
 		{
@@ -151,7 +152,10 @@ namespace Lion
 			return false;
 		}
 
-		file << SerializeToString(scene);
+		// A scene leaves the editor sealed, and it is JSON again by the time anything reads it — Vault::Unseal
+		// takes plaintext back unchanged, so a scene written by hand still opens. Sealed is what a .lscene is,
+		// not what shipping does to one, which is why nothing has to remember which kind it is holding.
+		file << Vault::Seal(SerializeToString(scene));
 		Log::Console(LogLevel::Success, LION_FORMAT_TEXT("[SceneSerializer] Saved scene: '{}'.", filePath));
 		return true;
 	}
@@ -309,7 +313,9 @@ namespace Lion
 		std::stringstream buffer;
 		buffer << file.rdbuf();
 
-		if (!DeserializeFromString(scene, buffer.str()))
+		// A scene a project keeps is plain JSON; a scene a game ships is sealed. This does not have to know
+		// which it opened — the content says so itself, and unsealing something plain gives it back.
+		if (!DeserializeFromString(scene, Vault::Unseal(buffer.str())))
 			return false;
 
 		Log::Console(LogLevel::Success, LION_FORMAT_TEXT("[SceneSerializer] Loaded scene: '{}'.", filePath));

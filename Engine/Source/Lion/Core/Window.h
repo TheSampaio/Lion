@@ -54,6 +54,14 @@ namespace Lion
         static LION_API void ToggleMaximize();
         static LION_API bool IsMaximized();
 
+        // Whether the cursor is over one of the edges the window is resized by.
+        //
+        // A window that draws its own caption has no non-client area left, so the edges are inside what the
+        // GUI thinks is its own. The GUI has to be told to keep its hands off the cursor there, or it sets an
+        // arrow over an edge Windows is trying to put a double-headed one on, every frame, and the edge looks
+        // like it is not there.
+        static LION_API bool IsPointerOnResizeBorder();
+
         // Immediate keyboard state, using engine key codes.
         static LION_API bool IsKeyPressed(int32 keyCode) { return sInstance->mBackend->IsKeyPressed(keyCode); }
         static LION_API bool IsKeyReleased(int32 keyCode) { return sInstance->mBackend->IsKeyReleased(keyCode); }

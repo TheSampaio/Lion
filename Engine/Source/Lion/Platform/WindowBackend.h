@@ -30,6 +30,10 @@ namespace Lion
 		bool customTitleBar = false;
 		float32 titleBarHeight = 0.0f;   // How tall the drawn caption is, so the platform knows what to drag by.
 		bool titleBarBlocked = false;    // The cursor is over something clickable in it; that click is not a drag.
+
+		// The cursor is over an edge the window resizes by. The platform answers that question already, for
+		// every mouse move; the GUI needs the answer so it stops setting a cursor of its own over the edge.
+		bool pointerOnResizeBorder = false;
 	};
 
 	// Platform windowing backend.

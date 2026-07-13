@@ -11,6 +11,14 @@
 
 using namespace Lion;
 
+// The bold cut, kept because ImGui hands it back as nothing more than a pointer into its font atlas.
+static ImFont* sBoldFont = nullptr;
+
+ImFont* EditorGui::GetBoldFont()
+{
+	return sBoldFont;
+}
+
 static void SetDarkTheme()
 {
 	ImGui::StyleColorsDark();
@@ -133,9 +141,14 @@ void EditorGui::Init()
 	static const std::string iniPath = (dataDirectory / "lion-ui.ini").string();
 	io.IniFilename = iniPath.c_str();
 
-	// Prefer Segoe UI (much more legible than ImGui's built-in font); fall back to the default.
+	// Prefer Segoe UI (much more legible than ImGui's built-in font); fall back to the default. The bold cut
+	// comes along for the few places that have to weigh more than what is around them; without it, a caller
+	// asking for bold gets a null font and ImGui draws its own.
 	if (std::filesystem::exists("C:/Windows/Fonts/segoeui.ttf"))
 		io.Fonts->AddFontFromFileTTF("C:/Windows/Fonts/segoeui.ttf", 18.0f);
+
+	if (std::filesystem::exists("C:/Windows/Fonts/segoeuib.ttf"))
+		sBoldFont = io.Fonts->AddFontFromFileTTF("C:/Windows/Fonts/segoeuib.ttf", 18.0f);
 
 	SetDarkTheme();
 
@@ -153,6 +166,17 @@ void EditorGui::Shutdown()
 
 void EditorGui::BeginFrame()
 {
+	// The window draws its own caption, so the edges it is resized by are inside the area the GUI believes is
+	// entirely its own — and the GUI sets a cursor there every frame, over the double-headed one Windows put
+	// there on the way in. Whoever writes last wins, and the GUI writes last: the edge stops looking like an
+	// edge, and a border you cannot see is a border you cannot grab. Over an edge, the GUI does not get a say.
+	ImGuiIO& io = ImGui::GetIO();
+
+	if (Window::IsPointerOnResizeBorder())
+		io.ConfigFlags |= ImGuiConfigFlags_NoMouseCursorChange;
+	else
+		io.ConfigFlags &= ~ImGuiConfigFlags_NoMouseCursorChange;
+
 	ImGui_ImplOpenGL3_NewFrame();
 	ImGui_ImplGlfw_NewFrame();
 	ImGui::NewFrame();

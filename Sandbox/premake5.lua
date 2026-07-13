@@ -58,9 +58,3 @@ project "Game"
             -- post-build runs in the project's folder, one level under the workspace.
             'xcopy /E /I /Y /Q /EXCLUDE:..\\Scripts\\AssetCopyExclude.txt "%{prj.location}Assets" "%{wks.location}/Build/Bin/' .. output_dir .. launcher_project .. '/"',
         }
-
-    filter { "system:windows", "configurations:Shipping" }
-        -- Make shipped shaders unreadable so they cannot be edited in a text editor.
-        postbuildcommands {
-            'powershell -NoProfile -ExecutionPolicy Bypass -File "%{wks.location}Scripts/ObfuscateShaders.ps1" "%{wks.location}/Build/Bin/' .. output_dir .. launcher_project .. '/"',
-        }

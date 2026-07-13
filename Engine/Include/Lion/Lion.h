@@ -12,10 +12,13 @@
 #include <Lion/Core/Asset.h>
 #include <Lion/Core/Build.h>
 #include <Lion/Core/Clock.h>
+#include <Lion/Core/CommandLine.h>
 #include <Lion/Core/GameModule.h>
 #include <Lion/Core/Input.h>
 #include <Lion/Core/Layer.h>
 #include <Lion/Core/Log.h>
+#include <Lion/Core/Vault.h>
+#include <Lion/Platform/FileAssociation.h>
 #include <Lion/Core/Version.h>
 #include <Lion/Core/Window.h>
 
