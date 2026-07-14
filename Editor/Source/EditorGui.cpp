@@ -9,10 +9,49 @@
 #include <imgui/backends/imgui_impl_glfw.h>
 #include <imgui/backends/imgui_impl_opengl3.h>
 
+#include <IconsMaterialDesignIcons.h>
+
 using namespace Lion;
 
 // The bold cut, kept because ImGui hands it back as nothing more than a pointer into its font atlas.
 static ImFont* sBoldFont = nullptr;
+
+// One size for the text and the icons, because an icon is a character: it is laid out on the same line as
+// the words beside it, and a glyph a size apart from them would not sit on their baseline.
+constexpr float32 kFontSize = 18.0f;
+
+// The icon font, merged into the text font rather than added beside it.
+//
+// Merged, an icon *is* a character — "ICON_MDI_PLUS  Add" is one string, drawn by one call, out of one
+// atlas, in one draw call. Kept as a font of its own it would need pushing and popping around every icon,
+// and an icon could never sit inline with a label.
+//
+// The alternative was what the editor did before: drawing each glyph by hand out of arcs and lines. That
+// cost nothing to speak of — same draw list, same atlas — but every icon was a small pile of code that
+// only approximated the thing it was drawing.
+void MergeIconFont()
+{
+	const std::filesystem::path font = std::filesystem::path(ResourceRootDirectory()) / "Fonts" / FONT_ICON_FILE_NAME_MDI;
+
+	if (!std::filesystem::exists(font))
+	{
+		Log::Console(LogLevel::Warning, LION_FORMAT_TEXT("[Editor] Icon font not found: '{}'.", font.string()));
+		return;
+	}
+
+	// ImGui keeps the pointer, not the array, so the range outlives this call.
+	static const ImWchar range[] = { ICON_MIN_MDI, ICON_MAX_MDI, 0 };
+
+	ImFontConfig config;
+	config.MergeMode = true;
+	config.PixelSnapH = true;
+
+	// An icon is drawn to fill its square, while a letter leaves room around itself. Given the letters'
+	// advance, icons would sit shoulder to shoulder; this is the room they need to be told apart.
+	config.GlyphMinAdvanceX = kFontSize;
+
+	ImGui::GetIO().Fonts->AddFontFromFileTTF(font.string().c_str(), kFontSize, &config, range);
+}
 
 ImFont* EditorGui::GetBoldFont()
 {
@@ -145,10 +184,12 @@ void EditorGui::Init()
 	// comes along for the few places that have to weigh more than what is around them; without it, a caller
 	// asking for bold gets a null font and ImGui draws its own.
 	if (std::filesystem::exists("C:/Windows/Fonts/segoeui.ttf"))
-		io.Fonts->AddFontFromFileTTF("C:/Windows/Fonts/segoeui.ttf", 18.0f);
+		io.Fonts->AddFontFromFileTTF("C:/Windows/Fonts/segoeui.ttf", kFontSize);
+
+	MergeIconFont();
 
 	if (std::filesystem::exists("C:/Windows/Fonts/segoeuib.ttf"))
-		sBoldFont = io.Fonts->AddFontFromFileTTF("C:/Windows/Fonts/segoeuib.ttf", 18.0f);
+		sBoldFont = io.Fonts->AddFontFromFileTTF("C:/Windows/Fonts/segoeuib.ttf", kFontSize);
 
 	SetDarkTheme();
 

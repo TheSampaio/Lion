@@ -83,8 +83,22 @@ workspace "Lion"
     }
 
     dependencies["imguizmo"] = {
-        -- Header only: the editor compiles the vendored ImGuizmo.cpp from its own Source/Vendor tree.
-        include = "%{wks.location}/Vendor/imguizmo/include",
+        -- Upstream keeps its sources in src/, so that is what a translation unit including "ImGuizmo.h" is
+        -- given. A fork that rearranged its own folders would have to rearrange them again at every merge.
+        include = "%{wks.location}/Vendor/imguizmo/src",
+        lib = "imguizmo",
+    }
+
+    -- The icons the editor draws with: a webfont, and the header that names its glyphs. The font is data,
+    -- like GLFW's DLL — nothing links it, so what a dependency on it means is a file that has to arrive
+    -- beside the executable. Its licence travels with it, which is what the Apache 2.0 licence asks for.
+    dependencies["mdi"] = {
+        font = "%{wks.location}/Vendor/mdi/fonts/materialdesignicons-webfont.ttf",
+        license = "%{wks.location}/Vendor/mdi/LICENSE",
+    }
+
+    dependencies["iconfont"] = {
+        include = "%{wks.location}/Vendor/iconfont",
     }
 
     dependencies["spdlog"] = {
@@ -101,14 +115,18 @@ group ". External Dependencies"
     include "Vendor/glad"
     include "Vendor/glfw"
     include "Vendor/glm"
+    include "Vendor/iconfont"
     include "Vendor/imgui"
+    include "Vendor/imguizmo"
+    include "Vendor/json"
+    include "Vendor/mdi"
     include "Vendor/spdlog"
     include "Vendor/stb"
 
     -- Each library builds inside its own folder, so its artefacts never mix with the engine's. Set
     -- here rather than in the vendored scripts, which are submodules: they keep the name this project
     -- uses for an output folder without being edited.
-    for _, vendor in ipairs { "box2d", "glad", "glfw", "glm", "imgui", "spdlog", "stb" } do
+    for _, vendor in ipairs { "box2d", "glad", "glfw", "glm", "iconfont", "imgui", "imguizmo", "json", "mdi", "spdlog", "stb" } do
         project(vendor)
             filter {}
             targetdir ("%{wks.location}/Vendor/" .. vendor .. "/Build/Bin/" .. output_dir .. "%{prj.name}")

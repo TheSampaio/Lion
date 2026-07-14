@@ -13,7 +13,7 @@ project "Mane"
     files {
         "%{prj.location}/**.rc",   -- The executable's icon.
         "%{prj.location}/**.h",
-        "%{prj.location}/**.cpp",  -- includes the vendored ImGuizmo.cpp under Source/Vendor (editor-only)
+        "%{prj.location}/**.cpp",
     }
 
     includedirs {
@@ -26,10 +26,9 @@ project "Mane"
         "%{dependencies.glad.include}",
         "%{dependencies.glfw.include}",
         "%{dependencies.glm.include}",
+        "%{dependencies.iconfont.include}",
         "%{dependencies.imgui.include}",
         "%{dependencies.imguizmo.include}",
-        "%{wks.location}/Vendor/imguizmo/include/imguizmo",  -- so ImGuizmo.cpp finds its own "ImGuizmo.h"
-        "%{wks.location}/Vendor/imgui/include/imgui",  -- so ImGuizmo can include "imgui.h" directly
         "%{dependencies.spdlog.include}",
         "%{dependencies.stb.include}",
     }
@@ -37,6 +36,7 @@ project "Mane"
     links {
         "Lion",
         "%{dependencies.imgui.lib}",
+        "%{dependencies.imguizmo.lib}",
         "%{dependencies.glfw.lib}",  -- ImGui's GLFW backend links against GLFW directly (editor-only).
     }
 
@@ -57,6 +57,11 @@ project "Mane"
             '{COPY} "%{wks.location}/Build/Bin/' .. output_dir .. 'Lion/lion-core.dll" "%{cfg.targetdir}"',
             -- GLFW shared library (the editor's ImGui backend links against it directly).
             '{COPYFILE} "%{dependencies.glfw.dll}" "%{cfg.targetdir}"',
+            -- The icon font, beside the executable, with the licence it ships under. It is the editor's
+            -- alone: ImGui never crosses into the engine, and a game draws no icons.
+            '{MKDIR} "%{cfg.targetdir}/Fonts"',
+            '{COPYFILE} "%{dependencies.mdi.font}" "%{cfg.targetdir}/Fonts/"',
+            '{COPYFILE} "%{dependencies.mdi.license}" "%{cfg.targetdir}/Fonts/LICENSE-mdi.txt"',
             -- Shared resources (shaders + sprites) flattened next to the executable, minus the scripts:
             -- the editor reads those from the project, and they are compiled into the module anyway.
             -- The exclude list is named relatively — see the same copy in Sandbox/premake5.lua.

@@ -32,6 +32,11 @@ module (see hot reload, below).
   and looking at it (screenshot), not just a green build. A build that compiles proves nothing about
   whether the feature works.
 - Never commit changes the user made to their own working tree without asking. Stage your own files.
+- **What the user makes with the engine is not the engine.** A component scaffolded from the editor
+  (`Sandbox/Assets/Scripts/`) belongs to whoever is building a game with it — it is the editor working,
+  not the engine changing. Leave those files alone unless the user asks for them, even when they are the
+  only thing standing between the tree and a clean `git status`. The Brickout demo's own components are
+  the exception, because the sandbox *is* part of this repository.
 
 ## Design principles
 
@@ -72,6 +77,11 @@ Follow the surrounding code; it is consistent. In short:
 This project's artefacts land under `Build/`. Each vendored library builds inside its own folder
 (`Vendor/<lib>/Build/`), so a library's output never mixes with the engine's — set from the workspace
 script, not by editing the submodules.
+
+**Every dependency is a submodule**, each a fork under `github.com/TheSampaio`, each carrying its own
+`premake5.lua`. Nothing is copied into the tree by hand, so `git clone --recursive` is all a fresh
+machine needs. A vendored licence travels with whatever the build copies out of it — the icon font
+lands beside the editor with its `LICENSE` next to it.
 
 ```sh
 Scripts\Build.bat [Debug|Release|Shipping]   # from a fresh clone: generates, then builds everything
