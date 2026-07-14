@@ -1,13 +1,10 @@
 <body>
-
   <h1>🦁 Lion Engine</h1>
   <p>
     Lion Engine is a <strong>2D game engine</strong> written in <strong>C++</strong>, built primarily for my personal use and continuous improvement as a software engineer.
     It combines architectural concepts and ideas inspired by <strong>Judson Santiago’s Volt Engine</strong>, <strong>Yan Chernikov’s Hazel Engine</strong>, and my own preferences — resulting in a lightweight, modular, and educational codebase.
   </p>
-
   <img src=".github/image/lion-engine-logo-transparent.png" alt="Lion Engine Logo">
-
   <div>
     <h2>📑 Table of Contents</h2>
     <ul>
@@ -21,17 +18,14 @@
       <li><a href="#license">📜 License</a></li>
     </ul>
   </div>
-
   <div id="preview">
     <h2>🚀 Preview</h2>
     <p>Coming soon — screenshots, demos, and GIFs will be added here.</p>
     <img src=".github/image/lion-engine-showcase-transparent.png" alt="Lion Engine Showcase">
     <p>The bundled <strong>Brickout</strong> sandbox is a playable, physics-driven demo. Move the paddle with <kbd>A</kbd> / <kbd>D</kbd>; the ball bounces off the walls and destroys bricks on contact.</p>
   </div>
-
   <div id="features">
     <h2>✨ Features</h2>
-
     <h3>Engine</h3>
     <ul>
       <li><strong>Entities &amp; Components</strong> — an <code>Entity</code> is <em>composed</em>, never derived: it is a name, a <code>Transform</code> and the components attached to it. Everything else is a component, including collision (<code>Component::OnCollision</code>), because a trait added by subclassing is one the editor cannot list, the scene cannot save and another entity cannot reuse.</li>
@@ -43,7 +37,6 @@
       <li><strong>Asset sealing</strong> — <code>Vault</code> is the one place the format lives (XOR, then URL-safe base64). A scene is sealed by the editor that saves it; a shipped game’s shaders are sealed by the build. Loading never has to know which kind it has — plain content comes back unchanged. It is obfuscation, not encryption.</li>
       <li><strong>Layer stack, events, input, logging and a resource cache</strong> for building games on top of the engine.</li>
     </ul>
-
     <h3>Editor (<em>Lion’s Mane</em>)</h3>
     <ul>
       <li><strong>Scene editing</strong> — a viewport with <a href="https://github.com/CedricGuillemet/ImGuizmo">ImGuizmo</a> tools, multi-selection, drag-and-drop parenting, undo/redo, and play / pause / step / stop against the live scene.</li>
@@ -53,11 +46,9 @@
       <li><strong>Its own window</strong> — a caption the editor draws itself, and <code>.lscene</code> files registered with Windows on first run, so Explorer shows them with the engine’s icon and a double-click opens them here.</li>
     </ul>
   </div>
-
   <div id="structure">
     <h2>📂 Project Structure</h2>
     <p>A folder is never named after its project, so a path always says which of the two it means.</p>
-
     <table>
       <tr><th>Folder</th><th>Project</th><th>Output</th><th>What it is</th></tr>
       <tr><td><code>Engine/</code></td><td><code>Lion</code></td><td><code>lion-core.dll</code></td><td>The engine.</td></tr>
@@ -65,7 +56,6 @@
       <tr><td><code>Launcher/</code></td><td><code>Launcher</code></td><td><code>lion-launcher.exe</code></td><td>Thin executable: loads the game module and runs it.</td></tr>
       <tr><td><code>Sandbox/</code></td><td><code>Game</code></td><td><code>lion-game.dll</code></td><td>The game’s code, as a module. Brickout lives here.</td></tr>
     </table>
-
 <pre><code>Lion Engine
 │
 ├── Engine                  # The engine (lion-core.dll)
@@ -108,7 +98,6 @@
 └── premake5.lua
 </code></pre>
   </div>
-
   <div id="dependencies">
     <h2>🛠 Dependencies</h2>
     <p>Every dependency is a <strong>Git submodule</strong> under <code>Vendor/</code> — nothing is copied into the tree by hand, so <code>git clone --recursive</code> is all a fresh machine needs. Each one is a fork carrying the <code>premake5.lua</code> that says how this workspace builds it.</p>
@@ -126,7 +115,6 @@
       <li><a href="https://github.com/nothings/stb">stb</a> – Image loading utilities</li>
     </ul>
   </div>
-
   <div id="build-run">
     <h2>🏗 Build &amp; Run</h2>
     <ol>
@@ -148,7 +136,6 @@
         <strong>Run:</strong> the editor from <code>Build/Bin/&lt;config&gt;/Mane/Lion.exe</code>, the game from <code>Build/Bin/&lt;config&gt;/Launcher/lion-launcher.exe</code>.
       </li>
     </ol>
-
     <p>Three configurations, each there to catch something the others cannot:</p>
     <table>
       <tr><th>Configuration</th><th>Optimised</th><th>Symbols</th><th>What it is for</th></tr>
@@ -156,10 +143,8 @@
       <tr><td><strong>Release</strong></td><td>yes</td><td>no</td><td>Measuring performance with the engine still talking.</td></tr>
       <tr><td><strong>Shipping</strong></td><td>yes</td><td>no</td><td>What reaches a player: no logs, sealed assets, its own entry point.</td></tr>
     </table>
-
     <p>Adding or removing a source file means regenerating — the project file lists are globs.</p>
   </div>
-
   <div id="how-it-was-built">
     <h2>🧭 How It Was Built</h2>
     <p>
@@ -180,7 +165,6 @@
       engineer, which is a goal you cannot outsource.
     </p>
   </div>
-
   <div id="credits">
     <h2>🙏 Credits</h2>
     <p>A huge thank you to creators whose free content inspired this project:</p>
@@ -201,7 +185,6 @@
     </ul>
     <p>If you’re interested in learning about <strong>game engine development</strong> and <strong>computer graphics</strong>, their content is an invaluable resource.</p>
   </div>
-
   <div id="license">
     <h2>📜 License</h2>
     <p>
@@ -215,5 +198,4 @@
       beside the executable with its <code>LICENSE</code> next to it.
     </p>
   </div>
-
 </body>

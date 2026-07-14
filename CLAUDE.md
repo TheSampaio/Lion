@@ -32,6 +32,11 @@ module (see hot reload, below).
   and looking at it (screenshot), not just a green build. A build that compiles proves nothing about
   whether the feature works.
 - Never commit changes the user made to their own working tree without asking. Stage your own files.
+- **What the user makes with the engine is not the engine.** A component scaffolded from the editor
+  (`Sandbox/Assets/Scripts/`) belongs to whoever is building a game with it — it is the editor working,
+  not the engine changing. Leave those files alone unless the user asks for them, even when they are the
+  only thing standing between the tree and a clean `git status`. The Brickout demo's own components are
+  the exception, because the sandbox *is* part of this repository.
 
 ## Design principles
 
