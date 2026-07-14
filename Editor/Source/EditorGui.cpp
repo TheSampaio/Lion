@@ -17,6 +17,13 @@ using namespace Lion;
 // The bold cut, kept because ImGui hands it back as nothing more than a pointer into its font atlas.
 static ImFont* sBoldFont = nullptr;
 
+ImVec4 EditorGui::GetAccent()
+{
+	// #E87A2A — the orange of the engine's mark. Everything the editor highlights is this colour, so the
+	// colour is written once: a second copy of it is a second thing to remember when the brand moves.
+	return ImVec4(0.910f, 0.478f, 0.165f, 1.0f);
+}
+
 // One size for the text and the icons, because an icon is a character: it is laid out on the same line as
 // the words beside it, and a glyph a size apart from them would not sit on their baseline.
 constexpr float32 kFontSize = 18.0f;
@@ -93,10 +100,12 @@ static void SetDarkTheme()
 	style.WindowMenuButtonPosition = ImGuiDir_None;
 	style.SeparatorTextBorderSize  = 1.0f;
 
-	// Palette: neutral graphite surfaces with a single blue accent for interactive/selected states.
-	const ImVec4 accent      = ImVec4(0.24f, 0.52f, 0.90f, 1.00f);
-	const ImVec4 accentHover = ImVec4(0.30f, 0.58f, 0.95f, 1.00f);
-	const ImVec4 accentDim   = ImVec4(0.24f, 0.52f, 0.90f, 0.45f);
+	// Palette: neutral graphite surfaces under the engine's own orange, which is the colour of the mark on
+	// the window and the icon in Explorer. A blue accent is what every dark theme ships with; this one is the
+	// Lion's, and an editor that looks like itself is worth the two lines it takes.
+	const ImVec4 accent      = EditorGui::GetAccent();
+	const ImVec4 accentHover = ImVec4(0.96f, 0.56f, 0.24f, 1.00f);
+	const ImVec4 accentDim   = ImVec4(accent.x, accent.y, accent.z, 0.45f);
 
 	ImVec4* colors = style.Colors;
 	colors[ImGuiCol_Text]                  = ImVec4(0.88f, 0.89f, 0.91f, 1.00f);
@@ -147,7 +156,7 @@ static void SetDarkTheme()
 	colors[ImGuiCol_TabSelectedOverline]   = accent;
 	colors[ImGuiCol_TabDimmed]             = ImVec4(0.105f, 0.110f, 0.120f, 1.00f);
 	colors[ImGuiCol_TabDimmedSelected]     = ImVec4(0.135f, 0.145f, 0.165f, 1.00f);
-	colors[ImGuiCol_TabDimmedSelectedOverline] = ImVec4(0.24f, 0.52f, 0.90f, 0.30f);
+	colors[ImGuiCol_TabDimmedSelectedOverline] = ImVec4(accent.x, accent.y, accent.z, 0.30f);
 
 	colors[ImGuiCol_DockingPreview]        = accentDim;
 	colors[ImGuiCol_DockingEmptyBg]        = ImVec4(0.09f, 0.095f, 0.105f, 1.00f);
@@ -178,7 +187,10 @@ void EditorGui::Init()
 	std::error_code error;
 	std::filesystem::create_directories(dataDirectory, error);
 
-	static const std::string iniPath = (dataDirectory / "lion-ui.ini").string();
+	// Named for the layout it stores, not for the editor: a panel is identified by its window's name, the
+	// names now carry an icon, and a file written before that describes windows that no longer exist. A new
+	// file starts the session on the default layout instead of on six panels floating over each other.
+	static const std::string iniPath = (dataDirectory / "lion-layout.ini").string();
 	io.IniFilename = iniPath.c_str();
 
 	// Prefer Segoe UI (much more legible than ImGui's built-in font); fall back to the default. The bold cut

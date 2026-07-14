@@ -29,15 +29,27 @@ static const char8* kEditorName = "Lion's Mane";
 // what it is made of is the engine's business, and what it is is the project's.
 static const char8* kSceneFilter = "Lion Scene (*.lscene)\0*.lscene\0";
 
+// Every panel's window name: the icon it wears on its tab, the name it goes by, and the id a saved layout
+// remembers it as. ImGui identifies a window by its name — so the name carries the icon — and everything
+// after "###" is the part it hashes, which is why the icon can change without a layout forgetting where the
+// panel lives.
+static const char8* kViewportWindow   = ICON_MDI_MONITOR "  Viewport###Viewport";
+static const char8* kHierarchyWindow  = ICON_MDI_FILE_TREE "  Scene Hierarchy###SceneHierarchy";
+static const char8* kPropertiesWindow = ICON_MDI_TUNE "  Properties###Properties";
+static const char8* kProjectWindow    = ICON_MDI_FOLDER_MULTIPLE "  Content Browser###ContentBrowser";
+static const char8* kConsoleWindow    = ICON_MDI_CONSOLE "  Console###Console";
+static const char8* kStatisticsWindow = ICON_MDI_CHART_BAR "  Statistics###Statistics";
+static const char8* kShortcutsWindow  = ICON_MDI_KEYBOARD "  Shortcuts###Shortcuts";
+
 // Ordered by how much they are reached for: what you pick, what you edit on it, where its assets come
 // from, what the engine has to say, and how it is doing. Alt+N follows this, so the numbers you use
 // most are the ones under your fingers.
 const EditorLayer::Panel EditorLayer::kPanels[5] = {
-	{ "Scene Hierarchy", &EditorLayer::mShowHierarchy,  ShortcutAction::ToggleHierarchy  },
-	{ "Properties",      &EditorLayer::mShowProperties, ShortcutAction::ToggleProperties },
-	{ "Content Browser", &EditorLayer::mShowProject,    ShortcutAction::ToggleProject    },
-	{ "Console",         &EditorLayer::mShowConsole,    ShortcutAction::ToggleConsole    },
-	{ "Statistics",      &EditorLayer::mShowStatistics, ShortcutAction::ToggleStatistics },
+	{ kHierarchyWindow, "Scene Hierarchy", &EditorLayer::mShowHierarchy,  ShortcutAction::ToggleHierarchy  },
+	{ kPropertiesWindow, "Properties",     &EditorLayer::mShowProperties, ShortcutAction::ToggleProperties },
+	{ kProjectWindow,   "Content Browser", &EditorLayer::mShowProject,    ShortcutAction::ToggleProject    },
+	{ kConsoleWindow,   "Console",         &EditorLayer::mShowConsole,    ShortcutAction::ToggleConsole    },
+	{ kStatisticsWindow, "Statistics",     &EditorLayer::mShowStatistics, ShortcutAction::ToggleStatistics },
 };
 
 void EditorLayer::OnAttach()
@@ -290,7 +302,7 @@ void EditorLayer::DrawUI()
 	if (mFocusViewport)
 	{
 		mFocusViewport = false;
-		ImGui::SetWindowFocus("Viewport");
+		ImGui::SetWindowFocus(kViewportWindow);
 	}
 
 	DrawTitleBar();
@@ -441,9 +453,9 @@ void EditorLayer::DrawPanelSizeOverlay()
 	};
 
 	for (const Panel& panel : kPanels)
-		report(panel.name);
+		report(panel.window);
 
-	report("Viewport");
+	report(kViewportWindow);
 }
 
 void EditorLayer::PushToast(const std::string& message, bool busy)
@@ -583,7 +595,7 @@ void EditorLayer::DrawStatistics()
 	if (!mShowStatistics)
 		return;
 
-	ImGui::Begin("Statistics", &mShowStatistics);
+	ImGui::Begin(kStatisticsWindow, &mShowStatistics);
 
 	const ImGuiIO& io = ImGui::GetIO();
 	const RenderStats& stats = Renderer::GetStats();
@@ -719,7 +731,7 @@ void EditorLayer::DrawConsole()
 
 	// While the panel is collapsed or sits behind another dock tab there is no layout to build, and
 	// leaving the tail counter untouched makes it snap to the newest line once it comes back.
-	if (!ImGui::Begin("Console", &mShowConsole))
+	if (!ImGui::Begin(kConsoleWindow, &mShowConsole))
 	{
 		ImGui::End();
 		return;
@@ -747,7 +759,7 @@ void EditorLayer::DrawConsole()
 	ImGui::SameLine();
 	static ImGuiTextFilter filter;
 	ImGui::SetNextItemWidth(240.0f);
-	if (ImGui::InputTextWithHint("##search", "Search...", filter.InputBuf, IM_ARRAYSIZE(filter.InputBuf)))
+	if (ImGui::InputTextWithHint("##search", ICON_MDI_MAGNIFY "  Search...", filter.InputBuf, IM_ARRAYSIZE(filter.InputBuf)))
 		filter.Build();
 
 	ImGui::SameLine();
@@ -759,19 +771,19 @@ void EditorLayer::DrawConsole()
 	if (ImGui::IsItemHovered())
 		ImGui::SetTooltip("Show one line per distinct message, with how many times it was logged");
 
-	const std::string errorText = "ERROR  " + std::to_string(errorCount);
-	const std::string warnText = "WARN  " + std::to_string(warningCount);
-	const std::string infoText = "INFO  " + std::to_string(infoCount);
+	const std::string errorText = std::string(ICON_MDI_ALERT_CIRCLE "  ") + std::to_string(errorCount);
+	const std::string warnText = std::string(ICON_MDI_ALERT "  ") + std::to_string(warningCount);
+	const std::string infoText = std::string(ICON_MDI_INFORMATION "  ") + std::to_string(infoCount);
 	const float32 togglesWidth =
 		ImGui::CalcTextSize(errorText.c_str()).x + ImGui::CalcTextSize(warnText.c_str()).x +
 		ImGui::CalcTextSize(infoText.c_str()).x + style.FramePadding.x * 6.0f + style.ItemSpacing.x * 2.0f;
 
 	ImGui::SameLine(ImGui::GetContentRegionMax().x - togglesWidth);
-	LogFilterToggle("ERROR", errorCount, mConsoleShowErrors, LogLevelColor(LogLevel::Error));
+	LogFilterToggle(ICON_MDI_ALERT_CIRCLE, errorCount, mConsoleShowErrors, LogLevelColor(LogLevel::Error));
 	ImGui::SameLine();
-	LogFilterToggle("WARN", warningCount, mConsoleShowWarnings, LogLevelColor(LogLevel::Warning));
+	LogFilterToggle(ICON_MDI_ALERT, warningCount, mConsoleShowWarnings, LogLevelColor(LogLevel::Warning));
 	ImGui::SameLine();
-	LogFilterToggle("INFO", infoCount, mConsoleShowInfo, LogLevelColor(LogLevel::Information));
+	LogFilterToggle(ICON_MDI_INFORMATION, infoCount, mConsoleShowInfo, LogLevelColor(LogLevel::Information));
 
 	ImGui::Separator();
 
@@ -1293,12 +1305,18 @@ namespace
 
 	// An icon, centred in a square of its own. An icon is a character now — the font carries it — so this
 	// is a glyph drawn where a glyph goes, and no longer a shape assembled out of arcs and lines.
-	void DrawIcon(const ImVec2& origin, float32 size, const char8* icon, ImU32 color)
+	//
+	// 'scale' is against the text around it. An icon fills its em square while a letter leaves room inside
+	// theirs, so an icon set at the text's size reads heavier than the text: the ones that sit in a row of
+	// fields are taken down a little to weigh the same.
+	void DrawIcon(const ImVec2& origin, float32 box, const char8* icon, ImU32 color, float32 scale = 1.0f)
 	{
-		const ImVec2 glyph = ImGui::CalcTextSize(icon);
+		ImFont* font = ImGui::GetFont();
+		const float32 size = ImGui::GetFontSize() * scale;
+		const ImVec2 glyph = font->CalcTextSizeA(size, FLT_MAX, 0.0f, icon);
 
-		ImGui::GetWindowDrawList()->AddText(
-			ImVec2(ImFloor(origin.x + (size - glyph.x) * 0.5f), ImFloor(origin.y + (size - glyph.y) * 0.5f)),
+		ImGui::GetWindowDrawList()->AddText(font, size,
+			ImVec2(ImFloor(origin.x + (box - glyph.x) * 0.5f), ImFloor(origin.y + (box - glyph.y) * 0.5f)),
 			color, icon);
 	}
 
@@ -1316,7 +1334,7 @@ namespace
 
 		const ImU32 color = ImGui::GetColorU32((visible || hovered) ? ImGuiCol_Text : ImGuiCol_TextDisabled);
 
-		DrawIcon(origin, size, visible ? ICON_MDI_EYE : ICON_MDI_EYE_OFF, color);
+		DrawIcon(origin, size, visible ? ICON_MDI_EYE : ICON_MDI_EYE_OFF, color, 0.85f);
 		return clicked;
 	}
 
@@ -1342,7 +1360,7 @@ namespace
 
 		const ImU32 color = hovered ? IM_COL32(255, 216, 122, 255) : IM_COL32(224, 176, 62, 255);
 
-		DrawIcon(origin, size, ICON_MDI_RESTORE, color);
+		DrawIcon(origin, size, ICON_MDI_RESTORE, color, 0.85f);
 		return clicked;
 	}
 
@@ -1455,7 +1473,7 @@ void EditorLayer::DrawProject()
 	if (!mShowProject)
 		return;
 
-	ImGui::Begin("Content Browser", &mShowProject);
+	ImGui::Begin(kProjectWindow, &mShowProject);
 
 	const std::filesystem::path root = ProjectPanelDirectory();
 
@@ -1470,7 +1488,7 @@ void EditorLayer::DrawProject()
 
 	// --- Breadcrumb toolbar.
 	ImGui::BeginDisabled(mProjectPath.empty());
-	if (ImGui::Button("Up"))
+	if (ImGui::Button(ICON_MDI_ARROW_UP))
 	{
 		const std::filesystem::path parent = std::filesystem::path(mProjectPath).parent_path();
 		mProjectPath = parent.generic_string();
@@ -1566,6 +1584,29 @@ void EditorLayer::DrawProject()
 	ImGui::End();
 }
 
+namespace
+{
+	// The face of a file, by what it holds. A scene is the engine's own kind, so it gets the engine's shape.
+	const char8* AssetIcon(const std::string& name)
+	{
+		const std::string extension = std::filesystem::path(name).extension().string();
+
+		if (extension == ".png" || extension == ".jpg" || extension == ".jpeg" || extension == ".bmp")
+			return ICON_MDI_IMAGE_OUTLINE;
+
+		if (extension == ".h" || extension == ".cpp")
+			return ICON_MDI_CODE_TAGS;
+
+		if (extension == ".glsl")
+			return ICON_MDI_PALETTE;
+
+		if (extension == ".lscene")
+			return ICON_MDI_SHAPE;
+
+		return ICON_MDI_FILE_DOCUMENT_OUTLINE;
+	}
+}
+
 bool EditorLayer::DrawAssetEntry(const std::string& name, const std::string& assetPath, bool folder)
 {
 	const std::filesystem::path full = ProjectPanelDirectory() / assetPath;
@@ -1593,15 +1634,15 @@ bool EditorLayer::DrawAssetEntry(const std::string& name, const std::string& ass
 		return false;
 	}
 
-	// A folder is tinted; what the engine owns is dimmed, and says so when asked.
-	if (folder)
-		ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.95f, 0.80f, 0.35f, 1.0f));
-	else if (engineOwned)
+	// The icon says what the row is, which is what the yellow used to be doing badly: a colour has to be
+	// learned, and a folder does not. What the engine owns is dimmed, and says so when asked.
+	if (engineOwned)
 		ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyle().Colors[ImGuiCol_TextDisabled]);
 
-	const bool activated = ImGui::Selectable(name.c_str(), false, ImGuiSelectableFlags_AllowDoubleClick);
+	const std::string label = std::string(folder ? ICON_MDI_FOLDER : AssetIcon(name)) + "  " + name;
+	const bool activated = ImGui::Selectable(label.c_str(), false, ImGuiSelectableFlags_AllowDoubleClick);
 
-	if (folder || engineOwned)
+	if (engineOwned)
 		ImGui::PopStyleColor();
 
 	if (ImGui::IsItemHovered())
@@ -1789,7 +1830,7 @@ void EditorLayer::DrawShortcuts()
 
 	ImGui::SetNextWindowSize(ImVec2(460.0f, 500.0f), ImGuiCond_FirstUseEver);
 
-	if (ImGui::Begin("Shortcuts", &mShowShortcuts))
+	if (ImGui::Begin(kShortcutsWindow, &mShowShortcuts))
 	{
 		// The rebindable actions, grouped by category (order defines the display order).
 		struct Row { ShortcutAction action; const char8* category; const char8* name; };
@@ -1853,7 +1894,7 @@ void EditorLayer::DrawShortcuts()
 			const std::string label = capturing ? "Press a key..." : KeybindToString(mBinds[index]);
 
 			if (capturing)
-				ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.30f, 0.58f, 0.95f, 1.0f));
+				ImGui::PushStyleColor(ImGuiCol_Button, EditorGui::GetAccent());
 
 			if (ImGui::Button(label.c_str(), ImVec2(150.0f, 0.0f)))
 				mRebindingIndex = capturing ? -1 : index;
@@ -2383,7 +2424,7 @@ void EditorLayer::DrawViewport()
 	// The viewport image fills the window edge to edge. Begin() captures the padding, so it is
 	// restored right away: popups opened from here (e.g. Settings) then get the normal padding.
 	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
-	ImGui::Begin("Viewport");
+	ImGui::Begin(kViewportWindow);
 	ImGui::PopStyleVar();
 
 	const ImVec2 available = ImGui::GetContentRegionAvail();
@@ -2447,11 +2488,15 @@ void EditorLayer::DrawViewport()
 		}
 	}
 
+	// What is selected, outlined where it is — before the colliders, so a collider's line wins where the
+	// two land on the same pixel: the collider is the debug view, and a debug view nobody can read is off.
+	DrawSelectionOutline(imageMin, imageSize);
+
 	if (mShowColliders)
 		DrawColliderOverlays(imageMin, imageSize);
 
-	// Play mode is signalled by an accent outline around the viewport. It is inset by half its
-	// thickness so the whole stroke stays inside the image instead of being clipped in half.
+	// Play mode is signalled by an outline around the viewport, in the engine's colour. It is inset by half
+	// its thickness so the whole stroke stays inside the image instead of being clipped in half.
 	if (mPlaying)
 	{
 		constexpr float32 thickness = 4.0f;
@@ -2460,7 +2505,7 @@ void EditorLayer::DrawViewport()
 		ImGui::GetWindowDrawList()->AddRect(
 			ImVec2(imageMin.x + inset, imageMin.y + inset),
 			ImVec2(imageMin.x + imageSize.x - inset, imageMin.y + imageSize.y - inset),
-			IM_COL32(61, 133, 224, 255), 0.0f, 0, thickness);
+			ImGui::ColorConvertFloat4ToU32(EditorGui::GetAccent()), 0.0f, 0, thickness);
 	}
 
 	DrawViewportToolbar(imageMin, imageSize);
@@ -2522,22 +2567,57 @@ void EditorLayer::DrawViewport()
 	ImGui::End();
 }
 
+Lion::float32 EditorLayer::ToolbarDockWidth(int count)
+{
+	return count * kDockButton + (count - 1) * kDockSpacing + kDockPadding * 2.0f;
+}
+
+void EditorLayer::BeginToolbarDock(const char8* id, const ImVec2& position, int count)
+{
+	const ImVec2 size(ToolbarDockWidth(count), kDockButton + kDockPadding * 2.0f);
+
+	// The panel is painted, not begun as a child window: a child would take the mouse wheel and the clicks
+	// that belong to the scene under it, and it would need a scroll region it will never scroll.
+	ImDrawList* drawList = ImGui::GetWindowDrawList();
+
+	drawList->AddRectFilled(position, ImVec2(position.x + size.x, position.y + size.y),
+		IM_COL32(26, 27, 31, 235), 6.0f);
+
+	drawList->AddRect(position, ImVec2(position.x + size.x, position.y + size.y),
+		IM_COL32(0, 0, 0, 110), 6.0f);
+
+	ImGui::PushID(id);
+	ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(kDockSpacing, kDockSpacing));
+	ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0.0f, 0.0f));   // The button is a square; the glyph centres itself in it.
+	ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.0f, 0.0f, 0.0f, 0.0f));  // Only the hovered and active ones are drawn.
+
+	ImGui::SetCursorScreenPos(ImVec2(position.x + kDockPadding, position.y + kDockPadding));
+}
+
+void EditorLayer::EndToolbarDock()
+{
+	ImGui::PopStyleColor();
+	ImGui::PopStyleVar(2);
+	ImGui::PopID();
+}
+
 void EditorLayer::DrawViewportToolbar(const ImVec2& imageMin, const ImVec2& imageSize)
 {
-	const ImGuiStyle& style = ImGui::GetStyle();
-	const ImVec4 accent(0.24f, 0.52f, 0.90f, 1.0f);
+	// Two docks and a button, floating over the image: what you do to the scene on the left, what you do to
+	// time along the top, and how the scene is shown on the right. They are docks and not loose buttons
+	// because a row of buttons on top of a picture reads as part of the picture.
+	const ImVec4 accent = EditorGui::GetAccent();
 
-	// Tools (Select / Move / Rotate / Scale), pinned to the viewport's top-left corner. Icons will
-	// replace the labels later.
-	ImGui::SetCursorScreenPos(ImVec2(imageMin.x + 8.0f, imageMin.y + 8.0f));
-
-	struct ToolButton { Tool tool; const char8* label; const char8* tooltip; };
+	// Tools, top-left.
+	struct ToolButton { Tool tool; const char8* icon; const char8* tooltip; };
 	static const ToolButton tools[] = {
-		{ Tool::Select, "Select", "Select entities (Q)" },
-		{ Tool::Move,   "Move",   "Move the selection (W)" },
-		{ Tool::Rotate, "Rotate", "Rotate the selection (E)" },
-		{ Tool::Scale,  "Scale",  "Scale the selection (R)" },
+		{ Tool::Select, ICON_MDI_CURSOR_DEFAULT,   "Select entities (Q)"    },
+		{ Tool::Move,   ICON_MDI_ARROW_ALL,        "Move the selection (W)" },
+		{ Tool::Rotate, ICON_MDI_ROTATE_RIGHT,     "Rotate the selection (E)" },
+		{ Tool::Scale,  ICON_MDI_ARROW_EXPAND_ALL, "Scale the selection (R)"  },
 	};
+
+	BeginToolbarDock("##tools", ImVec2(imageMin.x + kDockMargin, imageMin.y + kDockMargin), IM_ARRAYSIZE(tools));
 
 	for (const ToolButton& button : tools)
 	{
@@ -2549,7 +2629,7 @@ void EditorLayer::DrawViewportToolbar(const ImVec2& imageMin, const ImVec2& imag
 		if (active)
 			ImGui::PushStyleColor(ImGuiCol_Button, accent);
 
-		if (ImGui::Button(button.label))
+		if (ImGui::Button(button.icon, ImVec2(kDockButton, kDockButton)))
 			mTool = button.tool;
 
 		if (active)
@@ -2559,11 +2639,63 @@ void EditorLayer::DrawViewportToolbar(const ImVec2& imageMin, const ImVec2& imag
 			ImGui::SetTooltip("%s", button.tooltip);
 	}
 
-	// Settings, pinned to the viewport's top-right corner (a gear icon later).
-	const float32 settingsWidth = ImGui::CalcTextSize("Settings").x + style.FramePadding.x * 2.0f;
-	ImGui::SetCursorScreenPos(ImVec2(imageMin.x + imageSize.x - settingsWidth - 8.0f, imageMin.y + 8.0f));
+	EndToolbarDock();
 
-	if (ImGui::Button("Settings"))
+	// Play, step, pause, stop — centred along the top edge, where the thing they act on is.
+	const float32 playDockWidth = ToolbarDockWidth(4);
+
+	BeginToolbarDock("##play",
+		ImVec2(imageMin.x + (imageSize.x - playDockWidth) * 0.5f, imageMin.y + kDockMargin), 4);
+
+	// Play doubles as "resume" while paused, so it stays enabled in that state.
+	ImGui::BeginDisabled(mPlaying && !mPaused);
+	if (ImGui::Button(ICON_MDI_PLAY, ImVec2(kDockButton, kDockButton)))
+		StartPlay();
+	ImGui::EndDisabled();
+	if (ImGui::IsItemHovered())
+		ImGui::SetTooltip("Run the scene simulation (F5)");
+
+	// Step advances a halted simulation one frame at a time, so it only means anything while playing.
+	ImGui::SameLine();
+	ImGui::BeginDisabled(!mPlaying);
+	if (ImGui::Button(ICON_MDI_STEP_FORWARD, ImVec2(kDockButton, kDockButton)))
+		StepOneFrame();
+	ImGui::EndDisabled();
+	if (ImGui::IsItemHovered())
+		ImGui::SetTooltip("Advance the simulation by one frame (F6)");
+
+	ImGui::SameLine();
+	ImGui::BeginDisabled(!mPlaying);
+
+	if (mPaused)
+		ImGui::PushStyleColor(ImGuiCol_Button, accent);
+
+	if (ImGui::Button(ICON_MDI_PAUSE, ImVec2(kDockButton, kDockButton)))
+		TogglePause();
+
+	if (mPaused)
+		ImGui::PopStyleColor();
+
+	ImGui::EndDisabled();
+	if (ImGui::IsItemHovered())
+		ImGui::SetTooltip(mPaused ? "Resume the simulation (F7)" : "Pause the simulation (F7)");
+
+	ImGui::SameLine();
+	ImGui::BeginDisabled(!mPlaying);
+	if (ImGui::Button(ICON_MDI_STOP, ImVec2(kDockButton, kDockButton)))
+		StopPlay();
+	ImGui::EndDisabled();
+	if (ImGui::IsItemHovered())
+		ImGui::SetTooltip("Stop and return to the edited state (F8)");
+
+	EndToolbarDock();
+
+	// How the scene is shown, top-right. One button, in a dock of its own, so it sits on the same line as
+	// the other two rather than floating beside them.
+	BeginToolbarDock("##settings",
+		ImVec2(imageMin.x + imageSize.x - ToolbarDockWidth(1) - kDockMargin, imageMin.y + kDockMargin), 1);
+
+	if (ImGui::Button(ICON_MDI_COG, ImVec2(kDockButton, kDockButton)))
 		ImGui::OpenPopup("ViewportSettings");
 
 	if (ImGui::IsItemHovered())
@@ -2585,52 +2717,88 @@ void EditorLayer::DrawViewportToolbar(const ImVec2& imageMin, const ImVec2& imag
 		ImGui::EndPopup();
 	}
 
-	// Play / Step / Pause / Stop, centered along the viewport's top edge.
-	const char8* pauseLabel = mPaused ? "Resume" : "Pause";
-	const float32 playWidth = ImGui::CalcTextSize("Play").x + style.FramePadding.x * 2.0f;
-	const float32 stepWidth = ImGui::CalcTextSize("Step").x + style.FramePadding.x * 2.0f;
-	const float32 pauseWidth = ImGui::CalcTextSize(pauseLabel).x + style.FramePadding.x * 2.0f;
-	const float32 stopWidth = ImGui::CalcTextSize("Stop").x + style.FramePadding.x * 2.0f;
-	const float32 totalWidth = playWidth + stepWidth + pauseWidth + stopWidth + style.ItemSpacing.x * 3.0f;
+	EndToolbarDock();
+}
 
-	ImGui::SetCursorScreenPos(ImVec2(imageMin.x + (imageSize.x - totalWidth) * 0.5f, imageMin.y + 8.0f));
+void EditorLayer::DrawSelectionOutline(const ImVec2& imageMin, const ImVec2& imageSize)
+{
+	if (mSelection.empty() || imageSize.x <= 0.0f || imageSize.y <= 0.0f)
+		return;
 
-	// Play doubles as "resume" while paused, so it stays enabled in that state.
-	ImGui::BeginDisabled(mPlaying && !mPaused);
-	if (ImGui::Button("Play"))
-		StartPlay();
-	ImGui::EndDisabled();
-	if (ImGui::IsItemHovered())
-		ImGui::SetTooltip("Run the scene simulation (F5)");
+	// Every selected entity gets an outline, not just the one the Inspector is showing: a selection you
+	// cannot see the extent of is a selection you are about to move by accident.
+	const glm::mat4 viewProjection = mCamera->GetProjectionMatrix() * mCamera->GetViewMatrix();
+	const ImVec4 accent = EditorGui::GetAccent();
+	const ImU32 color = ImGui::ColorConvertFloat4ToU32(accent);
 
-	// Step advances a halted simulation one frame at a time, so it only means anything while playing.
-	ImGui::SameLine();
-	ImGui::BeginDisabled(!mPlaying);
-	if (ImGui::Button("Step"))
-		StepOneFrame();
-	ImGui::EndDisabled();
-	if (ImGui::IsItemHovered())
-		ImGui::SetTooltip("Advance the simulation by one frame (F6)");
+	ImDrawList* drawList = ImGui::GetWindowDrawList();
 
-	ImGui::SameLine();
-	ImGui::BeginDisabled(!mPlaying);
-	if (mPaused)
-		ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.24f, 0.52f, 0.90f, 1.0f));
-	if (ImGui::Button(pauseLabel))
-		TogglePause();
-	if (mPaused)
-		ImGui::PopStyleColor();
-	ImGui::EndDisabled();
-	if (ImGui::IsItemHovered())
-		ImGui::SetTooltip(mPaused ? "Resume the simulation (F7)" : "Pause the simulation (F7)");
+	const auto worldToScreen = [&](float32 worldX, float32 worldY) -> ImVec2
+	{
+		const glm::vec4 clip = viewProjection * glm::vec4(worldX, worldY, 0.0f, 1.0f);
+		return ImVec2(
+			imageMin.x + (clip.x / clip.w * 0.5f + 0.5f) * imageSize.x,
+			imageMin.y + (1.0f - (clip.y / clip.w * 0.5f + 0.5f)) * imageSize.y);   // Flip Y for screen space.
+	};
 
-	ImGui::SameLine();
-	ImGui::BeginDisabled(!mPlaying);
-	if (ImGui::Button("Stop"))
-		StopPlay();
-	ImGui::EndDisabled();
-	if (ImGui::IsItemHovered())
-		ImGui::SetTooltip("Stop and return to the edited state (F8)");
+	for (const auto& entity : mSelection)
+	{
+		// A folder is not in the scene; it is a place in the Hierarchy, and it has nothing to draw around.
+		if (!entity || entity->IsFolder())
+			continue;
+
+		// The box is the one the entity actually occupies, which is what it draws: a sprite is its texture's
+		// size times the transform's scale, not the scale on its own — every entity in the demo scene has a
+		// scale of 1, and an outline drawn from that is a dot. An entity with nothing to draw still gets a
+		// box, from its collider or, failing that, a small square: an outline you cannot see is not one.
+		const Vector position = entity->GetWorldPosition();
+		const Vector scale = entity->GetWorldScale();
+		const float32 angle = glm::radians(entity->GetWorldRotation());
+		const float32 cosAngle = std::cos(angle);
+		const float32 sinAngle = std::sin(angle);
+
+		constexpr float32 kEmptyExtent = 24.0f;
+		float32 width = kEmptyExtent;
+		float32 height = kEmptyExtent;
+
+		if (const SpriteRenderer* sprite = entity->GetComponent<SpriteRenderer>())
+		{
+			const Size size = sprite->GetSize();
+
+			if (size.width > 0.0f && size.height > 0.0f)
+			{
+				width = size.width;
+				height = size.height;
+			}
+		}
+		else if (const BoxCollider2D* box = entity->GetComponent<BoxCollider2D>())
+		{
+			width = box->GetWidth();
+			height = box->GetHeight();
+		}
+		else if (const CircleCollider2D* circle = entity->GetComponent<CircleCollider2D>())
+		{
+			width = circle->GetRadius() * 2.0f;
+			height = width;
+		}
+
+		const float32 halfWidth = width * std::fabs(scale.x) * 0.5f;
+		const float32 halfHeight = height * std::fabs(scale.y) * 0.5f;
+
+		const auto corner = [&](float32 offsetX, float32 offsetY)
+		{
+			return worldToScreen(
+				position.x + offsetX * cosAngle - offsetY * sinAngle,
+				position.y + offsetX * sinAngle + offsetY * cosAngle);
+		};
+
+		const ImVec2 points[4] = {
+			corner(-halfWidth,  halfHeight), corner(halfWidth,  halfHeight),
+			corner( halfWidth, -halfHeight), corner(-halfWidth, -halfHeight),
+		};
+
+		drawList->AddPolyline(points, 4, color, ImDrawFlags_Closed, 2.0f);
+	}
 }
 
 void EditorLayer::DrawColliderOverlays(const ImVec2& imageMin, const ImVec2& imageSize)
@@ -2698,7 +2866,7 @@ void EditorLayer::DrawHierarchy()
 	if (!mShowHierarchy)
 		return;
 
-	ImGui::Begin("Scene Hierarchy", &mShowHierarchy);
+	ImGui::Begin(kHierarchyWindow, &mShowHierarchy);
 
 	const ImGuiStyle& style = ImGui::GetStyle();
 
@@ -2712,7 +2880,7 @@ void EditorLayer::DrawHierarchy()
 
 	ImGui::SameLine();
 	ImGui::SetNextItemWidth(-1.0f);
-	ImGui::InputTextWithHint("##search", "Search...", mHierarchyFilter, IM_ARRAYSIZE(mHierarchyFilter));
+	ImGui::InputTextWithHint("##search", ICON_MDI_MAGNIFY "  Search...", mHierarchyFilter, IM_ARRAYSIZE(mHierarchyFilter));
 
 	// The scene these entities are in is named in the title bar, where what is open belongs. It was named
 	// here as well, which is a panel answering a question about the window.
@@ -2986,17 +3154,22 @@ void EditorLayer::DrawEntityNode(const Reference<Entity>& entity)
 	const std::string& name = entity->GetName();
 	const bool folder = entity->IsFolder();
 
-	// Folders are tinted so they read as organizational nodes rather than scene objects. A hidden entity
-	// is dimmed: the eye says why, and the name says so at a glance.
-	if (folder)
-		ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.95f, 0.80f, 0.35f, 1.0f));
-	else if (!entity->IsVisible() || !entity->IsEnabled())
+	// What the row is, said by an icon rather than by a colour: a folder that is open looks open, and a
+	// scene object looks like an object. The yellow that used to say it was a thing you had to learn.
+	//
+	// A hidden or disabled entity is dimmed — the eye says why, and the name says so at a glance.
+	const bool dimmed = !folder && (!entity->IsVisible() || !entity->IsEnabled());
+
+	if (dimmed)
 		ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyle().Colors[ImGuiCol_TextDisabled]);
 
-	ImGui::SetNextItemAllowOverlap();   // The eye sits in the row the node spans, and gets its own clicks.
-	const bool open = ImGui::TreeNodeEx("##node", flags, "%s", name.empty() ? "(unnamed)" : name.c_str());
+	const bool expanded = folder && ImGui::TreeNodeGetOpen(ImGui::GetID("##node"));
+	const char8* icon = folder ? (expanded ? ICON_MDI_FOLDER_OPEN : ICON_MDI_FOLDER) : ICON_MDI_CUBE_OUTLINE;
 
-	if (folder || !entity->IsVisible() || !entity->IsEnabled())
+	ImGui::SetNextItemAllowOverlap();   // The eye sits in the row the node spans, and gets its own clicks.
+	const bool open = ImGui::TreeNodeEx("##node", flags, "%s  %s", icon, name.empty() ? "(unnamed)" : name.c_str());
+
+	if (dimmed)
 		ImGui::PopStyleColor();
 
 	// Clicking the label (not the expand arrow) selects. Ctrl adds one, Shift takes everything between.
@@ -3443,7 +3616,7 @@ void EditorLayer::InspectorReflector::FieldAsset(const char8* name, std::string&
 	buffer[length] = '\0';
 
 	const ImGuiStyle& style = ImGui::GetStyle();
-	const float32 browseWidth = ImGui::CalcTextSize("...").x + style.FramePadding.x * 2.0f;
+	const float32 browseWidth = ImGui::CalcTextSize(ICON_MDI_FOLDER_OPEN).x + style.FramePadding.x * 2.0f;
 
 	ImGui::PushID(name);
 	PropertyLabel(name);
@@ -3474,7 +3647,7 @@ void EditorLayer::InspectorReflector::FieldAsset(const char8* name, std::string&
 
 	ImGui::SameLine(0.0f, style.ItemInnerSpacing.x);
 
-	if (ImGui::Button("..."))
+	if (ImGui::Button(ICON_MDI_FOLDER_OPEN))
 	{
 		const std::string picked = FileDialog::Open("All Files\0*.*\0", GameAssetsDirectory().string());
 
@@ -3496,7 +3669,7 @@ void EditorLayer::DrawProperties()
 	if (!mShowProperties)
 		return;
 
-	ImGui::Begin("Properties", &mShowProperties);
+	ImGui::Begin(kPropertiesWindow, &mShowProperties);
 
 	if (!mSelectedEntity)
 	{
@@ -3504,6 +3677,11 @@ void EditorLayer::DrawProperties()
 		ImGui::End();
 		return;
 	}
+
+	// The same icon the Hierarchy draws, so the two panels agree about what they are pointing at.
+	ImGui::AlignTextToFramePadding();
+	ImGui::TextUnformatted(mSelectedEntity->IsFolder() ? ICON_MDI_FOLDER : ICON_MDI_CUBE_OUTLINE);
+	ImGui::SameLine();
 
 	// Whether the entity is switched on at all — the checkbox Unity puts before the name, and the same
 	// flag the game reads. Hiding is a different thing entirely, and lives on the eye in the Hierarchy.
@@ -3534,18 +3712,17 @@ void EditorLayer::DrawProperties()
 	if (ImGui::IsItemActivated()) BeginEdit();
 	if (ImGui::IsItemDeactivatedAfterEdit()) CommitEdit();
 
-	// What the Inspector is looking at, when it is looking at more than one thing. The fields below show
-	// the primary's values and write to every entity that has the same field to write.
-	if (mSelection.size() > 1)
-		ImGui::TextDisabled("%d entities selected — edits apply to all of them.", static_cast<int32>(mSelection.size()));
-
 	ImGui::Separator();
+
+	// The fields scroll; the summary below them does not. It is the same bargain the Hierarchy strikes: what
+	// you are looking at is stated in one place, at the bottom, and it stays there however long the list is.
+	ImGui::BeginChild("##components", ImVec2(0.0f, -ImGui::GetFrameHeightWithSpacing()));
 
 	// A folder only organizes the hierarchy: it has no transform or components to edit.
 	if (mSelectedEntity->IsFolder())
 	{
 		ImGui::TextDisabled("Folder — groups entities in the hierarchy.");
-		ImGui::End();
+		EndPropertiesPanel();
 		return;
 	}
 
@@ -3599,7 +3776,7 @@ void EditorLayer::DrawProperties()
 
 				// The field gives up just enough room for the browse button at the end of the row.
 				const ImGuiStyle& style = ImGui::GetStyle();
-				const float32 browseWidth = ImGui::CalcTextSize("...").x + style.FramePadding.x * 2.0f;
+					const float32 browseWidth = ImGui::CalcTextSize(ICON_MDI_FOLDER_OPEN).x + style.FramePadding.x * 2.0f;
 
 				PropertyLabel("Texture");
 				ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - browseWidth - style.ItemInnerSpacing.x);
@@ -3622,7 +3799,7 @@ void EditorLayer::DrawProperties()
 				// Browse for a sprite file; store the path relative to the resource root. The dialog opens
 				// inside the project's assets, which is the only place a sprite can come from.
 				ImGui::SameLine(0.0f, style.ItemInnerSpacing.x);
-				if (ImGui::Button("..."))
+				if (ImGui::Button(ICON_MDI_FOLDER_OPEN))
 				{
 					const std::string picked = FileDialog::Open(
 						"Images (*.png;*.jpg;*.jpeg;*.bmp)\0*.png;*.jpg;*.jpeg;*.bmp\0All Files\0*.*\0",
@@ -3829,6 +4006,23 @@ void EditorLayer::DrawProperties()
 
 		ImGui::EndPopup();
 	}
+
+	EndPropertiesPanel();
+}
+
+void EditorLayer::EndPropertiesPanel()
+{
+	ImGui::EndChild();
+	ImGui::Separator();
+
+	const int32 count = static_cast<int32>(mSelection.size());
+
+	// One entity needs no explaining. Several do: the fields show what the last one clicked has, and write
+	// to every one of them that has the same field to write.
+	if (count > 1)
+		ImGui::TextDisabled("%d Entities | Edits apply to all of them.", count);
+	else
+		ImGui::TextDisabled("1 Entity");
 
 	ImGui::End();
 }
@@ -4192,7 +4386,7 @@ float32 EditorLayer::DrawMenuBar(const ImVec2& barMin, const ImVec2& barMax)
 			for (const Panel& panel : kPanels)
 			{
 				const std::string shortcut = KeybindToString(mBinds[static_cast<int>(panel.shortcut)]);
-				labelWidth = ImMax(labelWidth, ImGui::CalcTextSize(panel.name).x);
+				labelWidth = ImMax(labelWidth, ImGui::CalcTextSize(panel.label).x);
 				shortcutWidth = ImMax(shortcutWidth, ImGui::CalcTextSize(shortcut.c_str()).x);
 			}
 
@@ -4201,7 +4395,7 @@ float32 EditorLayer::DrawMenuBar(const ImVec2& barMin, const ImVec2& barMax)
 
 			for (const Panel& panel : kPanels)
 			{
-				ImGui::Checkbox(panel.name, &(this->*panel.visible));
+				ImGui::Checkbox(panel.label, &(this->*panel.visible));
 
 				ImGui::SameLine(checkboxWidth + labelWidth + style.ItemSpacing.x * 3.0f);
 				ImGui::TextDisabled("%s", KeybindToString(mBinds[static_cast<int>(panel.shortcut)]).c_str());
@@ -4288,12 +4482,12 @@ void EditorLayer::BuildDefaultLayout(unsigned int dockspaceId)
 	const ImGuiID leftBottom = ImGui::DockBuilderSplitNode(left, ImGuiDir_Down, ratio(kContentBrowserHeight, work.y), nullptr, &left);
 	const ImGuiID rightTop   = ImGui::DockBuilderSplitNode(right, ImGuiDir_Up, ratio(kStatisticsHeight, work.y), nullptr, &right);
 
-	ImGui::DockBuilderDockWindow("Scene Hierarchy", left);
-	ImGui::DockBuilderDockWindow("Content Browser", leftBottom);
-	ImGui::DockBuilderDockWindow("Viewport", center);
-	ImGui::DockBuilderDockWindow("Console", bottom);
-	ImGui::DockBuilderDockWindow("Statistics", rightTop);
-	ImGui::DockBuilderDockWindow("Properties", right);
+	ImGui::DockBuilderDockWindow(kHierarchyWindow, left);
+	ImGui::DockBuilderDockWindow(kProjectWindow, leftBottom);
+	ImGui::DockBuilderDockWindow(kViewportWindow, center);
+	ImGui::DockBuilderDockWindow(kConsoleWindow, bottom);
+	ImGui::DockBuilderDockWindow(kStatisticsWindow, rightTop);
+	ImGui::DockBuilderDockWindow(kPropertiesWindow, right);
 
 	ImGui::DockBuilderFinish(dockspaceId);
 }

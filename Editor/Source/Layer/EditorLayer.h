@@ -76,7 +76,12 @@ private:
 	// shortcut handler cannot disagree about what exists.
 	struct Panel
 	{
-		const char* name;
+		// What ImGui is told, and what a person is told. A window is identified by its name, so the icon and
+		// the trailing "###id" are part of it — the id is what keeps a saved layout pointing at the same
+		// window when the icon or the wording changes. The label is what a menu shows: an icon in a list of
+		// checkboxes is decoration, and decoration in a list is noise.
+		const char* window;
+		const char* label;
 		bool EditorLayer::* visible;
 		ShortcutAction shortcut;
 	};
@@ -233,6 +238,13 @@ private:
 	// How far after the last menu the scene's name begins on the row below.
 	static constexpr float kSceneGap = 64.0f;
 
+	// The docks that float over the viewport: a square button, the room the dock leaves around its row of
+	// them, and how far the dock itself sits from the edge of the image.
+	static constexpr float kDockButton = 30.0f;
+	static constexpr float kDockPadding = 5.0f;
+	static constexpr float kDockSpacing = 4.0f;
+	static constexpr float kDockMargin = 10.0f;
+
 	// Tells Windows what a .lscene is, so Explorer draws it with the engine's icon and a double-click opens
 	// it here. Written once, on the first run, and again only if the editor moves.
 	void RegisterSceneFiles();
@@ -243,14 +255,24 @@ private:
 	void SaveScene();
 	void SaveSceneAs();
 
+	// A floating dock over the viewport's image: a rounded panel with a row of square icon buttons in it.
+	// The width has to be known before the buttons are drawn, because a dock is placed against an edge or a
+	// centre line, so it is worked out from the count.
+	static Lion::float32 ToolbarDockWidth(int count);
+	static void BeginToolbarDock(const Lion::char8* id, const ImVec2& position, int count);
+	static void EndToolbarDock();
+
 	void DrawTitleBar();
 
 	// Draws the menus in the given rectangle and answers where they ended, which is where the row below picks
 	// up: the scene's name follows the menus, and only the menus know how wide they were.
 	Lion::float32 DrawMenuBar(const ImVec2& barMin, const ImVec2& barMax);
 	void DrawWindowButtons(const ImVec2& barMin, Lion::float32 barWidth, Lion::float32 rowHeight);
+	void EndPropertiesPanel();   // Closes the fields, states what is selected, and closes the panel.
 	void DrawStatusBar();   // The bar along the bottom: what is open, and which engine has it open.
 	void DrawViewport();
+	// The box around what is selected, drawn over the image for every entity in the selection.
+	void DrawSelectionOutline(const ImVec2& imageMin, const ImVec2& imageSize);
 	void DrawColliderOverlays(const ImVec2& imageMin, const ImVec2& imageSize);
 	void DrawHierarchy();
 	void DrawEntityNode(const Lion::Reference<Lion::Entity>& entity);
