@@ -8,7 +8,7 @@
 #include <Lion/Logic/Reflector.h>
 
 #include <imgui/imgui.h>
-#include <imguizmo/ImGuizmo.h>
+#include <ImGuizmo.h>
 
 // Root editor layer: sets up the window, renders a scene into a framebuffer and draws the
 // docked editor UI (menu bar + panels), displaying the framebuffer inside the Viewport panel.

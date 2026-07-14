@@ -73,6 +73,11 @@ This project's artefacts land under `Build/`. Each vendored library builds insid
 (`Vendor/<lib>/Build/`), so a library's output never mixes with the engine's — set from the workspace
 script, not by editing the submodules.
 
+**Every dependency is a submodule**, each a fork under `github.com/TheSampaio`, each carrying its own
+`premake5.lua`. Nothing is copied into the tree by hand, so `git clone --recursive` is all a fresh
+machine needs. A vendored licence travels with whatever the build copies out of it — the icon font
+lands beside the editor with its `LICENSE` next to it.
+
 ```sh
 Scripts\Build.bat [Debug|Release|Shipping]   # from a fresh clone: generates, then builds everything
 ```

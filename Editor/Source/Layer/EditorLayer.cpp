@@ -1,6 +1,8 @@
 #include "EditorLayer.h"
 
 #include "../EditorGui.h"
+
+#include <IconsMaterialDesignIcons.h>
 #include "../ModuleSymbols.h"
 
 #include <cctype>
@@ -1287,6 +1289,17 @@ namespace
 		}
 	}
 
+	// An icon, centred in a square of its own. An icon is a character now — the font carries it — so this
+	// is a glyph drawn where a glyph goes, and no longer a shape assembled out of arcs and lines.
+	void DrawIcon(const ImVec2& origin, float32 size, const char8* icon, ImU32 color)
+	{
+		const ImVec2 glyph = ImGui::CalcTextSize(icon);
+
+		ImGui::GetWindowDrawList()->AddText(
+			ImVec2(ImFloor(origin.x + (size - glyph.x) * 0.5f), ImFloor(origin.y + (size - glyph.y) * 0.5f)),
+			color, icon);
+	}
+
 	// The eye in the Hierarchy's Visibility column. Open, the entity is drawn; struck through, it is not
 	// — and that is all it is: a hidden entity still updates and still collides.
 	bool EyeButton(const char8* id, bool visible)
@@ -1300,42 +1313,14 @@ namespace
 			ImGui::SetTooltip(visible ? "Hide" : "Show");
 
 		const ImU32 color = ImGui::GetColorU32((visible || hovered) ? ImGuiCol_Text : ImGuiCol_TextDisabled);
-		const ImVec2 center(origin.x + size * 0.5f, origin.y + size * 0.5f);
-		const float32 halfWidth = size * 0.42f;
-		const float32 halfHeight = size * 0.26f;
 
-		// Two arcs meeting at the corners of the eye, and a pupil between them.
-		ImDrawList* drawList = ImGui::GetWindowDrawList();
-		drawList->PathClear();
-		drawList->PathArcTo(ImVec2(center.x, center.y + halfHeight * 1.6f), halfWidth * 1.35f, IM_PI * 1.25f, IM_PI * 1.75f, 12);
-		drawList->PathStroke(color, ImDrawFlags_None, 1.4f);
-		drawList->PathArcTo(ImVec2(center.x, center.y - halfHeight * 1.6f), halfWidth * 1.35f, IM_PI * 0.25f, IM_PI * 0.75f, 12);
-		drawList->PathStroke(color, ImDrawFlags_None, 1.4f);
-		drawList->AddCircleFilled(center, size * 0.13f, color, 8);
-
-		if (!visible)
-			drawList->AddLine(ImVec2(center.x - halfWidth, center.y + halfWidth),
-				ImVec2(center.x + halfWidth, center.y - halfWidth), color, 1.4f);
-
+		DrawIcon(origin, size, visible ? ICON_MDI_EYE : ICON_MDI_EYE_OFF, color);
 		return clicked;
 	}
 
-	// The plus on the Hierarchy's Add button, drawn beside its label for the same reason everything else
-	// here is drawn: the editor's font has no icons in it.
-	void DrawPlusIcon(const ImVec2& center, float32 size, ImU32 color)
-	{
-		const float32 arm = size * 0.5f;
-
-		ImDrawList* drawList = ImGui::GetWindowDrawList();
-		drawList->AddLine(ImVec2(center.x - arm, center.y), ImVec2(center.x + arm, center.y), color, 1.6f);
-		drawList->AddLine(ImVec2(center.x, center.y - arm), ImVec2(center.x, center.y + arm), color, 1.6f);
-	}
-
-	// The revert arrow, as Unreal draws it: a curved arrow at the end of a row, shown only while the
-	// field is not what it ships as. Clicking it puts the default back.
-	//
-	// It is drawn rather than written because the editor's font carries no glyph for it, and the slot is
-	// held even when nothing is in it — see RowEndSlot.
+	// The revert arrow, as Unreal draws it: a curved arrow at the end of a row, shown only while the field
+	// is not what it ships as. Clicking it puts the default back. The slot is held even when nothing is in
+	// it — see RowEndSlot — so the fields do not shift as one of them is edited.
 	bool ResetToDefaultButton(const char8* id, bool modified)
 	{
 		const float32 size = RowEndSlot();
@@ -1354,32 +1339,14 @@ namespace
 			ImGui::SetTooltip("Reset to default");
 
 		const ImU32 color = hovered ? IM_COL32(255, 216, 122, 255) : IM_COL32(224, 176, 62, 255);
-		const ImVec2 center(origin.x + size * 0.5f, origin.y + size * 0.5f);
-		const float32 radius = ImFloor(size * 0.26f);
 
-		// Most of a circle, and an arrowhead carried on its tangent: the shape reads as "put it back".
-		ImDrawList* drawList = ImGui::GetWindowDrawList();
-		drawList->PathArcTo(center, radius, IM_PI * 0.35f, IM_PI * 1.70f, 16);
-		drawList->PathStroke(color, ImDrawFlags_None, 1.6f);
-
-		const float32 angle = IM_PI * 1.70f;
-		const ImVec2 tip(center.x + radius * ImCos(angle), center.y + radius * ImSin(angle));
-		const ImVec2 along(-ImSin(angle), ImCos(angle));
-		const ImVec2 across(-along.y, along.x);
-		const float32 head = size * 0.22f;
-
-		drawList->AddTriangleFilled(
-			ImVec2(tip.x + along.x * head, tip.y + along.y * head),
-			ImVec2(tip.x - across.x * head * 0.7f, tip.y - across.y * head * 0.7f),
-			ImVec2(tip.x + across.x * head * 0.7f, tip.y + across.y * head * 0.7f),
-			color);
-
+		DrawIcon(origin, size, ICON_MDI_RESTORE, color);
 		return clicked;
 	}
 
-	// The uniform-scale padlock: closed, the three axes move together. Drawn for the same reason as the
-	// arrow above — the font has no padlock — and it says which state it is in rather than which state
-	// it would switch to, because a toggle that shows the other state is a toggle nobody trusts.
+	// The uniform-scale padlock: closed, the three axes move together. It says which state it is in rather
+	// than which state it would switch to, because a toggle that shows the other state is a toggle nobody
+	// trusts.
 	bool LockButton(const char8* id, bool locked)
 	{
 		const float32 size = RowEndSlot();
@@ -1390,24 +1357,9 @@ namespace
 		if (hovered)
 			ImGui::SetTooltip(locked ? "Scale the axes together" : "Scale each axis on its own");
 
-		const ImU32 color = ImGui::GetColorU32(
-			(locked || hovered) ? ImGuiCol_Text : ImGuiCol_TextDisabled);
+		const ImU32 color = ImGui::GetColorU32((locked || hovered) ? ImGuiCol_Text : ImGuiCol_TextDisabled);
 
-		const float32 body = ImFloor(size * 0.56f);
-		const ImVec2 center(origin.x + size * 0.5f, origin.y + size * 0.5f);
-		const ImVec2 bodyMin(center.x - body * 0.5f, center.y - body * 0.15f);
-		const ImVec2 bodyMax(bodyMin.x + body, bodyMin.y + body * 0.85f);
-
-		ImDrawList* drawList = ImGui::GetWindowDrawList();
-		drawList->AddRectFilled(bodyMin, bodyMax, color, 1.0f);
-
-		// The shackle: closed, it sits on the body; open, it lifts off one side of it.
-		const float32 shackle = body * 0.32f;
-		const ImVec2 hinge(locked ? center.x : center.x + shackle * 0.5f, bodyMin.y);
-
-		drawList->PathArcTo(hinge, shackle, IM_PI, IM_PI * 2.0f, 12);
-		drawList->PathStroke(color, ImDrawFlags_None, 1.4f);
-
+		DrawIcon(origin, size, locked ? ICON_MDI_LOCK : ICON_MDI_LOCK_OPEN_VARIANT, color);
 		return clicked;
 	}
 
@@ -2711,17 +2663,9 @@ void EditorLayer::DrawHierarchy()
 
 	const ImGuiStyle& style = ImGui::GetStyle();
 
-	// Add, then what you are looking for, then what you are looking in. The label is padded out to leave
-	// the plus its own room: an icon touching the word beside it reads as part of the word.
-	const float32 plusSize = ImGui::GetFontSize() * 0.6f;
-	const ImVec2 addPosition = ImGui::GetCursorScreenPos();
-	const bool add = ImGui::Button("     Add");
-
-	DrawPlusIcon(
-		ImVec2(addPosition.x + style.FramePadding.x + plusSize * 0.5f, addPosition.y + ImGui::GetFrameHeight() * 0.5f),
-		plusSize, ImGui::GetColorU32(ImGuiCol_Text));
-
-	if (add)
+	// Add, then what you are looking for, then what you are looking in. The icon is part of the label: it is
+	// a character, so the button lays it out beside the word the way it lays out the word itself.
+	if (ImGui::Button(ICON_MDI_PLUS "  Add"))
 		CreateEntity();
 
 	if (ImGui::IsItemHovered())

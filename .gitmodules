@@ -19,3 +19,17 @@
 [submodule "Vendor/stb"]
 	path = Vendor/stb
 	url = https://github.com/TheSampaio/STB
+[submodule "Vendor/json"]
+	path = Vendor/json
+	url = https://github.com/TheSampaio/JsonCpp.git
+	branch = develop
+[submodule "Vendor/imguizmo"]
+	path = Vendor/imguizmo
+	url = https://github.com/TheSampaio/ImGuizmo.git
+[submodule "Vendor/mdi"]
+	path = Vendor/mdi
+	url = https://github.com/TheSampaio/MaterialDesignWebfont.git
+[submodule "Vendor/iconfont"]
+	path = Vendor/iconfont
+	url = https://github.com/TheSampaio/IconFontCpp.git
+	branch = main
