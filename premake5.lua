@@ -131,6 +131,19 @@ group ". External Dependencies"
             filter {}
             targetdir ("%{wks.location}/Vendor/" .. vendor .. "/Build/Bin/" .. output_dir .. "%{prj.name}")
             objdir    ("%{wks.location}/Vendor/" .. vendor .. "/Build/Obj/" .. output_dir .. "%{prj.name}")
+
+            -- A vendored library is optimised even in Debug. Debug is where *this* code is stepped through;
+            -- nobody steps into ImGui to find a bug in the editor, and an unoptimised ImGui builds the whole
+            -- UI's geometry every frame at debug speed — which is most of what the editor was paying for.
+            -- The runtime is left alone: it is the one thing that has to match across every module.
+            -- Optimising means giving up the runtime checks that come with an unoptimised Debug build:
+            -- /O2 and /RTC1 are mutually exclusive, and the checks are there to catch bugs in the code you
+            -- are writing, which this is not.
+            filter "configurations:Debug"
+                optimize "Speed"
+                flags { "NoRuntimeChecks" }
+
+            filter {}
     end
 
     -- Override GLFW (a submodule) to build as a shared library without editing the vendored file.

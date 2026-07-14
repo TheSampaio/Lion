@@ -1,3 +1,4 @@
+#include "EditorPch.h"
 #include "Sealer.h"
 
 #include <algorithm>

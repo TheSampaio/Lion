@@ -1,3 +1,4 @@
+#include "EditorPch.h"
 #include "ModuleSymbols.h"
 
 #include <cstdint>

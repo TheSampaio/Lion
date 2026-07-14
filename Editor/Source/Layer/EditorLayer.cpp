@@ -1,3 +1,4 @@
+#include "EditorPch.h"
 #include "EditorLayer.h"
 
 #include "../EditorGui.h"
@@ -350,6 +351,7 @@ void EditorLayer::DrawUI()
 	DrawProject();
 	DrawShortcuts();
 	DrawLayoutPopups();
+
 	DrawNewComponentPopup();
 	DrawDeleteAssetPopup();
 
@@ -1490,47 +1492,50 @@ void EditorLayer::DrawProject()
 		return;
 	}
 
-	// --- Directories first, then asset files.
-	std::string enterDirectory;
+	// --- The listing, read when it changed and not when it is drawn.
+	//
+	// A folder's own timestamp moves when an entry is added to or removed from it, so one cheap look at it
+	// answers "did anything change?" without walking anything. It is looked at on a timer rather than every
+	// frame, because a folder somebody else edits is not a folder that changes 600 times a second.
+	constexpr double kPollInterval = 0.5;
+	const double now = ImGui::GetTime();
 
-	for (const auto& entry : std::filesystem::directory_iterator(current, error))
+	if (mProjectDirty || mProjectScannedPath != mProjectPath)
 	{
-		if (!entry.is_directory())
-			continue;
+		ScanProjectDirectory(current);
+	}
+	else if (now - mProjectPollTime >= kPollInterval)
+	{
+		mProjectPollTime = now;
 
-		const std::string name = entry.path().filename().generic_string();
+		const std::filesystem::file_time_type stamp = std::filesystem::last_write_time(current, error);
 
-		// The editor's own Data folder sits in the resource root, but it holds no assets.
-		if (mProjectPath.empty() && name == kDataDirectory)
-			continue;
-
-		const std::string assetPath = mProjectPath.empty() ? name : mProjectPath + "/" + name;
-
-		ImGui::PushID(name.c_str());
-
-		if (DrawAssetEntry(name, assetPath, true) && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
-			enterDirectory = assetPath;
-
-		ImGui::PopID();
+		if (!error && stamp != mProjectStamp)
+			ScanProjectDirectory(current);
 	}
 
-	for (const auto& entry : std::filesystem::directory_iterator(current, error))
+	std::string enterDirectory;
+
+	for (const AssetEntry& entry : mProjectEntries)
 	{
-		if (entry.is_directory() || !IsAssetFile(entry.path()))
-			continue;
+		ImGui::PushID(entry.path.c_str());
 
-		const std::string name = entry.path().filename().generic_string();
-		const std::string assetPath = mProjectPath.empty() ? name : mProjectPath + "/" + name;
-
-		ImGui::PushID(name.c_str());
-		DrawAssetEntry(name, assetPath, false);
-
-		// Drag an asset onto a field that accepts it (e.g. the Sprite Renderer's texture).
-		if (ImGui::BeginDragDropSource())
+		if (entry.directory)
 		{
-			ImGui::SetDragDropPayload("LN_ASSET_PATH", assetPath.c_str(), assetPath.size() + 1);
-			ImGui::TextUnformatted(name.c_str());
-			ImGui::EndDragDropSource();
+			if (DrawAssetEntry(entry.name, entry.path, true) && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
+				enterDirectory = entry.path;
+		}
+		else
+		{
+			DrawAssetEntry(entry.name, entry.path, false);
+
+			// Drag an asset onto a field that accepts it (e.g. the Sprite Renderer's texture).
+			if (ImGui::BeginDragDropSource())
+			{
+				ImGui::SetDragDropPayload("LN_ASSET_PATH", entry.path.c_str(), entry.path.size() + 1);
+				ImGui::TextUnformatted(entry.name.c_str());
+				ImGui::EndDragDropSource();
+			}
 		}
 
 		ImGui::PopID();
@@ -1638,6 +1643,36 @@ bool EditorLayer::DrawAssetEntry(const std::string& name, const std::string& ass
 	return activated;
 }
 
+void EditorLayer::ScanProjectDirectory(const std::filesystem::path& directory)
+{
+	mProjectEntries.clear();
+	mProjectScannedPath = mProjectPath;
+	mProjectDirty = false;
+
+	std::error_code error;
+	mProjectStamp = std::filesystem::last_write_time(directory, error);
+	mProjectPollTime = ImGui::GetTime();
+
+	// Directories first, then the files: a folder is a place you go, and the places come before the things.
+	for (const auto& entry : std::filesystem::directory_iterator(directory, error))
+	{
+		const std::string name = entry.path().filename().generic_string();
+
+		// The editor's own Data folder sits in the resource root, but it holds no assets.
+		if (entry.is_directory() && !(mProjectPath.empty() && name == kDataDirectory))
+			mProjectEntries.push_back({ name, mProjectPath.empty() ? name : mProjectPath + "/" + name, true });
+	}
+
+	for (const auto& entry : std::filesystem::directory_iterator(directory, error))
+	{
+		if (entry.is_directory() || !IsAssetFile(entry.path()))
+			continue;
+
+		const std::string name = entry.path().filename().generic_string();
+		mProjectEntries.push_back({ name, mProjectPath.empty() ? name : mProjectPath + "/" + name, false });
+	}
+}
+
 void EditorLayer::CreateAssetFolder()
 {
 	const std::filesystem::path parent = ProjectPanelDirectory() / mProjectPath;
@@ -1654,6 +1689,8 @@ void EditorLayer::CreateAssetFolder()
 
 	// Straight into a rename, the way every file browser does it: a folder called "New Folder" is a
 	// folder nobody meant to keep.
+	mProjectDirty = true;
+
 	const std::string name = created.filename().generic_string();
 	mRenamingAsset = mProjectPath.empty() ? name : mProjectPath + "/" + name;
 	mAssetRenameFocus = true;
@@ -1683,6 +1720,7 @@ void EditorLayer::RenameAsset(const std::string& assetPath, const std::string& n
 	}
 
 	std::filesystem::rename(from, to, error);
+	mProjectDirty = true;
 
 	if (error)
 		Log::Console(LogLevel::Error, LION_FORMAT_TEXT("[Editor] Could not rename '{}': {}.", assetPath, error.message()));
@@ -1722,6 +1760,7 @@ void EditorLayer::DrawDeleteAssetPopup()
 	if (ImGui::Button("Delete", ImVec2(96.0f, 0.0f)))
 	{
 		std::filesystem::remove_all(full, error);
+		mProjectDirty = true;
 
 		if (error)
 			Log::Console(LogLevel::Error, LION_FORMAT_TEXT("[Editor] Could not delete '{}': {}.", mAssetToDelete, error.message()));

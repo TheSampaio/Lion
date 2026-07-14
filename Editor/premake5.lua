@@ -10,6 +10,12 @@ project "Mane"
     -- state all sit next to the executable, and Visual Studio would otherwise start it from Editor/.
     debugdir "%{cfg.targetdir}"
 
+    -- Everything the editor includes and never edits — the standard library, the engine's headers, ImGui —
+    -- compiled once instead of once per translation unit. EditorLayer.cpp alone is thousands of lines over
+    -- all of it, and it was being paid for from scratch every time a line of it changed.
+    pchheader("EditorPch.h")
+    pchsource("EditorPch.cpp")
+
     files {
         "%{prj.location}/**.rc",   -- The executable's icon.
         "%{prj.location}/**.h",
@@ -17,6 +23,7 @@ project "Mane"
     }
 
     includedirs {
+        "%{prj.location}",   -- So every translation unit finds "EditorPch.h" by that name, wherever it sits.
         "%{wks.location}/Engine/Include",
         "%{wks.location}/Engine/Source",
     }

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <filesystem>
 #include <future>
 #include <optional>
 
@@ -184,6 +185,25 @@ private:
 	bool mAssetRenameFocus = false;
 	std::string mAssetToDelete;                // Relative path awaiting the confirmation modal.
 
+	// What is in that folder, read once and kept.
+	//
+	// The panel used to walk the directory twice per frame — two round trips to the file system for a list
+	// that changes when somebody changes it, which is almost never. It was the most expensive thing the
+	// editor did, by a distance. Now the list is read when the folder changes, when the editor changes
+	// something in it, and otherwise only when the folder's own timestamp says a stranger did.
+	struct AssetEntry
+	{
+		std::string name;
+		std::string path;   // Relative to the resource root, which is what everything else here speaks in.
+		bool directory = false;
+	};
+
+	std::vector<AssetEntry> mProjectEntries;
+	std::string mProjectScannedPath;                       // The folder mProjectEntries was read from.
+	std::filesystem::file_time_type mProjectStamp;         // Its modification time when it was read.
+	double mProjectPollTime = 0.0;                         // When the timestamp was last checked.
+	bool mProjectDirty = true;                             // The editor changed something; read it again.
+
 	// Hierarchy tree state, applied after the tree is drawn (never mutate it mid-iteration).
 	std::unordered_map<Lion::Entity*, Lion::Reference<Lion::Entity>> mEntityLookup;
 	Lion::Reference<Lion::Entity> mEntityToDelete;
@@ -244,6 +264,9 @@ private:
 	bool DrawAssetEntry(const std::string& name, const std::string& assetPath, bool folder);
 
 	void CreateAssetFolder();
+
+	// Reads the browsed folder into mProjectEntries, directories first.
+	void ScanProjectDirectory(const std::filesystem::path& directory);
 	void RenameAsset(const std::string& assetPath, const std::string& name);
 	void DrawDeleteAssetPopup();   // Deleting a file is not an undo step, so it is a question first.
 	void DrawShortcuts();
