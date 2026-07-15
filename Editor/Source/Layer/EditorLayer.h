@@ -169,11 +169,26 @@ private:
 	std::unordered_map<std::string, ImVec2> mPanelSizes;
 	std::vector<std::string> mResizingPanels;
 
-	// Undo/redo history of full-scene JSON snapshots. mPendingSnapshot holds the pre-edit state
-	// captured at the start of a continuous edit (gizmo/drag), committed once the edit ends.
-	std::vector<std::string> mUndoStack;
-	std::vector<std::string> mRedoStack;
+	// Undo/redo history. One timeline holds two kinds of thing, so a single Ctrl+Z walks back through the
+	// last edit whatever it was: a scene change carries the scene as JSON, a panel resize carries the dock
+	// layout as an ImGui ini. mPendingSnapshot holds the pre-edit scene captured at the start of a
+	// continuous edit (gizmo/drag), committed once the edit ends.
+	enum class EditKind { Scene, Layout };
+
+	struct EditState
+	{
+		EditKind kind;
+		std::string data;   // Scene JSON, or the ini text SaveIniSettingsToMemory produced.
+	};
+
+	std::vector<EditState> mUndoStack;
+	std::vector<EditState> mRedoStack;
 	std::string mPendingSnapshot;
+
+	// A panel resize is one undoable step, and it is bracketed by the mouse: the layout is snapshotted when
+	// the button goes down, and pushed onto the history when it comes up if a resize happened between.
+	std::string mLayoutBeforePress;
+	bool mResizedThisPress = false;
 	bool mHasPending = false;
 
 	// Snapshot of the edited scene captured when entering Play mode, restored on Stop.
@@ -269,6 +284,10 @@ private:
 	Lion::float32 DrawMenuBar(const ImVec2& barMin, const ImVec2& barMax);
 	void DrawWindowButtons(const ImVec2& barMin, Lion::float32 barWidth, Lion::float32 rowHeight);
 	void EndPropertiesPanel();   // Closes the fields, states what is selected, and closes the panel.
+	// Restores an undo entry, scene or layout, and returns what to push onto the opposite stack.
+	EditState CaptureCurrent(EditKind kind) const;
+	void RestoreState(const EditState& state);
+
 	void DrawStatusBar();   // The bar along the bottom: what is open, and which engine has it open.
 	void DrawViewport();
 	// The box around what is selected, drawn over the image for every entity in the selection.

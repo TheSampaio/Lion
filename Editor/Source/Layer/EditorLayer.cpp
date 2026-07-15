@@ -388,6 +388,31 @@ void EditorLayer::DrawUI()
 	// Commit any in-progress continuous edit (gizmo/slider drag) once the mouse is released.
 	if (mHasPending && ImGui::IsMouseReleased(ImGuiMouseButton_Left))
 		CommitEdit();
+
+	// A panel resize is one undo step, bracketed by the mouse. The layout is snapshotted the instant the
+	// button goes down — before any drag has moved a separator — so what lands on the history is the layout
+	// as it was, not as it is becoming. DrawPanelSizeOverlay is what notices a panel changing size, so this
+	// reads its verdict rather than working the drag out a second time.
+	if (ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+	{
+		mLayoutBeforePress = ImGui::SaveIniSettingsToMemory(nullptr);
+		mResizedThisPress = false;
+	}
+
+	if (!mResizingPanels.empty())
+		mResizedThisPress = true;
+
+	if (mResizedThisPress && ImGui::IsMouseReleased(ImGuiMouseButton_Left))
+	{
+		mResizedThisPress = false;
+
+		mUndoStack.push_back({ EditKind::Layout, mLayoutBeforePress });
+
+		if (mUndoStack.size() > kMaxUndo)
+			mUndoStack.erase(mUndoStack.begin());
+
+		mRedoStack.clear();
+	}
 }
 
 void EditorLayer::DrawPlayModeDim()
@@ -2089,7 +2114,7 @@ void EditorLayer::DrawShortcuts()
 void EditorLayer::RecordSnapshot()
 {
 	// Snapshot the current state onto the undo stack (used right before a discrete edit).
-	mUndoStack.push_back(SceneSerializer::SerializeToString(mScene));
+	mUndoStack.push_back({ EditKind::Scene, SceneSerializer::SerializeToString(mScene) });
 
 	if (mUndoStack.size() > kMaxUndo)
 		mUndoStack.erase(mUndoStack.begin());
@@ -2118,7 +2143,7 @@ void EditorLayer::CommitEdit()
 	if (SceneSerializer::SerializeToString(mScene) == mPendingSnapshot)
 		return;
 
-	mUndoStack.push_back(mPendingSnapshot);
+	mUndoStack.push_back({ EditKind::Scene, mPendingSnapshot });
 
 	if (mUndoStack.size() > kMaxUndo)
 		mUndoStack.erase(mUndoStack.begin());
@@ -2126,19 +2151,38 @@ void EditorLayer::CommitEdit()
 	mRedoStack.clear();
 }
 
+EditorLayer::EditState EditorLayer::CaptureCurrent(EditKind kind) const
+{
+	if (kind == EditKind::Layout)
+		return { EditKind::Layout, ImGui::SaveIniSettingsToMemory(nullptr) };
+
+	return { EditKind::Scene, SceneSerializer::SerializeToString(mScene) };
+}
+
+void EditorLayer::RestoreState(const EditState& state)
+{
+	if (state.kind == EditKind::Layout)
+	{
+		ImGui::LoadIniSettingsFromMemory(state.data.c_str(), state.data.size());
+		return;
+	}
+
+	// The scene is rebuilt from scratch, so any selected-entity pointer becomes stale.
+	SetSelection(nullptr);
+	SceneSerializer::DeserializeFromString(mScene, state.data);
+}
+
 void EditorLayer::Undo()
 {
 	if (mUndoStack.empty())
 		return;
 
-	mRedoStack.push_back(SceneSerializer::SerializeToString(mScene));
-
-	const std::string state = mUndoStack.back();
+	const EditState state = mUndoStack.back();
 	mUndoStack.pop_back();
 
-	// The scene is rebuilt from scratch, so any selected-entity pointer becomes stale.
-	SetSelection(nullptr);
-	SceneSerializer::DeserializeFromString(mScene, state);
+	// What is undone is put on the redo stack as it stands now, in the same kind, so redo puts it back.
+	mRedoStack.push_back(CaptureCurrent(state.kind));
+	RestoreState(state);
 }
 
 void EditorLayer::Redo()
@@ -2146,13 +2190,11 @@ void EditorLayer::Redo()
 	if (mRedoStack.empty())
 		return;
 
-	mUndoStack.push_back(SceneSerializer::SerializeToString(mScene));
-
-	const std::string state = mRedoStack.back();
+	const EditState state = mRedoStack.back();
 	mRedoStack.pop_back();
 
-	SetSelection(nullptr);
-	SceneSerializer::DeserializeFromString(mScene, state);
+	mUndoStack.push_back(CaptureCurrent(state.kind));
+	RestoreState(state);
 }
 
 namespace
