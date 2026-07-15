@@ -255,9 +255,10 @@ private:
 
 	// The docks that float over the viewport: a square button, the room the dock leaves around its row of
 	// them, and how far the dock itself sits from the edge of the image.
-	static constexpr float kDockButton = 24.0f;   // 24 + 4 padding either side = a 32px-tall dock.
-	static constexpr float kDockPadding = 4.0f;
-	static constexpr float kDockSpacing = 4.0f;
+	// The viewport toolbar docks: a 24px hit target around a 16px icon, in a compact bar.
+	static constexpr float kDockButton = 24.0f;
+	static constexpr float kDockPadding = 3.0f;
+	static constexpr float kDockSpacing = 3.0f;
 	static constexpr float kDockMargin = 10.0f;
 
 	// Tells Windows what a .lscene is, so Explorer draws it with the engine's icon and a double-click opens
@@ -276,6 +277,7 @@ private:
 	static Lion::float32 ToolbarDockWidth(int count);
 	static void BeginToolbarDock(const Lion::char8* id, const ImVec2& position, int count);
 	static void EndToolbarDock();
+	bool ToolbarButton(const Lion::char8* id, const Lion::char8* icon, bool active, bool enabled, const Lion::char8* tooltip);
 
 	void DrawTitleBar();
 
@@ -370,7 +372,7 @@ private:
 	// Draws a collapsing header for a component with a right-aligned "X" remove button and
 	// drag-to-reorder support. Returns whether the body is open; sets removeRequested when the X is
 	// pressed, and sets dragFrom/dragTo when a header is dropped onto this one.
-	bool DrawComponentHeader(const char* label, int index, bool& removeRequested, int& dragFrom, int& dragTo);
+	bool DrawComponentHeader(const Lion::char8* icon, const Lion::char8* name, int index, bool& removeRequested, int& dragFrom, int& dragTo);
 
 	// Draws a scalar property row: the label, the field, and the revert arrow that puts the default
 	// back — which only appears while the value is not it. Pass no default for a field that has none

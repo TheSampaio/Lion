@@ -14,30 +14,34 @@
 
 using namespace Lion;
 
-// The bold cut, kept because ImGui hands it back as nothing more than a pointer into its font atlas.
+// The bold cut, and the icon font as a font of its own. Both are kept because ImGui hands them back as
+// nothing more than a pointer into its font atlas.
 static ImFont* sBoldFont = nullptr;
+static ImFont* sIconFont = nullptr;
 
 ImVec4 EditorGui::GetAccent()
 {
-	// #E87A2A — the orange of the engine's mark. Everything the editor highlights is this colour, so the
-	// colour is written once: a second copy of it is a second thing to remember when the brand moves.
-	return ImVec4(0.910f, 0.478f, 0.165f, 1.0f);
+	// #D96D1F — the orange of the engine's mark, a shade deeper than the logo's so white text and white
+	// icons stay legible on top of it. The colour is written once: a second copy of it is a second thing to
+	// remember when the brand moves.
+	return ImVec4(0.851f, 0.427f, 0.122f, 1.0f);
 }
 
-// One size for the text and the icons, because an icon is a character: it is laid out on the same line as
-// the words beside it, and a glyph a size apart from them would not sit on their baseline.
+// One size for the text and the inline icons that sit in a run of it — a menu item, a tab, a button label.
 constexpr float32 kFontSize = 18.0f;
 
-// The icon font, merged into the text font rather than added beside it.
-//
-// Merged, an icon *is* a character — "ICON_MDI_PLUS  Add" is one string, drawn by one call, out of one
-// atlas, in one draw call. Kept as a font of its own it would need pushing and popping around every icon,
-// and an icon could never sit inline with a label.
-//
-// The alternative was what the editor did before: drawing each glyph by hand out of arcs and lines. That
-// cost nothing to speak of — same draw list, same atlas — but every icon was a small pile of code that
-// only approximated the thing it was drawing.
-void MergeIconFont()
+// The icons drawn by hand (the docks, the Hierarchy rows, the console) are baked once at the largest size
+// any of them asks for, and scaled down where a caller wants less. Down is sharp; up is not, which is why
+// the whole set is baked big rather than at each size it is used.
+constexpr float32 kIconAtlasSize = 32.0f;
+
+ImFont* EditorGui::GetBoldFont() { return sBoldFont; }
+ImFont* EditorGui::GetIconFont() { return sIconFont; }
+float32 EditorGui::GetIconAtlasSize() { return kIconAtlasSize; }
+
+// The icon font, twice over: merged into the text so an icon can sit inline with a label, and standalone at
+// atlas resolution so a hand-drawn icon is sharp at 20, 24 or 32 pixels. One .ttf, two ImFonts.
+void LoadIconFont()
 {
 	const std::filesystem::path font = std::filesystem::path(ResourceRootDirectory()) / "Fonts" / FONT_ICON_FILE_NAME_MDI;
 
@@ -50,24 +54,23 @@ void MergeIconFont()
 	// ImGui keeps the pointer, not the array, so the range outlives this call.
 	static const ImWchar range[] = { ICON_MIN_MDI, ICON_MAX_MDI, 0 };
 
-	ImFontConfig config;
-	config.MergeMode = true;
-	config.PixelSnapH = true;
+	// Merged into the text font at 16px — the size Unity, Godot and Unreal set an inline icon to. An icon
+	// fills its em square where a letter leaves room in theirs, so 16 against 18px text is what makes the two
+	// weigh the same in a menu, a tab or a component header. It sits on the baseline, nudged to level its ink
+	// box with the words'.
+	ImFontConfig merged;
+	merged.MergeMode = true;
+	merged.PixelSnapH = true;
+	merged.GlyphMinAdvanceX = 16.0f;
+	merged.GlyphOffset.y = 1.0f;
 
-	// Baked a little smaller than the text, and dropped onto its baseline. An icon fills its em square while
-	// a letter leaves room inside theirs, so an icon the same nominal size as the text reads bigger than it —
-	// in a tab, a menu, a toolbar button. A couple of points down, nudged to sit level with the words, and it
-	// weighs what they weigh. The places that want a large icon draw it themselves (see DrawInlineIcon).
-	constexpr float32 kIconSize = 15.0f;
-	config.GlyphMinAdvanceX = kIconSize;
-	config.GlyphOffset.y = 2.0f;
+	ImGui::GetIO().Fonts->AddFontFromFileTTF(font.string().c_str(), 16.0f, &merged, range);
 
-	ImGui::GetIO().Fonts->AddFontFromFileTTF(font.string().c_str(), kIconSize, &config, range);
-}
+	// And once more on its own, at atlas size, for the icons the editor positions itself.
+	ImFontConfig standalone;
+	standalone.PixelSnapH = true;
 
-ImFont* EditorGui::GetBoldFont()
-{
-	return sBoldFont;
+	sIconFont = ImGui::GetIO().Fonts->AddFontFromFileTTF(font.string().c_str(), kIconAtlasSize, &standalone, range);
 }
 
 static void SetDarkTheme()
@@ -212,7 +215,7 @@ void EditorGui::Init()
 	if (std::filesystem::exists("C:/Windows/Fonts/segoeui.ttf"))
 		io.Fonts->AddFontFromFileTTF("C:/Windows/Fonts/segoeui.ttf", kFontSize, nullptr, textRange);
 
-	MergeIconFont();
+	LoadIconFont();
 
 	if (std::filesystem::exists("C:/Windows/Fonts/segoeuib.ttf"))
 		sBoldFont = io.Fonts->AddFontFromFileTTF("C:/Windows/Fonts/segoeuib.ttf", kFontSize, nullptr, textRange);

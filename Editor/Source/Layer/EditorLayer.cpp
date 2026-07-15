@@ -33,6 +33,12 @@ using namespace Lion;
 // The editor's name, which is not the engine's: the project is called Mane, and this is the face it wears.
 static const char8* kEditorName = "Lion's Mane";
 
+// One icon scale for the whole editor, on the 4px grid the engines it takes after use: 16px for the icons
+// in toolbars, rows and headers, and 24px for the one that heads a panel. Read from here so a change is made
+// once, not hunted through every call site.
+static constexpr float32 kIconSize = 16.0f;
+static constexpr float32 kIconTitle = 24.0f;
+
 // What a file dialog offers when a scene is opened or saved. A scene is JSON inside and a .lscene outside:
 // what it is made of is the engine's business, and what it is is the project's.
 static const char8* kSceneFilter = "Lion Scene (*.lscene)\0*.lscene\0";
@@ -733,6 +739,9 @@ void EditorLayer::DrawStatistics()
 
 namespace
 {
+	// Defined further down, next to the other icon helpers, but needed here for the console's filter icons.
+	void DrawIcon(const ImVec2& origin, const ImVec2& box, const char8* icon, ImU32 color, float32 pixels);
+
 	// Console severity buckets, mirroring the three filter toggles (Unity-style).
 	enum class LogBucket { Error, Warning, Info };
 
@@ -776,17 +785,36 @@ namespace
 		return ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
 	}
 
-	// A severity filter rendered as a toggle button with its message count.
-	bool LogFilterToggle(const char8* label, int count, bool& enabled, const ImVec4& color)
+	// A severity filter: a 16px icon and its message count, toggling the filter on click. The icon is drawn
+	// rather than set inline so it is a true 16px square; the count sits beside it.
+	bool LogFilterToggle(const char8* icon, int count, bool& enabled, const ImVec4& color)
 	{
-		const std::string text = std::string(label) + "  " + std::to_string(count);
+		constexpr float32 kFilterIcon = kIconSize;
 
-		ImGui::PushStyleColor(ImGuiCol_Button, enabled ? ImVec4(color.x, color.y, color.z, 0.28f) : ImVec4(0, 0, 0, 0));
-		ImGui::PushStyleColor(ImGuiCol_Text, enabled ? color : ImVec4(0.45f, 0.46f, 0.49f, 1.0f));
+		const std::string countText = std::to_string(count);
+		const ImGuiStyle& style = ImGui::GetStyle();
+		const float32 width = kFilterIcon + style.ItemInnerSpacing.x + ImGui::CalcTextSize(countText.c_str()).x;
 
-		const bool clicked = ImGui::Button(text.c_str());
+		const ImVec2 origin = ImGui::GetCursorScreenPos();
+		const float32 height = ImGui::GetFrameHeight();
 
-		ImGui::PopStyleColor(2);
+		// Lit when the filter is on, flat when it is off, so the row reads as a set of toggles.
+		if (enabled)
+			ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(color.x, color.y, color.z, 0.22f));
+
+		const bool clicked = ImGui::Button("##filter", ImVec2(width + style.FramePadding.x * 2.0f, height));
+
+		if (enabled)
+			ImGui::PopStyleColor();
+
+		const ImU32 tint = ImGui::GetColorU32(enabled ? color : ImVec4(0.45f, 0.46f, 0.49f, 1.0f));
+
+		DrawIcon(ImVec2(origin.x + style.FramePadding.x, origin.y), ImVec2(kFilterIcon, height), icon, tint, kFilterIcon);
+
+		ImGui::GetWindowDrawList()->AddText(
+			ImVec2(origin.x + style.FramePadding.x + kFilterIcon + style.ItemInnerSpacing.x,
+				ImFloor(origin.y + (height - ImGui::GetTextLineHeight()) * 0.5f)),
+			tint, countText.c_str());
 
 		if (clicked)
 			enabled = !enabled;
@@ -902,19 +930,35 @@ void EditorLayer::DrawConsole()
 	// --- Message list: a coloured severity icon, a dimmed timestamp and the message. The clipper submits
 	// only the rows actually on screen, so a full history costs no more than a screenful.
 	//
-	// No padding on the child, so a hovered row reaches the panel's edges the way the Hierarchy's do: the
-	// left margin the content wants is added to each item by hand, not taken out of the whole panel.
+	// The child spans the whole panel, padding and all, so a hovered row reaches its left and right edges the
+	// way the Hierarchy's do. The margins the content wants are added to each item by hand, not taken out of
+	// the panel — a child inset by the window's padding would hold every hover a few pixels off both sides.
 	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
-	ImGui::BeginChild("ConsoleOutput", ImVec2(0.0f, 0.0f), false, ImGuiWindowFlags_HorizontalScrollbar);
+	ImGui::SetCursorPosX(0.0f);
+	ImGui::BeginChild("ConsoleOutput", ImVec2(ImGui::GetWindowWidth(), 0.0f), false, ImGuiWindowFlags_HorizontalScrollbar);
 	ImGui::PopStyleVar();
 
+	// A compact row: a 16px severity icon, the timestamp and the message, on a line no taller than it needs
+	// to be — which is how the engines this takes after keep a console dense enough to read a run of logs.
 	constexpr float32 kConsoleLeftPad = 8.0f;
+	constexpr float32 kConsoleIcon = kIconSize;
+	constexpr float32 kConsoleRow = 22.0f;
+	const float32 panelWidth = ImGui::GetContentRegionMax().x;
 
 	int contextIndex = -1;
 	ImDrawList* drawList = ImGui::GetWindowDrawList();
+	ImFont* iconFont = EditorGui::GetIconFont();
+	const float32 textHeight = ImGui::GetTextLineHeight();
+
+	// A selected row is the engine's orange, the same as the Hierarchy's — the selection looks like one
+	// thing wherever it is.
+	const ImVec4 selectAccent = EditorGui::GetAccent();
+	ImGui::PushStyleColor(ImGuiCol_Header, selectAccent);
+	ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(selectAccent.x, selectAccent.y, selectAccent.z, 0.30f));
+	ImGui::PushStyleColor(ImGuiCol_HeaderActive, selectAccent);
 
 	ImGuiListClipper clipper;
-	clipper.Begin(static_cast<int>(mConsoleVisible.size()));
+	clipper.Begin(static_cast<int>(mConsoleVisible.size()), kConsoleRow);
 
 	while (clipper.Step())
 	{
@@ -928,7 +972,10 @@ void EditorLayer::DrawConsole()
 
 			const ImVec2 rowMin = ImGui::GetCursorScreenPos();
 
-			if (ImGui::Selectable("##row", mConsoleSelected == index))
+			// One selectable the width of the panel and the height of the row: the hit area, the hover and
+			// the selection all reach the edges. Everything on top of it is painted, so it does not steal
+			// the clicks.
+			if (ImGui::Selectable("##row", mConsoleSelected == index, ImGuiSelectableFlags_None, ImVec2(0.0f, kConsoleRow)))
 				mConsoleSelected = index;
 
 			if (ImGui::IsItemHovered() && ImGui::IsMouseClicked(ImGuiMouseButton_Right))
@@ -937,31 +984,27 @@ void EditorLayer::DrawConsole()
 				contextIndex = index;
 			}
 
-			// The severity icon, in the severity's colour, sitting where the dot used to. Drawn here rather
-			// than through the shared helper, which the file defines further down than the console.
-			const char8* icon = LogLevelIcon(entry.level);
-			const float32 iconSize = ImGui::GetFontSize() * 0.85f;
-			const ImVec2 iconGlyph = ImGui::GetFont()->CalcTextSizeA(iconSize, FLT_MAX, 0.0f, icon);
+			// The severity icon, in the severity's colour, centred down the row.
+			if (iconFont)
+			{
+				const char8* icon = LogLevelIcon(entry.level);
+				const ImVec2 glyph = iconFont->CalcTextSizeA(kConsoleIcon, FLT_MAX, 0.0f, icon);
+				drawList->AddText(iconFont, kConsoleIcon,
+					ImVec2(rowMin.x + kConsoleLeftPad, ImFloor(rowMin.y + (kConsoleRow - glyph.y) * 0.5f)),
+					ImGui::GetColorU32(accent), icon);
+			}
 
-			drawList->AddText(ImGui::GetFont(), iconSize,
-				ImVec2(rowMin.x + kConsoleLeftPad, ImFloor(rowMin.y + (ImGui::GetTextLineHeight() - iconGlyph.y) * 0.5f)),
-				ImGui::GetColorU32(accent), icon);
+			// Timestamp and message, painted so they centre in the row rather than sitting at its top.
+			const float32 textY = ImFloor(rowMin.y + (kConsoleRow - textHeight) * 0.5f);
+			const float32 messageX = rowMin.x + kConsoleLeftPad + kConsoleIcon + 12.0f;
 
-			ImGui::SameLine(kConsoleLeftPad + 24.0f);
-			ImGui::TextDisabled("%s", entry.time.c_str());
-
-			ImGui::SameLine(kConsoleLeftPad + 96.0f);
+			drawList->AddText(ImVec2(messageX, textY), ImGui::GetColorU32(ImGuiCol_TextDisabled), entry.time.c_str());
 
 			// Only errors and warnings tint their message; everything else reads as plain text.
 			const bool tinted = LogLevelBucket(entry.level) != LogBucket::Info;
+			const ImU32 messageColor = tinted ? ImGui::GetColorU32(accent) : ImGui::GetColorU32(ImGuiCol_Text);
 
-			if (tinted)
-				ImGui::PushStyleColor(ImGuiCol_Text, accent);
-
-			ImGui::TextUnformatted(entry.message.c_str());
-
-			if (tinted)
-				ImGui::PopStyleColor();
+			drawList->AddText(ImVec2(messageX + 84.0f, textY), messageColor, entry.message.c_str());
 
 			// How many times this one line happened, pinned to the right edge where a count goes.
 			if (mConsoleCounts[row] > 1)
@@ -970,11 +1013,11 @@ void EditorLayer::DrawConsole()
 				std::snprintf(count, sizeof(count), "%d", mConsoleCounts[row]);
 
 				const ImVec2 size = ImGui::CalcTextSize(count);
-				const ImVec2 badge(rowMin.x + ImGui::GetContentRegionMax().x - size.x - 12.0f, rowMin.y);
+				const ImVec2 badge(rowMin.x + panelWidth - size.x - 16.0f, textY);
 
 				drawList->AddRectFilled(
 					ImVec2(badge.x - 6.0f, badge.y),
-					ImVec2(badge.x + size.x + 6.0f, badge.y + ImGui::GetTextLineHeight()),
+					ImVec2(badge.x + size.x + 6.0f, badge.y + textHeight),
 					ImGui::GetColorU32(ImGuiCol_Button), 3.0f);
 
 				drawList->AddText(badge, ImGui::GetColorU32(ImGuiCol_Text), count);
@@ -985,6 +1028,7 @@ void EditorLayer::DrawConsole()
 	}
 
 	clipper.End();
+	ImGui::PopStyleColor(3);
 
 	if (contextIndex >= 0)
 		ImGui::OpenPopup("ConsoleRowContext");
@@ -1254,9 +1298,11 @@ namespace
 	//
 	// A row stops short by exactly one of these, drawn or not: a column that appears and disappears would
 	// drag every field on the row with it.
+	// The width a row's end widget claims — the eye, the padlock, the revert arrow. A 16px icon with a little
+	// room around it, which is the size those are in Unity and Godot.
 	float32 RowEndSlot()
 	{
-		return ImFloor(ImGui::GetFontSize());
+		return 20.0f;
 	}
 
 	// The gap before a row-end glyph — tighter than the spacing between fields, because a glyph on its
@@ -1438,35 +1484,42 @@ namespace
 		}
 	}
 
-	// An icon, centred in a square of its own. An icon is a character now — the font carries it — so this
-	// is a glyph drawn where a glyph goes, and no longer a shape assembled out of arcs and lines.
-	//
-	// 'scale' is against the text around it. An icon fills its em square while a letter leaves room inside
-	// theirs, so an icon set at the text's size reads heavier than the text: the ones that sit in a row of
-	// fields are taken down a little to weigh the same.
-	void DrawIcon(const ImVec2& origin, float32 box, const char8* icon, ImU32 color, float32 scale = 1.0f)
+	// An icon of an exact pixel size, centred in a box of the caller's choosing. It draws from the standalone
+	// icon font — baked at atlas resolution — so 20, 24 or 32 pixels are all sharp, rather than one small
+	// baked size scaled up into a blur. This is what every hand-placed icon in the editor goes through.
+	void DrawIcon(const ImVec2& origin, const ImVec2& box, const char8* icon, ImU32 color, float32 pixels)
 	{
-		ImFont* font = ImGui::GetFont();
-		const float32 size = ImGui::GetFontSize() * scale;
-		const ImVec2 glyph = font->CalcTextSizeA(size, FLT_MAX, 0.0f, icon);
+		ImFont* font = EditorGui::GetIconFont();
 
-		ImGui::GetWindowDrawList()->AddText(font, size,
-			ImVec2(ImFloor(origin.x + (box - glyph.x) * 0.5f), ImFloor(origin.y + (box - glyph.y) * 0.5f)),
+		if (!font)
+			return;
+
+		const ImVec2 glyph = font->CalcTextSizeA(pixels, FLT_MAX, 0.0f, icon);
+
+		ImGui::GetWindowDrawList()->AddText(font, pixels,
+			ImVec2(ImFloor(origin.x + (box.x - glyph.x) * 0.5f), ImFloor(origin.y + (box.y - glyph.y) * 0.5f)),
 			color, icon);
 	}
 
-	// An icon drawn inline, as if it were a word, but at whatever size is asked for rather than the small
-	// size the font bakes them at. It claims its own space and leaves the cursor after it, so a SameLine
-	// puts the next item beside it — which is how the Inspector sets a large mark before an entity's name.
-	void DrawInlineIcon(const char8* icon, float32 size, ImU32 color)
+	// The square variant, for the many callers whose box is a square.
+	void DrawIcon(const ImVec2& origin, float32 box, const char8* icon, ImU32 color, float32 pixels)
 	{
-		ImFont* font = ImGui::GetFont();
-		const ImVec2 glyph = font->CalcTextSizeA(size, FLT_MAX, 0.0f, icon);
-		const ImVec2 origin = ImGui::GetCursorScreenPos();
-		const float32 line = ImGui::GetFrameHeight();
+		DrawIcon(origin, ImVec2(box, box), icon, color, pixels);
+	}
 
-		ImGui::GetWindowDrawList()->AddText(font, size,
-			ImVec2(origin.x, ImFloor(origin.y + (line - glyph.y) * 0.5f)), color, icon);
+	// An icon drawn inline, as if it were a word, at an exact pixel size — larger than the merged inline
+	// glyphs. It claims its own space and leaves the cursor after it, so a SameLine puts the next item beside
+	// it, which is how the Inspector sets a large mark before an entity's name.
+	void DrawInlineIcon(const char8* icon, float32 pixels, ImU32 color)
+	{
+		ImFont* font = EditorGui::GetIconFont();
+		const ImVec2 glyph = font ? font->CalcTextSizeA(pixels, FLT_MAX, 0.0f, icon) : ImVec2(pixels, pixels);
+		const ImVec2 origin = ImGui::GetCursorScreenPos();
+		const float32 line = ImMax(ImGui::GetFrameHeight(), glyph.y);
+
+		if (font)
+			ImGui::GetWindowDrawList()->AddText(font, pixels,
+				ImVec2(origin.x, ImFloor(origin.y + (line - glyph.y) * 0.5f)), color, icon);
 
 		ImGui::Dummy(ImVec2(glyph.x, line));
 	}
@@ -1485,7 +1538,7 @@ namespace
 
 		const ImU32 color = ImGui::GetColorU32((visible || hovered) ? ImGuiCol_Text : ImGuiCol_TextDisabled);
 
-		DrawIcon(origin, size, visible ? ICON_MDI_EYE : ICON_MDI_EYE_OFF, color, 0.85f);
+		DrawIcon(origin, size, visible ? ICON_MDI_EYE : ICON_MDI_EYE_OFF, color, kIconSize);
 		return clicked;
 	}
 
@@ -1511,7 +1564,7 @@ namespace
 
 		const ImU32 color = hovered ? IM_COL32(255, 216, 122, 255) : IM_COL32(224, 176, 62, 255);
 
-		DrawIcon(origin, size, ICON_MDI_RESTORE, color, 0.78f);
+		DrawIcon(origin, size, ICON_MDI_RESTORE, color, kIconSize);
 		return clicked;
 	}
 
@@ -1530,7 +1583,7 @@ namespace
 
 		const ImU32 color = ImGui::GetColorU32((locked || hovered) ? ImGuiCol_Text : ImGuiCol_TextDisabled);
 
-		DrawIcon(origin, size, locked ? ICON_MDI_LOCK : ICON_MDI_LOCK_OPEN_VARIANT, color);
+		DrawIcon(origin, size, locked ? ICON_MDI_LOCK : ICON_MDI_LOCK_OPEN_VARIANT, color, kIconSize);
 		return clicked;
 	}
 
@@ -1760,7 +1813,6 @@ namespace
 
 bool EditorLayer::DrawAssetEntry(const std::string& name, const std::string& assetPath, bool folder)
 {
-	const std::filesystem::path full = ProjectPanelDirectory() / assetPath;
 	const bool engineOwned = IsEngineAsset(assetPath);
 
 	// Renaming happens where the name is, so the row becomes the field.
@@ -1794,14 +1846,22 @@ bool EditorLayer::DrawAssetEntry(const std::string& name, const std::string& ass
 	if (dimmed)
 		ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyle().Colors[ImGuiCol_TextDisabled]);
 
+	// Hovered and clicked in the engine's orange, the same as the Hierarchy and the console: one selection
+	// colour across the editor.
+	const ImVec4 accent = EditorGui::GetAccent();
+	ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(accent.x, accent.y, accent.z, 0.30f));
+	ImGui::PushStyleColor(ImGuiCol_HeaderActive, accent);
+
 	const std::string label = std::string(folder ? ICON_MDI_FOLDER : AssetIcon(name)) + "  " + name;
 	const bool activated = ImGui::Selectable(label.c_str(), false, ImGuiSelectableFlags_AllowDoubleClick);
+
+	ImGui::PopStyleColor(2);
 
 	if (dimmed)
 		ImGui::PopStyleColor();
 
 	if (ImGui::IsItemHovered())
-		ImGui::SetTooltip(engineOwned ? "%s\nShipped with the engine — it cannot be renamed or deleted." : "%s",
+		ImGui::SetTooltip(engineOwned ? "%s\nShipped with the engine. It cannot be renamed or deleted." : "%s",
 			assetPath.c_str());
 
 	if (ImGui::BeginPopupContextItem())
@@ -2797,17 +2857,43 @@ void EditorLayer::BeginToolbarDock(const char8* id, const ImVec2& position, int 
 
 	ImGui::PushID(id);
 	ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(kDockSpacing, kDockSpacing));
-	ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0.0f, 0.0f));   // The button is a square; the glyph centres itself in it.
-	ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.0f, 0.0f, 0.0f, 0.0f));  // Only the hovered and active ones are drawn.
 
 	ImGui::SetCursorScreenPos(ImVec2(position.x + kDockPadding, position.y + kDockPadding));
 }
 
 void EditorLayer::EndToolbarDock()
 {
-	ImGui::PopStyleColor();
-	ImGui::PopStyleVar(2);
+	ImGui::PopStyleVar();
 	ImGui::PopID();
+}
+
+// One dock button: a 24px icon centred in a square, with its own hover and active background. Drawn rather
+// than an ImGui::Button(icon), so the icon is a true 24px and sits in the middle of the square instead of
+// riding low on a text baseline.
+bool EditorLayer::ToolbarButton(const char8* id, const char8* icon, bool active, bool enabled, const char8* tooltip)
+{
+	ImGui::BeginDisabled(!enabled);
+
+	const ImVec2 origin = ImGui::GetCursorScreenPos();
+	const bool clicked = ImGui::InvisibleButton(id, ImVec2(kDockButton, kDockButton));
+	const bool hovered = ImGui::IsItemHovered();
+
+	ImDrawList* drawList = ImGui::GetWindowDrawList();
+	const ImVec2 max(origin.x + kDockButton, origin.y + kDockButton);
+
+	if (active)
+		drawList->AddRectFilled(origin, max, ImGui::ColorConvertFloat4ToU32(EditorGui::GetAccent()), 4.0f);
+	else if (hovered && enabled)
+		drawList->AddRectFilled(origin, max, IM_COL32(255, 255, 255, 24), 4.0f);
+
+	const ImU32 color = ImGui::GetColorU32(enabled ? ImGuiCol_Text : ImGuiCol_TextDisabled);
+	DrawIcon(origin, kDockButton, icon, color, kIconSize);
+
+	if (hovered && enabled && tooltip)
+		ImGui::SetTooltip("%s", tooltip);
+
+	ImGui::EndDisabled();
+	return clicked;
 }
 
 void EditorLayer::DrawViewportToolbar(const ImVec2& imageMin, const ImVec2& imageSize)
@@ -2815,7 +2901,6 @@ void EditorLayer::DrawViewportToolbar(const ImVec2& imageMin, const ImVec2& imag
 	// Two docks and a button, floating over the image: what you do to the scene on the left, what you do to
 	// time along the top, and how the scene is shown on the right. They are docks and not loose buttons
 	// because a row of buttons on top of a picture reads as part of the picture.
-	const ImVec4 accent = EditorGui::GetAccent();
 
 	// Tools, top-left.
 	struct ToolButton { Tool tool; const char8* icon; const char8* tooltip; };
@@ -2833,19 +2918,8 @@ void EditorLayer::DrawViewportToolbar(const ImVec2& imageMin, const ImVec2& imag
 		if (button.tool != tools[0].tool)
 			ImGui::SameLine();
 
-		const bool active = (mTool == button.tool);
-
-		if (active)
-			ImGui::PushStyleColor(ImGuiCol_Button, accent);
-
-		if (ImGui::Button(button.icon, ImVec2(kDockButton, kDockButton)))
+		if (ToolbarButton(button.icon, button.icon, mTool == button.tool, true, button.tooltip))
 			mTool = button.tool;
-
-		if (active)
-			ImGui::PopStyleColor();
-
-		if (ImGui::IsItemHovered())
-			ImGui::SetTooltip("%s", button.tooltip);
 	}
 
 	EndToolbarDock();
@@ -2857,45 +2931,21 @@ void EditorLayer::DrawViewportToolbar(const ImVec2& imageMin, const ImVec2& imag
 		ImVec2(imageMin.x + (imageSize.x - playDockWidth) * 0.5f, imageMin.y + kDockMargin), 4);
 
 	// Play doubles as "resume" while paused, so it stays enabled in that state.
-	ImGui::BeginDisabled(mPlaying && !mPaused);
-	if (ImGui::Button(ICON_MDI_PLAY, ImVec2(kDockButton, kDockButton)))
+	if (ToolbarButton("##play", ICON_MDI_PLAY, false, !(mPlaying && !mPaused), "Run the scene simulation (F5)"))
 		StartPlay();
-	ImGui::EndDisabled();
-	if (ImGui::IsItemHovered())
-		ImGui::SetTooltip("Run the scene simulation (F5)");
 
 	// Step advances a halted simulation one frame at a time, so it only means anything while playing.
 	ImGui::SameLine();
-	ImGui::BeginDisabled(!mPlaying);
-	if (ImGui::Button(ICON_MDI_STEP_FORWARD, ImVec2(kDockButton, kDockButton)))
+	if (ToolbarButton("##step", ICON_MDI_STEP_FORWARD, false, mPlaying, "Advance the simulation by one frame (F6)"))
 		StepOneFrame();
-	ImGui::EndDisabled();
-	if (ImGui::IsItemHovered())
-		ImGui::SetTooltip("Advance the simulation by one frame (F6)");
 
 	ImGui::SameLine();
-	ImGui::BeginDisabled(!mPlaying);
-
-	if (mPaused)
-		ImGui::PushStyleColor(ImGuiCol_Button, accent);
-
-	if (ImGui::Button(ICON_MDI_PAUSE, ImVec2(kDockButton, kDockButton)))
+	if (ToolbarButton("##pause", ICON_MDI_PAUSE, mPaused, mPlaying, mPaused ? "Resume the simulation (F7)" : "Pause the simulation (F7)"))
 		TogglePause();
 
-	if (mPaused)
-		ImGui::PopStyleColor();
-
-	ImGui::EndDisabled();
-	if (ImGui::IsItemHovered())
-		ImGui::SetTooltip(mPaused ? "Resume the simulation (F7)" : "Pause the simulation (F7)");
-
 	ImGui::SameLine();
-	ImGui::BeginDisabled(!mPlaying);
-	if (ImGui::Button(ICON_MDI_STOP, ImVec2(kDockButton, kDockButton)))
+	if (ToolbarButton("##stop", ICON_MDI_STOP, false, mPlaying, "Stop and return to the edited state (F8)"))
 		StopPlay();
-	ImGui::EndDisabled();
-	if (ImGui::IsItemHovered())
-		ImGui::SetTooltip("Stop and return to the edited state (F8)");
 
 	EndToolbarDock();
 
@@ -2904,11 +2954,8 @@ void EditorLayer::DrawViewportToolbar(const ImVec2& imageMin, const ImVec2& imag
 	BeginToolbarDock("##settings",
 		ImVec2(imageMin.x + imageSize.x - ToolbarDockWidth(1) - kDockMargin, imageMin.y + kDockMargin), 1);
 
-	if (ImGui::Button(ICON_MDI_COG, ImVec2(kDockButton, kDockButton)))
+	if (ToolbarButton("##cog", ICON_MDI_COG, false, true, "Viewport display options"))
 		ImGui::OpenPopup("ViewportSettings");
-
-	if (ImGui::IsItemHovered())
-		ImGui::SetTooltip("Viewport display options");
 
 	if (ImGui::BeginPopup("ViewportSettings"))
 	{
@@ -3388,8 +3435,21 @@ void EditorLayer::DrawEntityNode(const Reference<Entity>& entity)
 	const bool expanded = folder && ImGui::TreeNodeGetOpen(ImGui::GetID("##node"));
 	const char8* icon = folder ? (expanded ? ICON_MDI_FOLDER_OPEN : ICON_MDI_FOLDER) : ICON_MDI_CUBE_OUTLINE;
 
+	// The row icon is drawn by hand, so the label reserves room for it with spaces and the glyph is painted
+	// into that gap after the node is laid out — inline in the label it could only be the small merged size.
+	const float32 spaceWidth = ImMax(ImGui::CalcTextSize(" ").x, 1.0f);
+	const int32 spaces = static_cast<int32>(ImCeil((kIconSize + 6.0f) / spaceWidth));
+	const std::string label = std::string(spaces, ' ') + (name.empty() ? "(unnamed)" : name);
+
+	const ImVec2 rowStart = ImGui::GetCursorScreenPos();
+
 	ImGui::SetNextItemAllowOverlap();   // The eye sits in the row the node spans, and gets its own clicks.
-	const bool open = ImGui::TreeNodeEx("##node", flags, "%s  %s", icon, name.empty() ? "(unnamed)" : name.c_str());
+	const bool open = ImGui::TreeNodeEx("##node", flags, "%s", label.c_str());
+
+	// Paint the icon into the space reserved for it: after the expand arrow, centred down the row.
+	const float32 iconX = rowStart.x + ImGui::GetTreeNodeToLabelSpacing();
+	const ImU32 iconColor = ImGui::GetColorU32(dimmed ? ImGuiCol_TextDisabled : ImGuiCol_Text);
+	DrawIcon(ImVec2(iconX, ImGui::GetItemRectMin().y), ImVec2(kIconSize, ImGui::GetItemRectSize().y), icon, iconColor, kIconSize);
 
 	ImGui::PopStyleColor(3);
 
@@ -3499,47 +3559,66 @@ void EditorLayer::DrawEntityNode(const Reference<Entity>& entity)
 	ImGui::PopID();
 }
 
-bool EditorLayer::DrawComponentHeader(const char* label, int index, bool& removeRequested, int& dragFrom, int& dragTo)
+bool EditorLayer::DrawComponentHeader(const char8* icon, const char8* name, int index, bool& removeRequested, int& dragFrom, int& dragTo)
 {
-	ImGui::PushID(label);
+	ImGui::PushID(name);
 
 	const ImGuiStyle& style = ImGui::GetStyle();
 	const float32 lineHeight = ImGui::GetFontSize() + style.FramePadding.y * 2.0f;
 
+	// The header draws the arrow and the background; the icon and the name are painted onto it, so the icon
+	// sits a hair after the arrow instead of at the wide default label offset — that offset was the gap.
 	ImGui::SetNextItemAllowOverlap();
-	const bool open = ImGui::CollapsingHeader(label,
+	const bool open = ImGui::CollapsingHeader("###header",
 		ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_SpanAvailWidth | ImGuiTreeNodeFlags_AllowOverlap);
 
 	// Exact header bounds, so the remove button sits flush against its right edge.
 	const ImVec2 headerMin = ImGui::GetItemRectMin();
 	const ImVec2 headerMax = ImGui::GetItemRectMax();
 
-	// Drag the header onto another component's header to reorder.
-	if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID))
-	{
-		ImGui::SetDragDropPayload("LN_COMPONENT", &index, sizeof(int));
-		ImGui::Text("Move %s", label);
-		ImGui::EndDragDropSource();
-	}
+	// Icon then name, laid out by hand: the arrow takes about a font's width, the icon follows it closely, and
+	// the name follows the icon.
+	const float32 iconX = headerMin.x + ImGui::GetFontSize() + 6.0f;
+	const float32 rowHeight = headerMax.y - headerMin.y;
+	const ImU32 textColor = ImGui::GetColorU32(ImGuiCol_Text);
 
-	if (ImGui::BeginDragDropTarget())
+	DrawIcon(ImVec2(iconX, headerMin.y), ImVec2(kIconSize, rowHeight), icon, textColor, kIconSize);
+
+	ImGui::GetWindowDrawList()->AddText(
+		ImVec2(iconX + kIconSize + 8.0f, ImFloor(headerMin.y + (rowHeight - ImGui::GetTextLineHeight()) * 0.5f)),
+		textColor, name);
+
+	// A negative index is a fixed component — the Transform — which reorders into nothing and cannot be
+	// removed. Everything below is for the ones that can.
+	if (index >= 0)
 	{
-		if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("LN_COMPONENT"))
+		// Drag the header onto another component's header to reorder.
+		if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID))
 		{
-			dragFrom = *static_cast<const int*>(payload->Data);
-			dragTo = index;
+			ImGui::SetDragDropPayload("LN_COMPONENT", &index, sizeof(int));
+			ImGui::Text("Move %s", name);
+			ImGui::EndDragDropSource();
 		}
-		ImGui::EndDragDropTarget();
+
+		if (ImGui::BeginDragDropTarget())
+		{
+			if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("LN_COMPONENT"))
+			{
+				dragFrom = *static_cast<const int*>(payload->Data);
+				dragTo = index;
+			}
+			ImGui::EndDragDropTarget();
+		}
+
+		// Square remove button sitting on the header row, flush with its right edge.
+		ImGui::SameLine();
+		ImGui::SetCursorScreenPos(ImVec2(headerMax.x - lineHeight, headerMin.y));
+		if (ImGui::Button("X", ImVec2(lineHeight, lineHeight)))
+			removeRequested = true;
+
+		if (ImGui::IsItemHovered())
+			ImGui::SetTooltip("Remove component");
 	}
-
-	// Square "X" button sitting on the header row, flush with its right edge.
-	ImGui::SameLine();
-	ImGui::SetCursorScreenPos(ImVec2(headerMax.x - lineHeight, headerMin.y));
-	if (ImGui::Button("X", ImVec2(lineHeight, lineHeight)))
-		removeRequested = true;
-
-	if (ImGui::IsItemHovered())
-		ImGui::SetTooltip("Remove component");
 
 	ImGui::PopID();
 	return open;
@@ -3905,7 +3984,7 @@ void EditorLayer::DrawProperties()
 	// The same icon the Hierarchy draws, so the two panels agree about what they are pointing at — but larger
 	// here, because this is the one entity the whole panel is about, not one row among many.
 	DrawInlineIcon(mSelectedEntity->IsFolder() ? ICON_MDI_FOLDER : ICON_MDI_CUBE_OUTLINE,
-		ImGui::GetFontSize() * 1.35f, ImGui::GetColorU32(ImGuiCol_Text));
+		kIconTitle, ImGui::GetColorU32(ImGuiCol_Text));
 	ImGui::SameLine();
 
 	// Whether the entity is switched on at all — the checkbox Unity puts before the name, and the same
@@ -3951,7 +4030,9 @@ void EditorLayer::DrawProperties()
 		return;
 	}
 
-	if (ImGui::CollapsingHeader(ICON_MDI_AXIS_ARROW "  Transform", ImGuiTreeNodeFlags_DefaultOpen))
+	bool transformRemove = false;
+	int transformDrag = -1;
+	if (DrawComponentHeader(ICON_MDI_AXIS_ARROW, "Transform", -1, transformRemove, transformDrag, transformDrag))
 	{
 		// Every entity has a Transform, so a transform edit is the one edit the whole selection always
 		// has in common. The values shown are the primary's; the value written is written to all of them.
@@ -3991,7 +4072,7 @@ void EditorLayer::DrawProperties()
 
 		if (SpriteRenderer* renderer = dynamic_cast<SpriteRenderer*>(component))
 		{
-			if (DrawComponentHeader(ICON_MDI_IMAGE "  Sprite Renderer", i, remove, dragFrom, dragTo))
+			if (DrawComponentHeader(ICON_MDI_IMAGE, "Sprite Renderer", i, remove, dragFrom, dragTo))
 			{
 				// Reload the texture only once the user finishes editing (not per keystroke).
 				char textureBuffer[256];
@@ -4042,7 +4123,7 @@ void EditorLayer::DrawProperties()
 		}
 		else if (RigidBody2D* body = dynamic_cast<RigidBody2D*>(component))
 		{
-			if (DrawComponentHeader(ICON_MDI_WEIGHT "  Rigid Body 2D", i, remove, dragFrom, dragTo))
+			if (DrawComponentHeader(ICON_MDI_WEIGHT, "Rigid Body 2D", i, remove, dragFrom, dragTo))
 			{
 				static const char8* bodyTypes[] = { "Static", "Kinematic", "Dynamic" };
 				const int32 defaultType = static_cast<int32>(BodyType::Dynamic);
@@ -4080,7 +4161,7 @@ void EditorLayer::DrawProperties()
 		}
 		else if (BoxCollider2D* collider = dynamic_cast<BoxCollider2D*>(component))
 		{
-			if (DrawComponentHeader(ICON_MDI_VECTOR_SQUARE "  Box Collider 2D", i, remove, dragFrom, dragTo))
+			if (DrawComponentHeader(ICON_MDI_VECTOR_SQUARE, "Box Collider 2D", i, remove, dragFrom, dragTo))
 			{
 				// A collider's extents have no default worth going back to: a fresh one is zero-sized, and
 				// what the editor gives it when you add it is the sprite's size, not something the class
@@ -4103,7 +4184,7 @@ void EditorLayer::DrawProperties()
 		}
 		else if (CircleCollider2D* collider = dynamic_cast<CircleCollider2D*>(component))
 		{
-			if (DrawComponentHeader(ICON_MDI_VECTOR_CIRCLE_VARIANT "  Circle Collider 2D", i, remove, dragFrom, dragTo))
+			if (DrawComponentHeader(ICON_MDI_VECTOR_CIRCLE_VARIANT, "Circle Collider 2D", i, remove, dragFrom, dragTo))
 			{
 				// The radius has no default to go back to, for the same reason a box's extents do not.
 				float32 radius = collider->GetRadius();
@@ -4125,9 +4206,9 @@ void EditorLayer::DrawProperties()
 			// against it and has no idea what it holds, so it asks: the component describes its fields, and
 			// the Inspector draws exactly what it was told about, no more.
 			const std::string& typeName = component->GetTypeName();
-			const std::string label = std::string(ICON_MDI_PUZZLE "  ") + (typeName.empty() ? "Component" : typeName);
+			const char8* componentName = typeName.empty() ? "Component" : typeName.c_str();
 
-			if (DrawComponentHeader(label.c_str(), i, remove, dragFrom, dragTo))
+			if (DrawComponentHeader(ICON_MDI_PUZZLE, componentName, i, remove, dragFrom, dragTo))
 			{
 				InspectorReflector reflector(*this, typeName);
 				component->Reflect(reflector);
