@@ -18,6 +18,14 @@
 #include <Lion/Logic/ComponentRegistry.h>
 #include <Lion/Logic/Reflector.h>
 
+// For running the compile without a console flashing up (see RunCommand). windowsx.h defines IsMaximized
+// and friends as macros, so it stays out; this is Windows.h alone.
+#ifdef LN_PLATFORM_WIN
+	#define WIN32_LEAN_AND_MEAN
+	#define NOMINMAX
+	#include <Windows.h>
+#endif
+
 #include <imgui/imgui_internal.h> // DockBuilder API for the default layout.
 
 using namespace Lion;
@@ -1062,24 +1070,67 @@ namespace
 			Log::Console(LogLevel::Warning, "[Editor] Could not copy the game module's symbols; rebuilding it while debugging the editor will fail.");
 	}
 
-	// Runs a command, capturing whatever it writes to stdout and stderr, and returns its exit code.
-	// The whole command is wrapped in an extra pair of quotes: cmd.exe otherwise mangles one that
-	// starts with a quoted path.
+	// Runs a command through cmd.exe, capturing stdout and stderr, and returns its exit code.
+	//
+	// Not _popen: _popen spawns a console, and a Shipping editor has none of its own to lend the child, so
+	// Windows gives each one a window — and a compile is several commands, hence "a bunch of consoles". This
+	// creates the process with CREATE_NO_WINDOW and reads a pipe, so nothing flashes in any configuration.
 	int32 RunCommand(const std::string& command, std::string& output)
 	{
-		const std::string wrapped = "\"" + command + " 2>&1\"";
+		SECURITY_ATTRIBUTES security = {};
+		security.nLength = sizeof(security);
+		security.bInheritHandle = TRUE;   // The child inherits the write end; that is how it reaches the pipe.
 
-		FILE* pipe = _popen(wrapped.c_str(), "r");
+		HANDLE readPipe = nullptr;
+		HANDLE writePipe = nullptr;
 
-		if (!pipe)
+		if (!CreatePipe(&readPipe, &writePipe, &security, 0))
 			return -1;
 
+		// The read end is ours alone: a child that inherited it could keep the pipe open and hang the read.
+		SetHandleInformation(readPipe, HANDLE_FLAG_INHERIT, 0);
+
+		STARTUPINFOA startup = {};
+		startup.cb = sizeof(startup);
+		startup.dwFlags = STARTF_USESTDHANDLES;
+		startup.hStdOutput = writePipe;
+		startup.hStdError = writePipe;   // Both streams down one pipe, in the order they were written.
+
+		// cmd.exe, because the commands use its cd and && — but with no window for it to open. The command
+		// is wrapped in one more pair of quotes: cmd /C strips the outer pair, and without them it would
+		// mangle a command that opens with a quoted path (the MSBuild one, under "C:\Program Files").
+		std::string line = "cmd.exe /C \"" + command + "\"";
+
+		PROCESS_INFORMATION process = {};
+		const BOOL started = CreateProcessA(nullptr, line.data(), nullptr, nullptr, TRUE,
+			CREATE_NO_WINDOW, nullptr, nullptr, &startup, &process);
+
+		// The write end has to be closed here too, or the read below never sees end-of-file: the child is not
+		// the only thing holding it open until this does.
+		CloseHandle(writePipe);
+
+		if (!started)
+		{
+			CloseHandle(readPipe);
+			return -1;
+		}
+
 		char8 buffer[512];
+		DWORD read = 0;
 
-		while (std::fgets(buffer, sizeof(buffer), pipe))
-			output += buffer;
+		while (ReadFile(readPipe, buffer, sizeof(buffer), &read, nullptr) && read > 0)
+			output.append(buffer, read);
 
-		return _pclose(pipe);
+		WaitForSingleObject(process.hProcess, INFINITE);
+
+		DWORD exitCode = 0;
+		GetExitCodeProcess(process.hProcess, &exitCode);
+
+		CloseHandle(readPipe);
+		CloseHandle(process.hThread);
+		CloseHandle(process.hProcess);
+
+		return static_cast<int32>(exitCode);
 	}
 
 	// MSBuild's path is not fixed across Visual Studio installs, so ask the installer's own locator.
