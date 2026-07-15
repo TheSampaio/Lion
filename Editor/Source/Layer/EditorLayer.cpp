@@ -940,6 +940,13 @@ void EditorLayer::DrawConsole()
 	ImGui::BeginChild("ConsoleOutput", ImVec2(ImGui::GetWindowWidth(), 0.0f), false, ImGuiWindowFlags_HorizontalScrollbar);
 	ImGui::PopStyleVar();
 
+	// Scrolling the wheel up over the console lets go of the tail, so the user can read back through the
+	// history freely. Caught here, before the rows are drawn, because it is what decides whether the follow
+	// re-pins below. A drag on the scrollbar is caught the same way further down, by noticing the view is no
+	// longer at the bottom.
+	if (ImGui::IsWindowHovered() && ImGui::GetIO().MouseWheel > 0.0f)
+		mConsoleStickToBottom = false;
+
 	// A compact row: a 16px severity icon, the timestamp and the message, on a line no taller than it needs
 	// to be — which is how the engines this takes after keep a console dense enough to read a run of logs.
 	constexpr float32 kConsoleLeftPad = 8.0f;
@@ -1047,15 +1054,16 @@ void EditorLayer::DrawConsole()
 	// the newest line shows in full instead of half-clipped at the edge. New content pins too, so a line
 	// logged while the console is at the bottom scrolls it into view. Scroll up and the pinning lets go,
 	// because the total count moving is not a reason to yank someone back down.
-	// Auto-scroll keeps the view pinned to the bottom, every frame, so the newest line is always in full view
-	// — and the editor opens showing it, not a row short of it. Pinned to the maximum and not to SetScrollHereY,
-	// which lands a row shy of the bottom after a clipper; and pinned every frame, not only when a line was
-	// added, so the one-frame lag in the maximum corrects itself instead of leaving the view stranded above the
-	// end. It is a toggle: turn it off to read back through the history, on to follow the tail again.
+	// While following, keep the view pinned to the maximum every frame — which lands on the newest line in
+	// full (SetScrollHereY lands a row shy after a clipper) and rides out the one-frame lag in the maximum as
+	// rows stream in, so the editor opens on the last line rather than a screen above it. The wheel above
+	// breaks the follow; scrolling back to the bottom, by wheel or scrollbar, restores it.
 	mConsoleLastTotal = Log::GetTotalCount();
 
-	if (mConsoleAutoScroll)
+	if (mConsoleAutoScroll && mConsoleStickToBottom)
 		ImGui::SetScrollY(ImGui::GetScrollMaxY());
+	else if (ImGui::GetScrollY() >= ImGui::GetScrollMaxY() - 1.0f)
+		mConsoleStickToBottom = true;
 
 	ImGui::EndChild();
 	ImGui::End();

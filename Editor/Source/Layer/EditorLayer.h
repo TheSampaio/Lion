@@ -103,6 +103,7 @@ private:
 	char mNewComponentName[64] = {};
 	char mNewComponentFolder[64] = "Scripts";   // Where it lands, under the game's assets.
 	bool mConsoleAutoScroll = true;
+	bool mConsoleStickToBottom = true;   // Following the tail; set false when the user scrolls up, true again at the bottom.
 	bool mConsoleShowErrors = true;    // Console severity filters (Error/Fatal, Warning, everything else).
 	bool mConsoleShowWarnings = true;
 	bool mConsoleShowInfo = true;
