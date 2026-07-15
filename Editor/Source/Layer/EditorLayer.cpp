@@ -68,7 +68,9 @@ const EditorLayer::Panel EditorLayer::kPanels[5] = {
 
 void EditorLayer::OnAttach()
 {
-	Window::SetSize(1280, 720);
+	// The size the editor takes when it is un-maximised — a comfortable windowed default. The editor opens
+	// maximised; this is what the restore button drops it back to.
+	Window::SetSize(1600, 900);
 	Window::SetTitle("Lion Engine");
 	Window::SetBackgroundColor(0.10f, 0.10f, 0.11f);
 	Window::SetResizable(true);

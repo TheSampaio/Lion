@@ -206,8 +206,12 @@ namespace Lion
 		glfwWindowHint(GLFW_CLIENT_API, RendererAPI::GetAPI() == GraphicsAPI::OpenGL ? GLFW_OPENGL_API : GLFW_NO_API);
 		glfwWindowHint(GLFW_VISIBLE, false);
 		glfwWindowHint(GLFW_RESIZABLE, mData->resizable ? GLFW_TRUE : GLFW_FALSE);
-		glfwWindowHint(GLFW_MAXIMIZED, mData->maximized ? GLFW_TRUE : GLFW_FALSE);
 
+		// Created at its windowed size, always — not maximised through the hint. The window is hidden until
+		// Show(), so it is maximised here while nobody is looking: there is no create-then-resize jump to see,
+		// and GLFW remembers the created size as the one to restore to. Maximise through the hint instead, and
+		// the window opens maximised with no windowed size to fall back on — un-maximising then leaves it
+		// filling the screen, which is the bug.
 		mWindow = glfwCreateWindow(
 			static_cast<int32>(mData->width),
 			static_cast<int32>(mData->height),
@@ -219,6 +223,9 @@ namespace Lion
 			Log::Console(LogLevel::Fatal, "[GlfwWindow] Window creation failed.");
 			return false;
 		}
+
+		if (mData->maximized)
+			glfwMaximizeWindow(mWindow);
 
 #ifdef LN_PLATFORM_WIN
 		// Only what was asked for: a game's window looks like every other window on the machine.

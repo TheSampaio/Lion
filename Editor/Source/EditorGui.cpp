@@ -51,8 +51,31 @@ void LoadIconFont()
 		return;
 	}
 
-	// ImGui keeps the pointer, not the array, so the range outlives this call.
-	static const ImWchar range[] = { ICON_MIN_MDI, ICON_MAX_MDI, 0 };
+	// Only the glyphs the editor actually draws, not the whole 7,400-icon set. The font is baked twice — once
+	// merged at 16px, once standalone at 32px — and the full range at both sizes made an atlas texture too
+	// large to upload, which is why the editor opened as a blank white sheet: no font texture, nothing to
+	// draw the UI with. A few dozen glyphs at two sizes is nothing.
+	//
+	// A glyph left off this list comes out blank, so an icon added to the editor is added here too — the one
+	// upkeep the subset costs.
+	static const char8* kUsedIcons =
+		ICON_MDI_ALERT ICON_MDI_ALERT_CIRCLE ICON_MDI_ARROW_ALL ICON_MDI_ARROW_EXPAND_ALL ICON_MDI_ARROW_UP
+		ICON_MDI_AXIS_ARROW ICON_MDI_CHART_BAR ICON_MDI_CODE_TAGS ICON_MDI_COG ICON_MDI_CONSOLE
+		ICON_MDI_CONTENT_SAVE_ALL_OUTLINE ICON_MDI_CONTENT_SAVE_OUTLINE ICON_MDI_CUBE_OUTLINE
+		ICON_MDI_CURSOR_DEFAULT ICON_MDI_DELETE_OUTLINE ICON_MDI_EXIT_TO_APP ICON_MDI_EYE ICON_MDI_EYE_OFF
+		ICON_MDI_FILE_DOCUMENT_OUTLINE ICON_MDI_FILE_PLUS_OUTLINE ICON_MDI_FILE_TREE ICON_MDI_FOLDER
+		ICON_MDI_FOLDER_MULTIPLE ICON_MDI_FOLDER_OPEN ICON_MDI_FOLDER_OPEN_OUTLINE ICON_MDI_HAMMER_WRENCH
+		ICON_MDI_IMAGE ICON_MDI_IMAGE_OUTLINE ICON_MDI_INFORMATION ICON_MDI_KEYBOARD ICON_MDI_LOCK
+		ICON_MDI_LOCK_OPEN_VARIANT ICON_MDI_MAGNIFY ICON_MDI_MONITOR ICON_MDI_PALETTE ICON_MDI_PAUSE
+		ICON_MDI_PLAY ICON_MDI_PLUS ICON_MDI_PUZZLE ICON_MDI_REDO ICON_MDI_RELOAD ICON_MDI_RESTORE
+		ICON_MDI_ROTATE_RIGHT ICON_MDI_SHAPE ICON_MDI_STEP_FORWARD ICON_MDI_STOP ICON_MDI_TUNE ICON_MDI_UNDO
+		ICON_MDI_VECTOR_CIRCLE_VARIANT ICON_MDI_VECTOR_SQUARE ICON_MDI_VIEW_DASHBOARD_OUTLINE ICON_MDI_WEIGHT;
+
+	// ImGui keeps the pointer, not the array, so the built range outlives this call.
+	static ImVector<ImWchar> range;
+	ImFontGlyphRangesBuilder builder;
+	builder.AddText(kUsedIcons);
+	builder.BuildRanges(&range);
 
 	// Merged into the text font at 16px — the size Unity, Godot and Unreal set an inline icon to. An icon
 	// fills its em square where a letter leaves room in theirs, so 16 against 18px text is what makes the two
@@ -64,13 +87,13 @@ void LoadIconFont()
 	merged.GlyphMinAdvanceX = 16.0f;
 	merged.GlyphOffset.y = 1.0f;
 
-	ImGui::GetIO().Fonts->AddFontFromFileTTF(font.string().c_str(), 16.0f, &merged, range);
+	ImGui::GetIO().Fonts->AddFontFromFileTTF(font.string().c_str(), 16.0f, &merged, range.Data);
 
 	// And once more on its own, at atlas size, for the icons the editor positions itself.
 	ImFontConfig standalone;
 	standalone.PixelSnapH = true;
 
-	sIconFont = ImGui::GetIO().Fonts->AddFontFromFileTTF(font.string().c_str(), kIconAtlasSize, &standalone, range);
+	sIconFont = ImGui::GetIO().Fonts->AddFontFromFileTTF(font.string().c_str(), kIconAtlasSize, &standalone, range.Data);
 }
 
 static void SetDarkTheme()
