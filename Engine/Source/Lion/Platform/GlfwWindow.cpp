@@ -260,12 +260,10 @@ namespace Lion
 		}
 #endif
 
-		// Maximised only after the custom chrome is in place, so the maximise is the one our own window
-		// procedure sees — it pins the size to the work area (WM_GETMINMAXINFO). Maximise before the subclass
-		// is installed and GLFW's default handling runs instead, which lets a borderless window spill over the
-		// taskbar and snap back a frame later. Still hidden, so there is nothing to watch either way.
-		if (mData->maximized)
-			glfwMaximizeWindow(mWindow);
+		// The maximise is not done here — it happens in Show(), in one atomic show-maximised, so the window
+		// never appears at any size but its final one. Maximising while hidden and then showing is two steps:
+		// the hidden maximise takes the default geometry (off the top of the screen) and the show re-applies
+		// the work-area fit, and that correction is the reajuste you could watch happen.
 
 		glfwSetWindowUserPointer(mWindow, mData);
 		RegisterCallbacks();
@@ -381,6 +379,18 @@ namespace Lion
 
 	void GlfwWindow::Show()
 	{
+#ifdef LN_PLATFORM_WIN
+		// Show maximised in one call when it opens maximised: SW_SHOWMAXIMIZED makes the window visible and
+		// maximised at once, so it is laid out against the work area (our WM_GETMINMAXINFO) from the first
+		// frame — no showing at one size and correcting to another. The size it was created at stays on
+		// record as the one to restore to.
+		if (mData->maximized)
+		{
+			ShowWindow(glfwGetWin32Window(mWindow), SW_SHOWMAXIMIZED);
+			return;
+		}
+#endif
+
 		glfwShowWindow(mWindow);
 	}
 

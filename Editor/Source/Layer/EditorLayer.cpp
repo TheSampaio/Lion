@@ -1043,17 +1043,19 @@ void EditorLayer::DrawConsole()
 		ImGui::EndPopup();
 	}
 
-	// Follow the tail whenever lines were logged since the last frame this panel was drawn. Keying
-	// off the total logged count rather than the scroll offset keeps the follow alive once the
-	// history saturates at its cap, and after the panel spent frames hidden behind another tab
-	// (where the offset stays put while the content grows past it). SetScrollHereY targets the
-	// cursor, which the clipper leaves at the end of the virtual list, so it lands on the bottom.
-	const size_t totalLogged = Log::GetTotalCount();
+	// Stay pinned to the bottom while the view is resting there — which it is when the editor first opens, so
+	// the newest line shows in full instead of half-clipped at the edge. New content pins too, so a line
+	// logged while the console is at the bottom scrolls it into view. Scroll up and the pinning lets go,
+	// because the total count moving is not a reason to yank someone back down.
+	// Auto-scroll keeps the view pinned to the bottom, every frame, so the newest line is always in full view
+	// — and the editor opens showing it, not a row short of it. Pinned to the maximum and not to SetScrollHereY,
+	// which lands a row shy of the bottom after a clipper; and pinned every frame, not only when a line was
+	// added, so the one-frame lag in the maximum corrects itself instead of leaving the view stranded above the
+	// end. It is a toggle: turn it off to read back through the history, on to follow the tail again.
+	mConsoleLastTotal = Log::GetTotalCount();
 
-	if (mConsoleAutoScroll && totalLogged != mConsoleLastTotal)
-		ImGui::SetScrollHereY(1.0f);
-
-	mConsoleLastTotal = totalLogged;
+	if (mConsoleAutoScroll)
+		ImGui::SetScrollY(ImGui::GetScrollMaxY());
 
 	ImGui::EndChild();
 	ImGui::End();
