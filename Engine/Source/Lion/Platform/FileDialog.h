@@ -12,6 +12,10 @@ namespace Lion
 	{
 	public:
 		static LION_API std::string Open(const char8* filter, const std::string& initialDirectory = std::string());
+
+		// Picks a folder rather than a file. Returns the absolute path, or empty when the dialog was
+		// cancelled. Used where the editor needs a location and not a document — where a component lands.
+		static LION_API std::string OpenFolder(const std::string& initialDirectory = std::string());
 		static LION_API std::string Save(const char8* filter, const char8* defaultExtension, const std::string& initialDirectory = std::string());
 	};
 }

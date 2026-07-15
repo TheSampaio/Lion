@@ -1,5 +1,6 @@
 #pragma once
 
+#include <filesystem>
 #include <future>
 #include <optional>
 
@@ -75,7 +76,12 @@ private:
 	// shortcut handler cannot disagree about what exists.
 	struct Panel
 	{
-		const char* name;
+		// What ImGui is told, and what a person is told. A window is identified by its name, so the icon and
+		// the trailing "###id" are part of it — the id is what keeps a saved layout pointing at the same
+		// window when the icon or the wording changes. The label is what a menu shows: an icon in a list of
+		// checkboxes is decoration, and decoration in a list is noise.
+		const char* window;
+		const char* label;
 		bool EditorLayer::* visible;
 		ShortcutAction shortcut;
 	};
@@ -97,6 +103,7 @@ private:
 	char mNewComponentName[64] = {};
 	char mNewComponentFolder[64] = "Scripts";   // Where it lands, under the game's assets.
 	bool mConsoleAutoScroll = true;
+	bool mConsoleStickToBottom = true;   // Following the tail; set false when the user scrolls up, true again at the bottom.
 	bool mConsoleShowErrors = true;    // Console severity filters (Error/Fatal, Warning, everything else).
 	bool mConsoleShowWarnings = true;
 	bool mConsoleShowInfo = true;
@@ -163,11 +170,26 @@ private:
 	std::unordered_map<std::string, ImVec2> mPanelSizes;
 	std::vector<std::string> mResizingPanels;
 
-	// Undo/redo history of full-scene JSON snapshots. mPendingSnapshot holds the pre-edit state
-	// captured at the start of a continuous edit (gizmo/drag), committed once the edit ends.
-	std::vector<std::string> mUndoStack;
-	std::vector<std::string> mRedoStack;
+	// Undo/redo history. One timeline holds two kinds of thing, so a single Ctrl+Z walks back through the
+	// last edit whatever it was: a scene change carries the scene as JSON, a panel resize carries the dock
+	// layout as an ImGui ini. mPendingSnapshot holds the pre-edit scene captured at the start of a
+	// continuous edit (gizmo/drag), committed once the edit ends.
+	enum class EditKind { Scene, Layout };
+
+	struct EditState
+	{
+		EditKind kind;
+		std::string data;   // Scene JSON, or the ini text SaveIniSettingsToMemory produced.
+	};
+
+	std::vector<EditState> mUndoStack;
+	std::vector<EditState> mRedoStack;
 	std::string mPendingSnapshot;
+
+	// A panel resize is one undoable step, and it is bracketed by the mouse: the layout is snapshotted when
+	// the button goes down, and pushed onto the history when it comes up if a resize happened between.
+	std::string mLayoutBeforePress;
+	bool mResizedThisPress = false;
 	bool mHasPending = false;
 
 	// Snapshot of the edited scene captured when entering Play mode, restored on Stop.
@@ -183,6 +205,25 @@ private:
 	char mAssetRenameBuffer[128] = {};
 	bool mAssetRenameFocus = false;
 	std::string mAssetToDelete;                // Relative path awaiting the confirmation modal.
+
+	// What is in that folder, read once and kept.
+	//
+	// The panel used to walk the directory twice per frame — two round trips to the file system for a list
+	// that changes when somebody changes it, which is almost never. It was the most expensive thing the
+	// editor did, by a distance. Now the list is read when the folder changes, when the editor changes
+	// something in it, and otherwise only when the folder's own timestamp says a stranger did.
+	struct AssetEntry
+	{
+		std::string name;
+		std::string path;   // Relative to the resource root, which is what everything else here speaks in.
+		bool directory = false;
+	};
+
+	std::vector<AssetEntry> mProjectEntries;
+	std::string mProjectScannedPath;                       // The folder mProjectEntries was read from.
+	std::filesystem::file_time_type mProjectStamp;         // Its modification time when it was read.
+	double mProjectPollTime = 0.0;                         // When the timestamp was last checked.
+	bool mProjectDirty = true;                             // The editor changed something; read it again.
 
 	// Hierarchy tree state, applied after the tree is drawn (never mutate it mid-iteration).
 	std::unordered_map<Lion::Entity*, Lion::Reference<Lion::Entity>> mEntityLookup;
@@ -213,6 +254,14 @@ private:
 	// How far after the last menu the scene's name begins on the row below.
 	static constexpr float kSceneGap = 64.0f;
 
+	// The docks that float over the viewport: a square button, the room the dock leaves around its row of
+	// them, and how far the dock itself sits from the edge of the image.
+	// The viewport toolbar docks: a 24px hit target around a 16px icon, in a compact bar.
+	static constexpr float kDockButton = 24.0f;
+	static constexpr float kDockPadding = 3.0f;
+	static constexpr float kDockSpacing = 3.0f;
+	static constexpr float kDockMargin = 10.0f;
+
 	// Tells Windows what a .lscene is, so Explorer draws it with the engine's icon and a double-click opens
 	// it here. Written once, on the first run, and again only if the editor moves.
 	void RegisterSceneFiles();
@@ -223,14 +272,29 @@ private:
 	void SaveScene();
 	void SaveSceneAs();
 
+	// A floating dock over the viewport's image: a rounded panel with a row of square icon buttons in it.
+	// The width has to be known before the buttons are drawn, because a dock is placed against an edge or a
+	// centre line, so it is worked out from the count.
+	static Lion::float32 ToolbarDockWidth(int count);
+	static void BeginToolbarDock(const Lion::char8* id, const ImVec2& position, int count);
+	static void EndToolbarDock();
+	bool ToolbarButton(const Lion::char8* id, const Lion::char8* icon, bool active, bool enabled, const Lion::char8* tooltip);
+
 	void DrawTitleBar();
 
 	// Draws the menus in the given rectangle and answers where they ended, which is where the row below picks
 	// up: the scene's name follows the menus, and only the menus know how wide they were.
 	Lion::float32 DrawMenuBar(const ImVec2& barMin, const ImVec2& barMax);
 	void DrawWindowButtons(const ImVec2& barMin, Lion::float32 barWidth, Lion::float32 rowHeight);
+	void EndPropertiesPanel();   // Closes the fields, states what is selected, and closes the panel.
+	// Restores an undo entry, scene or layout, and returns what to push onto the opposite stack.
+	EditState CaptureCurrent(EditKind kind) const;
+	void RestoreState(const EditState& state);
+
 	void DrawStatusBar();   // The bar along the bottom: what is open, and which engine has it open.
 	void DrawViewport();
+	// The box around what is selected, drawn over the image for every entity in the selection.
+	void DrawSelectionOutline(const ImVec2& imageMin, const ImVec2& imageSize);
 	void DrawColliderOverlays(const ImVec2& imageMin, const ImVec2& imageSize);
 	void DrawHierarchy();
 	void DrawEntityNode(const Lion::Reference<Lion::Entity>& entity);
@@ -244,6 +308,9 @@ private:
 	bool DrawAssetEntry(const std::string& name, const std::string& assetPath, bool folder);
 
 	void CreateAssetFolder();
+
+	// Reads the browsed folder into mProjectEntries, directories first.
+	void ScanProjectDirectory(const std::filesystem::path& directory);
 	void RenameAsset(const std::string& assetPath, const std::string& name);
 	void DrawDeleteAssetPopup();   // Deleting a file is not an undo step, so it is a question first.
 	void DrawShortcuts();
@@ -306,7 +373,7 @@ private:
 	// Draws a collapsing header for a component with a right-aligned "X" remove button and
 	// drag-to-reorder support. Returns whether the body is open; sets removeRequested when the X is
 	// pressed, and sets dragFrom/dragTo when a header is dropped onto this one.
-	bool DrawComponentHeader(const char* label, int index, bool& removeRequested, int& dragFrom, int& dragTo);
+	bool DrawComponentHeader(const Lion::char8* icon, const Lion::char8* name, int index, bool& removeRequested, int& dragFrom, int& dragTo);
 
 	// Draws a scalar property row: the label, the field, and the revert arrow that puts the default
 	// back — which only appears while the value is not it. Pass no default for a field that has none
@@ -401,7 +468,9 @@ private:
 
 	// The entity commands shared by the Hierarchy's context menu and the viewport's: they are the same
 	// menu, so they are the same code — one of them showing up in two places is not two menus.
-	void DrawEntityMenuItems(const Lion::Reference<Lion::Entity>& target, const Lion::Vector* position);
+	// The entity context menu, shared by the Hierarchy and the viewport. 'inViewport' drops what makes no
+	// sense over the scene: a folder organizes the Hierarchy, and the clipboard is a Hierarchy operation.
+	void DrawEntityMenuItems(const Lion::Reference<Lion::Entity>& target, const Lion::Vector* position, bool inViewport = false);
 
 	// Shortcut/keybinding helpers.
 	void InitShortcuts();                                  // Sets defaults, then loads overrides from disk.

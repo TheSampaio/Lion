@@ -1,3 +1,4 @@
+#include "EditorPch.h"
 #include "Editor.h"
 
 #include <cstdlib>
