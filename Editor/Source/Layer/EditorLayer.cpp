@@ -380,24 +380,30 @@ void EditorLayer::DrawUI()
 
 void EditorLayer::DrawPlayModeDim()
 {
-	if (!mPlaying || mViewportImageMax.x <= mViewportImageMin.x)
+	if (!mPlaying)
 		return;
 
-	// Four rectangles around the viewport's image, over everything: the editor goes dark and the game
-	// does not. Four quads a frame is what it costs, which is the cheap way to say "this is running" —
-	// the expensive way is re-theming the UI, which means touching every colour ImGui has and paying for
-	// it again in every widget that reads one.
-	const ImGuiViewport* viewport = ImGui::GetMainViewport();
-	const ImVec2 min = viewport->Pos;
-	const ImVec2 max = ImVec2(min.x + viewport->Size.x, min.y + viewport->Size.y);
-	const ImU32 dim = IM_COL32(0, 0, 0, 56);
+	// Playing, a film settles over each panel and leaves the viewport clear: the game is what you are
+	// watching, and the editor steps back without going away. A panel is still readable through it — this
+	// is a veil, not a curtain. The title and status bars are the window's own frame, not panels, so they
+	// keep their colour; re-theming the whole UI would be the same statement paid for in every widget.
+	const ImU32 dim = IM_COL32(0, 0, 0, 90);
 
 	ImDrawList* drawList = ImGui::GetForegroundDrawList();
 
-	drawList->AddRectFilled(min, ImVec2(max.x, mViewportImageMin.y), dim);
-	drawList->AddRectFilled(ImVec2(min.x, mViewportImageMax.y), max, dim);
-	drawList->AddRectFilled(ImVec2(min.x, mViewportImageMin.y), ImVec2(mViewportImageMin.x, mViewportImageMax.y), dim);
-	drawList->AddRectFilled(ImVec2(mViewportImageMax.x, mViewportImageMin.y), ImVec2(max.x, mViewportImageMax.y), dim);
+	const auto veil = [&](const char8* name)
+	{
+		ImGuiWindow* window = ImGui::FindWindowByName(name);
+
+		if (window && !window->Hidden && window->WasActive)
+			drawList->AddRectFilled(window->Pos, ImVec2(window->Pos.x + window->Size.x, window->Pos.y + window->Size.y), dim);
+	};
+
+	for (const Panel& panel : kPanels)
+		veil(panel.window);
+
+	if (mShowShortcuts)
+		veil(kShortcutsWindow);
 }
 
 void EditorLayer::DrawPanelSizeOverlay()
@@ -1360,7 +1366,7 @@ namespace
 
 		const ImU32 color = hovered ? IM_COL32(255, 216, 122, 255) : IM_COL32(224, 176, 62, 255);
 
-		DrawIcon(origin, size, ICON_MDI_RESTORE, color, 0.85f);
+		DrawIcon(origin, size, ICON_MDI_RESTORE, color, 0.78f);
 		return clicked;
 	}
 
@@ -1828,7 +1834,7 @@ void EditorLayer::DrawShortcuts()
 	if (!mShowShortcuts)
 		return;
 
-	ImGui::SetNextWindowSize(ImVec2(460.0f, 500.0f), ImGuiCond_FirstUseEver);
+	ImGui::SetNextWindowSize(ImVec2(800.0f, 600.0f), ImGuiCond_FirstUseEver);
 
 	if (ImGui::Begin(kShortcutsWindow, &mShowShortcuts))
 	{
@@ -2045,7 +2051,7 @@ void EditorLayer::ResetShortcutsToDefault()
 	set(ShortcutAction::Redo, ImGuiKey_Y, true);
 	set(ShortcutAction::Play, ImGuiKey_F5);
 	set(ShortcutAction::Stop, ImGuiKey_F8);
-	set(ShortcutAction::ToggleShortcuts, ImGuiKey_F1);
+	set(ShortcutAction::ToggleShortcuts, ImGuiKey_F10);
 	set(ShortcutAction::GizmoMove, ImGuiKey_W);
 	set(ShortcutAction::GizmoRotate, ImGuiKey_E);
 	set(ShortcutAction::GizmoScale, ImGuiKey_R);
@@ -2482,9 +2488,42 @@ void EditorLayer::DrawViewport()
 			float32 newTranslation[3], newRotation[3], newScale[3];
 			ImGuizmo::DecomposeMatrixToComponents(model, newTranslation, newRotation, newScale);
 
-			mSelectedEntity->SetWorldPosition(Vector(newTranslation[0], newTranslation[1], position.z));
-			mSelectedEntity->SetWorldRotation(newRotation[2]);
-			mSelectedEntity->SetWorldScale(Vector(newScale[0], newScale[1], scale.z));
+			// The gizmo sits on one entity, and the drag belongs to the whole selection: what the primary
+			// changed by is what every one of them changes by. A delta, and not the primary's new value —
+			// they are in different places, and dragging five entities must not stack them on one.
+			const Vector moved(newTranslation[0] - position.x, newTranslation[1] - position.y, 0.0f);
+			const float32 turned = newRotation[2] - rotationZ;
+
+			// Scale is a ratio for the same reason: an entity twice the size of another stays twice the size.
+			const float32 scaleX = (std::fabs(scale.x) > 0.0001f) ? newScale[0] / scale.x : 1.0f;
+			const float32 scaleY = (std::fabs(scale.y) > 0.0001f) ? newScale[1] / scale.y : 1.0f;
+
+			for (const auto& entity : mSelection)
+			{
+				if (!entity || entity->IsFolder())
+					continue;
+
+				const Vector entityPosition = entity->GetWorldPosition();
+				const Vector entityScale = entity->GetWorldScale();
+
+				switch (mTool)
+				{
+					case Tool::Move:
+						entity->SetWorldPosition(Vector(entityPosition.x + moved.x, entityPosition.y + moved.y, entityPosition.z));
+						break;
+
+					case Tool::Rotate:
+						entity->SetWorldRotation(entity->GetWorldRotation() + turned);
+						break;
+
+					case Tool::Scale:
+						entity->SetWorldScale(Vector(entityScale.x * scaleX, entityScale.y * scaleY, entityScale.z));
+						break;
+
+					default:
+						break;
+				}
+			}
 		}
 	}
 
@@ -2528,7 +2567,7 @@ void EditorLayer::DrawViewport()
 	// over items would never open over the one thing this menu is about.
 	if (ImGui::BeginPopupContextWindow("ViewportContext", ImGuiPopupFlags_MouseButtonRight))
 	{
-		DrawEntityMenuItems(nullptr, &mViewportMenuPosition);
+		DrawEntityMenuItems(nullptr, &mViewportMenuPosition, true);
 		ImGui::EndPopup();
 	}
 
@@ -3043,7 +3082,7 @@ void EditorLayer::DrawHierarchy()
 	ImGui::End();
 }
 
-void EditorLayer::DrawEntityMenuItems(const Reference<Entity>& target, const Vector* position)
+void EditorLayer::DrawEntityMenuItems(const Reference<Entity>& target, const Vector* position, bool inViewport)
 {
 	// One menu, opened from two places. The Hierarchy's version has no position, so an entity lands at
 	// the origin; the viewport's has one, so it lands under the mouse — which is the only difference
@@ -3065,19 +3104,25 @@ void EditorLayer::DrawEntityMenuItems(const Reference<Entity>& target, const Vec
 	if (target && ImGui::MenuItem("Create Entity as Child"))
 		CreateEntity(target.get(), nullptr);
 
-	if (ImGui::MenuItem("Create Folder"))
+	// A folder is a place in the Hierarchy, not a thing in the scene, so the viewport does not offer one.
+	if (!inViewport && ImGui::MenuItem("Create Folder"))
 		CreateFolder();
 
-	ImGui::Separator();
-
-	if (target)
+	// Copy, paste and duplicate act on the Hierarchy's selection; over the scene they have no subject the
+	// mouse is pointing at, so the viewport leaves them to the Hierarchy (and to their shortcuts).
+	if (!inViewport)
 	{
-		if (ImGui::MenuItem("Copy", "Ctrl+C"))      CopyEntity();
-		if (ImGui::MenuItem("Duplicate", "Ctrl+D")) DuplicateEntity();
-	}
+		ImGui::Separator();
 
-	if (ImGui::MenuItem("Paste", "Ctrl+V", false, !mEntityClipboard.empty()))
-		PasteEntity();
+		if (target)
+		{
+			if (ImGui::MenuItem("Copy", "Ctrl+C"))      CopyEntity();
+			if (ImGui::MenuItem("Duplicate", "Ctrl+D")) DuplicateEntity();
+		}
+
+		if (ImGui::MenuItem("Paste", "Ctrl+V", false, !mEntityClipboard.empty()))
+			PasteEntity();
+	}
 
 	if (!target)
 		return;
@@ -3939,50 +3984,81 @@ void EditorLayer::DrawProperties()
 
 	if (ImGui::BeginPopup("AddComponentPopup"))
 	{
-		// New colliders fit the entity's sprite (Unity-style); without one they get a default size.
-		// Sizes are unscaled, so the Transform scale applies on top.
-		const SpriteRenderer* sprite = mSelectedEntity->GetComponent<SpriteRenderer>();
-		const Size spriteSize = sprite ? sprite->GetSize() : Size(100.0f, 100.0f);
+		// A menu item is shown while any entity in the selection lacks the component: an entity that has one
+		// already is passed over, so adding it to five is adding it to the four that were missing it. The
+		// list stops offering it only once every one of them has it. Adding to the whole selection, not to
+		// the last one clicked, is the whole point of having selected more than one.
+		const auto selectionLacks = [&](const auto& has)
+		{
+			for (const auto& entity : mSelection)
+				if (!entity->IsFolder() && !has(entity))
+					return true;
+			return false;
+		};
 
-		if (!mSelectedEntity->HasComponent<SpriteRenderer>() && ImGui::MenuItem("Sprite Renderer"))
+		const auto lacksBuiltIn = [&]<typename T>()
+		{
+			return selectionLacks([](const Reference<Entity>& e) { return e->HasComponent<T>(); });
+		};
+
+		if (lacksBuiltIn.operator()<SpriteRenderer>() && ImGui::MenuItem("Sprite Renderer"))
 		{
 			RecordSnapshot();
-			mSelectedEntity->AddComponent<SpriteRenderer>();
+			for (const auto& entity : mSelection)
+				if (!entity->IsFolder() && !entity->HasComponent<SpriteRenderer>())
+					entity->AddComponent<SpriteRenderer>();
 		}
 
-		if (!mSelectedEntity->HasComponent<RigidBody2D>() && ImGui::MenuItem("Rigid Body 2D"))
+		if (lacksBuiltIn.operator()<RigidBody2D>() && ImGui::MenuItem("Rigid Body 2D"))
 		{
 			RecordSnapshot();
-			mSelectedEntity->AddComponent<RigidBody2D>();
+			for (const auto& entity : mSelection)
+				if (!entity->IsFolder() && !entity->HasComponent<RigidBody2D>())
+					entity->AddComponent<RigidBody2D>();
 		}
 
-		if (!mSelectedEntity->HasComponent<BoxCollider2D>() && ImGui::MenuItem("Box Collider 2D"))
+		// A new collider fits its own entity's sprite (Unity-style): the size is read per entity, not from
+		// the primary, so each one ends up with the box its own picture needs. Sizes are unscaled, so the
+		// Transform scale applies on top.
+		if (lacksBuiltIn.operator()<BoxCollider2D>() && ImGui::MenuItem("Box Collider 2D"))
 		{
 			RecordSnapshot();
-			mSelectedEntity->AddComponent<BoxCollider2D>(spriteSize.width, spriteSize.height);
+			for (const auto& entity : mSelection)
+			{
+				if (entity->IsFolder() || entity->HasComponent<BoxCollider2D>())
+					continue;
+
+				const SpriteRenderer* sprite = entity->GetComponent<SpriteRenderer>();
+				const Size size = sprite ? sprite->GetSize() : Size(100.0f, 100.0f);
+				entity->AddComponent<BoxCollider2D>(size.width, size.height);
+			}
 		}
 
-		if (!mSelectedEntity->HasComponent<CircleCollider2D>() && ImGui::MenuItem("Circle Collider 2D"))
+		if (lacksBuiltIn.operator()<CircleCollider2D>() && ImGui::MenuItem("Circle Collider 2D"))
 		{
 			RecordSnapshot();
-			mSelectedEntity->AddComponent<CircleCollider2D>(std::max(spriteSize.width, spriteSize.height) * 0.5f);
+			for (const auto& entity : mSelection)
+			{
+				if (entity->IsFolder() || entity->HasComponent<CircleCollider2D>())
+					continue;
+
+				const SpriteRenderer* sprite = entity->GetComponent<SpriteRenderer>();
+				const Size size = sprite ? sprite->GetSize() : Size(100.0f, 100.0f);
+				entity->AddComponent<CircleCollider2D>(std::max(size.width, size.height) * 0.5f);
+			}
 		}
 
 		// Components coming from the loaded game module (user-defined ones). They have no special
 		// construction here — created by name, default-constructed, then configured in the Inspector.
 		// The built-in types above are listed explicitly, so they are skipped here.
-		const auto isAttached = [&](const std::string& name)
-		{
-			for (const auto& component : mSelectedEntity->GetComponents())
-				if (component->GetTypeName() == name) return true;
-			return false;
-		};
-
 		bool sawGameComponent = false;
 
 		for (const std::string& name : ComponentRegistry::GetNames())
 		{
-			if (IsBuiltInComponent(name) || isAttached(name))
+			if (IsBuiltInComponent(name))
+				continue;
+
+			if (!selectionLacks([&](const Reference<Entity>& e) { return e->HasComponentByName(name); }))
 				continue;
 
 			if (!sawGameComponent)
@@ -3994,7 +4070,9 @@ void EditorLayer::DrawProperties()
 			if (ImGui::MenuItem(name.c_str()))
 			{
 				RecordSnapshot();
-				mSelectedEntity->AddComponentByName(name);
+				for (const auto& entity : mSelection)
+					if (!entity->IsFolder() && !entity->HasComponentByName(name))
+						entity->AddComponentByName(name);
 			}
 		}
 
@@ -4221,9 +4299,17 @@ void EditorLayer::DrawWindowButtons(const ImVec2& barMin, float32 barWidth, floa
 
 		ImGui::PopID();
 
+		// Hovered, each button lights in its own colour, the way a traffic light does on a Mac: minimise green,
+		// maximise amber, close red. The close red was already right; the other two join it.
+		static const ImU32 kHoverFill[3] = {
+			IM_COL32(46, 160, 67, 255),   // Minimise.
+			IM_COL32(219, 158, 32, 255),  // Maximise.
+			IM_COL32(196, 43, 28, 255),   // Close.
+		};
+
 		if (hovered)
 			drawList->AddRectFilled(ImVec2(left, barMin.y), ImVec2(left + kWindowButton, barMin.y + rowHeight),
-				(kind == 2) ? IM_COL32(196, 43, 28, 255) : IM_COL32(255, 255, 255, 22));
+				kHoverFill[kind]);
 
 		const ImVec2 center(left + kWindowButton * 0.5f, barMin.y + rowHeight * 0.5f);
 		const ImU32 color = ImGui::GetColorU32(ImGuiCol_Text);
@@ -4243,7 +4329,7 @@ void EditorLayer::DrawWindowButtons(const ImVec2& barMin, float32 barWidth, floa
 				// heavier than a single square of the same size, and the three buttons must weigh the same.
 				const bool maximized = Window::IsMaximized();
 				const float32 offset = maximized ? 2.0f : 0.0f;
-				const float32 arm = maximized ? kArm - 1.5f : kArm;
+				const float32 arm = maximized ? kArm - 1.5f : kArm - 0.5f;
 
 				if (maximized)
 					drawList->AddRect(
@@ -4429,7 +4515,7 @@ float32 EditorLayer::DrawMenuBar(const ImVec2& barMin, const ImVec2& barMax)
 
 		if (ImGui::BeginMenu("Help"))
 		{
-			ImGui::MenuItem("Shortcuts", "F1", &mShowShortcuts);
+			ImGui::MenuItem(ICON_MDI_KEYBOARD "  Shortcuts", ShortcutText(ShortcutAction::ToggleShortcuts).c_str(), &mShowShortcuts);
 			ImGui::EndMenu();
 		}
 
@@ -4944,11 +5030,47 @@ void EditorLayer::DrawNewComponentPopup()
 		ImGuiInputTextFlags_EnterReturnsTrue);
 
 	// Where it lands, as a path under the game's assets — the same paths the Project panel browses. It
-	// keeps whatever was typed last: a component rarely arrives alone.
+	// keeps whatever was typed last: a component rarely arrives alone. The folder can be typed or picked;
+	// what the picker gives back is an absolute path, and what is stored is that path made relative to the
+	// assets, because a component lives inside the game's tree and an absolute one only names this machine.
 	ImGui::Spacing();
 	ImGui::TextUnformatted("Folder");
-	ImGui::SetNextItemWidth(320.0f);
+
+	const ImGuiStyle& style = ImGui::GetStyle();
+	const float32 browseWidth = ImGui::CalcTextSize(ICON_MDI_FOLDER_OPEN).x + style.FramePadding.x * 2.0f;
+
+	ImGui::SetNextItemWidth(320.0f - browseWidth - style.ItemInnerSpacing.x);
 	ImGui::InputText("##folder", mNewComponentFolder, IM_ARRAYSIZE(mNewComponentFolder));
+
+	ImGui::SameLine(0.0f, style.ItemInnerSpacing.x);
+
+	ImGui::BeginDisabled(GameAssetsDirectory().empty());
+	if (ImGui::Button(ICON_MDI_FOLDER_OPEN))
+	{
+		const std::filesystem::path assetsRoot = GameAssetsDirectory();
+		const std::string picked = FileDialog::OpenFolder((assetsRoot / mNewComponentFolder).string());
+
+		if (!picked.empty())
+		{
+			// Back to a path relative to the assets. A folder chosen outside them cannot hold a component,
+			// so it is refused here rather than written and rejected on Create.
+			std::error_code relativeError;
+			const std::filesystem::path relative = std::filesystem::relative(picked, assetsRoot, relativeError);
+			const std::string relativeText = relative.generic_string();
+
+			if (relativeError || relativeText.empty() || relativeText.rfind("..", 0) == 0)
+				Log::Console(LogLevel::Warning, "[Editor] A component has to live inside the game's assets.");
+			else
+			{
+				const size_t copied = relativeText.copy(mNewComponentFolder, sizeof(mNewComponentFolder) - 1);
+				mNewComponentFolder[copied] = '\0';
+			}
+		}
+	}
+	ImGui::EndDisabled();
+
+	if (ImGui::IsItemHovered())
+		ImGui::SetTooltip("Browse for a folder inside the game's assets");
 
 	const std::string name = mNewComponentName;
 	const std::filesystem::path assets = GameAssetsDirectory();

@@ -446,7 +446,9 @@ private:
 
 	// The entity commands shared by the Hierarchy's context menu and the viewport's: they are the same
 	// menu, so they are the same code — one of them showing up in two places is not two menus.
-	void DrawEntityMenuItems(const Lion::Reference<Lion::Entity>& target, const Lion::Vector* position);
+	// The entity context menu, shared by the Hierarchy and the viewport. 'inViewport' drops what makes no
+	// sense over the scene: a folder organizes the Hierarchy, and the clipboard is a Hierarchy operation.
+	void DrawEntityMenuItems(const Lion::Reference<Lion::Entity>& target, const Lion::Vector* position, bool inViewport = false);
 
 	// Shortcut/keybinding helpers.
 	void InitShortcuts();                                  // Sets defaults, then loads overrides from disk.
