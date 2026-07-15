@@ -170,9 +170,16 @@ namespace Lion
 					// cursor — the standard Windows gesture. The window has no real maximised state to leave, so
 					// it is done by hand: restore to the windowed size, place it under the cursor at the same
 					// horizontal spot on the title bar, then hand the drag back to Windows to run from there.
+					//
+					// Only a drag does this. DragDetect holds the press until the pointer either moves past the
+					// drag threshold — a drag — or lets go where it was — a plain click, which leaves a maximised
+					// window maximised. Without it a single click on the caption un-maximised the window.
 					if (wParam == HTCAPTION && sChrome && sChrome->maximized && sChrome->resizable)
 					{
 						const POINT cursor = { GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam) };
+
+						if (!DragDetect(window, cursor))
+							return 0;   // A click, not a drag: leave it maximised.
 
 						RECT maximized = {};
 						GetWindowRect(window, &maximized);
