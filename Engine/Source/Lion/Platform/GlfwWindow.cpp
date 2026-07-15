@@ -63,9 +63,37 @@ namespace Lion
 		WNDPROC sOriginalProc = nullptr;
 		WindowData* sChrome = nullptr;
 
-		int32 FrameBorder()
+		// The windowed rectangle to put the window back to when it leaves the maximised state — which it does
+		// by being sized to the work area rather than Windows-maximised (see the flash it avoids, below).
+		RECT sRestore = {};
+
+		// Sizes the window to the monitor's work area (maximised) or back to sRestore (windowed), in window
+		// coordinates, and records the new logical state. The one place the maximise happens, shared by the
+		// button, a caption double-click and the drag-off-the-top-edge — so all three behave the same.
+		void SetMaximizedState(HWND window, bool maximized, bool captureRestore)
 		{
-			return GetSystemMetrics(SM_CXFRAME) + GetSystemMetrics(SM_CXPADDEDBORDER);
+			if (maximized)
+			{
+				if (captureRestore)
+					GetWindowRect(window, &sRestore);
+
+				MONITORINFO info = {};
+				info.cbSize = sizeof(info);
+
+				if (GetMonitorInfo(MonitorFromWindow(window, MONITOR_DEFAULTTONEAREST), &info))
+					SetWindowPos(window, nullptr, info.rcWork.left, info.rcWork.top,
+						info.rcWork.right - info.rcWork.left, info.rcWork.bottom - info.rcWork.top,
+						SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
+			}
+			else
+			{
+				SetWindowPos(window, nullptr, sRestore.left, sRestore.top,
+					sRestore.right - sRestore.left, sRestore.bottom - sRestore.top,
+					SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
+			}
+
+			if (sChrome)
+				sChrome->maximized = maximized;
 		}
 
 		// What the cursor has to be within to be resizing rather than clicking. The frame Windows reports is
@@ -119,6 +147,56 @@ namespace Lion
 
 					if (command == SC_MAXIMIZE)
 						return 0;
+
+					break;
+				}
+
+				case WM_NCLBUTTONDBLCLK:
+				{
+					// Double-click the caption to maximise or restore, the way a Windows title bar does — through
+					// the editor's own sizing, so it does not flash.
+					if (wParam == HTCAPTION && sChrome && sChrome->resizable)
+					{
+						SetMaximizedState(window, !sChrome->maximized, true);
+						return 0;
+					}
+
+					break;
+				}
+
+				case WM_NCLBUTTONDOWN:
+				{
+					// Grabbing the caption of a maximised window and dragging restores it and lets it follow the
+					// cursor — the standard Windows gesture. The window has no real maximised state to leave, so
+					// it is done by hand: restore to the windowed size, place it under the cursor at the same
+					// horizontal spot on the title bar, then hand the drag back to Windows to run from there.
+					if (wParam == HTCAPTION && sChrome && sChrome->maximized && sChrome->resizable)
+					{
+						const POINT cursor = { GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam) };
+
+						RECT maximized = {};
+						GetWindowRect(window, &maximized);
+						const int32 maximizedWidth = maximized.right - maximized.left;
+						const float64 ratioX = maximizedWidth > 0 ? static_cast<float64>(cursor.x - maximized.left) / maximizedWidth : 0.5;
+
+						SetMaximizedState(window, false, false);
+
+						RECT windowed = {};
+						GetWindowRect(window, &windowed);
+						const int32 windowedWidth = windowed.right - windowed.left;
+
+						// The cursor keeps its place along the title bar, a few pixels down from the top edge.
+						const int32 left = cursor.x - static_cast<int32>(ratioX * windowedWidth);
+						const int32 top = cursor.y - static_cast<int32>(sChrome->titleBarHeight * 0.25f);
+
+						SetWindowPos(window, nullptr, left, top, windowedWidth, windowed.bottom - windowed.top,
+							SWP_NOZORDER | SWP_NOACTIVATE);
+
+						// The button is still down, so re-posting the caption press drops straight into the move.
+						ReleaseCapture();
+						SendMessage(window, WM_NCLBUTTONDOWN, HTCAPTION, lParam);
+						return 0;
+					}
 
 					break;
 				}
@@ -239,29 +317,27 @@ namespace Lion
 		}
 #endif
 
-		// Sized to the work area while still hidden, so it opens at exactly that — the whole work area, none
-		// of the taskbar — with no maximise for Windows to flash through. The windowed rectangle it restores
-		// to is the created size, centred on the work area, so the restore button lands it somewhere sensible.
-		mRestoreWidth = static_cast<int32>(mData->width);
-		mRestoreHeight = static_cast<int32>(mData->height);
-		mRestoreX = 0;
-		mRestoreY = 0;
-
+		// Sized to the work area while still hidden, so it opens at exactly that — the whole work area, none of
+		// the taskbar — with no maximise for Windows to flash through. The windowed rectangle it restores to is
+		// the created size, centred on the work area, so a restore lands it somewhere sensible.
 #ifdef LN_PLATFORM_WIN
+		const int32 windowedWidth = static_cast<int32>(mData->width);
+		const int32 windowedHeight = static_cast<int32>(mData->height);
+
 		MONITORINFO restoreInfo = {};
 		restoreInfo.cbSize = sizeof(restoreInfo);
 
 		if (GetMonitorInfo(MonitorFromWindow(glfwGetWin32Window(mWindow), MONITOR_DEFAULTTONEAREST), &restoreInfo))
 		{
-			mRestoreX = restoreInfo.rcWork.left + ((restoreInfo.rcWork.right - restoreInfo.rcWork.left) - mRestoreWidth) / 2;
-			mRestoreY = restoreInfo.rcWork.top + ((restoreInfo.rcWork.bottom - restoreInfo.rcWork.top) - mRestoreHeight) / 2;
+			sRestore.left = restoreInfo.rcWork.left + ((restoreInfo.rcWork.right - restoreInfo.rcWork.left) - windowedWidth) / 2;
+			sRestore.top = restoreInfo.rcWork.top + ((restoreInfo.rcWork.bottom - restoreInfo.rcWork.top) - windowedHeight) / 2;
+			sRestore.right = sRestore.left + windowedWidth;
+			sRestore.bottom = sRestore.top + windowedHeight;
 		}
 #endif
 
 		if (mData->maximized)
 			ApplyMaximized(true, false);   // Keep the centred windowed rectangle just set as the restore.
-		else
-			glfwSetWindowPos(mWindow, mRestoreX, mRestoreY);
 
 		glfwSetWindowUserPointer(mWindow, mData);
 		RegisterCallbacks();
@@ -389,41 +465,14 @@ namespace Lion
 	void GlfwWindow::ApplyMaximized(bool maximized, bool captureRestore)
 	{
 #ifdef LN_PLATFORM_WIN
-		HWND handle = glfwGetWin32Window(mWindow);
-
-		if (maximized)
-		{
-			// Remember the windowed rectangle, to come back to it — unless the caller already set one (the
-			// first maximise, at start-up, comes up already maximised and keeps the centred default below).
-			if (captureRestore)
-			{
-				RECT windowed = {};
-				GetWindowRect(handle, &windowed);
-				mRestoreX = windowed.left;
-				mRestoreY = windowed.top;
-				mRestoreWidth = windowed.right - windowed.left;
-				mRestoreHeight = windowed.bottom - windowed.top;
-			}
-
-			MONITORINFO info = {};
-			info.cbSize = sizeof(info);
-
-			if (GetMonitorInfo(MonitorFromWindow(handle, MONITOR_DEFAULTTONEAREST), &info))
-				SetWindowPos(handle, nullptr, info.rcWork.left, info.rcWork.top,
-					info.rcWork.right - info.rcWork.left, info.rcWork.bottom - info.rcWork.top,
-					SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
-		}
-		else
-		{
-			SetWindowPos(handle, nullptr, mRestoreX, mRestoreY, mRestoreWidth, mRestoreHeight,
-				SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
-		}
+		// The button and the boot both go through the one place the maximise lives, so they cannot drift from
+		// the caption double-click and the drag-off-the-top that share it.
+		SetMaximizedState(glfwGetWin32Window(mWindow), maximized, captureRestore);
 #else
 		(void)captureRestore;
 		if (maximized) glfwMaximizeWindow(mWindow); else glfwRestoreWindow(mWindow);
-#endif
-
 		mData->maximized = maximized;
+#endif
 	}
 
 	void GlfwWindow::PollEvents()

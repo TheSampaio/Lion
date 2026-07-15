@@ -42,12 +42,9 @@ namespace Lion
 		GLFWimage* mIcon = nullptr;
 		WindowData* mData = nullptr;  // Owned by the Window facade; not freed here.
 
-		// The window is "maximised" by being sized to the monitor's work area, not by Windows' own maximise —
-		// a borderless window flashes when Windows maximises it on show, so we never ask it to. These are the
-		// position and size to put back when it is un-maximised.
-		int32 mRestoreX = 0, mRestoreY = 0, mRestoreWidth = 0, mRestoreHeight = 0;
-
-		// Sizes the window to the current monitor's work area (the maximised look) or back to the restore rect.
+		// The window is "maximised" by being sized to the monitor's work area, not by Windows' own maximise — a
+		// borderless window flashes when Windows maximises it on show, so we never ask it to. The windowed
+		// rectangle it restores to is kept by the window procedure (which the caption gestures also reach).
 		void ApplyMaximized(bool maximized, bool captureRestore = true);
 
 		void RegisterCallbacks();
