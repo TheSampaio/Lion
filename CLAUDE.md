@@ -158,3 +158,16 @@ editor's own state to the executable, not to the working directory.
 - **`%{wks.location}` becomes `$(SolutionDir)`.** Building a `.vcxproj` directly (outside the solution)
   therefore resolves it to the project directory and breaks the post-build paths. Build through the
   solution.
+
+- **Editor icons come from Material Design Icons, on one scale.** The `.ttf` is loaded twice
+  (`EditorGui::LoadIconFont`): merged into the text font at **16px** for icons that sit *inline* with a
+  label (menu items, tabs, component headers — `ICON_MDI_x "  Label"` is one string, one draw call), and
+  standalone at atlas resolution (32px) for icons the editor *positions itself*, reachable through
+  `EditorGui::GetIconFont()`. Every hand-placed icon goes through `DrawIcon(origin, box, glyph, colour,
+  pixels)`, which draws from the standalone font at an exact pixel size — sharp at any size *down* from
+  the atlas, never scaled up. **Sizes are even, on a 4px grid, and read from `kIconSize` (16) / `kIconTitle`
+  (24), not spelled at the call site:** 16px is the base — toolbars, list rows, row-end widgets (eye,
+  padlock, revert), console lines and filters; 24px is the single highlight icon that heads a panel (the
+  entity at the top of the Inspector). The minimum is 20px only where an icon must be *drawn* smaller and
+  still read — below that it is unusable — and the window's own `X` / minimise / maximise glyphs are their
+  own thing, outside this scale. Copy what Unity, Godot, Unreal and Hazel do; do not invent a size.
