@@ -71,8 +71,11 @@ namespace Lion
         mPendingRemoval.clear();
     }
 
-    void Scene::OnUpdate()
+    void Scene::OnUpdate(float32 deltaTime)
     {
+        if (deltaTime < 0.0f)
+            deltaTime = Clock::GetDeltaTime();
+
         for (auto& entity : mEntities)
             entity->UpdateBegin();
 
@@ -83,7 +86,7 @@ namespace Lion
             entity->UpdateEnd();
 
         // Advance the simulation, then reflect the results on the entities and fire collisions.
-        mPhysicsWorld->Step(Clock::GetDeltaTime());
+        mPhysicsWorld->Step(deltaTime);
 
         FlushPendingRemoval();
     }

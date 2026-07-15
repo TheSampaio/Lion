@@ -25,7 +25,10 @@ namespace Lion
 		// Removes an entity by raw pointer (used for self-removal); deferred to end of frame.
 		LION_API void Remove(Entity* entity);
 
-		LION_API void OnUpdate();
+		// Advances the scene by 'deltaTime' seconds. A negative value (the default) means "however long the
+		// last frame took" — the running game. A step passes a whole fixed frame instead, so one step is one
+		// visible frame and not a slice of real time too small for the fixed-timestep physics to act on.
+		LION_API void OnUpdate(float32 deltaTime = -1.0f);
 		LION_API void OnRender();
 
 		// Physics world owned by this scene (never null).

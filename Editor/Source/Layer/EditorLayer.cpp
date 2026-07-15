@@ -115,9 +115,13 @@ void EditorLayer::OnUpdate()
 
 	// Advance the scene simulation (physics + entity scripts) while playing and not paused — or for
 	// exactly one frame when a step was requested, which is what makes a paused run inspectable.
+	//
+	// A step advances by a whole fixed frame (1/60s), not by the sliver of real time since the last frame:
+	// at several hundred FPS that real slice is a fraction of a physics tick, so a dozen steps used to pass
+	// before the world moved once — the cooldown that wasn't. A running game keeps real time.
 	if (mPlaying && (!mPaused || mStepFrame))
 	{
-		mScene->OnUpdate();
+		mScene->OnUpdate(mStepFrame ? (1.0f / 60.0f) : -1.0f);
 		mStepFrame = false;
 	}
 }
@@ -629,9 +633,24 @@ void EditorLayer::DrawStatistics()
 		va_end(arguments);
 	};
 
+	// Every group's value column starts at the same x, so the numbers line up down the whole panel and not
+	// only within a group. A shared fixed width for the label column is what does it: left to itself, each
+	// table sized its own columns to its own longest label, and no two groups agreed. The width is enough
+	// for the longest label there is ("Textures alive").
+	constexpr float32 kLabelWidth = 132.0f;
 	constexpr ImGuiTableFlags tableFlags = ImGuiTableFlags_SizingStretchProp;
 
-	if (ImGui::CollapsingHeader("Frame", ImGuiTreeNodeFlags_DefaultOpen) && ImGui::BeginTable("Frame", 2, tableFlags))
+	const auto beginTable = [&](const char8* id) -> bool
+	{
+		if (!ImGui::BeginTable(id, 2, tableFlags))
+			return false;
+
+		ImGui::TableSetupColumn("label", ImGuiTableColumnFlags_WidthFixed, kLabelWidth);
+		ImGui::TableSetupColumn("value", ImGuiTableColumnFlags_WidthStretch);
+		return true;
+	};
+
+	if (ImGui::CollapsingHeader("Frame", ImGuiTreeNodeFlags_DefaultOpen) && beginTable("Frame"))
 	{
 		row("FPS", "%.1f", io.Framerate);
 		row("Frame time", "%.3f ms", 1000.0f / io.Framerate);
@@ -639,7 +658,7 @@ void EditorLayer::DrawStatistics()
 		ImGui::EndTable();
 	}
 
-	if (ImGui::CollapsingHeader("Renderer", ImGuiTreeNodeFlags_DefaultOpen) && ImGui::BeginTable("Renderer", 2, tableFlags))
+	if (ImGui::CollapsingHeader("Renderer", ImGuiTreeNodeFlags_DefaultOpen) && beginTable("Renderer"))
 	{
 		// The batch's whole job is to turn many sprites into few draw calls, and none of that shows from
 		// the outside. These are the numbers that say whether it is doing it.
@@ -656,7 +675,7 @@ void EditorLayer::DrawStatistics()
 		ImGui::EndTable();
 	}
 
-	if (ImGui::CollapsingHeader("Scene", ImGuiTreeNodeFlags_DefaultOpen) && ImGui::BeginTable("Scene", 2, tableFlags))
+	if (ImGui::CollapsingHeader("Scene", ImGuiTreeNodeFlags_DefaultOpen) && beginTable("Scene"))
 	{
 		int32 components = 0;
 		int32 bodies = 0;
@@ -677,7 +696,7 @@ void EditorLayer::DrawStatistics()
 		ImGui::EndTable();
 	}
 
-	if (ImGui::CollapsingHeader("Viewport", ImGuiTreeNodeFlags_DefaultOpen) && ImGui::BeginTable("Viewport", 2, tableFlags))
+	if (ImGui::CollapsingHeader("Viewport", ImGuiTreeNodeFlags_DefaultOpen) && beginTable("Viewport"))
 	{
 		row("Render target", "%.0f x %.0f", mViewportSize.x, mViewportSize.y);
 		row("Window", "%d x %d", static_cast<int32>(io.DisplaySize.x), static_cast<int32>(io.DisplaySize.y));
@@ -1011,26 +1030,35 @@ namespace
 	// The project root, found by walking up from the working directory: the editor runs from its build
 	// output, not the project. Empty when the project is not around (a distributed editor), which is
 	// what disables generating and compiling.
+	//
+	// Found once and kept. The project does not move while the editor runs, and the walk is a handful of
+	// filesystem probes — cheap once, but the Content Browser asked for this per row per frame, which is
+	// how a panel that reads no disk still hit it dozens of times a frame. That was the "slow to go back".
 	std::filesystem::path ProjectRootDirectory()
 	{
-		std::error_code error;
-		std::filesystem::path current = std::filesystem::current_path(error);
-
-		if (error)
-			return {};
-
-		for (int32 depth = 0; depth < 8; ++depth)
+		static const std::filesystem::path root = []() -> std::filesystem::path
 		{
-			if (std::filesystem::is_directory(current / kGameFolder / "Source", error))
-				return current;
+			std::error_code error;
+			std::filesystem::path current = std::filesystem::current_path(error);
 
-			if (!current.has_parent_path() || current.parent_path() == current)
-				break;
+			if (error)
+				return {};
 
-			current = current.parent_path();
-		}
+			for (int32 depth = 0; depth < 8; ++depth)
+			{
+				if (std::filesystem::is_directory(current / kGameFolder / "Source", error))
+					return current;
 
-		return {};
+				if (!current.has_parent_path() || current.parent_path() == current)
+					break;
+
+				current = current.parent_path();
+			}
+
+			return {};
+		}();
+
+		return root;
 	}
 
 	// The game's assets, in the project. Empty when the project is not around.
@@ -4443,19 +4471,16 @@ void EditorLayer::DrawWindowButtons(const ImVec2& barMin, float32 barWidth, floa
 						ImVec2(center.x + arm + offset, center.y + arm - offset),
 						color, 0.0f, 0, 1.0f);
 
-				// The front square is filled with what is behind it, so the one behind it stops where it
-				// should. That is the bar, plus the highlight the bar has while the button is hovered —
-				// painting the bar's colour alone would punch a hole in the highlight.
+				// The front square is filled with whatever is behind it, so the square behind it stops at the
+				// front one's edge instead of showing through. Behind it is the bar — or, while the button is
+				// hovered, the amber that fills the whole button. Filling with the bar's colour then left a
+				// bar-coloured hole in the amber, which is the square that "was not painted inside".
 				const ImVec2 frontMin(center.x - arm - offset, center.y - arm + offset);
 				const ImVec2 frontMax(center.x + arm - offset, center.y + arm + offset);
 
 				if (maximized)
-				{
-					drawList->AddRectFilled(frontMin, frontMax, ImGui::GetColorU32(ImGuiCol_MenuBarBg));
-
-					if (hovered)
-						drawList->AddRectFilled(frontMin, frontMax, IM_COL32(255, 255, 255, 22));
-				}
+					drawList->AddRectFilled(frontMin, frontMax,
+						hovered ? kHoverFill[1] : ImGui::GetColorU32(ImGuiCol_MenuBarBg));
 
 				drawList->AddRect(frontMin, frontMax, color, 0.0f, 0, 1.0f);
 
@@ -4907,13 +4932,17 @@ void EditorLayer::CompileGameModule()
 
 	// Build only the game module. Its MSBuild target is its solution folder and project name — premake
 	// files it under the "Runtime" group, hence "Runtime\Game", so moving the project between groups
-	// renames this. Building the solution outright would try to relink the running editor. Nothing
-	// else is rebuilt, so the editor's copy of the module — which the module's own post-build step
-	// refreshes — is the one the reload then picks up.
+	// renames this.
+	//
+	// BuildProjectReferences=false is what keeps it to only the module. The game links the engine, so
+	// MSBuild would otherwise build the engine first to satisfy the reference — and the engine's DLL is
+	// loaded by this very editor, so Windows has its .pdb locked and the relink dies with LNK1201. The
+	// engine the editor is running is the engine the module is built against; there is nothing to rebuild.
 	const std::string build =
 		"\"" + MSBuildPath() + "\""
 		" \"" + (root / "Lion.sln").string() + "\""
 		" -t:Runtime\\Game"
+		" -p:BuildProjectReferences=false"
 		" -p:Configuration=" + BuildConfiguration() +
 		" -p:Platform=x64 -v:minimal -nologo";
 
