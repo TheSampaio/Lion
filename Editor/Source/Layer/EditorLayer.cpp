@@ -2675,7 +2675,11 @@ void EditorLayer::DrawViewport()
 
 	// The Hierarchy's menu, opened over the scene itself. Where the mouse was when it opened is captured
 	// then and there — the menu is a window, and the cursor walks away from the spot the moment it opens.
-	if (imageHovered && ImGui::IsMouseClicked(ImGuiMouseButton_Right) && !ImGuizmo::IsOver() && !ImGuizmo::IsUsing())
+	//
+	// No gizmo guard on the capture: the gizmo is where the *selected* entity is, and a right-click there is
+	// still a request to create the next one under the cursor. Guarding it left the position at wherever the
+	// last menu opened, so a new entity landed away from the mouse — the "not exactly at my cursor".
+	if (imageHovered && ImGui::IsMouseClicked(ImGuiMouseButton_Right))
 	{
 		const ImVec2 mouse = ImGui::GetMousePos();
 		const glm::mat4 inverseViewProjection = glm::inverse(mCamera->GetProjectionMatrix() * mCamera->GetViewMatrix());
