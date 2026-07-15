@@ -240,8 +240,8 @@ private:
 
 	// The docks that float over the viewport: a square button, the room the dock leaves around its row of
 	// them, and how far the dock itself sits from the edge of the image.
-	static constexpr float kDockButton = 30.0f;
-	static constexpr float kDockPadding = 5.0f;
+	static constexpr float kDockButton = 24.0f;   // 24 + 4 padding either side = a 32px-tall dock.
+	static constexpr float kDockPadding = 4.0f;
 	static constexpr float kDockSpacing = 4.0f;
 	static constexpr float kDockMargin = 10.0f;
 

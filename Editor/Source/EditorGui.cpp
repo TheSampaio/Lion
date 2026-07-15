@@ -54,11 +54,15 @@ void MergeIconFont()
 	config.MergeMode = true;
 	config.PixelSnapH = true;
 
-	// An icon is drawn to fill its square, while a letter leaves room around itself. Given the letters'
-	// advance, icons would sit shoulder to shoulder; this is the room they need to be told apart.
-	config.GlyphMinAdvanceX = kFontSize;
+	// Baked a little smaller than the text, and dropped onto its baseline. An icon fills its em square while
+	// a letter leaves room inside theirs, so an icon the same nominal size as the text reads bigger than it —
+	// in a tab, a menu, a toolbar button. A couple of points down, nudged to sit level with the words, and it
+	// weighs what they weigh. The places that want a large icon draw it themselves (see DrawInlineIcon).
+	constexpr float32 kIconSize = 15.0f;
+	config.GlyphMinAdvanceX = kIconSize;
+	config.GlyphOffset.y = 2.0f;
 
-	ImGui::GetIO().Fonts->AddFontFromFileTTF(font.string().c_str(), kFontSize, &config, range);
+	ImGui::GetIO().Fonts->AddFontFromFileTTF(font.string().c_str(), kIconSize, &config, range);
 }
 
 ImFont* EditorGui::GetBoldFont()
@@ -193,16 +197,25 @@ void EditorGui::Init()
 	static const std::string iniPath = (dataDirectory / "lion-layout.ini").string();
 	io.IniFilename = iniPath.c_str();
 
+	// The glyphs the text font carries. ImGui's default is Basic Latin and nothing else, so a dash, an
+	// ellipsis or an accented name comes out as a hollow box — the em-dash that did. General Punctuation
+	// comes along, and the Latin block a Portuguese name needs.
+	static const ImWchar textRange[] = {
+		0x0020, 0x00FF,   // Basic Latin + Latin-1 Supplement (accented letters).
+		0x2010, 0x205E,   // General Punctuation (dashes, quotes, the ellipsis).
+		0,
+	};
+
 	// Prefer Segoe UI (much more legible than ImGui's built-in font); fall back to the default. The bold cut
 	// comes along for the few places that have to weigh more than what is around them; without it, a caller
 	// asking for bold gets a null font and ImGui draws its own.
 	if (std::filesystem::exists("C:/Windows/Fonts/segoeui.ttf"))
-		io.Fonts->AddFontFromFileTTF("C:/Windows/Fonts/segoeui.ttf", kFontSize);
+		io.Fonts->AddFontFromFileTTF("C:/Windows/Fonts/segoeui.ttf", kFontSize, nullptr, textRange);
 
 	MergeIconFont();
 
 	if (std::filesystem::exists("C:/Windows/Fonts/segoeuib.ttf"))
-		sBoldFont = io.Fonts->AddFontFromFileTTF("C:/Windows/Fonts/segoeuib.ttf", kFontSize);
+		sBoldFont = io.Fonts->AddFontFromFileTTF("C:/Windows/Fonts/segoeuib.ttf", kFontSize, nullptr, textRange);
 
 	SetDarkTheme();
 

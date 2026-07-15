@@ -703,6 +703,19 @@ namespace
 		}
 	}
 
+	// The icon each severity wears in the console, coloured with the severity's own colour: an alert for a
+	// warning, a filled alert for an error, an i for information — the shapes Unity uses, so a glance at the
+	// left edge reads the same way it does there.
+	const char8* LogLevelIcon(LogLevel level)
+	{
+		switch (LogLevelBucket(level))
+		{
+			case LogBucket::Error:   return ICON_MDI_ALERT_CIRCLE;
+			case LogBucket::Warning: return ICON_MDI_ALERT;
+			default:                 return ICON_MDI_INFORMATION;
+		}
+	}
+
 	// Display color for each log severity, mirroring the spdlog console coloring.
 	ImVec4 LogLevelColor(LogLevel level)
 	{
@@ -842,9 +855,16 @@ void EditorLayer::DrawConsole()
 		mConsoleCounts.push_back(1);
 	}
 
-	// --- Message list: a severity dot, a dimmed timestamp and the message. The clipper submits only
-	// the rows actually on screen, so a full history costs no more than a screenful.
+	// --- Message list: a coloured severity icon, a dimmed timestamp and the message. The clipper submits
+	// only the rows actually on screen, so a full history costs no more than a screenful.
+	//
+	// No padding on the child, so a hovered row reaches the panel's edges the way the Hierarchy's do: the
+	// left margin the content wants is added to each item by hand, not taken out of the whole panel.
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
 	ImGui::BeginChild("ConsoleOutput", ImVec2(0.0f, 0.0f), false, ImGuiWindowFlags_HorizontalScrollbar);
+	ImGui::PopStyleVar();
+
+	constexpr float32 kConsoleLeftPad = 8.0f;
 
 	int contextIndex = -1;
 	ImDrawList* drawList = ImGui::GetWindowDrawList();
@@ -873,15 +893,20 @@ void EditorLayer::DrawConsole()
 				contextIndex = index;
 			}
 
-			// A small severity dot stands in for the icon that will replace it later.
-			drawList->AddCircleFilled(
-				ImVec2(rowMin.x + 8.0f, rowMin.y + ImGui::GetTextLineHeight() * 0.5f),
-				4.0f, ImGui::GetColorU32(accent));
+			// The severity icon, in the severity's colour, sitting where the dot used to. Drawn here rather
+			// than through the shared helper, which the file defines further down than the console.
+			const char8* icon = LogLevelIcon(entry.level);
+			const float32 iconSize = ImGui::GetFontSize() * 0.85f;
+			const ImVec2 iconGlyph = ImGui::GetFont()->CalcTextSizeA(iconSize, FLT_MAX, 0.0f, icon);
 
-			ImGui::SameLine(24.0f);
+			drawList->AddText(ImGui::GetFont(), iconSize,
+				ImVec2(rowMin.x + kConsoleLeftPad, ImFloor(rowMin.y + (ImGui::GetTextLineHeight() - iconGlyph.y) * 0.5f)),
+				ImGui::GetColorU32(accent), icon);
+
+			ImGui::SameLine(kConsoleLeftPad + 24.0f);
 			ImGui::TextDisabled("%s", entry.time.c_str());
 
-			ImGui::SameLine(96.0f);
+			ImGui::SameLine(kConsoleLeftPad + 96.0f);
 
 			// Only errors and warnings tint their message; everything else reads as plain text.
 			const bool tinted = LogLevelBucket(entry.level) != LogBucket::Info;
@@ -1377,6 +1402,22 @@ namespace
 			color, icon);
 	}
 
+	// An icon drawn inline, as if it were a word, but at whatever size is asked for rather than the small
+	// size the font bakes them at. It claims its own space and leaves the cursor after it, so a SameLine
+	// puts the next item beside it — which is how the Inspector sets a large mark before an entity's name.
+	void DrawInlineIcon(const char8* icon, float32 size, ImU32 color)
+	{
+		ImFont* font = ImGui::GetFont();
+		const ImVec2 glyph = font->CalcTextSizeA(size, FLT_MAX, 0.0f, icon);
+		const ImVec2 origin = ImGui::GetCursorScreenPos();
+		const float32 line = ImGui::GetFrameHeight();
+
+		ImGui::GetWindowDrawList()->AddText(font, size,
+			ImVec2(origin.x, ImFloor(origin.y + (line - glyph.y) * 0.5f)), color, icon);
+
+		ImGui::Dummy(ImVec2(glyph.x, line));
+	}
+
 	// The eye in the Hierarchy's Visibility column. Open, the entity is drawn; struck through, it is not
 	// — and that is all it is: a hidden entity still updates and still collides.
 	bool EyeButton(const char8* id, bool visible)
@@ -1692,14 +1733,18 @@ bool EditorLayer::DrawAssetEntry(const std::string& name, const std::string& ass
 	}
 
 	// The icon says what the row is, which is what the yellow used to be doing badly: a colour has to be
-	// learned, and a folder does not. What the engine owns is dimmed, and says so when asked.
-	if (engineOwned)
+	// learned, and a folder does not. A folder reads as a normal folder whoever owns it — the engine's
+	// Shaders and Sprites are folders like any other; only an engine-owned *file* is dimmed, and that only
+	// hints at what the context menu and the tooltip say plainly: it cannot be renamed or deleted.
+	const bool dimmed = engineOwned && !folder;
+
+	if (dimmed)
 		ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyle().Colors[ImGuiCol_TextDisabled]);
 
 	const std::string label = std::string(folder ? ICON_MDI_FOLDER : AssetIcon(name)) + "  " + name;
 	const bool activated = ImGui::Selectable(label.c_str(), false, ImGuiSelectableFlags_AllowDoubleClick);
 
-	if (engineOwned)
+	if (dimmed)
 		ImGui::PopStyleColor();
 
 	if (ImGui::IsItemHovered())
@@ -3259,11 +3304,20 @@ void EditorLayer::DrawEntityNode(const Reference<Entity>& entity)
 	if (dimmed)
 		ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyle().Colors[ImGuiCol_TextDisabled]);
 
+	// A selected row wears the engine's orange — the same colour as its outline in the viewport and the
+	// frame around a running game. The selection is one thing; it looks like one thing wherever it shows.
+	const ImVec4 accent = EditorGui::GetAccent();
+	ImGui::PushStyleColor(ImGuiCol_Header, accent);
+	ImGui::PushStyleColor(ImGuiCol_HeaderHovered, IsSelected(entity.get()) ? accent : ImVec4(accent.x, accent.y, accent.z, 0.30f));
+	ImGui::PushStyleColor(ImGuiCol_HeaderActive, accent);
+
 	const bool expanded = folder && ImGui::TreeNodeGetOpen(ImGui::GetID("##node"));
 	const char8* icon = folder ? (expanded ? ICON_MDI_FOLDER_OPEN : ICON_MDI_FOLDER) : ICON_MDI_CUBE_OUTLINE;
 
 	ImGui::SetNextItemAllowOverlap();   // The eye sits in the row the node spans, and gets its own clicks.
 	const bool open = ImGui::TreeNodeEx("##node", flags, "%s  %s", icon, name.empty() ? "(unnamed)" : name.c_str());
+
+	ImGui::PopStyleColor(3);
 
 	if (dimmed)
 		ImGui::PopStyleColor();
@@ -3774,9 +3828,10 @@ void EditorLayer::DrawProperties()
 		return;
 	}
 
-	// The same icon the Hierarchy draws, so the two panels agree about what they are pointing at.
-	ImGui::AlignTextToFramePadding();
-	ImGui::TextUnformatted(mSelectedEntity->IsFolder() ? ICON_MDI_FOLDER : ICON_MDI_CUBE_OUTLINE);
+	// The same icon the Hierarchy draws, so the two panels agree about what they are pointing at — but larger
+	// here, because this is the one entity the whole panel is about, not one row among many.
+	DrawInlineIcon(mSelectedEntity->IsFolder() ? ICON_MDI_FOLDER : ICON_MDI_CUBE_OUTLINE,
+		ImGui::GetFontSize() * 1.35f, ImGui::GetColorU32(ImGuiCol_Text));
 	ImGui::SameLine();
 
 	// Whether the entity is switched on at all — the checkbox Unity puts before the name, and the same
@@ -3822,7 +3877,7 @@ void EditorLayer::DrawProperties()
 		return;
 	}
 
-	if (ImGui::CollapsingHeader("Transform", ImGuiTreeNodeFlags_DefaultOpen))
+	if (ImGui::CollapsingHeader(ICON_MDI_AXIS_ARROW "  Transform", ImGuiTreeNodeFlags_DefaultOpen))
 	{
 		// Every entity has a Transform, so a transform edit is the one edit the whole selection always
 		// has in common. The values shown are the primary's; the value written is written to all of them.
@@ -3862,7 +3917,7 @@ void EditorLayer::DrawProperties()
 
 		if (SpriteRenderer* renderer = dynamic_cast<SpriteRenderer*>(component))
 		{
-			if (DrawComponentHeader("Sprite Renderer", i, remove, dragFrom, dragTo))
+			if (DrawComponentHeader(ICON_MDI_IMAGE "  Sprite Renderer", i, remove, dragFrom, dragTo))
 			{
 				// Reload the texture only once the user finishes editing (not per keystroke).
 				char textureBuffer[256];
@@ -3913,7 +3968,7 @@ void EditorLayer::DrawProperties()
 		}
 		else if (RigidBody2D* body = dynamic_cast<RigidBody2D*>(component))
 		{
-			if (DrawComponentHeader("Rigid Body 2D", i, remove, dragFrom, dragTo))
+			if (DrawComponentHeader(ICON_MDI_WEIGHT "  Rigid Body 2D", i, remove, dragFrom, dragTo))
 			{
 				static const char8* bodyTypes[] = { "Static", "Kinematic", "Dynamic" };
 				const int32 defaultType = static_cast<int32>(BodyType::Dynamic);
@@ -3951,7 +4006,7 @@ void EditorLayer::DrawProperties()
 		}
 		else if (BoxCollider2D* collider = dynamic_cast<BoxCollider2D*>(component))
 		{
-			if (DrawComponentHeader("Box Collider 2D", i, remove, dragFrom, dragTo))
+			if (DrawComponentHeader(ICON_MDI_VECTOR_SQUARE "  Box Collider 2D", i, remove, dragFrom, dragTo))
 			{
 				// A collider's extents have no default worth going back to: a fresh one is zero-sized, and
 				// what the editor gives it when you add it is the sprite's size, not something the class
@@ -3974,7 +4029,7 @@ void EditorLayer::DrawProperties()
 		}
 		else if (CircleCollider2D* collider = dynamic_cast<CircleCollider2D*>(component))
 		{
-			if (DrawComponentHeader("Circle Collider 2D", i, remove, dragFrom, dragTo))
+			if (DrawComponentHeader(ICON_MDI_VECTOR_CIRCLE_VARIANT "  Circle Collider 2D", i, remove, dragFrom, dragTo))
 			{
 				// The radius has no default to go back to, for the same reason a box's extents do not.
 				float32 radius = collider->GetRadius();
@@ -3996,9 +4051,9 @@ void EditorLayer::DrawProperties()
 			// against it and has no idea what it holds, so it asks: the component describes its fields, and
 			// the Inspector draws exactly what it was told about, no more.
 			const std::string& typeName = component->GetTypeName();
-			const char8* label = typeName.empty() ? "Component" : typeName.c_str();
+			const std::string label = std::string(ICON_MDI_PUZZLE "  ") + (typeName.empty() ? "Component" : typeName);
 
-			if (DrawComponentHeader(label, i, remove, dragFrom, dragTo))
+			if (DrawComponentHeader(label.c_str(), i, remove, dragFrom, dragTo))
 			{
 				InspectorReflector reflector(*this, typeName);
 				component->Reflect(reflector);
@@ -4479,23 +4534,23 @@ float32 EditorLayer::DrawMenuBar(const ImVec2& barMin, const ImVec2& barMax)
 		{
 			// The menu says what the key does and the key does what the menu does, because both call the one
 			// function that does it — a rule written down twice is a rule that will disagree with itself.
-			if (ImGui::MenuItem("New Scene", ShortcutText(ShortcutAction::NewScene).c_str()))
+			if (ImGui::MenuItem(ICON_MDI_FILE_PLUS_OUTLINE "  New Scene", ShortcutText(ShortcutAction::NewScene).c_str()))
 				NewScene();
 
-			if (ImGui::MenuItem("Open Scene...", ShortcutText(ShortcutAction::OpenScene).c_str()))
+			if (ImGui::MenuItem(ICON_MDI_FOLDER_OPEN_OUTLINE "  Open Scene...", ShortcutText(ShortcutAction::OpenScene).c_str()))
 				OpenScene();
 
 			ImGui::Separator();
 
-			if (ImGui::MenuItem("Save Scene", ShortcutText(ShortcutAction::SaveScene).c_str()))
+			if (ImGui::MenuItem(ICON_MDI_CONTENT_SAVE_OUTLINE "  Save Scene", ShortcutText(ShortcutAction::SaveScene).c_str()))
 				SaveScene();
 
-			if (ImGui::MenuItem("Save Scene As...", ShortcutText(ShortcutAction::SaveSceneAs).c_str()))
+			if (ImGui::MenuItem(ICON_MDI_CONTENT_SAVE_ALL_OUTLINE "  Save Scene As...", ShortcutText(ShortcutAction::SaveSceneAs).c_str()))
 				SaveSceneAs();
 
 			ImGui::Separator();
 
-			if (ImGui::MenuItem("Exit", "Alt+F4"))
+			if (ImGui::MenuItem(ICON_MDI_EXIT_TO_APP "  Exit", "Alt+F4"))
 				Window::RequestClose();
 
 			ImGui::EndMenu();
@@ -4503,10 +4558,10 @@ float32 EditorLayer::DrawMenuBar(const ImVec2& barMin, const ImVec2& barMax)
 
 		if (ImGui::BeginMenu("Edit"))
 		{
-			if (ImGui::MenuItem("Undo", "Ctrl+Z", false, !mUndoStack.empty()))
+			if (ImGui::MenuItem(ICON_MDI_UNDO "  Undo", "Ctrl+Z", false, !mUndoStack.empty()))
 				Undo();
 
-			if (ImGui::MenuItem("Redo", "Ctrl+Y", false, !mRedoStack.empty()))
+			if (ImGui::MenuItem(ICON_MDI_REDO "  Redo", "Ctrl+Y", false, !mRedoStack.empty()))
 				Redo();
 
 			ImGui::EndMenu();
@@ -4543,13 +4598,13 @@ float32 EditorLayer::DrawMenuBar(const ImVec2& barMin, const ImVec2& barMax)
 
 		if (ImGui::BeginMenu("Game"))
 		{
-			if (ImGui::MenuItem("Compile", ShortcutText(ShortcutAction::CompileModule).c_str(), false, !mBuilding))
+			if (ImGui::MenuItem(ICON_MDI_HAMMER_WRENCH "  Compile", ShortcutText(ShortcutAction::CompileModule).c_str(), false, !mBuilding))
 				CompileGameModule();
 
 			if (ImGui::IsItemHovered())
 				ImGui::SetTooltip("Rebuild the game module and reload it");
 
-			if (ImGui::MenuItem("Reload Module", KeybindToString(mBinds[static_cast<int>(ShortcutAction::ReloadModule)]).c_str(), false, !mBuilding))
+			if (ImGui::MenuItem(ICON_MDI_RELOAD "  Reload Module", KeybindToString(mBinds[static_cast<int>(ShortcutAction::ReloadModule)]).c_str(), false, !mBuilding))
 				ReloadGameModule();
 
 			if (ImGui::IsItemHovered())
@@ -4705,7 +4760,7 @@ void EditorLayer::DrawLayoutMenu()
 	if (!ImGui::BeginMenu("Layouts"))
 		return;
 
-	if (ImGui::MenuItem("Default"))
+	if (ImGui::MenuItem(ICON_MDI_VIEW_DASHBOARD_OUTLINE "  Default"))
 		mLayoutRequest = LayoutRequest::Reset;
 
 	const std::vector<std::string> layouts = SavedLayouts();
@@ -4724,10 +4779,10 @@ void EditorLayer::DrawLayoutMenu()
 
 	ImGui::Separator();
 
-	if (ImGui::MenuItem("Save Layout..."))
+	if (ImGui::MenuItem(ICON_MDI_CONTENT_SAVE_OUTLINE "  Save Layout..."))
 		mOpenSaveLayoutPopup = true;
 
-	if (ImGui::BeginMenu("Delete Layout", !layouts.empty()))
+	if (ImGui::BeginMenu(ICON_MDI_DELETE_OUTLINE "  Delete Layout", !layouts.empty()))
 	{
 		for (const std::string& name : layouts)
 			if (ImGui::MenuItem(name.c_str()))
