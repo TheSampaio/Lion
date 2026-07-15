@@ -3578,9 +3578,9 @@ bool EditorLayer::DrawComponentHeader(const char8* icon, const char8* name, int 
 	const ImVec2 headerMin = ImGui::GetItemRectMin();
 	const ImVec2 headerMax = ImGui::GetItemRectMax();
 
-	// Icon then name, laid out by hand: the arrow takes about a font's width, the icon follows it closely, and
-	// the name follows the icon.
-	const float32 iconX = headerMin.x + ImGui::GetFontSize() + 6.0f;
+	// Icon then name, laid out by hand: the arrow takes about a font's width, the icon follows it with a
+	// little air, and the name follows the icon.
+	const float32 iconX = headerMin.x + ImGui::GetFontSize() + 12.0f;
 	const float32 rowHeight = headerMax.y - headerMin.y;
 	const ImU32 textColor = ImGui::GetColorU32(ImGuiCol_Text);
 

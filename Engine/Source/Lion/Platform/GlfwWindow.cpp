@@ -108,6 +108,30 @@ namespace Lion
 		{
 			switch (message)
 			{
+				case WM_GETMINMAXINFO:
+				{
+					// A borderless window maximises to the whole monitor, taskbar and all, and then snaps back
+					// to the work area a frame later — the reajuste you see on open. This pins the maximised
+					// size and position to the work area up front, so it opens at the right size and stays.
+					HMONITOR monitor = MonitorFromWindow(window, MONITOR_DEFAULTTONEAREST);
+
+					MONITORINFO info = {};
+					info.cbSize = sizeof(info);
+
+					if (monitor && GetMonitorInfo(monitor, &info))
+					{
+						MINMAXINFO* bounds = reinterpret_cast<MINMAXINFO*>(lParam);
+
+						bounds->ptMaxPosition.x = info.rcWork.left - info.rcMonitor.left;
+						bounds->ptMaxPosition.y = info.rcWork.top - info.rcMonitor.top;
+						bounds->ptMaxSize.x = info.rcWork.right - info.rcWork.left;
+						bounds->ptMaxSize.y = info.rcWork.bottom - info.rcWork.top;
+						bounds->ptMaxTrackSize = bounds->ptMaxSize;
+					}
+
+					return 0;
+				}
+
 				case WM_NCCALCSIZE:
 				{
 					if (wParam == FALSE)
@@ -224,9 +248,6 @@ namespace Lion
 			return false;
 		}
 
-		if (mData->maximized)
-			glfwMaximizeWindow(mWindow);
-
 #ifdef LN_PLATFORM_WIN
 		// Only what was asked for: a game's window looks like every other window on the machine.
 		if (mData->darkTitleBar)
@@ -238,6 +259,13 @@ namespace Lion
 			UseRoundedCorners(mWindow);
 		}
 #endif
+
+		// Maximised only after the custom chrome is in place, so the maximise is the one our own window
+		// procedure sees — it pins the size to the work area (WM_GETMINMAXINFO). Maximise before the subclass
+		// is installed and GLFW's default handling runs instead, which lets a borderless window spill over the
+		// taskbar and snap back a frame later. Still hidden, so there is nothing to watch either way.
+		if (mData->maximized)
+			glfwMaximizeWindow(mWindow);
 
 		glfwSetWindowUserPointer(mWindow, mData);
 		RegisterCallbacks();
