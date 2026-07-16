@@ -1708,17 +1708,55 @@ void EditorLayer::DrawProject()
 
 	const std::filesystem::path current = root / mProjectPath;
 
+	// A folder change is decided here but applied at the very end, so `current` and the listing stay in
+	// step with `mProjectPath` for the whole frame. Mutating `mProjectPath` mid-draw would leave `current`
+	// (read once, above) pointing at the folder we just left, and the scan below would read that one while
+	// recording it under the new path — so the view would only right itself on the next timer poll.
+	bool navigate = false;
+	std::string navigateTarget;
+
 	// --- Breadcrumb toolbar.
 	ImGui::BeginDisabled(mProjectPath.empty());
 	if (ImGui::Button(ICON_MDI_ARROW_UP))
 	{
-		const std::filesystem::path parent = std::filesystem::path(mProjectPath).parent_path();
-		mProjectPath = parent.generic_string();
+		navigate = true;
+		navigateTarget = std::filesystem::path(mProjectPath).parent_path().generic_string();
 	}
 	ImGui::EndDisabled();
 
+	// Every ancestor is one click away: the root, then each folder on the way down, the last being where we
+	// stand. It is the reliable way back — a target you aim at, not a button you might miss.
 	ImGui::SameLine();
-	ImGui::TextDisabled("Assets/%s", mProjectPath.c_str());
+	if (ImGui::SmallButton("Assets"))
+	{
+		navigate = true;
+		navigateTarget.clear();
+	}
+
+	int32 crumbId = 0;
+	for (size_t start = 0; start < mProjectPath.size(); )
+	{
+		const size_t slash = mProjectPath.find('/', start);
+		const size_t end = (slash == std::string::npos) ? mProjectPath.size() : slash;
+		const std::string segment = mProjectPath.substr(start, end - start);
+
+		if (!segment.empty())
+		{
+			ImGui::SameLine();
+			ImGui::TextDisabled("/");
+			ImGui::SameLine();
+
+			ImGui::PushID(crumbId++);
+			if (ImGui::SmallButton(segment.c_str()))
+			{
+				navigate = true;
+				navigateTarget = mProjectPath.substr(0, end);
+			}
+			ImGui::PopID();
+		}
+
+		start = end + 1;
+	}
 
 	ImGui::Separator();
 
@@ -1754,8 +1792,6 @@ void EditorLayer::DrawProject()
 			ScanProjectDirectory(current);
 	}
 
-	std::string enterDirectory;
-
 	for (const AssetEntry& entry : mProjectEntries)
 	{
 		ImGui::PushID(entry.path.c_str());
@@ -1763,7 +1799,10 @@ void EditorLayer::DrawProject()
 		if (entry.directory)
 		{
 			if (DrawAssetEntry(entry.name, entry.path, true) && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
-				enterDirectory = entry.path;
+			{
+				navigate = true;
+				navigateTarget = entry.path;
+			}
 		}
 		else
 		{
@@ -1800,8 +1839,8 @@ void EditorLayer::DrawProject()
 		ImGui::EndPopup();
 	}
 
-	if (!enterDirectory.empty())
-		mProjectPath = enterDirectory;
+	if (navigate)
+		mProjectPath = navigateTarget;
 
 	ImGui::End();
 }
