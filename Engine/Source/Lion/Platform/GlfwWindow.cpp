@@ -42,14 +42,15 @@ namespace Lion
 			DwmSetWindowAttribute(glfwGetWin32Window(window), kUseImmersiveDarkMode, &dark, sizeof(dark));
 		}
 
-		// A window that draws its own caption still has corners, and on Windows 11 the corners are round.
-		// Taking the caption away is not a reason for the window to stop looking like a window.
-		void UseRoundedCorners(GLFWwindow* window)
+		// A window that draws its own caption still has corners, and on Windows 11 the corners are round while
+		// it is windowed. Maximised, they are square: a rounded corner on a window filling the screen would
+		// show the desktop through the gap, so it is turned off — which is what Windows does with its own.
+		void SetCornerRounding(HWND window, bool rounded)
 		{
-			constexpr DWORD kCornerPreference = 33;
-			constexpr DWORD kRound = 2;
+			constexpr DWORD kCornerPreference = 33;   // DWMWA_WINDOW_CORNER_PREFERENCE
+			const DWORD preference = rounded ? 2u /* ROUND */ : 1u /* DONOTROUND */;
 
-			DwmSetWindowAttribute(glfwGetWin32Window(window), kCornerPreference, &kRound, sizeof(kRound));
+			DwmSetWindowAttribute(window, kCornerPreference, &preference, sizeof(preference));
 		}
 
 		// A caption the application draws itself.
@@ -91,6 +92,9 @@ namespace Lion
 					sRestore.right - sRestore.left, sRestore.bottom - sRestore.top,
 					SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
 			}
+
+			// Square corners fill the screen edge to edge; round ones leave the desktop showing through.
+			SetCornerRounding(window, !maximized);
 
 			if (sChrome)
 				sChrome->maximized = maximized;
@@ -320,7 +324,7 @@ namespace Lion
 		if (mData->customTitleBar)
 		{
 			UseCustomTitleBar(mWindow, mData);
-			UseRoundedCorners(mWindow);
+			SetCornerRounding(glfwGetWin32Window(mWindow), !mData->maximized);
 		}
 #endif
 

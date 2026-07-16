@@ -800,6 +800,10 @@ namespace
 		const ImVec2 origin = ImGui::GetCursorScreenPos();
 		const float32 height = ImGui::GetFrameHeight();
 
+		// Each filter needs its own id, or the three buttons all answer to "##filter" and ImGui flags the
+		// clash. The icon differs per severity, so it is what tells them apart.
+		ImGui::PushID(icon);
+
 		// Lit when the filter is on, flat when it is off, so the row reads as a set of toggles.
 		if (enabled)
 			ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(color.x, color.y, color.z, 0.22f));
@@ -808,6 +812,8 @@ namespace
 
 		if (enabled)
 			ImGui::PopStyleColor();
+
+		ImGui::PopID();
 
 		const ImU32 tint = ImGui::GetColorU32(enabled ? color : ImVec4(0.45f, 0.46f, 0.49f, 1.0f));
 

@@ -141,7 +141,7 @@ group ". External Dependencies"
             -- are writing, which this is not.
             filter "configurations:Debug"
                 optimize "Speed"
-                flags { "NoRuntimeChecks" }
+                runtimechecks "Off"
 
             filter {}
     end
