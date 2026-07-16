@@ -2,6 +2,7 @@
 #include "EditorLayer.h"
 
 #include "../EditorGui.h"
+#include "../Projects.h"
 
 #include <IconsMaterialDesignIcons.h>
 #include "../ModuleSymbols.h"
@@ -43,6 +44,13 @@ static constexpr float32 kIconTitle = 24.0f;
 // What a file dialog offers when a scene is opened or saved. A scene is JSON inside and a .lscene outside:
 // what it is made of is the engine's business, and what it is is the project's.
 static const char8* kSceneFilter = "Lion Scene (*.lscene)\0*.lscene\0";
+
+namespace
+{
+	// Defined with the rest of the project machinery further down the file; the boot needs it before that
+	// point is reached.
+	void SetActiveProjectDirectory(const std::filesystem::path& project);
+}
 
 // Every panel's window name: the icon it wears on its tab, the name it goes by, and the id a saved layout
 // remembers it as. ImGui identifies a window by its name — so the name carries the icon — and everything
@@ -108,8 +116,8 @@ void EditorLayer::OnCreate()
 	LoadRecentScenes();
 
 	// A scene handed over on the command line — which is how Windows opens one, by running the editor and
-	// giving it the path. A scene in hand answers the question the Project Manager would have asked.
-	// Leading dashes mark a flag, not a path, so those are not mistaken for a scene and "opened".
+	// giving it the path. Leading dashes mark a flag, not a path, so those are not mistaken for a scene
+	// and "opened".
 	const std::string opened = CommandLine::Get(1);
 
 	if (!opened.empty() && opened.rfind("--", 0) != 0 && SceneSerializer::Deserialize(mScene, opened))
@@ -119,23 +127,34 @@ void EditorLayer::OnCreate()
 		return;
 	}
 
-	// --no-project-manager: straight into the built-in project and its demo scene, skipping the greeting.
-	// A development flag (documented in the README): iterating on the editor means launching it dozens of
-	// times, and answering the same question dozens of times is what this skips.
-	for (int32 argument = 1; argument < CommandLine::GetCount(); ++argument)
+	// The project the Project Manager window picked, handed over as this process was started: the editor
+	// initialises on it. The built-in comes up on its demo; any other project on a fresh scene, with its
+	// own module built and hot-swapped in as soon as the build answers. Without it — the development skip
+	// --no-project-manager, or a bare debugger launch — the editor comes up on the built-in demo.
+	for (int32 argument = 1; argument < CommandLine::GetCount() - 1; ++argument)
 	{
-		if (CommandLine::Get(argument) == "--no-project-manager")
+		if (CommandLine::Get(argument) != "--project")
+			continue;
+
+		const std::filesystem::path requested = CommandLine::Get(argument + 1);
+
+		if (Projects::IsProjectFolder(requested)
+			&& requested.lexically_normal() != Projects::DefaultProjectDirectory().lexically_normal())
 		{
-			CreateDemoScene();
+			SetActiveProjectDirectory(requested);
+			RememberRecentProject(requested);
+
+			Log::Console(LogLevel::Success,
+				LION_FORMAT_TEXT("[Editor] Opened project '{}'.", Projects::DisplayName(requested)));
+
+			CompileGameModule();
 			return;
 		}
+
+		break;
 	}
 
-	// The Project Manager greets first, the way every engine's does: pick a project, create one, or
-	// dismiss it — which means the default, the same built-in demo the flag jumps to. The popup itself is
-	// opened by DrawProjectManagerPopup once the first frames settle: the boot focuses the viewport a
-	// frame in, and focusing a window dismisses the popups above it.
-	mStartupProjectPick = true;
+	CreateDemoScene();
 }
 
 void EditorLayer::OnUpdate()
@@ -1106,10 +1125,10 @@ namespace
 
 	// The editor's state lives beside the executable, not in whatever directory the editor happened to
 	// be started from — Visual Studio starts it from the project folder, and a shortcut can point
-	// anywhere. Everything below anchors to this rather than to the working directory.
+	// anywhere. The rule lives in Projects.h, shared with the Project Manager window.
 	std::filesystem::path EditorDataDirectory()
 	{
-		return std::filesystem::path(ResourceRootDirectory()) / kDataDirectory;
+		return Projects::EditorDataDirectory();
 	}
 
 	std::filesystem::path EditorLayoutsDirectory()
@@ -1132,67 +1151,31 @@ namespace
 		return false;
 	}
 
-	// The game's folder, relative to the project root — the editor recognises the root by finding it.
-	// It is the folder, not the VS project name.
-	constexpr const char8* kGameFolder = "Sandbox";
-
-	// The project root, found by walking up from the executable's directory: the editor runs from its
-	// build output, several folders below the project. It is anchored to the executable, not the working
-	// directory, for the same reason the rest of the editor is — the working directory is not the editor's
-	// to trust. A file dialog moves it out from under the process (the shell browses by changing it), so a
-	// project found through the working directory would go missing the moment a scene was opened. Empty
-	// when the project is not around (a distributed editor), which is what disables generating and compiling.
-	//
-	// Found once and kept. The project does not move while the editor runs, and the walk is a handful of
-	// filesystem probes — cheap once, but the Content Browser asked for this per row per frame, which is
-	// how a panel that reads no disk still hit it dozens of times a frame. That was the "slow to go back".
+	// The project machinery is shared with the Project Manager window and lives in Projects.h; these keep
+	// the names this file has always spoken in.
 	std::filesystem::path ProjectRootDirectory()
 	{
-		static const std::filesystem::path root = []() -> std::filesystem::path
-		{
-			std::filesystem::path current = ResourceRootDirectory();
-
-			// The resource root keeps a trailing separator, which leaves an empty final component; drop it
-			// so the first climb reaches the parent directory and not this same one again.
-			if (!current.has_filename())
-				current = current.parent_path();
-
-			std::error_code error;
-
-			for (int32 depth = 0; depth < 8; ++depth)
-			{
-				if (std::filesystem::is_directory(current / kGameFolder / "Source", error))
-					return current;
-
-				if (!current.has_parent_path() || current.parent_path() == current)
-					break;
-
-				current = current.parent_path();
-			}
-
-			return {};
-		}();
-
-		return root;
+		return Projects::EngineRootDirectory();
 	}
 
-	// The marker a project folder carries, so an arbitrary folder can be told apart from a game's: its stem
-	// is the project's name. A scaffolded project drops one; the built-in Sandbox is a project without one.
-	constexpr const char8* kProjectFileExtension = ".lproject";
+	bool IsProjectFolder(const std::filesystem::path& folder)
+	{
+		return Projects::IsProjectFolder(folder);
+	}
+
+	std::string ProjectDisplayName(const std::filesystem::path& project)
+	{
+		return Projects::DisplayName(project);
+	}
 
 	// The active project: the folder that holds a game's Assets and Source. It is what the Content Browser
 	// browses, what a component is scaffolded into, and what the title bar names. It opens on the built-in
-	// Sandbox found beside the editor (root/Sandbox), and Open Project points it at another folder — which
-	// is what makes the editor hold more than one game. The build root above stays put: it is the engine's
-	// solution, shared by every project until a per-project build gives each its own module.
+	// Sandbox found beside the editor, and --project or Open Project points it at another folder — which
+	// is what makes the editor hold more than one game. The engine root above stays put: it is the engine's
+	// solution, shared by every project's module build.
 	std::filesystem::path& ActiveProjectStorage()
 	{
-		static std::filesystem::path project = []() -> std::filesystem::path
-		{
-			const std::filesystem::path root = ProjectRootDirectory();
-			return root.empty() ? std::filesystem::path() : root / kGameFolder;
-		}();
-
+		static std::filesystem::path project = Projects::DefaultProjectDirectory();
 		return project;
 	}
 
@@ -1211,30 +1194,6 @@ namespace
 	{
 		const std::filesystem::path project = ActiveProjectDirectory();
 		return project.empty() ? project : (project / "Assets");
-	}
-
-	// A folder the editor can open as a project: one that holds a game's assets. A scaffolded project also
-	// carries a .lproject marker, but a plain Assets folder is enough to browse and edit.
-	bool IsProjectFolder(const std::filesystem::path& folder)
-	{
-		std::error_code error;
-		return std::filesystem::is_directory(folder / "Assets", error);
-	}
-
-	// The project's name: the .lproject marker's stem, or the folder's own name when it has none (the
-	// built-in Sandbox).
-	std::string ProjectDisplayName(const std::filesystem::path& project)
-	{
-		if (project.empty())
-			return {};
-
-		std::error_code error;
-
-		for (const auto& entry : std::filesystem::directory_iterator(project, error))
-			if (entry.path().extension() == kProjectFileExtension)
-				return entry.path().stem().generic_string();
-
-		return project.filename().generic_string();
 	}
 
 	// The folder a component is generated into, as typed in the New C++ Component popup: a path under
@@ -5293,7 +5252,7 @@ void EditorLayer::CompileGameModule()
 	// stays byte-for-byte the one a plain Build.bat produces.
 	const std::filesystem::path active = ActiveProjectDirectory();
 	const bool projectOverride = !active.empty()
-		&& active.lexically_normal() != (root / kGameFolder).lexically_normal();
+		&& active.lexically_normal() != Projects::DefaultProjectDirectory().lexically_normal();
 
 	std::string generate = "cd /d \"" + root.string() + "\" && ";
 
@@ -5617,13 +5576,9 @@ void EditorLayer::DrawNewComponentPopup()
 
 namespace
 {
-	// The lists of recently-opened projects and scenes live beside the editor's other state, one path per
-	// line, newest first — the same Data/ folder the layout and shortcuts use.
-	std::filesystem::path RecentProjectsFile()
-	{
-		return EditorDataDirectory() / "recent-projects.txt";
-	}
-
+	// The recent scenes live beside the editor's other state, one path per line, newest first — the same
+	// Data/ folder the layout and shortcuts use. The recent projects live there too, but through
+	// Projects.h: the Project Manager window reads the same list.
 	std::filesystem::path RecentScenesFile()
 	{
 		return EditorDataDirectory() / "recent-scenes.txt";
@@ -5632,61 +5587,13 @@ namespace
 
 void EditorLayer::LoadRecentProjects()
 {
-	mRecentProjects.clear();
-
-	std::ifstream file(RecentProjectsFile());
-	std::string line;
-
-	while (std::getline(file, line))
-	{
-		while (!line.empty() && (line.back() == '\r' || line.back() == ' '))
-			line.pop_back();
-
-		// A project moved or deleted since it was last opened is dropped, not offered as a dead end.
-		if (!line.empty() && IsProjectFolder(line))
-			mRecentProjects.push_back(line);
-	}
-
-	// The built-in Sandbox is always on the list when it is around: it is the one project never opened
-	// through the manager — the editor boots on it — so without this, leaving it once would leave no way
-	// back but the folder browser. At the end, not the front: recency belongs to what was actually opened.
-	const std::filesystem::path root = ProjectRootDirectory();
-
-	if (!root.empty())
-	{
-		const std::string builtIn = (root / kGameFolder).generic_string();
-
-		if (IsProjectFolder(builtIn)
-			&& std::find(mRecentProjects.begin(), mRecentProjects.end(), builtIn) == mRecentProjects.end())
-			mRecentProjects.push_back(builtIn);
-	}
-}
-
-void EditorLayer::SaveRecentProjects() const
-{
-	std::error_code error;
-	std::filesystem::create_directories(EditorDataDirectory(), error);
-
-	std::ofstream file(RecentProjectsFile(), std::ios::trunc);
-
-	for (const std::string& path : mRecentProjects)
-		file << path << '\n';
+	mRecentProjects = Projects::LoadRecent();
 }
 
 void EditorLayer::RememberRecentProject(const std::filesystem::path& folder)
 {
-	const std::string path = folder.generic_string();
-
-	// A project opened again is the most recent, not a second entry: drop any old mention, then put it first.
-	mRecentProjects.erase(std::remove(mRecentProjects.begin(), mRecentProjects.end(), path), mRecentProjects.end());
-	mRecentProjects.insert(mRecentProjects.begin(), path);
-
-	constexpr size_t kMaxRecentProjects = 10;
-
-	if (mRecentProjects.size() > kMaxRecentProjects)
-		mRecentProjects.resize(kMaxRecentProjects);
-
-	SaveRecentProjects();
+	Projects::Remember(folder);
+	LoadRecentProjects();
 }
 
 void EditorLayer::LoadRecentScenes()
@@ -5753,21 +5660,11 @@ void EditorLayer::OpenProject(const std::filesystem::path& folder)
 		return;
 	}
 
-	const bool startup = mStartupProjectPick;
-	mStartupProjectPick = false;
-
 	RememberRecentProject(folder);
 
-	// Opening the project already in hand is not a switch: nothing to rebuild, nothing to replace. At
-	// startup it is the manager's question being answered with "this one", so the editor comes up the way
-	// the flag-skipped boot does — on the demo.
+	// Opening the project already in hand is not a switch: nothing to rebuild, nothing to replace.
 	if (ActiveProjectDirectory().lexically_normal() == folder.lexically_normal())
-	{
-		if (startup)
-			CreateDemoScene();
-
 		return;
-	}
 
 	SetActiveProjectDirectory(folder);
 
@@ -5784,9 +5681,7 @@ void EditorLayer::OpenProject(const std::filesystem::path& folder)
 	mUndoStack.clear();
 	mRedoStack.clear();
 
-	const std::filesystem::path root = ProjectRootDirectory();
-
-	if (!root.empty() && folder.lexically_normal() == (root / kGameFolder).lexically_normal())
+	if (folder.lexically_normal() == Projects::DefaultProjectDirectory().lexically_normal())
 		CreateDemoScene();
 
 	const std::string name = ProjectDisplayName(folder);
@@ -5802,47 +5697,17 @@ void EditorLayer::OpenProject(const std::filesystem::path& folder)
 
 bool EditorLayer::CreateProject(const std::string& name, const std::filesystem::path& location)
 {
-	const std::filesystem::path folder = location / name;
+	// The scaffolding lives in Projects.h, shared with the Project Manager window; this adds what only the
+	// editor has — the console, the toasts, and an editor to open the result in.
+	std::string error;
+	const std::filesystem::path folder = Projects::CreateOnDisk(name, location, error);
 
-	std::error_code error;
-
-	if (std::filesystem::exists(folder, error))
+	if (folder.empty())
 	{
-		Log::Console(LogLevel::Error, LION_FORMAT_TEXT("[Editor] '{}' already exists.", folder.generic_string()));
-		PushToast("A folder of that name already exists", false);
-		return false;
-	}
-
-	// The shape of a Lion project: assets to browse, a place for scenes, and a source tree for components.
-	std::filesystem::create_directories(folder / "Assets" / "Scenes", error);
-	std::filesystem::create_directories(folder / "Source", error);
-
-	if (error)
-	{
-		Log::Console(LogLevel::Error, LION_FORMAT_TEXT("[Editor] Could not create the project: {}.", error.message()));
+		Log::Console(LogLevel::Error, LION_FORMAT_TEXT("[Editor] Could not create the project: {}", error));
 		PushToast("Could not create the project", false);
 		return false;
 	}
-
-	// The marker that names the project and records which engine made it.
-	std::ofstream marker(folder / (name + kProjectFileExtension));
-	marker << "{\n\t\"name\": \"" << name << "\",\n\t\"engine\": \"" << kVersion << "\"\n}\n";
-	marker.close();
-
-	// A game module the editor and launcher can load: the exported entry point every project needs, empty
-	// but complete, so the project compiles from the first build. Components added to it are picked up by
-	// the glob — a game grows by adding files, not by editing this one.
-	std::ofstream module(folder / "Source" / "GameModule.cpp");
-	module
-		<< "#include <Lion/Lion.h>\n\n"
-		<< "// The game module's entry point: the launcher and the editor both load this library and call\n"
-		<< "// this to build the game. Push your layers onto the application as the game grows; the components\n"
-		<< "// under Assets/Scripts register themselves by being compiled in, and need no mention here.\n"
-		<< "extern \"C\" __declspec(dllexport) Lion::Application* LionCreateApplication()\n"
-		<< "{\n"
-		<< "\treturn new Lion::Application();\n"
-		<< "}\n";
-	module.close();
 
 	Log::Console(LogLevel::Success, LION_FORMAT_TEXT("[Editor] Created project '{}'.", name));
 	OpenProject(folder);
@@ -5851,13 +5716,6 @@ bool EditorLayer::CreateProject(const std::string& name, const std::filesystem::
 
 void EditorLayer::DrawProjectManagerPopup()
 {
-	// The startup greeting: held open until it is answered — by a pick, a creation, or a dismissal. Asked
-	// here each frame rather than once from OnCreate, because the boot focuses the viewport a frame in and
-	// focusing a window dismisses the popups above it; a greeting opened too early is a greeting closed
-	// before anyone saw it.
-	if (mStartupProjectPick && ImGui::GetFrameCount() > 3 && !ImGui::IsPopupOpen("Project Manager"))
-		mOpenProjectManagerPopup = true;
-
 	if (mOpenProjectManagerPopup)
 	{
 		mOpenProjectManagerPopup = false;
@@ -5976,17 +5834,7 @@ void EditorLayer::DrawProjectManagerPopup()
 	ImGui::SameLine();
 
 	if (ImGui::Button("Close", ImVec2(90.0f, 0.0f)) || ImGui::IsKeyPressed(ImGuiKey_Escape))
-	{
-		// Dismissed at startup, the question still needs an answer, and dismissing it is giving the
-		// default one: the built-in project and its demo, the same place --no-project-manager jumps to.
-		if (mStartupProjectPick)
-		{
-			mStartupProjectPick = false;
-			CreateDemoScene();
-		}
-
 		ImGui::CloseCurrentPopup();
-	}
 
 	if (!openRequest.empty())
 	{

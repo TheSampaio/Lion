@@ -1,9 +1,36 @@
 #include "EditorPch.h"
 #include "Editor.h"
+#include "ProjectManager.h"
 
 #include <cstdlib>
 
 #include "Source/Sealer.h"
+
+namespace
+{
+	// Whether the command line already answers the Project Manager's question. A project handed over
+	// (--project, what the manager itself passes), the development skip (--no-project-manager), or a scene
+	// path (what double-clicking a .lscene passes) all say which game this session is about — anything
+	// else, and the manager is there to ask.
+	bool WantsEditor()
+	{
+		using namespace Lion;
+
+		for (int32 argument = 1; argument < CommandLine::GetCount(); ++argument)
+		{
+			const std::string& value = CommandLine::Get(argument);
+
+			if (value == "--project" || value == "--no-project-manager")
+				return true;
+
+			// Leading dashes mark a flag; anything else is a path being opened.
+			if (value.rfind("--", 0) != 0)
+				return true;
+		}
+
+		return false;
+	}
+}
 
 Lion::Application* Lion::Main()
 {
@@ -23,6 +50,12 @@ Lion::Application* Lion::Main()
 	// and a title that rewrites itself every second is a title nobody can read. A game still keeps them —
 	// it has nowhere else to put them — except when it ships, where nothing is kept.
 	Clock::SetShowFrameStats(false);
+
+	// The greeting every engine gives: started bare, the executable is the Project Manager, and picking a
+	// project starts the editor on it as its own process. Started with a project already named, it is the
+	// editor.
+	if (!WantsEditor())
+		return new ProjectManager();
 
 	return new Editor();
 }

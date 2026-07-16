@@ -112,11 +112,6 @@ private:
 	char mNewProjectName[64] = {};
 	char mNewProjectLocation[512] = {};
 
-	// The editor greets with the Project Manager, the way every engine does. While this is set, dismissing
-	// it means "the default, then": the built-in Sandbox and its demo scene, which is also what the
-	// --no-project-manager flag jumps straight to (see OnCreate).
-	bool mStartupProjectPick = false;
-
 	// The scenes opened or saved before, newest first, for the File menu's Recent Scenes.
 	std::vector<std::string> mRecentScenes;
 	bool mConsoleAutoScroll = true;
@@ -367,7 +362,6 @@ private:
 	bool CreateProject(const std::string& name, const std::filesystem::path& location);
 	void BrowseForProject();   // The folder picker, then OpenProject — what the File menu and its key call.
 	void LoadRecentProjects();
-	void SaveRecentProjects() const;
 	void RememberRecentProject(const std::filesystem::path& folder);
 
 	// Recent scenes, mirrored on the projects: read at startup, updated by every open and save-as, shown
