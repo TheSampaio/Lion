@@ -1114,9 +1114,12 @@ namespace
 	// It is the folder, not the VS project name.
 	constexpr const char8* kGameFolder = "Sandbox";
 
-	// The project root, found by walking up from the working directory: the editor runs from its build
-	// output, not the project. Empty when the project is not around (a distributed editor), which is
-	// what disables generating and compiling.
+	// The project root, found by walking up from the executable's directory: the editor runs from its
+	// build output, several folders below the project. It is anchored to the executable, not the working
+	// directory, for the same reason the rest of the editor is — the working directory is not the editor's
+	// to trust. A file dialog moves it out from under the process (the shell browses by changing it), so a
+	// project found through the working directory would go missing the moment a scene was opened. Empty
+	// when the project is not around (a distributed editor), which is what disables generating and compiling.
 	//
 	// Found once and kept. The project does not move while the editor runs, and the walk is a handful of
 	// filesystem probes — cheap once, but the Content Browser asked for this per row per frame, which is
@@ -1125,11 +1128,14 @@ namespace
 	{
 		static const std::filesystem::path root = []() -> std::filesystem::path
 		{
-			std::error_code error;
-			std::filesystem::path current = std::filesystem::current_path(error);
+			std::filesystem::path current = ResourceRootDirectory();
 
-			if (error)
-				return {};
+			// The resource root keeps a trailing separator, which leaves an empty final component; drop it
+			// so the first climb reaches the parent directory and not this same one again.
+			if (!current.has_filename())
+				current = current.parent_path();
+
+			std::error_code error;
 
 			for (int32 depth = 0; depth < 8; ++depth)
 			{
