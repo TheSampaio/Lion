@@ -5184,7 +5184,21 @@ void EditorLayer::CompileGameModule()
 
 	// Regenerate the projects first: a file that was just scaffolded is not in the .vcxproj yet, and
 	// premake globs the source tree. It runs from the project root, where the workspace script lives.
-	const std::string generate = "cd /d \"" + root.string() + "\" && premake5 vs2022";
+	//
+	// The active project the editor points at is handed to premake through LION_PROJECT_DIR, so the game
+	// module is built from that project's sources — which is what makes a rebuild load the components of the
+	// project just opened. It is only set when the project is not the built-in Sandbox, so a Sandbox build
+	// stays byte-for-byte the one a plain Build.bat produces.
+	const std::filesystem::path active = ActiveProjectDirectory();
+	const bool projectOverride = !active.empty()
+		&& active.lexically_normal() != (root / kGameFolder).lexically_normal();
+
+	std::string generate = "cd /d \"" + root.string() + "\" && ";
+
+	if (projectOverride)
+		generate += "set \"LION_PROJECT_DIR=" + active.generic_string() + "\" && ";
+
+	generate += "premake5 vs2022";
 
 	// Build only the game module. Its MSBuild target is its solution folder and project name — premake
 	// files it under the "Runtime" group, hence "Runtime\Game", so moving the project between groups
@@ -5525,6 +5539,20 @@ void EditorLayer::LoadRecentProjects()
 		if (!line.empty() && IsProjectFolder(line))
 			mRecentProjects.push_back(line);
 	}
+
+	// The built-in Sandbox is always on the list when it is around: it is the one project never opened
+	// through the manager — the editor boots on it — so without this, leaving it once would leave no way
+	// back but the folder browser. At the end, not the front: recency belongs to what was actually opened.
+	const std::filesystem::path root = ProjectRootDirectory();
+
+	if (!root.empty())
+	{
+		const std::string builtIn = (root / kGameFolder).generic_string();
+
+		if (IsProjectFolder(builtIn)
+			&& std::find(mRecentProjects.begin(), mRecentProjects.end(), builtIn) == mRecentProjects.end())
+			mRecentProjects.push_back(builtIn);
+	}
 }
 
 void EditorLayer::SaveRecentProjects() const
@@ -5574,6 +5602,12 @@ void EditorLayer::OpenProject(const std::filesystem::path& folder)
 	const std::string name = ProjectDisplayName(folder);
 	Log::Console(LogLevel::Success, LION_FORMAT_TEXT("[Editor] Opened project '{}'.", name));
 	PushToast("Opened " + name, false);
+
+	// Build this project's module and hot-swap it in, so its own components are what the editor now lists —
+	// the one module the editor holds follows whichever project is open. Assets and built-in components work
+	// without it; a project's own C++ waits on this. When MSBuild is not around, the compile step says so and
+	// the switch is still good for everything that does not need the code.
+	CompileGameModule();
 }
 
 bool EditorLayer::CreateProject(const std::string& name, const std::filesystem::path& location)
@@ -5604,6 +5638,21 @@ bool EditorLayer::CreateProject(const std::string& name, const std::filesystem::
 	std::ofstream marker(folder / (name + kProjectFileExtension));
 	marker << "{\n\t\"name\": \"" << name << "\",\n\t\"engine\": \"" << kVersion << "\"\n}\n";
 	marker.close();
+
+	// A game module the editor and launcher can load: the exported entry point every project needs, empty
+	// but complete, so the project compiles from the first build. Components added to it are picked up by
+	// the glob — a game grows by adding files, not by editing this one.
+	std::ofstream module(folder / "Source" / "GameModule.cpp");
+	module
+		<< "#include <Lion/Lion.h>\n\n"
+		<< "// The game module's entry point: the launcher and the editor both load this library and call\n"
+		<< "// this to build the game. Push your layers onto the application as the game grows; the components\n"
+		<< "// under Assets/Scripts register themselves by being compiled in, and need no mention here.\n"
+		<< "extern \"C\" __declspec(dllexport) Lion::Application* LionCreateApplication()\n"
+		<< "{\n"
+		<< "\treturn new Lion::Application();\n"
+		<< "}\n";
+	module.close();
 
 	Log::Console(LogLevel::Success, LION_FORMAT_TEXT("[Editor] Created project '{}'.", name));
 	OpenProject(folder);
@@ -5655,7 +5704,10 @@ void EditorLayer::DrawProjectManagerPopup()
 		const bool isActive = (std::filesystem::path(path) == active);
 		const std::string label = std::string(ICON_MDI_FOLDER "  ") + ProjectDisplayName(path);
 
-		if (ImGui::Selectable(label.c_str(), isActive, ImGuiSelectableFlags_AllowDoubleClick)
+		// DontClosePopups: a Selectable dismisses its host popup on any click by default, which would take
+		// the first click of the double-click and the modal with it. Closing is the open request's job.
+		if (ImGui::Selectable(label.c_str(), isActive,
+			ImGuiSelectableFlags_AllowDoubleClick | ImGuiSelectableFlags_DontClosePopups)
 			&& ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
 			openRequest = path;
 
