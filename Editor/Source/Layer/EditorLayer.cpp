@@ -800,6 +800,10 @@ namespace
 		const ImVec2 origin = ImGui::GetCursorScreenPos();
 		const float32 height = ImGui::GetFrameHeight();
 
+		// Each filter needs its own id, or the three buttons all answer to "##filter" and ImGui flags the
+		// clash. The icon differs per severity, so it is what tells them apart.
+		ImGui::PushID(icon);
+
 		// Lit when the filter is on, flat when it is off, so the row reads as a set of toggles.
 		if (enabled)
 			ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(color.x, color.y, color.z, 0.22f));
@@ -808,6 +812,8 @@ namespace
 
 		if (enabled)
 			ImGui::PopStyleColor();
+
+		ImGui::PopID();
 
 		const ImU32 tint = ImGui::GetColorU32(enabled ? color : ImVec4(0.45f, 0.46f, 0.49f, 1.0f));
 
@@ -1108,9 +1114,12 @@ namespace
 	// It is the folder, not the VS project name.
 	constexpr const char8* kGameFolder = "Sandbox";
 
-	// The project root, found by walking up from the working directory: the editor runs from its build
-	// output, not the project. Empty when the project is not around (a distributed editor), which is
-	// what disables generating and compiling.
+	// The project root, found by walking up from the executable's directory: the editor runs from its
+	// build output, several folders below the project. It is anchored to the executable, not the working
+	// directory, for the same reason the rest of the editor is — the working directory is not the editor's
+	// to trust. A file dialog moves it out from under the process (the shell browses by changing it), so a
+	// project found through the working directory would go missing the moment a scene was opened. Empty
+	// when the project is not around (a distributed editor), which is what disables generating and compiling.
 	//
 	// Found once and kept. The project does not move while the editor runs, and the walk is a handful of
 	// filesystem probes — cheap once, but the Content Browser asked for this per row per frame, which is
@@ -1119,11 +1128,14 @@ namespace
 	{
 		static const std::filesystem::path root = []() -> std::filesystem::path
 		{
-			std::error_code error;
-			std::filesystem::path current = std::filesystem::current_path(error);
+			std::filesystem::path current = ResourceRootDirectory();
 
-			if (error)
-				return {};
+			// The resource root keeps a trailing separator, which leaves an empty final component; drop it
+			// so the first climb reaches the parent directory and not this same one again.
+			if (!current.has_filename())
+				current = current.parent_path();
+
+			std::error_code error;
 
 			for (int32 depth = 0; depth < 8; ++depth)
 			{
@@ -1702,17 +1714,55 @@ void EditorLayer::DrawProject()
 
 	const std::filesystem::path current = root / mProjectPath;
 
+	// A folder change is decided here but applied at the very end, so `current` and the listing stay in
+	// step with `mProjectPath` for the whole frame. Mutating `mProjectPath` mid-draw would leave `current`
+	// (read once, above) pointing at the folder we just left, and the scan below would read that one while
+	// recording it under the new path — so the view would only right itself on the next timer poll.
+	bool navigate = false;
+	std::string navigateTarget;
+
 	// --- Breadcrumb toolbar.
 	ImGui::BeginDisabled(mProjectPath.empty());
 	if (ImGui::Button(ICON_MDI_ARROW_UP))
 	{
-		const std::filesystem::path parent = std::filesystem::path(mProjectPath).parent_path();
-		mProjectPath = parent.generic_string();
+		navigate = true;
+		navigateTarget = std::filesystem::path(mProjectPath).parent_path().generic_string();
 	}
 	ImGui::EndDisabled();
 
+	// Every ancestor is one click away: the root, then each folder on the way down, the last being where we
+	// stand. It is the reliable way back — a target you aim at, not a button you might miss.
 	ImGui::SameLine();
-	ImGui::TextDisabled("Assets/%s", mProjectPath.c_str());
+	if (ImGui::SmallButton("Assets"))
+	{
+		navigate = true;
+		navigateTarget.clear();
+	}
+
+	int32 crumbId = 0;
+	for (size_t start = 0; start < mProjectPath.size(); )
+	{
+		const size_t slash = mProjectPath.find('/', start);
+		const size_t end = (slash == std::string::npos) ? mProjectPath.size() : slash;
+		const std::string segment = mProjectPath.substr(start, end - start);
+
+		if (!segment.empty())
+		{
+			ImGui::SameLine();
+			ImGui::TextDisabled("/");
+			ImGui::SameLine();
+
+			ImGui::PushID(crumbId++);
+			if (ImGui::SmallButton(segment.c_str()))
+			{
+				navigate = true;
+				navigateTarget = mProjectPath.substr(0, end);
+			}
+			ImGui::PopID();
+		}
+
+		start = end + 1;
+	}
 
 	ImGui::Separator();
 
@@ -1748,8 +1798,6 @@ void EditorLayer::DrawProject()
 			ScanProjectDirectory(current);
 	}
 
-	std::string enterDirectory;
-
 	for (const AssetEntry& entry : mProjectEntries)
 	{
 		ImGui::PushID(entry.path.c_str());
@@ -1757,7 +1805,10 @@ void EditorLayer::DrawProject()
 		if (entry.directory)
 		{
 			if (DrawAssetEntry(entry.name, entry.path, true) && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
-				enterDirectory = entry.path;
+			{
+				navigate = true;
+				navigateTarget = entry.path;
+			}
 		}
 		else
 		{
@@ -1794,8 +1845,8 @@ void EditorLayer::DrawProject()
 		ImGui::EndPopup();
 	}
 
-	if (!enterDirectory.empty())
-		mProjectPath = enterDirectory;
+	if (navigate)
+		mProjectPath = navigateTarget;
 
 	ImGui::End();
 }
