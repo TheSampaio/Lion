@@ -102,6 +102,14 @@ private:
 	bool mOpenNewComponentPopup = false;
 	char mNewComponentName[64] = {};
 	char mNewComponentFolder[64] = "Scripts";   // Where it lands, under the game's assets.
+
+	// Project Manager (opened from the title-bar project tab): the game the editor has open, the ones it
+	// has opened before, and the fields of the "New Project" form. The recents are read at startup and
+	// kept newest-first; a project opened or created moves to the front.
+	bool mOpenProjectManagerPopup = false;
+	std::vector<std::string> mRecentProjects;
+	char mNewProjectName[64] = {};
+	char mNewProjectLocation[512] = {};
 	bool mConsoleAutoScroll = true;
 	bool mConsoleStickToBottom = true;   // Following the tail; set false when the user scrolls up, true again at the bottom.
 	bool mConsoleShowErrors = true;    // Console severity filters (Error/Fatal, Warning, everything else).
@@ -340,6 +348,17 @@ private:
 	// build, which is when it starts showing up in Add Component.
 	void DrawNewComponentPopup();
 	bool GenerateComponent(const std::string& name, const std::string& folder);
+
+	// Project Manager. The editor opens on the built-in Sandbox, and these let it hold more than one game:
+	// switch to a project already on disk, scaffold a fresh one from a template, and remember the ones
+	// visited so they are a click away next time. Switching repoints the assets, scenes and scripts; the
+	// compiled game module is shared until a per-project build gives each project its own.
+	void DrawProjectManagerPopup();
+	void OpenProject(const std::filesystem::path& folder);
+	bool CreateProject(const std::string& name, const std::filesystem::path& location);
+	void LoadRecentProjects();
+	void SaveRecentProjects() const;
+	void RememberRecentProject(const std::filesystem::path& folder);
 
 	// Game module lifecycle. LoadGameModule loads a copy of Game.dll, leaving the original writable so
 	// it can be rebuilt while the editor runs; ReloadGameModule swaps in that rebuild, taking the
