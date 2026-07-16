@@ -105,18 +105,37 @@ void EditorLayer::OnCreate()
 
 	RegisterSceneFiles();
 	LoadRecentProjects();
+	LoadRecentScenes();
 
 	// A scene handed over on the command line — which is how Windows opens one, by running the editor and
-	// giving it the path. Anything else, and the editor comes up on the scene it always comes up on.
+	// giving it the path. A scene in hand answers the question the Project Manager would have asked.
+	// Leading dashes mark a flag, not a path, so those are not mistaken for a scene and "opened".
 	const std::string opened = CommandLine::Get(1);
 
-	if (!opened.empty() && SceneSerializer::Deserialize(mScene, opened))
+	if (!opened.empty() && opened.rfind("--", 0) != 0 && SceneSerializer::Deserialize(mScene, opened))
 	{
 		mScenePath = opened;
+		RememberRecentScene(opened);
 		return;
 	}
 
-	CreateDemoScene();
+	// --no-project-manager: straight into the built-in project and its demo scene, skipping the greeting.
+	// A development flag (documented in the README): iterating on the editor means launching it dozens of
+	// times, and answering the same question dozens of times is what this skips.
+	for (int32 argument = 1; argument < CommandLine::GetCount(); ++argument)
+	{
+		if (CommandLine::Get(argument) == "--no-project-manager")
+		{
+			CreateDemoScene();
+			return;
+		}
+	}
+
+	// The Project Manager greets first, the way every engine's does: pick a project, create one, or
+	// dismiss it — which means the default, the same built-in demo the flag jumps to. The popup itself is
+	// opened by DrawProjectManagerPopup once the first frames settle: the boot focuses the viewport a
+	// frame in, and focusing a window dismisses the popups above it.
+	mStartupProjectPick = true;
 }
 
 void EditorLayer::OnUpdate()
@@ -2170,6 +2189,8 @@ void EditorLayer::DrawShortcuts()
 		// The rebindable actions, grouped by category (order defines the display order).
 		struct Row { ShortcutAction action; const char8* category; const char8* name; };
 		static const Row rows[] = {
+			{ ShortcutAction::NewProject,      "Project",   "New project..." },
+			{ ShortcutAction::OpenProject,     "Project",   "Open a project..." },
 			{ ShortcutAction::NewScene,        "Scene",     "New scene" },
 				{ ShortcutAction::OpenScene,       "Scene",     "Open a scene" },
 				{ ShortcutAction::SaveScene,       "Scene",     "Save the scene" },
@@ -2429,6 +2450,10 @@ void EditorLayer::ResetShortcutsToDefault()
 	set(ShortcutAction::OpenScene, ImGuiKey_O, true);
 	set(ShortcutAction::SaveScene, ImGuiKey_S, true);
 	set(ShortcutAction::SaveSceneAs, ImGuiKey_S, true, true);
+
+	// The project keys sit one Shift above the scene keys: the bigger thing, the bigger chord.
+	set(ShortcutAction::NewProject, ImGuiKey_N, true, true);
+	set(ShortcutAction::OpenProject, ImGuiKey_O, true, true);
 }
 
 void EditorLayer::SetSelection(const Reference<Entity>& entity)
@@ -2744,6 +2769,8 @@ void EditorLayer::HandleShortcuts()
 	if (IsShortcutPressed(ShortcutAction::OpenScene)) OpenScene();
 	if (IsShortcutPressed(ShortcutAction::SaveScene)) SaveScene();
 	if (IsShortcutPressed(ShortcutAction::SaveSceneAs)) SaveSceneAs();
+	if (IsShortcutPressed(ShortcutAction::NewProject)) mOpenProjectManagerPopup = true;
+	if (IsShortcutPressed(ShortcutAction::OpenProject)) BrowseForProject();
 
 	if (IsShortcutPressed(ShortcutAction::Undo)) Undo();
 	if (IsShortcutPressed(ShortcutAction::Redo)) Redo();
@@ -4773,13 +4800,24 @@ void EditorLayer::OpenScene()
 {
 	const std::string path = FileDialog::Open(kSceneFilter, GameAssetsDirectory().string());
 
-	if (path.empty())
-		return;
+	if (!path.empty())
+		LoadScene(path);
+}
 
+bool EditorLayer::LoadScene(const std::string& path)
+{
 	RecordSnapshot();
 	SetSelection(nullptr);
-	SceneSerializer::Deserialize(mScene, path);
+
+	if (!SceneSerializer::Deserialize(mScene, path))
+	{
+		Log::Console(LogLevel::Error, LION_FORMAT_TEXT("[Editor] Could not open '{}'.", path));
+		return false;
+	}
+
 	mScenePath = path;
+	RememberRecentScene(path);
+	return true;
 }
 
 void EditorLayer::SaveScene()
@@ -4803,6 +4841,7 @@ void EditorLayer::SaveSceneAs()
 
 	SceneSerializer::Serialize(mScene, path);
 	mScenePath = path;
+	RememberRecentScene(path);
 }
 
 float32 EditorLayer::DrawMenuBar(const ImVec2& barMin, const ImVec2& barMax)
@@ -4831,10 +4870,73 @@ float32 EditorLayer::DrawMenuBar(const ImVec2& barMin, const ImVec2& barMax)
 
 			ImGui::Separator();
 
+			if (ImGui::MenuItem(ICON_MDI_FOLDER_MULTIPLE "  New Project...", ShortcutText(ShortcutAction::NewProject).c_str()))
+				mOpenProjectManagerPopup = true;
+
+			if (ImGui::MenuItem(ICON_MDI_FOLDER_OPEN "  Open Project...", ShortcutText(ShortcutAction::OpenProject).c_str()))
+				BrowseForProject();
+
+			ImGui::Separator();
+
+			// What was recently in hand, one click from being in hand again. The menus stay in the frame
+			// they were drawn in, so a chosen entry is applied after they close.
+			std::string sceneToLoad;
+			std::string projectToOpen;
+
+			if (ImGui::BeginMenu(ICON_MDI_FILE_DOCUMENT_OUTLINE "  Recent Scenes"))
+			{
+				if (mRecentScenes.empty())
+					ImGui::MenuItem("Nothing yet", nullptr, false, false);
+
+				for (const std::string& path : mRecentScenes)
+				{
+					ImGui::PushID(path.c_str());
+
+					if (ImGui::MenuItem(std::filesystem::path(path).stem().generic_string().c_str()))
+						sceneToLoad = path;
+
+					if (ImGui::IsItemHovered())
+						ImGui::SetTooltip("%s", path.c_str());
+
+					ImGui::PopID();
+				}
+
+				ImGui::EndMenu();
+			}
+
+			if (ImGui::BeginMenu(ICON_MDI_FOLDER "  Recent Projects"))
+			{
+				if (mRecentProjects.empty())
+					ImGui::MenuItem("Nothing yet", nullptr, false, false);
+
+				for (const std::string& path : mRecentProjects)
+				{
+					ImGui::PushID(path.c_str());
+
+					if (ImGui::MenuItem(ProjectDisplayName(path).c_str()))
+						projectToOpen = path;
+
+					if (ImGui::IsItemHovered())
+						ImGui::SetTooltip("%s", path.c_str());
+
+					ImGui::PopID();
+				}
+
+				ImGui::EndMenu();
+			}
+
+			ImGui::Separator();
+
 			if (ImGui::MenuItem(ICON_MDI_EXIT_TO_APP "  Exit", "Alt+F4"))
 				Window::RequestClose();
 
 			ImGui::EndMenu();
+
+			if (!sceneToLoad.empty())
+				LoadScene(sceneToLoad);
+
+			if (!projectToOpen.empty())
+				OpenProject(projectToOpen);
 		}
 
 		if (ImGui::BeginMenu("Edit"))
@@ -5515,11 +5617,16 @@ void EditorLayer::DrawNewComponentPopup()
 
 namespace
 {
-	// The list of recently-opened projects lives beside the editor's other state, one path per line, newest
-	// first — the same Data/ folder the layout and shortcuts use.
+	// The lists of recently-opened projects and scenes live beside the editor's other state, one path per
+	// line, newest first — the same Data/ folder the layout and shortcuts use.
 	std::filesystem::path RecentProjectsFile()
 	{
 		return EditorDataDirectory() / "recent-projects.txt";
+	}
+
+	std::filesystem::path RecentScenesFile()
+	{
+		return EditorDataDirectory() / "recent-scenes.txt";
 	}
 }
 
@@ -5582,6 +5689,61 @@ void EditorLayer::RememberRecentProject(const std::filesystem::path& folder)
 	SaveRecentProjects();
 }
 
+void EditorLayer::LoadRecentScenes()
+{
+	mRecentScenes.clear();
+
+	std::ifstream file(RecentScenesFile());
+	std::string line;
+
+	while (std::getline(file, line))
+	{
+		while (!line.empty() && (line.back() == '\r' || line.back() == ' '))
+			line.pop_back();
+
+		std::error_code error;
+
+		// A scene moved or deleted since it was last opened is dropped, not offered as a dead end.
+		if (!line.empty() && std::filesystem::is_regular_file(line, error))
+			mRecentScenes.push_back(line);
+	}
+}
+
+void EditorLayer::SaveRecentScenes() const
+{
+	std::error_code error;
+	std::filesystem::create_directories(EditorDataDirectory(), error);
+
+	std::ofstream file(RecentScenesFile(), std::ios::trunc);
+
+	for (const std::string& path : mRecentScenes)
+		file << path << '\n';
+}
+
+void EditorLayer::RememberRecentScene(const std::string& path)
+{
+	const std::string normalized = std::filesystem::path(path).generic_string();
+
+	mRecentScenes.erase(std::remove(mRecentScenes.begin(), mRecentScenes.end(), normalized), mRecentScenes.end());
+	mRecentScenes.insert(mRecentScenes.begin(), normalized);
+
+	constexpr size_t kMaxRecentScenes = 10;
+
+	if (mRecentScenes.size() > kMaxRecentScenes)
+		mRecentScenes.resize(kMaxRecentScenes);
+
+	SaveRecentScenes();
+}
+
+void EditorLayer::BrowseForProject()
+{
+	const std::filesystem::path active = ActiveProjectDirectory();
+	const std::string picked = FileDialog::OpenFolder(active.empty() ? std::string() : active.generic_string());
+
+	if (!picked.empty())
+		OpenProject(picked);
+}
+
 void EditorLayer::OpenProject(const std::filesystem::path& folder)
 {
 	if (!IsProjectFolder(folder))
@@ -5591,13 +5753,41 @@ void EditorLayer::OpenProject(const std::filesystem::path& folder)
 		return;
 	}
 
+	const bool startup = mStartupProjectPick;
+	mStartupProjectPick = false;
+
+	RememberRecentProject(folder);
+
+	// Opening the project already in hand is not a switch: nothing to rebuild, nothing to replace. At
+	// startup it is the manager's question being answered with "this one", so the editor comes up the way
+	// the flag-skipped boot does — on the demo.
+	if (ActiveProjectDirectory().lexically_normal() == folder.lexically_normal())
+	{
+		if (startup)
+			CreateDemoScene();
+
+		return;
+	}
+
 	SetActiveProjectDirectory(folder);
 
 	// The Content Browser returns to the new project's root, and its listing is stale by definition.
 	mProjectPath.clear();
 	mProjectDirty = true;
 
-	RememberRecentProject(folder);
+	// The editor initialises on the project, the way an engine opens a game: what was open belonged to the
+	// project being left, and so did its history. The built-in Sandbox comes up on its demo scene; any
+	// other project on a fresh one.
+	mScene->Clear();
+	SetSelection(nullptr);
+	mScenePath.clear();
+	mUndoStack.clear();
+	mRedoStack.clear();
+
+	const std::filesystem::path root = ProjectRootDirectory();
+
+	if (!root.empty() && folder.lexically_normal() == (root / kGameFolder).lexically_normal())
+		CreateDemoScene();
 
 	const std::string name = ProjectDisplayName(folder);
 	Log::Console(LogLevel::Success, LION_FORMAT_TEXT("[Editor] Opened project '{}'.", name));
@@ -5661,6 +5851,13 @@ bool EditorLayer::CreateProject(const std::string& name, const std::filesystem::
 
 void EditorLayer::DrawProjectManagerPopup()
 {
+	// The startup greeting: held open until it is answered — by a pick, a creation, or a dismissal. Asked
+	// here each frame rather than once from OnCreate, because the boot focuses the viewport a frame in and
+	// focusing a window dismisses the popups above it; a greeting opened too early is a greeting closed
+	// before anyone saw it.
+	if (mStartupProjectPick && ImGui::GetFrameCount() > 3 && !ImGui::IsPopupOpen("Project Manager"))
+		mOpenProjectManagerPopup = true;
+
 	if (mOpenProjectManagerPopup)
 	{
 		mOpenProjectManagerPopup = false;
@@ -5779,7 +5976,17 @@ void EditorLayer::DrawProjectManagerPopup()
 	ImGui::SameLine();
 
 	if (ImGui::Button("Close", ImVec2(90.0f, 0.0f)) || ImGui::IsKeyPressed(ImGuiKey_Escape))
+	{
+		// Dismissed at startup, the question still needs an answer, and dismissing it is giving the
+		// default one: the built-in project and its demo, the same place --no-project-manager jumps to.
+		if (mStartupProjectPick)
+		{
+			mStartupProjectPick = false;
+			CreateDemoScene();
+		}
+
 		ImGui::CloseCurrentPopup();
+	}
 
 	if (!openRequest.empty())
 	{

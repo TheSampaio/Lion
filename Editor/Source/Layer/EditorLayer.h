@@ -38,6 +38,7 @@ private:
 		ToggleHierarchy, ToggleProject, ToggleConsole, ToggleStatistics, ToggleProperties,
 		NewScene, OpenScene, SaveScene, SaveSceneAs,
 		Deselect,
+		NewProject, OpenProject,
 		Count
 	};
 
@@ -110,6 +111,14 @@ private:
 	std::vector<std::string> mRecentProjects;
 	char mNewProjectName[64] = {};
 	char mNewProjectLocation[512] = {};
+
+	// The editor greets with the Project Manager, the way every engine does. While this is set, dismissing
+	// it means "the default, then": the built-in Sandbox and its demo scene, which is also what the
+	// --no-project-manager flag jumps straight to (see OnCreate).
+	bool mStartupProjectPick = false;
+
+	// The scenes opened or saved before, newest first, for the File menu's Recent Scenes.
+	std::vector<std::string> mRecentScenes;
 	bool mConsoleAutoScroll = true;
 	bool mConsoleStickToBottom = true;   // Following the tail; set false when the user scrolls up, true again at the bottom.
 	bool mConsoleShowErrors = true;    // Console severity filters (Error/Fatal, Warning, everything else).
@@ -356,9 +365,18 @@ private:
 	void DrawProjectManagerPopup();
 	void OpenProject(const std::filesystem::path& folder);
 	bool CreateProject(const std::string& name, const std::filesystem::path& location);
+	void BrowseForProject();   // The folder picker, then OpenProject — what the File menu and its key call.
 	void LoadRecentProjects();
 	void SaveRecentProjects() const;
 	void RememberRecentProject(const std::filesystem::path& folder);
+
+	// Recent scenes, mirrored on the projects: read at startup, updated by every open and save-as, shown
+	// in the File menu. LoadScene is the one door a scene comes in through — the Open dialog, a recent
+	// entry and the command line all land here, so all of them are remembered.
+	bool LoadScene(const std::string& path);
+	void LoadRecentScenes();
+	void SaveRecentScenes() const;
+	void RememberRecentScene(const std::string& path);
 
 	// Game module lifecycle. LoadGameModule loads a copy of Game.dll, leaving the original writable so
 	// it can be rebuilt while the editor runs; ReloadGameModule swaps in that rebuild, taking the

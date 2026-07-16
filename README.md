@@ -136,6 +136,16 @@
         <strong>Run:</strong> the editor from <code>Build/Bin/&lt;config&gt;/Mane/Lion.exe</code>, the game from <code>Build/Bin/&lt;config&gt;/Launcher/lion-launcher.exe</code>.
       </li>
     </ol>
+    <p>
+      The editor greets with the <strong>Project Manager</strong>: pick a recent project, open a folder as one, or
+      create a new one — the engine scaffolds it, builds its module and opens it. Two command-line arguments skip
+      the greeting:
+    </p>
+    <table>
+      <tr><th>Argument</th><th>What it does</th></tr>
+      <tr><td><code>Lion.exe &lt;path&gt;.lscene</code></td><td>Opens that scene directly (what double-clicking a scene in Explorer passes).</td></tr>
+      <tr><td><code>Lion.exe --no-project-manager</code></td><td>Skips the Project Manager and opens the built-in project and demo scene — for iterating on the editor itself, where relaunching is constant.</td></tr>
+    </table>
     <p>Three configurations, each there to catch something the others cannot:</p>
     <table>
       <tr><th>Configuration</th><th>Optimised</th><th>Symbols</th><th>What it is for</th></tr>
