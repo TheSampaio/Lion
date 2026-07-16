@@ -2,10 +2,12 @@
 #include "EditorLayer.h"
 
 #include "../EditorGui.h"
+#include "../Projects.h"
 
 #include <IconsMaterialDesignIcons.h>
 #include "../ModuleSymbols.h"
 
+#include <algorithm>
 #include <cctype>
 #include <chrono>
 #include <cstdio>
@@ -42,6 +44,13 @@ static constexpr float32 kIconTitle = 24.0f;
 // What a file dialog offers when a scene is opened or saved. A scene is JSON inside and a .lscene outside:
 // what it is made of is the engine's business, and what it is is the project's.
 static const char8* kSceneFilter = "Lion Scene (*.lscene)\0*.lscene\0";
+
+namespace
+{
+	// Defined with the rest of the project machinery further down the file; the boot needs it before that
+	// point is reached.
+	void SetActiveProjectDirectory(const std::filesystem::path& project);
+}
 
 // Every panel's window name: the icon it wears on its tab, the name it goes by, and the id a saved layout
 // remembers it as. ImGui identifies a window by its name — so the name carries the icon — and everything
@@ -102,15 +111,45 @@ void EditorLayer::OnCreate()
 	// ever be, and it ships beside the executable like the rest of the engine's own assets.
 	mLogo = Texture::Create(kEngineIconFile, TextureFilter::Linear);
 
-	RegisterSceneFiles();
+	Projects::RegisterFileType();
+	LoadRecentProjects();
+	LoadRecentScenes();
 
-	// A scene handed over on the command line — which is how Windows opens one, by running the editor and
-	// giving it the path. Anything else, and the editor comes up on the scene it always comes up on.
-	const std::string opened = CommandLine::Get(1);
+	// The project this session is about, handed over as the process was started: --project from the
+	// Project Manager, or a .lproject double-clicked in Explorer, which arrives as a bare path whose
+	// folder is the project. The editor initialises on it — the built-in on its demo, any other project
+	// on a fresh scene with its own module built and hot-swapped in as soon as the build answers. Without
+	// one (the --no-project-manager skip, or a bare debugger launch), the built-in demo it is. A scene is
+	// not an answer: scenes open inside the editor, the way they do in Unreal and Visual Studio.
+	std::filesystem::path requested;
 
-	if (!opened.empty() && SceneSerializer::Deserialize(mScene, opened))
+	for (int32 argument = 1; argument < CommandLine::GetCount(); ++argument)
 	{
-		mScenePath = opened;
+		const std::string& value = CommandLine::Get(argument);
+
+		if (value == "--project" && argument + 1 < CommandLine::GetCount())
+		{
+			requested = CommandLine::Get(argument + 1);
+			break;
+		}
+
+		if (value.rfind("--", 0) != 0 && std::filesystem::path(value).extension() == Projects::kFileExtension)
+		{
+			requested = std::filesystem::path(value).parent_path();
+			break;
+		}
+	}
+
+	if (!requested.empty() && Projects::IsProjectFolder(requested)
+		&& requested.lexically_normal() != Projects::DefaultProjectDirectory().lexically_normal())
+	{
+		SetActiveProjectDirectory(requested);
+		RememberRecentProject(requested);
+
+		Log::Console(LogLevel::Success,
+			LION_FORMAT_TEXT("[Editor] Opened project '{}'.", Projects::DisplayName(requested)));
+
+		CompileGameModule();
 		return;
 	}
 
@@ -386,6 +425,7 @@ void EditorLayer::DrawUI()
 
 	DrawNewComponentPopup();
 	DrawDeleteAssetPopup();
+	DrawProjectManagerPopup();
 
 	// Drawn over everything, because that is what they are: the dim that says the game is running, the
 	// size a panel reports while it is being dragged, and the toast that says the module is building.
@@ -1084,10 +1124,10 @@ namespace
 
 	// The editor's state lives beside the executable, not in whatever directory the editor happened to
 	// be started from — Visual Studio starts it from the project folder, and a shortcut can point
-	// anywhere. Everything below anchors to this rather than to the working directory.
+	// anywhere. The rule lives in Projects.h, shared with the Project Manager window.
 	std::filesystem::path EditorDataDirectory()
 	{
-		return std::filesystem::path(ResourceRootDirectory()) / kDataDirectory;
+		return Projects::EditorDataDirectory();
 	}
 
 	std::filesystem::path EditorLayoutsDirectory()
@@ -1110,55 +1150,49 @@ namespace
 		return false;
 	}
 
-	// The game's folder, relative to the project root — the editor recognises the root by finding it.
-	// It is the folder, not the VS project name.
-	constexpr const char8* kGameFolder = "Sandbox";
-
-	// The project root, found by walking up from the executable's directory: the editor runs from its
-	// build output, several folders below the project. It is anchored to the executable, not the working
-	// directory, for the same reason the rest of the editor is — the working directory is not the editor's
-	// to trust. A file dialog moves it out from under the process (the shell browses by changing it), so a
-	// project found through the working directory would go missing the moment a scene was opened. Empty
-	// when the project is not around (a distributed editor), which is what disables generating and compiling.
-	//
-	// Found once and kept. The project does not move while the editor runs, and the walk is a handful of
-	// filesystem probes — cheap once, but the Content Browser asked for this per row per frame, which is
-	// how a panel that reads no disk still hit it dozens of times a frame. That was the "slow to go back".
+	// The project machinery is shared with the Project Manager window and lives in Projects.h; these keep
+	// the names this file has always spoken in.
 	std::filesystem::path ProjectRootDirectory()
 	{
-		static const std::filesystem::path root = []() -> std::filesystem::path
-		{
-			std::filesystem::path current = ResourceRootDirectory();
-
-			// The resource root keeps a trailing separator, which leaves an empty final component; drop it
-			// so the first climb reaches the parent directory and not this same one again.
-			if (!current.has_filename())
-				current = current.parent_path();
-
-			std::error_code error;
-
-			for (int32 depth = 0; depth < 8; ++depth)
-			{
-				if (std::filesystem::is_directory(current / kGameFolder / "Source", error))
-					return current;
-
-				if (!current.has_parent_path() || current.parent_path() == current)
-					break;
-
-				current = current.parent_path();
-			}
-
-			return {};
-		}();
-
-		return root;
+		return Projects::EngineRootDirectory();
 	}
 
-	// The game's assets, in the project. Empty when the project is not around.
+	bool IsProjectFolder(const std::filesystem::path& folder)
+	{
+		return Projects::IsProjectFolder(folder);
+	}
+
+	std::string ProjectDisplayName(const std::filesystem::path& project)
+	{
+		return Projects::DisplayName(project);
+	}
+
+	// The active project: the folder that holds a game's Assets and Source. It is what the Content Browser
+	// browses, what a component is scaffolded into, and what the title bar names. It opens on the built-in
+	// Sandbox found beside the editor, and --project or Open Project points it at another folder — which
+	// is what makes the editor hold more than one game. The engine root above stays put: it is the engine's
+	// solution, shared by every project's module build.
+	std::filesystem::path& ActiveProjectStorage()
+	{
+		static std::filesystem::path project = Projects::DefaultProjectDirectory();
+		return project;
+	}
+
+	std::filesystem::path ActiveProjectDirectory()
+	{
+		return ActiveProjectStorage();
+	}
+
+	void SetActiveProjectDirectory(const std::filesystem::path& project)
+	{
+		ActiveProjectStorage() = project;
+	}
+
+	// The game's assets, in the active project. Empty when no project is around.
 	std::filesystem::path GameAssetsDirectory()
 	{
-		const std::filesystem::path root = ProjectRootDirectory();
-		return root.empty() ? root : (root / kGameFolder / "Assets");
+		const std::filesystem::path project = ActiveProjectDirectory();
+		return project.empty() ? project : (project / "Assets");
 	}
 
 	// The folder a component is generated into, as typed in the New C++ Component popup: a path under
@@ -2113,6 +2147,8 @@ void EditorLayer::DrawShortcuts()
 		// The rebindable actions, grouped by category (order defines the display order).
 		struct Row { ShortcutAction action; const char8* category; const char8* name; };
 		static const Row rows[] = {
+			{ ShortcutAction::NewProject,      "Project",   "New project..." },
+			{ ShortcutAction::OpenProject,     "Project",   "Open a project..." },
 			{ ShortcutAction::NewScene,        "Scene",     "New scene" },
 				{ ShortcutAction::OpenScene,       "Scene",     "Open a scene" },
 				{ ShortcutAction::SaveScene,       "Scene",     "Save the scene" },
@@ -2372,6 +2408,10 @@ void EditorLayer::ResetShortcutsToDefault()
 	set(ShortcutAction::OpenScene, ImGuiKey_O, true);
 	set(ShortcutAction::SaveScene, ImGuiKey_S, true);
 	set(ShortcutAction::SaveSceneAs, ImGuiKey_S, true, true);
+
+	// The project keys sit one Shift above the scene keys: the bigger thing, the bigger chord.
+	set(ShortcutAction::NewProject, ImGuiKey_N, true, true);
+	set(ShortcutAction::OpenProject, ImGuiKey_O, true, true);
 }
 
 void EditorLayer::SetSelection(const Reference<Entity>& entity)
@@ -2687,6 +2727,8 @@ void EditorLayer::HandleShortcuts()
 	if (IsShortcutPressed(ShortcutAction::OpenScene)) OpenScene();
 	if (IsShortcutPressed(ShortcutAction::SaveScene)) SaveScene();
 	if (IsShortcutPressed(ShortcutAction::SaveSceneAs)) SaveSceneAs();
+	if (IsShortcutPressed(ShortcutAction::NewProject)) mOpenProjectManagerPopup = true;
+	if (IsShortcutPressed(ShortcutAction::OpenProject)) BrowseForProject();
 
 	if (IsShortcutPressed(ShortcutAction::Undo)) Undo();
 	if (IsShortcutPressed(ShortcutAction::Redo)) Redo();
@@ -4463,27 +4505,6 @@ void EditorLayer::DrawStatusBar()
 	ImGui::End();
 }
 
-void EditorLayer::RegisterSceneFiles()
-{
-	// Windows learns what a .lscene is the first time the editor runs — the way every editor does it, in
-	// the user's own corner of the registry, with no administrator and no prompt.
-	//
-	// The icon is the one shipped beside the executable rather than the executable's own, so a scene in
-	// Explorer looks like a scene and not like a second copy of the editor.
-	const std::filesystem::path executable = CommandLine::Get(0);
-
-	if (executable.empty())
-		return;
-
-	// Native separators throughout: this string is read by Explorer, not by the engine, and a path with
-	// two kinds of slash in it is a path someone will one day have to explain.
-	std::filesystem::path icon = executable.parent_path() / kEngineIconResource;
-	icon.make_preferred();
-
-	FileAssociation::Register(".lscene", "Lion.Scene", "Lion Scene",
-		icon.string(), executable.string());
-}
-
 void EditorLayer::DrawTitleBar()
 {
 	// The window has no caption of its own, so this is it, and it is two rows tall.
@@ -4557,8 +4578,8 @@ void EditorLayer::DrawTitleBar()
 
 	ImGui::PopFont();
 
-	const std::filesystem::path project = ProjectRootDirectory();
-	const std::string projectName = project.empty() ? std::string("No project") : project.filename().generic_string();
+	const std::filesystem::path project = ActiveProjectDirectory();
+	const std::string projectName = project.empty() ? std::string("No project") : ProjectDisplayName(project);
 
 	const float32 projectWidth = ImGui::CalcTextSize(projectName.c_str()).x;
 	const float32 projectLeft = barWidth - kWindowButton * 3.0f - kProjectGap - projectWidth;
@@ -4572,14 +4593,23 @@ void EditorLayer::DrawTitleBar()
 	const ImVec2 boxMin(barMin.x + projectLeft - kProjectPadding, barMin.y);
 	const ImVec2 boxMax(barMin.x + projectLeft + projectWidth + kProjectPadding, barMin.y + row);
 
-	drawList->AddRectFilled(boxMin, boxMax, IM_COL32(0x30, 0x30, 0x33, 255), kProjectRounding, ImDrawFlags_RoundCornersBottom);
+	// The tab opens the Project Manager: an invisible button over the whole box catches the click, and its
+	// hover lights the fill so it reads as something to press rather than a label.
+	ImGui::SetCursorScreenPos(boxMin);
+	if (ImGui::InvisibleButton("##project_chip", ImVec2(boxMax.x - boxMin.x, boxMax.y - boxMin.y)))
+		mOpenProjectManagerPopup = true;
+
+	const bool projectHovered = ImGui::IsItemHovered();
+	const ImU32 fill = projectHovered ? IM_COL32(0x3C, 0x3C, 0x40, 255) : IM_COL32(0x30, 0x30, 0x33, 255);
+
+	drawList->AddRectFilled(boxMin, boxMax, fill, kProjectRounding, ImDrawFlags_RoundCornersBottom);
 	drawList->AddRect(boxMin, boxMax, IM_COL32(0x4A, 0x4A, 0x4F, 255), kProjectRounding, ImDrawFlags_RoundCornersBottom, 1.0f);
 
 	ImGui::SetCursorPos(ImVec2(projectLeft, (row - ImGui::GetTextLineHeight()) * 0.5f));
 	ImGui::TextUnformatted(projectName.c_str());
 
-	if (!project.empty() && ImGui::IsItemHovered())
-		ImGui::SetTooltip("%s", project.generic_string().c_str());
+	if (projectHovered)
+		ImGui::SetTooltip("%s\nClick to manage projects", project.empty() ? "No project open" : project.generic_string().c_str());
 
 	// --- Bottom row: the scene open in the project, picking up where the menus left off. It used to be named
 	// in the Hierarchy, which is a panel that shows a scene, not the thing that has one open.
@@ -4707,13 +4737,24 @@ void EditorLayer::OpenScene()
 {
 	const std::string path = FileDialog::Open(kSceneFilter, GameAssetsDirectory().string());
 
-	if (path.empty())
-		return;
+	if (!path.empty())
+		LoadScene(path);
+}
 
+bool EditorLayer::LoadScene(const std::string& path)
+{
 	RecordSnapshot();
 	SetSelection(nullptr);
-	SceneSerializer::Deserialize(mScene, path);
+
+	if (!SceneSerializer::Deserialize(mScene, path))
+	{
+		Log::Console(LogLevel::Error, LION_FORMAT_TEXT("[Editor] Could not open '{}'.", path));
+		return false;
+	}
+
 	mScenePath = path;
+	RememberRecentScene(path);
+	return true;
 }
 
 void EditorLayer::SaveScene()
@@ -4737,6 +4778,7 @@ void EditorLayer::SaveSceneAs()
 
 	SceneSerializer::Serialize(mScene, path);
 	mScenePath = path;
+	RememberRecentScene(path);
 }
 
 float32 EditorLayer::DrawMenuBar(const ImVec2& barMin, const ImVec2& barMax)
@@ -4765,10 +4807,73 @@ float32 EditorLayer::DrawMenuBar(const ImVec2& barMin, const ImVec2& barMax)
 
 			ImGui::Separator();
 
+			if (ImGui::MenuItem(ICON_MDI_FOLDER_MULTIPLE "  New Project...", ShortcutText(ShortcutAction::NewProject).c_str()))
+				mOpenProjectManagerPopup = true;
+
+			if (ImGui::MenuItem(ICON_MDI_FOLDER_OPEN "  Open Project...", ShortcutText(ShortcutAction::OpenProject).c_str()))
+				BrowseForProject();
+
+			ImGui::Separator();
+
+			// What was recently in hand, one click from being in hand again. The menus stay in the frame
+			// they were drawn in, so a chosen entry is applied after they close.
+			std::string sceneToLoad;
+			std::string projectToOpen;
+
+			if (ImGui::BeginMenu(ICON_MDI_FILE_DOCUMENT_OUTLINE "  Recent Scenes"))
+			{
+				if (mRecentScenes.empty())
+					ImGui::MenuItem("Nothing yet", nullptr, false, false);
+
+				for (const std::string& path : mRecentScenes)
+				{
+					ImGui::PushID(path.c_str());
+
+					if (ImGui::MenuItem(std::filesystem::path(path).stem().generic_string().c_str()))
+						sceneToLoad = path;
+
+					if (ImGui::IsItemHovered())
+						ImGui::SetTooltip("%s", path.c_str());
+
+					ImGui::PopID();
+				}
+
+				ImGui::EndMenu();
+			}
+
+			if (ImGui::BeginMenu(ICON_MDI_FOLDER "  Recent Projects"))
+			{
+				if (mRecentProjects.empty())
+					ImGui::MenuItem("Nothing yet", nullptr, false, false);
+
+				for (const std::string& path : mRecentProjects)
+				{
+					ImGui::PushID(path.c_str());
+
+					if (ImGui::MenuItem(ProjectDisplayName(path).c_str()))
+						projectToOpen = path;
+
+					if (ImGui::IsItemHovered())
+						ImGui::SetTooltip("%s", path.c_str());
+
+					ImGui::PopID();
+				}
+
+				ImGui::EndMenu();
+			}
+
+			ImGui::Separator();
+
 			if (ImGui::MenuItem(ICON_MDI_EXIT_TO_APP "  Exit", "Alt+F4"))
 				Window::RequestClose();
 
 			ImGui::EndMenu();
+
+			if (!sceneToLoad.empty())
+				LoadScene(sceneToLoad);
+
+			if (!projectToOpen.empty())
+				OpenProject(projectToOpen);
 		}
 
 		if (ImGui::BeginMenu("Edit"))
@@ -5118,7 +5223,21 @@ void EditorLayer::CompileGameModule()
 
 	// Regenerate the projects first: a file that was just scaffolded is not in the .vcxproj yet, and
 	// premake globs the source tree. It runs from the project root, where the workspace script lives.
-	const std::string generate = "cd /d \"" + root.string() + "\" && premake5 vs2022";
+	//
+	// The active project the editor points at is handed to premake through LION_PROJECT_DIR, so the game
+	// module is built from that project's sources — which is what makes a rebuild load the components of the
+	// project just opened. It is only set when the project is not the built-in Sandbox, so a Sandbox build
+	// stays byte-for-byte the one a plain Build.bat produces.
+	const std::filesystem::path active = ActiveProjectDirectory();
+	const bool projectOverride = !active.empty()
+		&& active.lexically_normal() != Projects::DefaultProjectDirectory().lexically_normal();
+
+	std::string generate = "cd /d \"" + root.string() + "\" && ";
+
+	if (projectOverride)
+		generate += "set \"LION_PROJECT_DIR=" + active.generic_string() + "\" && ";
+
+	generate += "premake5 vs2022";
 
 	// Build only the game module. Its MSBuild target is its solution folder and project name — premake
 	// files it under the "Runtime" group, hence "Runtime\Game", so moving the project between groups
@@ -5429,6 +5548,277 @@ void EditorLayer::DrawNewComponentPopup()
 
 	if (ImGui::Button("Cancel", ImVec2(96.0f, 0.0f)) || ImGui::IsKeyPressed(ImGuiKey_Escape))
 		ImGui::CloseCurrentPopup();
+
+	ImGui::EndPopup();
+}
+
+namespace
+{
+	// The recent scenes live beside the editor's other state, one path per line, newest first — the same
+	// Data/ folder the layout and shortcuts use. The recent projects live there too, but through
+	// Projects.h: the Project Manager window reads the same list.
+	std::filesystem::path RecentScenesFile()
+	{
+		return EditorDataDirectory() / "recent-scenes.txt";
+	}
+}
+
+void EditorLayer::LoadRecentProjects()
+{
+	mRecentProjects = Projects::LoadRecent();
+}
+
+void EditorLayer::RememberRecentProject(const std::filesystem::path& folder)
+{
+	Projects::Remember(folder);
+	LoadRecentProjects();
+}
+
+void EditorLayer::LoadRecentScenes()
+{
+	mRecentScenes.clear();
+
+	std::ifstream file(RecentScenesFile());
+	std::string line;
+
+	while (std::getline(file, line))
+	{
+		while (!line.empty() && (line.back() == '\r' || line.back() == ' '))
+			line.pop_back();
+
+		std::error_code error;
+
+		// A scene moved or deleted since it was last opened is dropped, not offered as a dead end.
+		if (!line.empty() && std::filesystem::is_regular_file(line, error))
+			mRecentScenes.push_back(line);
+	}
+}
+
+void EditorLayer::SaveRecentScenes() const
+{
+	std::error_code error;
+	std::filesystem::create_directories(EditorDataDirectory(), error);
+
+	std::ofstream file(RecentScenesFile(), std::ios::trunc);
+
+	for (const std::string& path : mRecentScenes)
+		file << path << '\n';
+}
+
+void EditorLayer::RememberRecentScene(const std::string& path)
+{
+	const std::string normalized = std::filesystem::path(path).generic_string();
+
+	mRecentScenes.erase(std::remove(mRecentScenes.begin(), mRecentScenes.end(), normalized), mRecentScenes.end());
+	mRecentScenes.insert(mRecentScenes.begin(), normalized);
+
+	constexpr size_t kMaxRecentScenes = 10;
+
+	if (mRecentScenes.size() > kMaxRecentScenes)
+		mRecentScenes.resize(kMaxRecentScenes);
+
+	SaveRecentScenes();
+}
+
+void EditorLayer::BrowseForProject()
+{
+	const std::filesystem::path active = ActiveProjectDirectory();
+	const std::string picked = FileDialog::OpenFolder(active.empty() ? std::string() : active.generic_string());
+
+	if (!picked.empty())
+		OpenProject(picked);
+}
+
+void EditorLayer::OpenProject(const std::filesystem::path& folder)
+{
+	if (!IsProjectFolder(folder))
+	{
+		Log::Console(LogLevel::Error, LION_FORMAT_TEXT("[Editor] '{}' is not a Lion project (no Assets folder).", folder.generic_string()));
+		PushToast("That folder is not a Lion project", false);
+		return;
+	}
+
+	RememberRecentProject(folder);
+
+	// Opening the project already in hand is not a switch: nothing to rebuild, nothing to replace.
+	if (ActiveProjectDirectory().lexically_normal() == folder.lexically_normal())
+		return;
+
+	SetActiveProjectDirectory(folder);
+
+	// The Content Browser returns to the new project's root, and its listing is stale by definition.
+	mProjectPath.clear();
+	mProjectDirty = true;
+
+	// The editor initialises on the project, the way an engine opens a game: what was open belonged to the
+	// project being left, and so did its history. The built-in Sandbox comes up on its demo scene; any
+	// other project on a fresh one.
+	mScene->Clear();
+	SetSelection(nullptr);
+	mScenePath.clear();
+	mUndoStack.clear();
+	mRedoStack.clear();
+
+	if (folder.lexically_normal() == Projects::DefaultProjectDirectory().lexically_normal())
+		CreateDemoScene();
+
+	const std::string name = ProjectDisplayName(folder);
+	Log::Console(LogLevel::Success, LION_FORMAT_TEXT("[Editor] Opened project '{}'.", name));
+	PushToast("Opened " + name, false);
+
+	// Build this project's module and hot-swap it in, so its own components are what the editor now lists —
+	// the one module the editor holds follows whichever project is open. Assets and built-in components work
+	// without it; a project's own C++ waits on this. When MSBuild is not around, the compile step says so and
+	// the switch is still good for everything that does not need the code.
+	CompileGameModule();
+}
+
+bool EditorLayer::CreateProject(const std::string& name, const std::filesystem::path& location)
+{
+	// The scaffolding lives in Projects.h, shared with the Project Manager window; this adds what only the
+	// editor has — the console, the toasts, and an editor to open the result in.
+	std::string error;
+	const std::filesystem::path folder = Projects::CreateOnDisk(name, location, error);
+
+	if (folder.empty())
+	{
+		Log::Console(LogLevel::Error, LION_FORMAT_TEXT("[Editor] Could not create the project: {}", error));
+		PushToast("Could not create the project", false);
+		return false;
+	}
+
+	Log::Console(LogLevel::Success, LION_FORMAT_TEXT("[Editor] Created project '{}'.", name));
+	OpenProject(folder);
+	return true;
+}
+
+void EditorLayer::DrawProjectManagerPopup()
+{
+	if (mOpenProjectManagerPopup)
+	{
+		mOpenProjectManagerPopup = false;
+		mNewProjectName[0] = '\0';
+		mNewProjectLocation[0] = '\0';
+		ImGui::OpenPopup("Project Manager");
+	}
+
+	const ImVec2 center = ImGui::GetMainViewport()->GetCenter();
+	ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+	ImGui::SetNextWindowSize(ImVec2(540.0f, 0.0f), ImGuiCond_Appearing);
+
+	if (!ImGui::BeginPopupModal("Project Manager", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+		return;
+
+	const std::filesystem::path active = ActiveProjectDirectory();
+
+	// --- The project the editor has open.
+	ImGui::TextDisabled("Current project");
+	ImGui::PushFont(EditorGui::GetBoldFont());
+	ImGui::TextUnformatted(active.empty() ? "No project open" : ProjectDisplayName(active).c_str());
+	ImGui::PopFont();
+
+	if (!active.empty())
+		ImGui::TextDisabled("%s", active.generic_string().c_str());
+
+	ImGui::Separator();
+
+	// --- The ones opened before, double-click to switch.
+	ImGui::TextDisabled("Recent");
+
+	std::string openRequest;   // Applied after the loop, so the list is not switched out mid-draw.
+
+	if (mRecentProjects.empty())
+		ImGui::TextDisabled("  Nothing yet — open or create a project below.");
+
+	for (const std::string& path : mRecentProjects)
+	{
+		ImGui::PushID(path.c_str());
+
+		const bool isActive = (std::filesystem::path(path) == active);
+		const std::string label = std::string(ICON_MDI_FOLDER "  ") + ProjectDisplayName(path);
+
+		// DontClosePopups: a Selectable dismisses its host popup on any click by default, which would take
+		// the first click of the double-click and the modal with it. Closing is the open request's job.
+		if (ImGui::Selectable(label.c_str(), isActive,
+			ImGuiSelectableFlags_AllowDoubleClick | ImGuiSelectableFlags_DontClosePopups)
+			&& ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
+			openRequest = path;
+
+		if (ImGui::IsItemHovered())
+			ImGui::SetTooltip("%s\nDouble-click to open", path.c_str());
+
+		ImGui::PopID();
+	}
+
+	ImGui::Separator();
+
+	// --- A fresh project, scaffolded from the template.
+	ImGui::TextDisabled("New project");
+
+	ImGui::SetNextItemWidth(-1.0f);
+	ImGui::InputTextWithHint("##project_name", "Project name", mNewProjectName, sizeof(mNewProjectName));
+
+	const ImGuiStyle& style = ImGui::GetStyle();
+	const float32 browseWidth = ImGui::CalcTextSize(ICON_MDI_FOLDER_OPEN).x + style.FramePadding.x * 2.0f;
+
+	ImGui::SetNextItemWidth(-browseWidth - style.ItemInnerSpacing.x);
+	ImGui::InputTextWithHint("##project_location", "Location", mNewProjectLocation, sizeof(mNewProjectLocation));
+
+	ImGui::SameLine(0.0f, style.ItemInnerSpacing.x);
+
+	if (ImGui::Button(ICON_MDI_FOLDER_OPEN "##pick_location"))
+	{
+		const std::string picked = FileDialog::OpenFolder(mNewProjectLocation);
+
+		if (!picked.empty())
+		{
+			const size_t copied = picked.copy(mNewProjectLocation, sizeof(mNewProjectLocation) - 1);
+			mNewProjectLocation[copied] = '\0';
+		}
+	}
+
+	if (ImGui::IsItemHovered())
+		ImGui::SetTooltip("Choose where the project folder is created");
+
+	const std::string newName = mNewProjectName;
+	const bool canCreate = IsValidLayoutName(newName) && mNewProjectLocation[0] != '\0';
+
+	if (newName[0] != '\0' && !IsValidLayoutName(newName))
+		ImGui::TextColored(LogLevelColor(LogLevel::Error), "Letters, digits, spaces, - and _ only.");
+
+	ImGui::Spacing();
+	ImGui::Separator();
+	ImGui::Spacing();
+
+	// --- Actions.
+	if (ImGui::Button(ICON_MDI_FOLDER_OPEN "  Open Folder...", ImVec2(150.0f, 0.0f)))
+	{
+		const std::string picked = FileDialog::OpenFolder(active.empty() ? std::string() : active.generic_string());
+
+		if (!picked.empty())
+			openRequest = picked;
+	}
+
+	ImGui::SameLine();
+	ImGui::BeginDisabled(!canCreate);
+
+	if (ImGui::Button("Create Project", ImVec2(150.0f, 0.0f)))
+	{
+		if (CreateProject(newName, mNewProjectLocation))
+			ImGui::CloseCurrentPopup();
+	}
+
+	ImGui::EndDisabled();
+	ImGui::SameLine();
+
+	if (ImGui::Button("Close", ImVec2(90.0f, 0.0f)) || ImGui::IsKeyPressed(ImGuiKey_Escape))
+		ImGui::CloseCurrentPopup();
+
+	if (!openRequest.empty())
+	{
+		OpenProject(openRequest);
+		ImGui::CloseCurrentPopup();
+	}
 
 	ImGui::EndPopup();
 }

@@ -72,9 +72,32 @@ namespace Lion
 		Log::Console(LogLevel::Success, LION_FORMAT_TEXT("[FileAssociation] '{}' now opens with this editor.", extension));
 		return true;
 	}
+
+	bool FileAssociation::Unregister(const std::string& extension, const std::string& programId)
+	{
+		const std::string classes = "Software\\Classes\\";
+
+		// Deleting a key that is not there answers "file not found", which is the outcome already wanted —
+		// so only an actual removal is worth telling Explorer about.
+		const bool removedExtension = RegDeleteTreeA(HKEY_CURRENT_USER, (classes + extension).c_str()) == ERROR_SUCCESS;
+		const bool removedProgram = RegDeleteTreeA(HKEY_CURRENT_USER, (classes + programId).c_str()) == ERROR_SUCCESS;
+
+		if (!removedExtension && !removedProgram)
+			return false;
+
+		SHChangeNotify(SHCNE_ASSOCCHANGED, SHCNF_IDLIST, nullptr, nullptr);
+
+		Log::Console(LogLevel::Information, LION_FORMAT_TEXT("[FileAssociation] '{}' no longer opens with this editor.", extension));
+		return true;
+	}
 #else
 	bool FileAssociation::Register(const std::string&, const std::string&, const std::string&,
 		const std::string&, const std::string&)
+	{
+		return false;
+	}
+
+	bool FileAssociation::Unregister(const std::string&, const std::string&)
 	{
 		return false;
 	}

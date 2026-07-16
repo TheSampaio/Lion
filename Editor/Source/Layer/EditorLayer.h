@@ -38,6 +38,7 @@ private:
 		ToggleHierarchy, ToggleProject, ToggleConsole, ToggleStatistics, ToggleProperties,
 		NewScene, OpenScene, SaveScene, SaveSceneAs,
 		Deselect,
+		NewProject, OpenProject,
 		Count
 	};
 
@@ -102,6 +103,17 @@ private:
 	bool mOpenNewComponentPopup = false;
 	char mNewComponentName[64] = {};
 	char mNewComponentFolder[64] = "Scripts";   // Where it lands, under the game's assets.
+
+	// Project Manager (opened from the title-bar project tab): the game the editor has open, the ones it
+	// has opened before, and the fields of the "New Project" form. The recents are read at startup and
+	// kept newest-first; a project opened or created moves to the front.
+	bool mOpenProjectManagerPopup = false;
+	std::vector<std::string> mRecentProjects;
+	char mNewProjectName[64] = {};
+	char mNewProjectLocation[512] = {};
+
+	// The scenes opened or saved before, newest first, for the File menu's Recent Scenes.
+	std::vector<std::string> mRecentScenes;
 	bool mConsoleAutoScroll = true;
 	bool mConsoleStickToBottom = true;   // Following the tail; set false when the user scrolls up, true again at the bottom.
 	bool mConsoleShowErrors = true;    // Console severity filters (Error/Fatal, Warning, everything else).
@@ -262,10 +274,6 @@ private:
 	static constexpr float kDockSpacing = 3.0f;
 	static constexpr float kDockMargin = 10.0f;
 
-	// Tells Windows what a .lscene is, so Explorer draws it with the engine's icon and a double-click opens
-	// it here. Written once, on the first run, and again only if the editor moves.
-	void RegisterSceneFiles();
-
 	// What the File menu does, and what its keys do — one function each, called by both.
 	void NewScene();
 	void OpenScene();
@@ -340,6 +348,25 @@ private:
 	// build, which is when it starts showing up in Add Component.
 	void DrawNewComponentPopup();
 	bool GenerateComponent(const std::string& name, const std::string& folder);
+
+	// Project Manager. The editor opens on the built-in Sandbox, and these let it hold more than one game:
+	// switch to a project already on disk, scaffold a fresh one from a template, and remember the ones
+	// visited so they are a click away next time. Switching repoints the assets, scenes and scripts; the
+	// compiled game module is shared until a per-project build gives each project its own.
+	void DrawProjectManagerPopup();
+	void OpenProject(const std::filesystem::path& folder);
+	bool CreateProject(const std::string& name, const std::filesystem::path& location);
+	void BrowseForProject();   // The folder picker, then OpenProject — what the File menu and its key call.
+	void LoadRecentProjects();
+	void RememberRecentProject(const std::filesystem::path& folder);
+
+	// Recent scenes, mirrored on the projects: read at startup, updated by every open and save-as, shown
+	// in the File menu. LoadScene is the one door a scene comes in through — the Open dialog, a recent
+	// entry and the command line all land here, so all of them are remembered.
+	bool LoadScene(const std::string& path);
+	void LoadRecentScenes();
+	void SaveRecentScenes() const;
+	void RememberRecentScene(const std::string& path);
 
 	// Game module lifecycle. LoadGameModule loads a copy of Game.dll, leaving the original writable so
 	// it can be rebuilt while the editor runs; ReloadGameModule swaps in that rebuild, taking the

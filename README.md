@@ -136,6 +136,18 @@
         <strong>Run:</strong> the editor from <code>Build/Bin/&lt;config&gt;/Mane/Lion.exe</code>, the game from <code>Build/Bin/&lt;config&gt;/Launcher/lion-launcher.exe</code>.
       </li>
     </ol>
+    <p>
+      Started bare, <code>Lion.exe</code> is the <strong>Project Manager</strong> — its own window, the way Godot,
+      Unity and Unreal open: pick a recent project, open a folder as one, or create a new one (the engine scaffolds
+      it and builds its module). Picking a project starts the editor on it as its own process. The command line can
+      answer the manager's question up front:
+    </p>
+    <table>
+      <tr><th>Argument</th><th>What it does</th></tr>
+      <tr><td><code>Lion.exe --project &lt;folder&gt;</code></td><td>Opens that project in the editor directly (what the Project Manager itself passes).</td></tr>
+      <tr><td><code>Lion.exe &lt;path&gt;.lproject</code></td><td>Opens the project the marker belongs to (what double-clicking a project in Explorer passes). Scenes open inside the editor, the way they do in Unreal and Visual Studio.</td></tr>
+      <tr><td><code>Lion.exe --no-project-manager</code></td><td>Opens the built-in project and demo scene directly — for iterating on the editor itself, where relaunching is constant.</td></tr>
+    </table>
     <p>Three configurations, each there to catch something the others cannot:</p>
     <table>
       <tr><th>Configuration</th><th>Optimised</th><th>Symbols</th><th>What it is for</th></tr>
