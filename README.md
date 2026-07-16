@@ -145,7 +145,7 @@
     <table>
       <tr><th>Argument</th><th>What it does</th></tr>
       <tr><td><code>Lion.exe --project &lt;folder&gt;</code></td><td>Opens that project in the editor directly (what the Project Manager itself passes).</td></tr>
-      <tr><td><code>Lion.exe &lt;path&gt;.lscene</code></td><td>Opens that scene directly (what double-clicking a scene in Explorer passes).</td></tr>
+      <tr><td><code>Lion.exe &lt;path&gt;.lproject</code></td><td>Opens the project the marker belongs to (what double-clicking a project in Explorer passes). Scenes open inside the editor, the way they do in Unreal and Visual Studio.</td></tr>
       <tr><td><code>Lion.exe --no-project-manager</code></td><td>Opens the built-in project and demo scene directly — for iterating on the editor itself, where relaunching is constant.</td></tr>
     </table>
     <p>Three configurations, each there to catch something the others cannot:</p>

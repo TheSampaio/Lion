@@ -111,47 +111,46 @@ void EditorLayer::OnCreate()
 	// ever be, and it ships beside the executable like the rest of the engine's own assets.
 	mLogo = Texture::Create(kEngineIconFile, TextureFilter::Linear);
 
-	RegisterSceneFiles();
+	Projects::RegisterFileType();
 	LoadRecentProjects();
 	LoadRecentScenes();
 
-	// A scene handed over on the command line — which is how Windows opens one, by running the editor and
-	// giving it the path. Leading dashes mark a flag, not a path, so those are not mistaken for a scene
-	// and "opened".
-	const std::string opened = CommandLine::Get(1);
+	// The project this session is about, handed over as the process was started: --project from the
+	// Project Manager, or a .lproject double-clicked in Explorer, which arrives as a bare path whose
+	// folder is the project. The editor initialises on it — the built-in on its demo, any other project
+	// on a fresh scene with its own module built and hot-swapped in as soon as the build answers. Without
+	// one (the --no-project-manager skip, or a bare debugger launch), the built-in demo it is. A scene is
+	// not an answer: scenes open inside the editor, the way they do in Unreal and Visual Studio.
+	std::filesystem::path requested;
 
-	if (!opened.empty() && opened.rfind("--", 0) != 0 && SceneSerializer::Deserialize(mScene, opened))
+	for (int32 argument = 1; argument < CommandLine::GetCount(); ++argument)
 	{
-		mScenePath = opened;
-		RememberRecentScene(opened);
-		return;
-	}
+		const std::string& value = CommandLine::Get(argument);
 
-	// The project the Project Manager window picked, handed over as this process was started: the editor
-	// initialises on it. The built-in comes up on its demo; any other project on a fresh scene, with its
-	// own module built and hot-swapped in as soon as the build answers. Without it — the development skip
-	// --no-project-manager, or a bare debugger launch — the editor comes up on the built-in demo.
-	for (int32 argument = 1; argument < CommandLine::GetCount() - 1; ++argument)
-	{
-		if (CommandLine::Get(argument) != "--project")
-			continue;
-
-		const std::filesystem::path requested = CommandLine::Get(argument + 1);
-
-		if (Projects::IsProjectFolder(requested)
-			&& requested.lexically_normal() != Projects::DefaultProjectDirectory().lexically_normal())
+		if (value == "--project" && argument + 1 < CommandLine::GetCount())
 		{
-			SetActiveProjectDirectory(requested);
-			RememberRecentProject(requested);
-
-			Log::Console(LogLevel::Success,
-				LION_FORMAT_TEXT("[Editor] Opened project '{}'.", Projects::DisplayName(requested)));
-
-			CompileGameModule();
-			return;
+			requested = CommandLine::Get(argument + 1);
+			break;
 		}
 
-		break;
+		if (value.rfind("--", 0) != 0 && std::filesystem::path(value).extension() == Projects::kFileExtension)
+		{
+			requested = std::filesystem::path(value).parent_path();
+			break;
+		}
+	}
+
+	if (!requested.empty() && Projects::IsProjectFolder(requested)
+		&& requested.lexically_normal() != Projects::DefaultProjectDirectory().lexically_normal())
+	{
+		SetActiveProjectDirectory(requested);
+		RememberRecentProject(requested);
+
+		Log::Console(LogLevel::Success,
+			LION_FORMAT_TEXT("[Editor] Opened project '{}'.", Projects::DisplayName(requested)));
+
+		CompileGameModule();
+		return;
 	}
 
 	CreateDemoScene();
@@ -4504,27 +4503,6 @@ void EditorLayer::DrawStatusBar()
 	}
 
 	ImGui::End();
-}
-
-void EditorLayer::RegisterSceneFiles()
-{
-	// Windows learns what a .lscene is the first time the editor runs — the way every editor does it, in
-	// the user's own corner of the registry, with no administrator and no prompt.
-	//
-	// The icon is the one shipped beside the executable rather than the executable's own, so a scene in
-	// Explorer looks like a scene and not like a second copy of the editor.
-	const std::filesystem::path executable = CommandLine::Get(0);
-
-	if (executable.empty())
-		return;
-
-	// Native separators throughout: this string is read by Explorer, not by the engine, and a path with
-	// two kinds of slash in it is a path someone will one day have to explain.
-	std::filesystem::path icon = executable.parent_path() / kEngineIconResource;
-	icon.make_preferred();
-
-	FileAssociation::Register(".lscene", "Lion.Scene", "Lion Scene",
-		icon.string(), executable.string());
 }
 
 void EditorLayer::DrawTitleBar()

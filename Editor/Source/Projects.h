@@ -52,4 +52,44 @@ namespace Projects
 	// enough to compile from the first build. Returns the project's folder, or an empty path with 'error'
 	// saying why not.
 	std::filesystem::path CreateOnDisk(const std::string& name, const std::filesystem::path& location, std::string& error);
+
+	// One row of the Project Manager's list: everything the window shows about a project, read once per
+	// refresh rather than per frame.
+	struct Entry
+	{
+		std::string path;
+		std::string name;
+		std::string version;   // The engine that made it; the running engine's for the built-in.
+		std::string edited;    // Last edited, "YYYY-MM-DD HH:MM"; empty when the folder is gone.
+		std::filesystem::file_time_type editedAt = {};
+		bool missing = false;  // Still on the list, no longer on disk — what Remove Missing sweeps.
+		bool favorite = false;
+		bool builtIn = false;
+	};
+
+	// Every project the manager lists: the recents as written — the missing ones included, greyed rather
+	// than hidden, so Remove Missing has something to act on — with the built-in appended when absent.
+	std::vector<Entry> LoadAll();
+
+	// The favourites, kept beside the recents. A favourite sorts to the top of the manager's list.
+	void SetFavorite(const std::filesystem::path& folder, bool favorite);
+
+	// Takes a project off the recents (and its favourite mark with it). The files stay: the list is the
+	// manager's memory, not the disk.
+	void RemoveRecent(const std::filesystem::path& folder);
+
+	// Sweeps the recents of every entry whose folder no longer exists.
+	void RemoveMissing();
+
+	// Renames the project's marker — the name the manager and the editor show. The folder keeps its name:
+	// a rename that moved directories would break every path that reaches the project.
+	bool Rename(const std::filesystem::path& folder, const std::string& newName, std::string& error);
+
+	// Copies the project to a sibling folder and puts the copy on the recents. Returns the copy's folder,
+	// or an empty path with 'error' saying why not.
+	std::filesystem::path Duplicate(const std::filesystem::path& folder, std::string& error);
+
+	// Teaches Windows that a .lproject opens this editor — and takes back the .lscene claim older versions
+	// made: a scene opens inside the editor, the way it does in Unreal and Visual Studio.
+	void RegisterFileType();
 }

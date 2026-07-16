@@ -29,5 +29,10 @@ namespace Lion
 			const std::string& description,
 			const std::string& iconPath,
 			const std::string& applicationPath);
+
+		// Takes a registration back out, extension and program identifier both. For a file kind the editor
+		// stops claiming: what was written on the first run should not outlive the reason it was written.
+		// Returns whether anything was removed.
+		static LION_API bool Unregister(const std::string& extension, const std::string& programId);
 	};
 }

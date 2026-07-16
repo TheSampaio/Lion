@@ -274,10 +274,6 @@ private:
 	static constexpr float kDockSpacing = 3.0f;
 	static constexpr float kDockMargin = 10.0f;
 
-	// Tells Windows what a .lscene is, so Explorer draws it with the engine's icon and a double-click opens
-	// it here. Written once, on the first run, and again only if the editor moves.
-	void RegisterSceneFiles();
-
 	// What the File menu does, and what its keys do — one function each, called by both.
 	void NewScene();
 	void OpenScene();
