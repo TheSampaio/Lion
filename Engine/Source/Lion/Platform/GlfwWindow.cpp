@@ -7,6 +7,8 @@
 #include <Lion/Signal/EventInput.h>
 #include <Lion/Signal/EventWindow.h>
 
+#include <chrono>
+
 #ifdef LN_PLATFORM_WIN
 	#define GLFW_EXPOSE_NATIVE_WIN32
 	#include <GLFW/glfw3native.h>
@@ -68,36 +70,129 @@ namespace Lion
 		// by being sized to the work area rather than Windows-maximised (see the flash it avoids, below).
 		RECT sRestore = {};
 
+		// The monitor's work area (the whole screen minus the taskbar), which is what "maximised" is sized to.
+		RECT WorkAreaRect(HWND window)
+		{
+			MONITORINFO info = {};
+			info.cbSize = sizeof(info);
+
+			if (GetMonitorInfo(MonitorFromWindow(window, MONITOR_DEFAULTTONEAREST), &info))
+				return info.rcWork;
+
+			// No monitor to ask: leave the window where it is rather than sending it somewhere wrong.
+			RECT here = {};
+			GetWindowRect(window, &here);
+			return here;
+		}
+
 		// Sizes the window to the monitor's work area (maximised) or back to sRestore (windowed), in window
-		// coordinates, and records the new logical state. The one place the maximise happens, shared by the
-		// button, a caption double-click and the drag-off-the-top-edge — so all three behave the same.
+		// coordinates, and records the new logical state. Instant: the one place the maximise happens without a
+		// transition — the boot into a maximised window (nothing to animate while it is hidden) and the
+		// drag-off-the-top restore (which has to land under the cursor at once). The button and the caption
+		// double-click animate on top of this same geometry (see AnimateMaximizedState).
 		void SetMaximizedState(HWND window, bool maximized, bool captureRestore)
 		{
-			if (maximized)
-			{
-				if (captureRestore)
-					GetWindowRect(window, &sRestore);
+			if (maximized && captureRestore)
+				GetWindowRect(window, &sRestore);
 
-				MONITORINFO info = {};
-				info.cbSize = sizeof(info);
+			const RECT target = maximized ? WorkAreaRect(window) : sRestore;
 
-				if (GetMonitorInfo(MonitorFromWindow(window, MONITOR_DEFAULTTONEAREST), &info))
-					SetWindowPos(window, nullptr, info.rcWork.left, info.rcWork.top,
-						info.rcWork.right - info.rcWork.left, info.rcWork.bottom - info.rcWork.top,
-						SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
-			}
-			else
-			{
-				SetWindowPos(window, nullptr, sRestore.left, sRestore.top,
-					sRestore.right - sRestore.left, sRestore.bottom - sRestore.top,
-					SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
-			}
+			SetWindowPos(window, nullptr, target.left, target.top,
+				target.right - target.left, target.bottom - target.top,
+				SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
 
 			// Square corners fill the screen edge to edge; round ones leave the desktop showing through.
 			SetCornerRounding(window, !maximized);
 
 			if (sChrome)
 				sChrome->maximized = maximized;
+		}
+
+		// The maximise/restore transition, played out over a short time so the window grows and shrinks
+		// instead of snapping — the movement Windows gives its own, which the editor was missing.
+		//
+		// It is driven by a timer rather than the render loop so the animation lives entirely in the chrome,
+		// beside the geometry it animates. Each tick sizes the window one step along an eased path; sizing it
+		// is what redraws it, through the same resize path a manual drag uses.
+		struct MaximizeAnimation
+		{
+			bool active = false;
+			bool toMaximized = false;
+			RECT from = {};
+			RECT to = {};
+			std::chrono::steady_clock::time_point start;
+		};
+
+		MaximizeAnimation sAnimation;
+
+		constexpr UINT_PTR kMaximizeTimerId = 1;
+		constexpr double kMaximizeSeconds = 0.15;
+
+		// Fast to start, easing to a stop — the shape of a movement that feels answered rather than mechanical.
+		double EaseOutCubic(double t)
+		{
+			const double inverse = 1.0 - t;
+			return 1.0 - inverse * inverse * inverse;
+		}
+
+		LONG Interpolate(LONG from, LONG to, double t)
+		{
+			return from + static_cast<LONG>((to - from) * t);
+		}
+
+		void FinishMaximizeAnimation(HWND window)
+		{
+			KillTimer(window, kMaximizeTimerId);
+			sAnimation.active = false;
+
+			SetWindowPos(window, nullptr, sAnimation.to.left, sAnimation.to.top,
+				sAnimation.to.right - sAnimation.to.left, sAnimation.to.bottom - sAnimation.to.top,
+				SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
+
+			// Set once landed: a growing window is not yet the screen, so square corners before it fills would
+			// show the desktop through them — the very gap the rounding is switched off to avoid.
+			SetCornerRounding(window, !sAnimation.toMaximized);
+		}
+
+		void TickMaximizeAnimation(HWND window)
+		{
+			const double elapsed = std::chrono::duration<double>(std::chrono::steady_clock::now() - sAnimation.start).count();
+
+			if (elapsed >= kMaximizeSeconds)
+			{
+				FinishMaximizeAnimation(window);
+				return;
+			}
+
+			const double t = EaseOutCubic(elapsed / kMaximizeSeconds);
+			const LONG left = Interpolate(sAnimation.from.left, sAnimation.to.left, t);
+			const LONG top = Interpolate(sAnimation.from.top, sAnimation.to.top, t);
+			const LONG right = Interpolate(sAnimation.from.right, sAnimation.to.right, t);
+			const LONG bottom = Interpolate(sAnimation.from.bottom, sAnimation.to.bottom, t);
+
+			SetWindowPos(window, nullptr, left, top, right - left, bottom - top,
+				SWP_NOZORDER | SWP_NOACTIVATE);
+		}
+
+		// Begins a maximise or restore that animates to its target. The logical state flips at once, so the
+		// caption's button and hit-testing already speak for where the window is going while it is still on the
+		// way. Starting from the window's current rectangle, not a fixed one, lets a second toggle mid-flight
+		// pick up smoothly from wherever the last one had reached.
+		void AnimateMaximizedState(HWND window, bool maximized)
+		{
+			if (maximized)
+				GetWindowRect(window, &sRestore);
+
+			GetWindowRect(window, &sAnimation.from);
+			sAnimation.to = maximized ? WorkAreaRect(window) : sRestore;
+			sAnimation.toMaximized = maximized;
+			sAnimation.start = std::chrono::steady_clock::now();
+			sAnimation.active = true;
+
+			if (sChrome)
+				sChrome->maximized = maximized;
+
+			SetTimer(window, kMaximizeTimerId, USER_TIMER_MINIMUM, nullptr);
 		}
 
 		// What the cursor has to be within to be resizing rather than clicking. The frame Windows reports is
@@ -140,6 +235,18 @@ namespace Lion
 		{
 			switch (message)
 			{
+				case WM_TIMER:
+				{
+					// The maximise/restore animation advances here: one eased step per tick until it lands.
+					if (wParam == kMaximizeTimerId && sAnimation.active)
+					{
+						TickMaximizeAnimation(window);
+						return 0;
+					}
+
+					break;
+				}
+
 				case WM_SYSCOMMAND:
 				{
 					// Windows must never maximise this window itself — not from a title-bar double-click, not
@@ -158,10 +265,10 @@ namespace Lion
 				case WM_NCLBUTTONDBLCLK:
 				{
 					// Double-click the caption to maximise or restore, the way a Windows title bar does — through
-					// the editor's own sizing, so it does not flash.
+					// the editor's own sizing, so it does not flash, and animated so it does not snap.
 					if (wParam == HTCAPTION && sChrome && sChrome->resizable)
 					{
-						SetMaximizedState(window, !sChrome->maximized, true);
+						AnimateMaximizedState(window, !sChrome->maximized);
 						return 0;
 					}
 
@@ -184,6 +291,14 @@ namespace Lion
 
 						if (!DragDetect(window, cursor))
 							return 0;   // A click, not a drag: leave it maximised.
+
+						// A drag off the top has to land under the cursor at once, so any maximise still animating
+						// is dropped here rather than left to finish and fight the restore.
+						if (sAnimation.active)
+						{
+							KillTimer(window, kMaximizeTimerId);
+							sAnimation.active = false;
+						}
 
 						RECT maximized = {};
 						GetWindowRect(window, &maximized);
@@ -557,7 +672,12 @@ namespace Lion
 
 	void GlfwWindow::ToggleMaximize()
 	{
+#ifdef LN_PLATFORM_WIN
+		// The button animates its maximise and restore, sharing the one transition the caption double-click uses.
+		AnimateMaximizedState(glfwGetWin32Window(mWindow), !mData->maximized);
+#else
 		ApplyMaximized(!mData->maximized);
+#endif
 	}
 
 	bool GlfwWindow::IsMaximized() const
