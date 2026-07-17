@@ -129,10 +129,11 @@ editor's own state to the executable, not to the working directory.
 
 ## Architecture notes worth knowing
 
-- **Sealing lives in one place: `Lion/Core/Vault.h`** — XOR against `0x07D2`, then URL-safe base64. The
-  editor saves scenes as plain, readable JSON; sealing is what *shipping* does, to shaders and scenes
-  alike: the build runs the editor to do it (`Lion.exe --seal <dir> .glsl .lnscene`, from the Launcher's
-  Shipping post-build — `Editor/Source/Sealer.h`). The rule used to live a second time in a PowerShell script,
+- **Sealing lives in one place: `Lion/Core/Vault.h`** — XOR against `0x07D2`, then URL-safe base64,
+  wrapped in 76-character lines so a sealed file still reads as a file. A scene and a project marker are
+  sealed by the editor that saves them; a shipped game's shaders are sealed by the build, which runs the
+  editor to do it (`Lion.exe --seal <dir> .glsl .lnscene`, from the Launcher's Shipping post-build —
+  `Editor/Source/Sealer.h`). The rule used to live a second time in a PowerShell script,
   and a third time as a whole project, which is two copies of a rule too many. Loading never has to know
   which kind it has: `Vault::Unseal` gives plain content back unchanged, and sealed content is base64 and
   nothing else, so a `#` or a `{` answers the question. It is obfuscation, not encryption — the key ships

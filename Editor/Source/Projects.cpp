@@ -3,6 +3,7 @@
 
 #include <Lion/Core/CommandLine.h>
 #include <Lion/Core/Filesystem.h>
+#include <Lion/Core/Vault.h>
 #include <Lion/Platform/FileAssociation.h>
 
 #include <ctime>
@@ -89,8 +90,9 @@ namespace Projects
 		}
 
 		// Writes the marker naming the project, replacing whichever one it had. It goes through the same
-		// JSON library the engine serializes scenes with, indented the same way — not a string with braces
-		// in it, which is a serializer waiting to disagree with the real one.
+		// JSON library the engine serializes scenes with — not a string with braces in it, which is a
+		// serializer waiting to disagree with the real one — and it leaves sealed, the way a scene does:
+		// the engine's files wear the engine's seal, whichever kind they are.
 		void WriteMarker(const std::filesystem::path& project, const std::string& name, const std::string& version)
 		{
 			const std::filesystem::path existing = MarkerPath(project);
@@ -106,7 +108,7 @@ namespace Projects
 			content["engine"] = version;
 
 			std::ofstream marker(renamed);
-			marker << content.dump(2) << '\n';
+			marker << Lion::Vault::Seal(content.dump(2));
 		}
 
 		// A folder's last-write moment as "YYYY-MM-DD HH:MM", local time — the column Godot's manager keeps.
@@ -217,13 +219,16 @@ namespace Projects
 		if (marker.empty())
 			return {};
 
-		// Read the way it was written — the JSON library, not a string search. A marker someone edited
-		// into something else is a marker recording nothing.
+		// Read the way it was written — unsealed, then the JSON library, not a string search. Unseal gives
+		// plain text back unchanged, so a marker written by hand still reads; a marker edited into
+		// something else records nothing.
 		std::ifstream file(marker);
+		std::stringstream buffer;
+		buffer << file.rdbuf();
 
 		try
 		{
-			const nlohmann::json content = nlohmann::json::parse(file);
+			const nlohmann::json content = nlohmann::json::parse(Lion::Vault::Unseal(buffer.str()));
 			return content.value("engine", std::string());
 		}
 		catch (const std::exception&)

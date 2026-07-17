@@ -149,7 +149,11 @@ void EditorLayer::OnCreate()
 		Log::Console(LogLevel::Success,
 			LION_FORMAT_TEXT("[Editor] Opened project '{}'.", Projects::DisplayName(requested)));
 
-		CompileGameModule();
+		// Rebuilding the module is a development-tree affair. A distributed editor opens the project with
+		// the module it shipped with, and says nothing — a warning at every boot is not "ready to use".
+		if (!Projects::EngineRootDirectory().empty())
+			CompileGameModule();
+
 		return;
 	}
 
@@ -5677,9 +5681,10 @@ void EditorLayer::OpenProject(const std::filesystem::path& folder)
 
 	// Build this project's module and hot-swap it in, so its own components are what the editor now lists —
 	// the one module the editor holds follows whichever project is open. Assets and built-in components work
-	// without it; a project's own C++ waits on this. When MSBuild is not around, the compile step says so and
-	// the switch is still good for everything that does not need the code.
-	CompileGameModule();
+	// without it; a project's own C++ waits on this. A distributed editor has no tree to build from, so it
+	// switches quietly with the module it shipped with — the warning belongs to the explicit Compile.
+	if (!Projects::EngineRootDirectory().empty())
+		CompileGameModule();
 }
 
 bool EditorLayer::CreateProject(const std::string& name, const std::filesystem::path& location)

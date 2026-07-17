@@ -34,7 +34,7 @@
       <li><strong>2D Physics</strong> — <a href="https://github.com/erincatto/box2d">Box2D</a> behind a <code>PhysicsWorld</code> with a fixed time step, transform synchronization and contact events routed to the components that care.</li>
       <li><strong>Backend-agnostic renderer</strong> — every OpenGL call lives behind a small RHI (<code>RendererAPI</code>, <code>GraphicsContext</code>, <code>Shader</code>, <code>Buffer</code>, <code>VertexArray</code>, <code>Texture</code>), so a Vulkan backend can be added without touching high-level code.</li>
       <li><strong>Batched sprite rendering</strong> — sprites are batched into a single dynamic buffer with per-frame texture slotting and depth sorting, issued in one draw call.</li>
-      <li><strong>Asset sealing</strong> — <code>Vault</code> is the one place the format lives (XOR, then URL-safe base64). The editor saves scenes as plain, readable JSON; a shipped game’s shaders and scenes are sealed by the build. Loading never has to know which kind it has — plain content comes back unchanged. It is obfuscation, not encryption.</li>
+      <li><strong>Asset sealing</strong> — <code>Vault</code> is the one place the format lives (XOR, then URL-safe base64 in 76-character lines). Scenes and project markers are sealed by the editor that saves them; a shipped game’s shaders are sealed by the build. Loading never has to know which kind it has — plain content comes back unchanged. It is obfuscation, not encryption.</li>
       <li><strong>Layer stack, events, input, logging and a resource cache</strong> for building games on top of the engine.</li>
     </ul>
     <h3>Editor (<em>Lion’s Mane</em>)</h3>

@@ -15,7 +15,9 @@ namespace Lion
 	//
 	// The bytes are XOR'd against a two-byte key and then written in base64 with the URL-safe alphabet —
 	// '-' and '_' where the usual one has '+' and '/'. The result is text, so it goes wherever text goes
-	// and no tool along the way decides to reinterpret a byte of it.
+	// and no tool along the way decides to reinterpret a byte of it. It travels in lines of 76 characters,
+	// the width base64 has worn since MIME, so a sealed file still looks like a file and not like one
+	// endless line; unsealing takes the breaks back out before it reads a thing.
 	class Vault
 	{
 	public:
