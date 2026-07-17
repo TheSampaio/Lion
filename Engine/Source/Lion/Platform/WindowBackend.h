@@ -4,6 +4,15 @@ namespace Lion
 {
 	class Event;
 
+	// Where a window first appears, named after Windows Forms' FormStartPosition, which named it well:
+	// wherever the system puts windows, or centred on the screen's work area — the way pickers and
+	// launchers open, so the first thing shown is not in a corner somewhere.
+	enum class WindowStartupPosition
+	{
+		WindowsDefault,
+		CenterScreen,
+	};
+
 	// Mutable window state shared between the Window facade and its platform backend.
 	//
 	// The backend receives a pointer to this struct and updates it from native callbacks (for
@@ -22,6 +31,7 @@ namespace Lion
 		std::function<void()> refreshCallback;
 		bool resizable = true;
 		bool maximized = false;
+		WindowStartupPosition startupPosition = WindowStartupPosition::WindowsDefault;
 
 		// The window's chrome. A game leaves it alone — its window should look like every other window on
 		// the machine, which is whatever the user told the machine they want. The editor asks for the dark

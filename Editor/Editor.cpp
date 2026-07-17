@@ -10,7 +10,7 @@ namespace
 {
 	// Whether the command line already answers the Project Manager's question. A project handed over
 	// (--project, what the manager itself passes), the development skip (--no-project-manager), or a scene
-	// path (what double-clicking a .lscene passes) all say which game this session is about — anything
+	// path (what double-clicking a .lnproject passes) all say which game this session is about — anything
 	// else, and the manager is there to ask.
 	bool WantsEditor()
 	{

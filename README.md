@@ -34,7 +34,7 @@
       <li><strong>2D Physics</strong> — <a href="https://github.com/erincatto/box2d">Box2D</a> behind a <code>PhysicsWorld</code> with a fixed time step, transform synchronization and contact events routed to the components that care.</li>
       <li><strong>Backend-agnostic renderer</strong> — every OpenGL call lives behind a small RHI (<code>RendererAPI</code>, <code>GraphicsContext</code>, <code>Shader</code>, <code>Buffer</code>, <code>VertexArray</code>, <code>Texture</code>), so a Vulkan backend can be added without touching high-level code.</li>
       <li><strong>Batched sprite rendering</strong> — sprites are batched into a single dynamic buffer with per-frame texture slotting and depth sorting, issued in one draw call.</li>
-      <li><strong>Asset sealing</strong> — <code>Vault</code> is the one place the format lives (XOR, then URL-safe base64). A scene is sealed by the editor that saves it; a shipped game’s shaders are sealed by the build. Loading never has to know which kind it has — plain content comes back unchanged. It is obfuscation, not encryption.</li>
+      <li><strong>Asset sealing</strong> — <code>Vault</code> is the one place the format lives (XOR, then URL-safe base64). The editor saves scenes as plain, readable JSON; a shipped game’s shaders and scenes are sealed by the build. Loading never has to know which kind it has — plain content comes back unchanged. It is obfuscation, not encryption.</li>
       <li><strong>Layer stack, events, input, logging and a resource cache</strong> for building games on top of the engine.</li>
     </ul>
     <h3>Editor (<em>Lion’s Mane</em>)</h3>
@@ -43,7 +43,7 @@
       <li><strong>Inspector</strong> — every component drawn from its own reflection, with per-field revert, a uniform-scale padlock, and required components pulled in automatically (<code>LION_REQUIRES</code>).</li>
       <li><strong>Hot reload</strong> — scaffold a C++ component from the editor, compile it, and the module is swapped back in without restarting: the editor loads a private copy of the DLL so the original stays writable.</li>
       <li><strong>Content Browser, Console and Statistics</strong> — create, rename and delete project assets; a console that collapses repeats and renders through a clipper; frame, renderer and scene counters.</li>
-      <li><strong>Its own window</strong> — a caption the editor draws itself, and <code>.lscene</code> files registered with Windows on first run, so Explorer shows them with the engine’s icon and a double-click opens them here.</li>
+      <li><strong>Its own window</strong> — a caption the editor draws itself, and <code>.lnproject</code> files registered with Windows on first run, so Explorer shows a project with the engine’s icon and a double-click opens it here — scenes open inside the editor.</li>
     </ul>
   </div>
   <div id="structure">
@@ -104,7 +104,7 @@
     <ul>
       <li><a href="https://github.com/erincatto/box2d">Box2D</a> – 2D physics</li>
       <li><a href="https://github.com/Dav1dde/glad">GLAD</a> – OpenGL loader</li>
-      <li><a href="https://github.com/glfw/glfw">GLFW</a> – Window &amp; input management</li>
+      <li><a href="https://github.com/glfw/glfw">GLFW</a> – Window &amp; input management. Built as a shared library and shipped as <code>lion-platform.dll</code> — the platform layer’s name, not a third-party grab-bag beside the executable. Renaming the binary is permitted by GLFW’s zlib licence, which ships beside the DLL as <code>LICENSE-glfw.md</code>.</li>
       <li><a href="https://github.com/g-truc/glm">GLM</a> – Math library for graphics</li>
       <li><a href="https://github.com/ocornut/imgui">Dear ImGui</a> – Immediate mode GUI (editor only)</li>
       <li><a href="https://github.com/CedricGuillemet/ImGuizmo">ImGuizmo</a> – Viewport gizmos (editor only)</li>
@@ -145,7 +145,7 @@
     <table>
       <tr><th>Argument</th><th>What it does</th></tr>
       <tr><td><code>Lion.exe --project &lt;folder&gt;</code></td><td>Opens that project in the editor directly (what the Project Manager itself passes).</td></tr>
-      <tr><td><code>Lion.exe &lt;path&gt;.lproject</code></td><td>Opens the project the marker belongs to (what double-clicking a project in Explorer passes). Scenes open inside the editor, the way they do in Unreal and Visual Studio.</td></tr>
+      <tr><td><code>Lion.exe &lt;path&gt;.lnproject</code></td><td>Opens the project the marker belongs to (what double-clicking a project in Explorer passes). Scenes open inside the editor, the way they do in Unreal and Visual Studio.</td></tr>
       <tr><td><code>Lion.exe --no-project-manager</code></td><td>Opens the built-in project and demo scene directly — for iterating on the editor itself, where relaunching is constant.</td></tr>
     </table>
     <p>Three configurations, each there to catch something the others cannot:</p>

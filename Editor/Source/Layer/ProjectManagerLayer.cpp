@@ -94,6 +94,7 @@ void ProjectManagerLayer::OnAttach()
 	Window::SetBackgroundColor(0.10f, 0.10f, 0.11f);
 	Window::SetResizable(false);
 	Window::SetMaximized(false);
+	Window::SetStartupPosition(WindowStartupPosition::CenterScreen);
 	Window::SetDarkTitleBar(true);
 	Window::SetCustomTitleBar(true, kCaptionHeight);
 }
@@ -102,7 +103,7 @@ void ProjectManagerLayer::OnCreate()
 {
 	EditorGui::Init();
 
-	// A .lproject in Explorer opens this program, the way a .uproject opens Unreal.
+	// A .lnproject in Explorer opens this program, the way a .uproject opens Unreal.
 	Projects::RegisterFileType();
 
 	mLogo = Texture::Create(kEngineIconFile, TextureFilter::Linear);

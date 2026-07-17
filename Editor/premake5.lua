@@ -36,6 +36,9 @@ project "Mane"
         "%{dependencies.iconfont.include}",
         "%{dependencies.imgui.include}",
         "%{dependencies.imguizmo.include}",
+        -- The project marker is JSON, written and read with the same library the engine serializes
+        -- scenes with. Header-only, and never handed across the DLL boundary.
+        "%{dependencies.json.include}",
         "%{dependencies.spdlog.include}",
         "%{dependencies.stb.include}",
     }
@@ -62,8 +65,10 @@ project "Mane"
         postbuildcommands {
             -- Engine DLL next to the editor executable.
             '{COPY} "%{wks.location}/Build/Bin/' .. output_dir .. 'Lion/lion-core.dll" "%{cfg.targetdir}"',
-            -- GLFW shared library (the editor's ImGui backend links against it directly).
+            -- GLFW shared library (the editor's ImGui backend links against it directly), shipped as
+            -- lion-platform.dll — its licence travels with it, as with every renamed or copied vendor file.
             '{COPYFILE} "%{dependencies.glfw.dll}" "%{cfg.targetdir}"',
+            '{COPYFILE} "%{dependencies.glfw.license}" "%{cfg.targetdir}/LICENSE-glfw.md"',
             -- The icon font, beside the executable, with the licence it ships under. It is the editor's
             -- alone: ImGui never crosses into the engine, and a game draws no icons.
             '{MKDIR} "%{cfg.targetdir}/Fonts"',

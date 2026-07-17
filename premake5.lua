@@ -66,7 +66,13 @@ workspace "Lion"
     dependencies["glfw"] = {
         include = "%{wks.location}/Vendor/glfw/include",
         lib = "glfw",
-        dll = "%{wks.location}/Vendor/glfw/Build/Bin/" .. output_dir .. "glfw/glfw.dll",
+        -- The library is GLFW; the file is named for what it is *here* — the platform layer's shared
+        -- library — so what ships beside the executables reads as the engine's, not as a grab-bag of
+        -- third-party names. Renaming the binary is fine under GLFW's zlib licence (it asks that altered
+        -- versions not misrepresent their origin, not that the file keep its name); the licence ships
+        -- beside the DLL, and the README's dependency table says what it really is.
+        dll = "%{wks.location}/Vendor/glfw/Build/Bin/" .. output_dir .. "glfw/lion-platform.dll",
+        license = "%{wks.location}/Vendor/glfw/LICENSE.md",
     }
 
     dependencies["glm"] = {
@@ -149,9 +155,13 @@ group ". External Dependencies"
     -- Override GLFW (a submodule) to build as a shared library without editing the vendored file.
     -- A single shared GLFW keeps one copy of its global state, shared by the engine DLL (which owns
     -- the window) and the editor executable (whose ImGui GLFW backend must act on that same window).
+    --
+    -- The target is named lion-platform: it is the platform layer's shared library, and the name beside
+    -- the executables should say so (see dependencies["glfw"].dll above for the licence note).
     project "glfw"
         filter {}
         kind "SharedLib"
+        targetname "lion-platform"
         defines { "_GLFW_BUILD_DLL" }
 group ""
 

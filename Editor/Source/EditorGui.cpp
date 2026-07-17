@@ -1,5 +1,6 @@
 #include "EditorPch.h"
 #include "EditorGui.h"
+#include "Projects.h"
 
 #include <filesystem>
 
@@ -208,11 +209,11 @@ void EditorGui::Init()
 	io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
 	io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 
-	// The editor's persisted state lives in Data/, beside the executable — not in the directory the
-	// editor was started from, which Visual Studio and a shortcut both get wrong. ImGui only holds a
-	// pointer to the filename, so it lives in a static string, and it will not create the folder
-	// itself. The layouts folder and the shortcuts config sit alongside it.
-	const std::filesystem::path dataDirectory = std::filesystem::path(ResourceRootDirectory()) / "Data";
+	// The editor's persisted state lives in the one Data folder Projects.h decides on — beside the
+	// executable, or in the user's app data when that folder refuses writes. ImGui only holds a pointer
+	// to the filename, so it lives in a static string, and it will not create the folder itself. The
+	// layouts folder and the shortcuts config sit alongside it.
+	const std::filesystem::path dataDirectory = Projects::EditorDataDirectory();
 
 	std::error_code error;
 	std::filesystem::create_directories(dataDirectory, error);

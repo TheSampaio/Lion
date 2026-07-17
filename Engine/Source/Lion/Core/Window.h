@@ -31,6 +31,10 @@ namespace Lion
         static LION_API void SetSize(uint32 width, uint32 height);
         static LION_API void SetTitle(const std::string& title);
 
+        // Where the window first appears. Set before the window exists — placement is decided while it is
+        // still hidden, so it never appears anywhere else first.
+        static LION_API void SetStartupPosition(WindowStartupPosition position);
+
         // Sets the title-bar text without changing the stored base title (used for live stats).
         static LION_API void SetDisplayTitle(const std::string& title);
 

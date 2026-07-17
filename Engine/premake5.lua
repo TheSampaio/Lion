@@ -45,8 +45,10 @@ project "Lion"
         '{MKDIR} "%{wks.location}/Build/Bin/' .. output_dir .. launcher_project .. '"',
         '{MKDIR} "%{wks.location}/Build/Bin/' .. output_dir .. editor_project .. '"',
         "{COPY} %{cfg.buildtarget.relpath} ../Build/Bin/" .. output_dir .. "/" .. launcher_project,
-        -- GLFW is a shared library; ship it next to the launcher that loads the engine.
+        -- GLFW is a shared library, shipped as lion-platform.dll next to the launcher that loads the
+        -- engine — with its licence beside it, as with every renamed or copied vendor file.
         '{COPYFILE} "%{dependencies.glfw.dll}" "%{wks.location}/Build/Bin/' .. output_dir .. launcher_project .. '/"',
+        '{COPYFILE} "%{dependencies.glfw.license}" "%{wks.location}/Build/Bin/' .. output_dir .. launcher_project .. '/LICENSE-glfw.md"',
         -- The engine's own assets — its icon — go beside anything it builds: a game that picks no icon of
         -- its own still wears the engine's, and the editor always does.
         'xcopy /E /I /Y /Q "%{prj.location}Assets" "%{wks.location}/Build/Bin/' .. output_dir .. launcher_project .. '/"',

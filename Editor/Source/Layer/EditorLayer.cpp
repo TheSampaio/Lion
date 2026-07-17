@@ -41,9 +41,9 @@ static const char8* kEditorName = "Lion's Mane";
 static constexpr float32 kIconSize = 16.0f;
 static constexpr float32 kIconTitle = 24.0f;
 
-// What a file dialog offers when a scene is opened or saved. A scene is JSON inside and a .lscene outside:
+// What a file dialog offers when a scene is opened or saved. A scene is JSON inside and a .lnscene outside:
 // what it is made of is the engine's business, and what it is is the project's.
-static const char8* kSceneFilter = "Lion Scene (*.lscene)\0*.lscene\0";
+static const char8* kSceneFilter = "Lion Scene (*.lnscene)\0*.lnscene\0";
 
 namespace
 {
@@ -116,7 +116,7 @@ void EditorLayer::OnCreate()
 	LoadRecentScenes();
 
 	// The project this session is about, handed over as the process was started: --project from the
-	// Project Manager, or a .lproject double-clicked in Explorer, which arrives as a bare path whose
+	// Project Manager, or a .lnproject double-clicked in Explorer, which arrives as a bare path whose
 	// folder is the project. The editor initialises on it — the built-in on its demo, any other project
 	// on a fresh scene with its own module built and hot-swapped in as soon as the build answers. Without
 	// one (the --no-project-manager skip, or a bare debugger launch), the built-in demo it is. A scene is
@@ -1234,7 +1234,7 @@ namespace
 	// which is the way the editor is usually run.
 	//
 	// Symbols are optional (an optimised build has none), so failing here costs debugging, not the load.
-	void CopyGameSymbols(const std::filesystem::path& root)
+	void CopyGameSymbols(const std::filesystem::path& root, const std::filesystem::path& destination)
 	{
 		const std::filesystem::path symbols = root / kGameModuleSymbolsFile;
 
@@ -1243,10 +1243,12 @@ namespace
 		if (!std::filesystem::exists(symbols, error))
 			return;
 
-		std::filesystem::copy_file(symbols, root / kGameModuleLoadedSymbolsFile,
+		// The copy sits where the loaded module's copy sits — the writable Data folder — and the module
+		// points at it by file name, which a debugger resolves beside the module.
+		std::filesystem::copy_file(symbols, destination / kGameModuleLoadedSymbolsFile,
 			std::filesystem::copy_options::overwrite_existing, error);
 
-		if (error || !RedirectModuleSymbols((root / kGameModuleLoadedFile).string(), kGameModuleLoadedSymbolsFile))
+		if (error || !RedirectModuleSymbols((destination / kGameModuleLoadedFile).string(), kGameModuleLoadedSymbolsFile))
 			Log::Console(LogLevel::Warning, "[Editor] Could not copy the game module's symbols; rebuilding it while debugging the editor will fail.");
 	}
 
@@ -1714,7 +1716,7 @@ namespace
 	// where a component is created, and hiding the result would be a strange way to end that flow.
 	bool IsAssetFile(const std::filesystem::path& path)
 	{
-		static const char8* extensions[] = { ".png", ".jpg", ".jpeg", ".bmp", ".glsl", ".lscene", ".h", ".cpp" };
+		static const char8* extensions[] = { ".png", ".jpg", ".jpeg", ".bmp", ".glsl", ".lnscene", ".h", ".cpp" };
 
 		std::string extension = path.extension().string();
 		std::transform(extension.begin(), extension.end(), extension.begin(),
@@ -1901,7 +1903,7 @@ namespace
 		if (extension == ".glsl")
 			return ICON_MDI_PALETTE;
 
-		if (extension == ".lscene")
+		if (extension == ".lnscene")
 			return ICON_MDI_SHAPE;
 
 		return ICON_MDI_FILE_DOCUMENT_OUTLINE;
@@ -4771,7 +4773,7 @@ void EditorLayer::SaveScene()
 
 void EditorLayer::SaveSceneAs()
 {
-	const std::string path = FileDialog::Save(kSceneFilter, "lscene", GameAssetsDirectory().string());
+	const std::string path = FileDialog::Save(kSceneFilter, "lnscene", GameAssetsDirectory().string());
 
 	if (path.empty())
 		return;
@@ -5169,10 +5171,13 @@ bool EditorLayer::LoadGameModule()
 {
 	// Anchored to the executable, not to the working directory: the module sits with the editor's own
 	// binaries, and the editor is not always started from that folder (Visual Studio runs it from the
-	// project directory, and a shortcut can point anywhere).
+	// project directory, and a shortcut can point anywhere). The *copy* goes to the Data folder, which
+	// is the one place guaranteed writable: an editor installed where Windows guards the folder can
+	// read the module beside itself but not put a file there — the "Access is denied" every launch.
 	const std::filesystem::path root = ResourceRootDirectory();
+	const std::filesystem::path data = EditorDataDirectory();
 	const std::filesystem::path source = root / kGameModuleFile;
-	const std::filesystem::path runtime = root / kGameModuleLoadedFile;
+	const std::filesystem::path runtime = data / kGameModuleLoadedFile;
 
 	std::error_code error;
 
@@ -5192,7 +5197,7 @@ bool EditorLayer::LoadGameModule()
 		return false;
 	}
 
-	CopyGameSymbols(root);
+	CopyGameSymbols(root, data);
 
 	const bool loaded = Lion::LoadGameModule(mGameModule, runtime.string());
 
@@ -5211,7 +5216,11 @@ void EditorLayer::CompileGameModule()
 
 	if (root.empty())
 	{
-		Log::Console(LogLevel::Error, "[Editor] Could not locate the project; nothing to compile.");
+		// Not a failure, a fact of the installation: compiling rebuilds the module from source against the
+		// engine's own tree, and a distributed editor ships without one. Assets, scenes and the module it
+		// came with all still work.
+		Log::Console(LogLevel::Warning,
+			"[Editor] Compiling needs the engine's source tree beside the editor; this editor runs the game module it shipped with.");
 		return;
 	}
 
