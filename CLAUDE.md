@@ -80,8 +80,9 @@ script, not by editing the submodules.
 
 **Every dependency is a submodule**, each a fork under `github.com/TheSampaio`, each carrying its own
 `premake5.lua`. Nothing is copied into the tree by hand, so `git clone --recursive` is all a fresh
-machine needs. A vendored licence travels with whatever the build copies out of it — the icon font
-lands beside the editor with its `LICENSE` next to it.
+machine needs. Every licence the distribution carries — the engine's own and each third party's — is
+gathered into one `Licenses/` folder beside the executables, each as Markdown, by
+`Scripts/PackLicenses.bat`.
 
 ```sh
 Scripts\Build.bat [Debug|Release|Shipping]   # from a fresh clone: generates, then builds everything
@@ -151,7 +152,8 @@ editor's own state to the executable, not to the working directory.
   `UnloadGameModule` own the bookkeeping, so neither loader can forget half of it.
 - **A project owns its build, Unreal-style.** The editor generates `<project>/Build/lion-game.vcxproj`
   (fresh file list before every compile — it is a glob) plus a `.sln` at the project root, tied to the
-  **SDK** beside the editor: engine + vendor headers and `lion-core.lib`, assembled by
+  **`Include/` and `Bin/` folders beside the editor**: one merged header tree (every package keeps to its
+  own subfolder, so one include path serves them all) and `lion-core.lib`, assembled by
   `Scripts/PackSdk.bat` from the editor's post-build. That is what lets a *distributed* editor create and
   compile C++ components with no engine tree — it needs only Visual Studio (found via vswhere). The
   module lands in `<project>/Build/Bin/<config>/` and the editor loads a project's own module before

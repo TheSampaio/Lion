@@ -69,10 +69,10 @@ workspace "Lion"
         -- The library is GLFW; the file is named for what it is *here* — the platform layer's shared
         -- library — so what ships beside the executables reads as the engine's, not as a grab-bag of
         -- third-party names. Renaming the binary is fine under GLFW's zlib licence (it asks that altered
-        -- versions not misrepresent their origin, not that the file keep its name); the licence ships
-        -- beside the DLL, and the README's dependency table says what it really is.
+        -- versions not misrepresent their origin, not that the file keep its name); the licence ships in
+        -- the Licenses folder (Scripts/PackLicenses.bat), and the README's dependency table says what the
+        -- file really is.
         dll = "%{wks.location}/Vendor/glfw/Build/Bin/" .. output_dir .. "glfw/lion-platform.dll",
-        license = "%{wks.location}/Vendor/glfw/LICENSE.md",
     }
 
     dependencies["glm"] = {
@@ -97,10 +97,9 @@ workspace "Lion"
 
     -- The icons the editor draws with: a webfont, and the header that names its glyphs. The font is data,
     -- like GLFW's DLL — nothing links it, so what a dependency on it means is a file that has to arrive
-    -- beside the executable. Its licence travels with it, which is what the Apache 2.0 licence asks for.
+    -- beside the executable. Its licence ships in the Licenses folder with everything else's.
     dependencies["mdi"] = {
         font = "%{wks.location}/Vendor/mdi/fonts/materialdesignicons-webfont.ttf",
-        license = "%{wks.location}/Vendor/mdi/LICENSE",
     }
 
     dependencies["iconfont"] = {

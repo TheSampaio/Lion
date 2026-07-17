@@ -104,7 +104,7 @@
     <ul>
       <li><a href="https://github.com/erincatto/box2d">Box2D</a> – 2D physics</li>
       <li><a href="https://github.com/Dav1dde/glad">GLAD</a> – OpenGL loader</li>
-      <li><a href="https://github.com/glfw/glfw">GLFW</a> – Window &amp; input management. Built as a shared library and shipped as <code>lion-platform.dll</code> — the platform layer’s name, not a third-party grab-bag beside the executable. Renaming the binary is permitted by GLFW’s zlib licence, which ships beside the DLL as <code>LICENSE-glfw.md</code>.</li>
+      <li><a href="https://github.com/glfw/glfw">GLFW</a> – Window &amp; input management. Built as a shared library and shipped as <code>lion-platform.dll</code> — the platform layer’s name, not a third-party grab-bag beside the executable. Renaming the binary is permitted by GLFW’s zlib licence, which ships with every other licence in the <code>Licenses/</code> folder beside the executables.</li>
       <li><a href="https://github.com/g-truc/glm">GLM</a> – Math library for graphics</li>
       <li><a href="https://github.com/ocornut/imgui">Dear ImGui</a> – Immediate mode GUI (editor only)</li>
       <li><a href="https://github.com/CedricGuillemet/ImGuizmo">ImGuizmo</a> – Viewport gizmos (editor only)</li>

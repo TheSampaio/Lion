@@ -153,7 +153,7 @@ void EditorLayer::OnCreate()
 		// The project's own module is built against the SDK beside the editor — dev tree or distributed
 		// install alike. Without an SDK there is nothing to build with, and nothing worth a warning at
 		// every boot: the project opens with the module already on disk.
-		if (!ProjectBuild::SdkDirectory().empty())
+		if (ProjectBuild::Available())
 			CompileGameModule();
 
 		return;
@@ -5712,7 +5712,7 @@ void EditorLayer::OpenProject(const std::filesystem::path& folder)
 	const bool switchedToBuiltIn =
 		folder.lexically_normal() == Projects::DefaultProjectDirectory().lexically_normal();
 
-	if (switchedToBuiltIn ? !Projects::EngineRootDirectory().empty() : !ProjectBuild::SdkDirectory().empty())
+	if (switchedToBuiltIn ? !Projects::EngineRootDirectory().empty() : ProjectBuild::Available())
 		CompileGameModule();
 }
 

@@ -15,10 +15,18 @@ namespace ProjectBuild
 		// ever references it.
 		constexpr const char8* kProjectGuid = "{B27D5FA1-8F5C-4E6B-9C7A-2D51E0C4A9F3}";
 
-		// The vendored headers a game module compiles against — the Sandbox's own include list, mirrored
-		// into the SDK by Scripts/PackSdk.bat. One list, read by the generator and written by the script;
-		// a vendor added there is added here.
-		constexpr const char8* kVendorIncludes[] = { "box2d", "glad", "glfw", "glm", "spdlog", "stb" };
+		// The headers and the import library beside the editor, assembled by Scripts/PackSdk.bat: one
+		// merged include tree (every package keeps to its own subfolder, so one path serves them all) and
+		// the lib the module links.
+		std::filesystem::path IncludeDirectory()
+		{
+			return std::filesystem::path(ResourceRootDirectory()) / "Include";
+		}
+
+		std::filesystem::path LibraryDirectory()
+		{
+			return std::filesystem::path(ResourceRootDirectory()) / "Bin";
+		}
 
 		// The sources the module is built from: everything the project keeps, except what the build itself
 		// writes under Build/ — compiling your own output is how a glob eats its tail.
@@ -47,12 +55,11 @@ namespace ProjectBuild
 		}
 	}
 
-	std::filesystem::path SdkDirectory()
+	bool Available()
 	{
-		const std::filesystem::path sdk = std::filesystem::path(ResourceRootDirectory()) / "SDK";
-
 		std::error_code error;
-		return std::filesystem::is_directory(sdk, error) ? sdk : std::filesystem::path();
+		return std::filesystem::is_directory(IncludeDirectory(), error)
+			&& std::filesystem::exists(LibraryDirectory() / "lion-core.lib", error);
 	}
 
 	std::filesystem::path ModulePath(const std::filesystem::path& project)
@@ -67,11 +74,9 @@ namespace ProjectBuild
 
 	bool Generate(const std::filesystem::path& project, std::string& error)
 	{
-		const std::filesystem::path sdk = SdkDirectory();
-
-		if (sdk.empty())
+		if (!Available())
 		{
-			error = "The editor's SDK folder is missing; there is nothing to compile against.";
+			error = "The editor's Include and Bin folders are missing; there is nothing to compile against.";
 			return false;
 		}
 
@@ -94,12 +99,7 @@ namespace ProjectBuild
 		const std::string configuration = BuildConfiguration();
 		const bool debug = configuration == "Debug";
 
-		std::string includes;
-		includes += (sdk / "Engine" / "Include").generic_string() + ";";
-		includes += (sdk / "Engine" / "Source").generic_string() + ";";
-
-		for (const char8* vendor : kVendorIncludes)
-			includes += (sdk / "Vendor" / vendor / "include").generic_string() + ";";
+		const std::string includes = IncludeDirectory().generic_string() + ";";
 
 		// LN_DISABLE_WARNINGS mirrors the workspace define in premake5.lua — the engine's headers hand it
 		// to #pragma warning, and a build without it trips over the bare macro name.
@@ -154,7 +154,7 @@ namespace ProjectBuild
 			<< "    </ClCompile>\n"
 			<< "    <Link>\n"
 			<< "      <AdditionalDependencies>lion-core.lib;%(AdditionalDependencies)</AdditionalDependencies>\n"
-			<< "      <AdditionalLibraryDirectories>" << (sdk / "Lib").generic_string() << ";%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>\n"
+			<< "      <AdditionalLibraryDirectories>" << LibraryDirectory().generic_string() << ";%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>\n"
 			<< "      <GenerateDebugInformation>" << (debug ? "true" : "false") << "</GenerateDebugInformation>\n"
 			<< "    </Link>\n"
 			<< "  </ItemDefinitionGroup>\n"

@@ -66,14 +66,16 @@ project "Mane"
             -- Engine DLL next to the editor executable.
             '{COPY} "%{wks.location}/Build/Bin/' .. output_dir .. 'Lion/lion-core.dll" "%{cfg.targetdir}"',
             -- GLFW shared library (the editor's ImGui backend links against it directly), shipped as
-            -- lion-platform.dll — its licence travels with it, as with every renamed or copied vendor file.
+            -- lion-platform.dll.
             '{COPYFILE} "%{dependencies.glfw.dll}" "%{cfg.targetdir}"',
-            '{COPYFILE} "%{dependencies.glfw.license}" "%{cfg.targetdir}/LICENSE-glfw.md"',
-            -- The icon font, beside the executable, with the licence it ships under. It is the editor's
-            -- alone: ImGui never crosses into the engine, and a game draws no icons.
+            -- The icon font, beside the executable. It is the editor's alone: ImGui never crosses into
+            -- the engine, and a game draws no icons.
             '{MKDIR} "%{cfg.targetdir}/Fonts"',
             '{COPYFILE} "%{dependencies.mdi.font}" "%{cfg.targetdir}/Fonts/"',
-            '{COPYFILE} "%{dependencies.mdi.license}" "%{cfg.targetdir}/Fonts/LICENSE-mdi.txt"',
+            -- Every licence the distribution carries — the engine's own and each third party's — lands in
+            -- one Licenses folder, gathered by one script (Scripts/PackLicenses.bat) so there is one
+            -- place to look instead of a note beside a font here and a file beside a DLL there.
+            'call "%{wks.location}/Scripts/PackLicenses.bat" "%{wks.location}" "%{cfg.targetdir}"',
             -- Shared resources (shaders + sprites) flattened next to the executable, minus the scripts:
             -- the editor reads those from the project, and they are compiled into the module anyway.
             -- The exclude list is named relatively — see the same copy in Sandbox/premake5.lua.
