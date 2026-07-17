@@ -2,6 +2,7 @@
 #include "EditorLayer.h"
 
 #include "../EditorGui.h"
+#include "../ProjectBuild.h"
 #include "../Projects.h"
 
 #include <IconsMaterialDesignIcons.h>
@@ -149,9 +150,10 @@ void EditorLayer::OnCreate()
 		Log::Console(LogLevel::Success,
 			LION_FORMAT_TEXT("[Editor] Opened project '{}'.", Projects::DisplayName(requested)));
 
-		// Rebuilding the module is a development-tree affair. A distributed editor opens the project with
-		// the module it shipped with, and says nothing — a warning at every boot is not "ready to use".
-		if (!Projects::EngineRootDirectory().empty())
+		// The project's own module is built against the SDK beside the editor — dev tree or distributed
+		// install alike. Without an SDK there is nothing to build with, and nothing worth a warning at
+		// every boot: the project opens with the module already on disk.
+		if (!ProjectBuild::SdkDirectory().empty())
 			CompileGameModule();
 
 		return;
@@ -1238,9 +1240,9 @@ namespace
 	// which is the way the editor is usually run.
 	//
 	// Symbols are optional (an optimised build has none), so failing here costs debugging, not the load.
-	void CopyGameSymbols(const std::filesystem::path& root, const std::filesystem::path& destination)
+	void CopyGameSymbols(const std::filesystem::path& moduleDirectory, const std::filesystem::path& destination)
 	{
-		const std::filesystem::path symbols = root / kGameModuleSymbolsFile;
+		const std::filesystem::path symbols = moduleDirectory / kGameModuleSymbolsFile;
 
 		std::error_code error;
 
@@ -5180,10 +5182,18 @@ bool EditorLayer::LoadGameModule()
 	// read the module beside itself but not put a file there — the "Access is denied" every launch.
 	const std::filesystem::path root = ResourceRootDirectory();
 	const std::filesystem::path data = EditorDataDirectory();
-	const std::filesystem::path source = root / kGameModuleFile;
 	const std::filesystem::path runtime = data / kGameModuleLoadedFile;
 
 	std::error_code error;
+
+	// The module belongs to the project when the project has built one — its own Build output, tied to
+	// the SDK. The built-in, and a project that has never compiled, run the module beside the editor.
+	const std::filesystem::path active = ActiveProjectDirectory();
+	const std::filesystem::path owned = active.empty()
+		? std::filesystem::path() : ProjectBuild::ModulePath(active);
+
+	const std::filesystem::path source = (!owned.empty() && std::filesystem::exists(owned, error))
+		? owned : root / kGameModuleFile;
 
 	if (!std::filesystem::exists(source, error))
 	{
@@ -5201,7 +5211,7 @@ bool EditorLayer::LoadGameModule()
 		return false;
 	}
 
-	CopyGameSymbols(root, data);
+	CopyGameSymbols(source.parent_path(), data);
 
 	const bool loaded = Lion::LoadGameModule(mGameModule, runtime.string());
 
@@ -5216,57 +5226,66 @@ void EditorLayer::CompileGameModule()
 	if (mBuilding)
 		return;
 
-	const std::filesystem::path root = ProjectRootDirectory();
-
-	if (root.empty())
-	{
-		// Not a failure, a fact of the installation: compiling rebuilds the module from source against the
-		// engine's own tree, and a distributed editor ships without one. Assets, scenes and the module it
-		// came with all still work.
-		Log::Console(LogLevel::Warning,
-			"[Editor] Compiling needs the engine's source tree beside the editor; this editor runs the game module it shipped with.");
-		return;
-	}
-
 	if (MSBuildPath().empty())
 	{
-		Log::Console(LogLevel::Error, "[Editor] Could not locate MSBuild; is Visual Studio installed?");
+		Log::Console(LogLevel::Error,
+			"[Editor] Could not locate MSBuild; building C++ needs Visual Studio with its C++ tools installed.");
 		return;
 	}
 
-	// Regenerate the projects first: a file that was just scaffolded is not in the .vcxproj yet, and
-	// premake globs the source tree. It runs from the project root, where the workspace script lives.
-	//
-	// The active project the editor points at is handed to premake through LION_PROJECT_DIR, so the game
-	// module is built from that project's sources — which is what makes a rebuild load the components of the
-	// project just opened. It is only set when the project is not the built-in Sandbox, so a Sandbox build
-	// stays byte-for-byte the one a plain Build.bat produces.
 	const std::filesystem::path active = ActiveProjectDirectory();
-	const bool projectOverride = !active.empty()
-		&& active.lexically_normal() != Projects::DefaultProjectDirectory().lexically_normal();
+	const bool builtIn = !active.empty()
+		&& active.lexically_normal() == Projects::DefaultProjectDirectory().lexically_normal();
 
-	std::string generate = "cd /d \"" + root.string() + "\" && ";
+	std::string generate;
+	std::string build;
 
-	if (projectOverride)
-		generate += "set \"LION_PROJECT_DIR=" + active.generic_string() + "\" && ";
+	if (builtIn)
+	{
+		// The built-in Sandbox is part of the engine's own tree and builds the way the tree does:
+		// premake regenerates (a file just scaffolded is not in the .vcxproj yet — the lists are globs),
+		// then MSBuild builds only the module. Its target is its solution folder and project name, hence
+		// "Runtime\Game"; BuildProjectReferences=false keeps the engine out of it, whose .pdb this very
+		// editor's debugger may hold locked.
+		const std::filesystem::path root = ProjectRootDirectory();
 
-	generate += "premake5 vs2022";
+		if (root.empty())
+		{
+			Log::Console(LogLevel::Warning,
+				"[Editor] The built-in project only exists inside the engine's source tree; there is nothing to compile here.");
+			return;
+		}
 
-	// Build only the game module. Its MSBuild target is its solution folder and project name — premake
-	// files it under the "Runtime" group, hence "Runtime\Game", so moving the project between groups
-	// renames this.
-	//
-	// BuildProjectReferences=false is what keeps it to only the module. The game links the engine, so
-	// MSBuild would otherwise build the engine first to satisfy the reference — and the engine's DLL is
-	// loaded by this very editor, so Windows has its .pdb locked and the relink dies with LNK1201. The
-	// engine the editor is running is the engine the module is built against; there is nothing to rebuild.
-	const std::string build =
-		"\"" + MSBuildPath() + "\""
-		" \"" + (root / "Lion.sln").string() + "\""
-		" -t:Runtime\\Game"
-		" -p:BuildProjectReferences=false"
-		" -p:Configuration=" + BuildConfiguration() +
-		" -p:Platform=x64 -v:minimal -nologo";
+		generate = "cd /d \"" + root.string() + "\" && premake5 vs2022";
+
+		build =
+			"\"" + MSBuildPath() + "\""
+			" \"" + (root / "Lion.sln").string() + "\""
+			" -t:Runtime\\Game"
+			" -p:BuildProjectReferences=false"
+			" -p:Configuration=" + BuildConfiguration() +
+			" -p:Platform=x64 -v:minimal -nologo";
+	}
+	else
+	{
+		// Any other project owns its build, the way an Unreal game does: a Visual Studio project of its
+		// own, tied to the SDK beside the editor — which is what lets a distributed editor compile C++
+		// with no engine tree in sight. Regenerated now, so the file list is the project as it stands.
+		std::string error;
+
+		if (!ProjectBuild::Generate(active, error))
+		{
+			Log::Console(LogLevel::Error, LION_FORMAT_TEXT("[Editor] Could not prepare the project's build: {}", error));
+			PushToast("Could not prepare the project's build", false);
+			return;
+		}
+
+		build =
+			"\"" + MSBuildPath() + "\""
+			" \"" + ProjectBuild::VcxprojPath(active).string() + "\""
+			" -p:Configuration=" + BuildConfiguration() +
+			" -p:Platform=x64 -v:minimal -nologo";
+	}
 
 	Log::Console(LogLevel::Information, "[Editor] Compiling the game module...");
 	PushToast("Compiling the game module", true);
@@ -5276,14 +5295,20 @@ void EditorLayer::CompileGameModule()
 	{
 		GameBuild result;
 
-		// A failed regeneration means the build would compile a stale file list, so it stops here.
-		result.exitCode = RunCommand(generate, result.output);
+		// A failed regeneration means the build would compile a stale file list, so it stops here. A
+		// project's own build has no generate step: its file list was written just above.
+		if (!generate.empty())
+		{
+			result.exitCode = RunCommand(generate, result.output);
 
-		if (result.exitCode == 0)
-			result.exitCode = RunCommand(build, result.output);
-		else
-			result.output += "[Editor] Could not regenerate the projects; is premake5 on your PATH?\n";
+			if (result.exitCode != 0)
+			{
+				result.output += "[Editor] Could not regenerate the projects; is premake5 on your PATH?\n";
+				return result;
+			}
+		}
 
+		result.exitCode = RunCommand(build, result.output);
 		return result;
 	});
 }
@@ -5681,9 +5706,13 @@ void EditorLayer::OpenProject(const std::filesystem::path& folder)
 
 	// Build this project's module and hot-swap it in, so its own components are what the editor now lists —
 	// the one module the editor holds follows whichever project is open. Assets and built-in components work
-	// without it; a project's own C++ waits on this. A distributed editor has no tree to build from, so it
-	// switches quietly with the module it shipped with — the warning belongs to the explicit Compile.
-	if (!Projects::EngineRootDirectory().empty())
+	// without it; a project's own C++ waits on this. The built-in builds from the engine's tree, any other
+	// project from the SDK beside the editor; with neither around, the switch is quiet — the module already
+	// on disk is the one that runs, and the explanation belongs to the explicit Compile.
+	const bool switchedToBuiltIn =
+		folder.lexically_normal() == Projects::DefaultProjectDirectory().lexically_normal();
+
+	if (switchedToBuiltIn ? !Projects::EngineRootDirectory().empty() : !ProjectBuild::SdkDirectory().empty())
 		CompileGameModule();
 }
 

@@ -149,6 +149,13 @@ editor's own state to the executable, not to the working directory.
   is what lets the editor list, create and serialize a type it was never compiled against. Loading the
   DLL runs those static initializers — that is the whole mechanism. `Lion::LoadGameModule` /
   `UnloadGameModule` own the bookkeeping, so neither loader can forget half of it.
+- **A project owns its build, Unreal-style.** The editor generates `<project>/Build/lion-game.vcxproj`
+  (fresh file list before every compile — it is a glob) plus a `.sln` at the project root, tied to the
+  **SDK** beside the editor: engine + vendor headers and `lion-core.lib`, assembled by
+  `Scripts/PackSdk.bat` from the editor's post-build. That is what lets a *distributed* editor create and
+  compile C++ components with no engine tree — it needs only Visual Studio (found via vswhere). The
+  module lands in `<project>/Build/Bin/<config>/` and the editor loads a project's own module before
+  falling back to the one beside itself. Only the built-in Sandbox still builds through `Lion.sln`.
 - **Hot reload is delicate.** Windows locks a loaded library, so the editor loads a *copy* and leaves
   the original writable. The registries' factories are code inside the module, so they are dropped
   before it is unloaded. Live components have their vtables in the module, so the scene round-trips

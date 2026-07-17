@@ -1,6 +1,8 @@
 #include "EditorPch.h"
 #include "Projects.h"
 
+#include "ProjectBuild.h"
+
 #include <Lion/Core/CommandLine.h>
 #include <Lion/Core/Filesystem.h>
 #include <Lion/Core/Vault.h>
@@ -324,6 +326,13 @@ namespace Projects
 			<< "\treturn new Lion::Application();\n"
 			<< "}\n";
 		module.close();
+
+		// The project is born with its Visual Studio files, the way an Unreal game is: a solution at its
+		// root, tied to the SDK beside the editor, openable in VS from the first minute. Best-effort — the
+		// compile path regenerates the project file anyway, and an editor without an SDK scaffolds the
+		// rest all the same.
+		std::string buildError;
+		ProjectBuild::Generate(folder, buildError);
 
 		return folder;
 	}

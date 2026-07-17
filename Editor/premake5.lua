@@ -78,4 +78,8 @@ project "Mane"
             -- the editor reads those from the project, and they are compiled into the module anyway.
             -- The exclude list is named relatively — see the same copy in Sandbox/premake5.lua.
             'xcopy /E /I /Y /Q /EXCLUDE:..\\Scripts\\AssetCopyExclude.txt "%{wks.location}/Sandbox/Assets" "%{cfg.targetdir}"',
+            -- The SDK a distributed editor compiles game modules against: engine headers, vendored headers
+            -- with their licences, and the engine's import library — assembled by one script so the rule of
+            -- what an SDK is lives once (see Scripts/PackSdk.bat).
+            'call "%{wks.location}/Scripts/PackSdk.bat" "%{wks.location}" "%{cfg.targetdir}" %{cfg.buildcfg}',
         }
