@@ -51,7 +51,7 @@ project "Launcher"
         dependson { editor_project }
 
         postbuildcommands {
-            '"%{wks.location}/Build/Bin/' .. output_dir .. editor_project .. '/Lion.exe" --seal "%{cfg.targetdir}" .glsl .lscene',
+            '"%{wks.location}/Build/Bin/' .. output_dir .. editor_project .. '/Lion.exe" --seal "%{cfg.targetdir}" .glsl .lnscene',
         }
 
     filter "system:windows"

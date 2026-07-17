@@ -465,6 +465,21 @@ namespace Lion
 		if (mData->maximized)
 			ApplyMaximized(true, false);   // Keep the centred windowed rectangle just set as the restore.
 
+		// Where the window first appears, decided while it is still hidden so it never appears anywhere
+		// else first. A maximised boot already covers the work area; anything else honours what was asked.
+		if (!mData->maximized && mData->startupPosition == WindowStartupPosition::CenterScreen)
+		{
+			if (GLFWmonitor* monitor = glfwGetPrimaryMonitor())
+			{
+				int32 areaX = 0, areaY = 0, areaWidth = 0, areaHeight = 0;
+				glfwGetMonitorWorkarea(monitor, &areaX, &areaY, &areaWidth, &areaHeight);
+
+				glfwSetWindowPos(mWindow,
+					areaX + (areaWidth - static_cast<int32>(mData->width)) / 2,
+					areaY + (areaHeight - static_cast<int32>(mData->height)) / 2);
+			}
+		}
+
 		glfwSetWindowUserPointer(mWindow, mData);
 		RegisterCallbacks();
 

@@ -1,11 +1,16 @@
 #include "EditorPch.h"
 #include "Projects.h"
 
+#include "ProjectBuild.h"
+
 #include <Lion/Core/CommandLine.h>
 #include <Lion/Core/Filesystem.h>
+#include <Lion/Core/Vault.h>
 #include <Lion/Platform/FileAssociation.h>
 
 #include <ctime>
+
+#include <nlohmann/json.hpp>
 
 namespace Projects
 {
@@ -86,7 +91,10 @@ namespace Projects
 				"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 _-") == std::string::npos;
 		}
 
-		// Writes the marker naming the project, replacing whichever one it had.
+		// Writes the marker naming the project, replacing whichever one it had. It goes through the same
+		// JSON library the engine serializes scenes with — not a string with braces in it, which is a
+		// serializer waiting to disagree with the real one — and it leaves sealed, the way a scene does:
+		// the engine's files wear the engine's seal, whichever kind they are.
 		void WriteMarker(const std::filesystem::path& project, const std::string& name, const std::string& version)
 		{
 			const std::filesystem::path existing = MarkerPath(project);
@@ -97,8 +105,12 @@ namespace Projects
 			if (!existing.empty() && existing != renamed)
 				std::filesystem::remove(existing, error);
 
+			nlohmann::json content;
+			content["name"] = name;
+			content["engine"] = version;
+
 			std::ofstream marker(renamed);
-			marker << "{\n\t\"name\": \"" << name << "\",\n\t\"engine\": \"" << version << "\"\n}\n";
+			marker << Lion::Vault::Seal(content.dump(2));
 		}
 
 		// A folder's last-write moment as "YYYY-MM-DD HH:MM", local time — the column Godot's manager keeps.
@@ -156,7 +168,35 @@ namespace Projects
 
 	std::filesystem::path EditorDataDirectory()
 	{
-		return std::filesystem::path(Lion::ResourceRootDirectory()) / "Data";
+		// Beside the executable when that folder takes writes — a development tree, a portable unzip —
+		// and in the user's local app data when it does not: an editor installed where Windows guards
+		// the folder runs read-only, which is why Unity, Unreal and Godot all keep state in the user's
+		// own corner. Probed once with a real write, because only a write answers whether writes work.
+		static const std::filesystem::path directory = []() -> std::filesystem::path
+		{
+			const std::filesystem::path beside = std::filesystem::path(Lion::ResourceRootDirectory()) / "Data";
+
+			std::error_code error;
+			std::filesystem::create_directories(beside, error);
+
+			const std::filesystem::path probe = beside / ".writable";
+
+			if (std::ofstream(probe).put('\n'))
+			{
+				std::filesystem::remove(probe, error);
+				return beside;
+			}
+
+			const Lion::char8* local = std::getenv("LOCALAPPDATA");
+			const std::filesystem::path fallback = (local && *local)
+				? std::filesystem::path(local) / "Lion Engine" / "Data"
+				: std::filesystem::temp_directory_path(error) / "Lion Engine" / "Data";
+
+			std::filesystem::create_directories(fallback, error);
+			return fallback;
+		}();
+
+		return directory;
 	}
 
 	bool IsProjectFolder(const std::filesystem::path& folder)
@@ -181,23 +221,22 @@ namespace Projects
 		if (marker.empty())
 			return {};
 
-		// The marker is a couple of lines of JSON; a whole parser for one quoted value would be a
-		// dependency for a label. Find the key, take what sits between the next pair of quotes.
+		// Read the way it was written — unsealed, then the JSON library, not a string search. Unseal gives
+		// plain text back unchanged, so a marker written by hand still reads; a marker edited into
+		// something else records nothing.
 		std::ifstream file(marker);
-		const std::string text((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+		std::stringstream buffer;
+		buffer << file.rdbuf();
 
-		const size_t key = text.find("\"engine\"");
-
-		if (key == std::string::npos)
+		try
+		{
+			const nlohmann::json content = nlohmann::json::parse(Lion::Vault::Unseal(buffer.str()));
+			return content.value("engine", std::string());
+		}
+		catch (const std::exception&)
+		{
 			return {};
-
-		const size_t open = text.find('"', text.find(':', key));
-		const size_t close = open == std::string::npos ? std::string::npos : text.find('"', open + 1);
-
-		if (close == std::string::npos)
-			return {};
-
-		return text.substr(open + 1, close - open - 1);
+		}
 	}
 
 	std::vector<std::string> LoadRecent()
@@ -287,6 +326,13 @@ namespace Projects
 			<< "\treturn new Lion::Application();\n"
 			<< "}\n";
 		module.close();
+
+		// The project is born with its Visual Studio files, the way an Unreal game is: a solution at its
+		// root, tied to the SDK beside the editor, openable in VS from the first minute. Best-effort — the
+		// compile path regenerates the project file anyway, and an editor without an SDK scaffolds the
+		// rest all the same.
+		std::string buildError;
+		ProjectBuild::Generate(folder, buildError);
 
 		return folder;
 	}
@@ -436,11 +482,14 @@ namespace Projects
 		std::filesystem::path icon = executable.parent_path() / Lion::kEngineIconResource;
 		icon.make_preferred();
 
-		Lion::FileAssociation::Register(".lproject", "Lion.Project", "Lion Project",
+		// The identifier is its own name, not the extension's, so retiring an extension retires its keys
+		// without touching these.
+		Lion::FileAssociation::Register(".lnproject", "Lion.EngineProject", "Lion Project",
 			icon.string(), executable.string());
 
-		// The claim older versions wrote for scenes is taken back: a scene opens inside the editor, the
-		// way it does in Unreal and Visual Studio — the project is what opens the program.
+		// Claims older versions wrote are taken back: scenes open inside the editor, the way they do in
+		// Unreal and Visual Studio, and the marker moved from .lproject to .lnproject.
 		Lion::FileAssociation::Unregister(".lscene", "Lion.Scene");
+		Lion::FileAssociation::Unregister(".lproject", "Lion.Project");
 	}
 }

@@ -152,9 +152,9 @@ namespace Lion
 			return false;
 		}
 
-		// A scene leaves the editor sealed, and it is JSON again by the time anything reads it — Vault::Unseal
-		// takes plaintext back unchanged, so a scene written by hand still opens. Sealed is what a .lscene is,
-		// not what shipping does to one, which is why nothing has to remember which kind it is holding.
+		// A scene leaves the editor sealed — XOR against the key, base64, broken into lines — and it is JSON
+		// again by the time anything reads it: Vault::Unseal takes plaintext back unchanged, so a scene
+		// written by hand still opens, and nothing has to remember which kind it is holding.
 		file << Vault::Seal(SerializeToString(scene));
 		Log::Console(LogLevel::Success, LION_FORMAT_TEXT("[SceneSerializer] Saved scene: '{}'.", filePath));
 		return true;

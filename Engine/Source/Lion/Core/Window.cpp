@@ -122,6 +122,11 @@ namespace Lion
         sInstance->mData.maximized = enable;
     }
 
+    void Window::SetStartupPosition(WindowStartupPosition position)
+    {
+        sInstance->mData.startupPosition = position;
+    }
+
     void Window::SetSize(uint32 width, uint32 height)
     {
         sInstance->mData.width = width;

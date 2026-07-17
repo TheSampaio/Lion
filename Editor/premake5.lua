@@ -36,6 +36,9 @@ project "Mane"
         "%{dependencies.iconfont.include}",
         "%{dependencies.imgui.include}",
         "%{dependencies.imguizmo.include}",
+        -- The project marker is JSON, written and read with the same library the engine serializes
+        -- scenes with. Header-only, and never handed across the DLL boundary.
+        "%{dependencies.json.include}",
         "%{dependencies.spdlog.include}",
         "%{dependencies.stb.include}",
     }
@@ -62,15 +65,23 @@ project "Mane"
         postbuildcommands {
             -- Engine DLL next to the editor executable.
             '{COPY} "%{wks.location}/Build/Bin/' .. output_dir .. 'Lion/lion-core.dll" "%{cfg.targetdir}"',
-            -- GLFW shared library (the editor's ImGui backend links against it directly).
+            -- GLFW shared library (the editor's ImGui backend links against it directly), shipped as
+            -- lion-platform.dll.
             '{COPYFILE} "%{dependencies.glfw.dll}" "%{cfg.targetdir}"',
-            -- The icon font, beside the executable, with the licence it ships under. It is the editor's
-            -- alone: ImGui never crosses into the engine, and a game draws no icons.
+            -- The icon font, beside the executable. It is the editor's alone: ImGui never crosses into
+            -- the engine, and a game draws no icons.
             '{MKDIR} "%{cfg.targetdir}/Fonts"',
             '{COPYFILE} "%{dependencies.mdi.font}" "%{cfg.targetdir}/Fonts/"',
-            '{COPYFILE} "%{dependencies.mdi.license}" "%{cfg.targetdir}/Fonts/LICENSE-mdi.txt"',
+            -- Every licence the distribution carries — the engine's own and each third party's — lands in
+            -- one Licenses folder, gathered by one script (Scripts/PackLicenses.bat) so there is one
+            -- place to look instead of a note beside a font here and a file beside a DLL there.
+            'call "%{wks.location}/Scripts/PackLicenses.bat" "%{wks.location}" "%{cfg.targetdir}"',
             -- Shared resources (shaders + sprites) flattened next to the executable, minus the scripts:
             -- the editor reads those from the project, and they are compiled into the module anyway.
             -- The exclude list is named relatively — see the same copy in Sandbox/premake5.lua.
             'xcopy /E /I /Y /Q /EXCLUDE:..\\Scripts\\AssetCopyExclude.txt "%{wks.location}/Sandbox/Assets" "%{cfg.targetdir}"',
+            -- The SDK a distributed editor compiles game modules against: engine headers, vendored headers
+            -- with their licences, and the engine's import library — assembled by one script so the rule of
+            -- what an SDK is lives once (see Scripts/PackSdk.bat).
+            'call "%{wks.location}/Scripts/PackSdk.bat" "%{wks.location}" "%{cfg.targetdir}" %{cfg.buildcfg}',
         }

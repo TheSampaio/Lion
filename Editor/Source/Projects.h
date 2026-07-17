@@ -8,12 +8,12 @@
 
 // What both faces of the editor know about projects: the Project Manager window that greets, and the
 // editor that opens one. A project is a folder holding a game's Assets and Source; a scaffolded one also
-// carries a .lproject marker naming it. This lives once, here, because two windows that disagree about
+// carries a .lnproject marker naming it. This lives once, here, because two windows that disagree about
 // what a project is would send a person to two different games.
 namespace Projects
 {
 	// The marker a scaffolded project carries; its stem is the project's name.
-	constexpr const Lion::char8* kFileExtension = ".lproject";
+	constexpr const Lion::char8* kFileExtension = ".lnproject";
 
 	// The engine's own tree, found by walking up from the executable's directory: the editor runs from its
 	// build output, several folders below it. Anchored to the executable, not the working directory — a
@@ -89,7 +89,7 @@ namespace Projects
 	// or an empty path with 'error' saying why not.
 	std::filesystem::path Duplicate(const std::filesystem::path& folder, std::string& error);
 
-	// Teaches Windows that a .lproject opens this editor — and takes back the .lscene claim older versions
+	// Teaches Windows that a .lnproject opens this editor — and takes back the .lscene claim older versions
 	// made: a scene opens inside the editor, the way it does in Unreal and Visual Studio.
 	void RegisterFileType();
 }

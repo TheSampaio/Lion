@@ -66,7 +66,13 @@ workspace "Lion"
     dependencies["glfw"] = {
         include = "%{wks.location}/Vendor/glfw/include",
         lib = "glfw",
-        dll = "%{wks.location}/Vendor/glfw/Build/Bin/" .. output_dir .. "glfw/glfw.dll",
+        -- The library is GLFW; the file is named for what it is *here* — the platform layer's shared
+        -- library — so what ships beside the executables reads as the engine's, not as a grab-bag of
+        -- third-party names. Renaming the binary is fine under GLFW's zlib licence (it asks that altered
+        -- versions not misrepresent their origin, not that the file keep its name); the licence ships in
+        -- the Licenses folder (Scripts/PackLicenses.bat), and the README's dependency table says what the
+        -- file really is.
+        dll = "%{wks.location}/Vendor/glfw/Build/Bin/" .. output_dir .. "glfw/lion-platform.dll",
     }
 
     dependencies["glm"] = {
@@ -91,10 +97,9 @@ workspace "Lion"
 
     -- The icons the editor draws with: a webfont, and the header that names its glyphs. The font is data,
     -- like GLFW's DLL — nothing links it, so what a dependency on it means is a file that has to arrive
-    -- beside the executable. Its licence travels with it, which is what the Apache 2.0 licence asks for.
+    -- beside the executable. Its licence ships in the Licenses folder with everything else's.
     dependencies["mdi"] = {
         font = "%{wks.location}/Vendor/mdi/fonts/materialdesignicons-webfont.ttf",
-        license = "%{wks.location}/Vendor/mdi/LICENSE",
     }
 
     dependencies["iconfont"] = {
@@ -149,9 +154,13 @@ group ". External Dependencies"
     -- Override GLFW (a submodule) to build as a shared library without editing the vendored file.
     -- A single shared GLFW keeps one copy of its global state, shared by the engine DLL (which owns
     -- the window) and the editor executable (whose ImGui GLFW backend must act on that same window).
+    --
+    -- The target is named lion-platform: it is the platform layer's shared library, and the name beside
+    -- the executables should say so (see dependencies["glfw"].dll above for the licence note).
     project "glfw"
         filter {}
         kind "SharedLib"
+        targetname "lion-platform"
         defines { "_GLFW_BUILD_DLL" }
 group ""
 
