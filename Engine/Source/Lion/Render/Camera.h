@@ -10,6 +10,11 @@ namespace Lion
 		virtual const LION_API glm::mat4& GetViewMatrix() const { return mView; }
 		virtual const LION_API glm::mat4& GetProjectionMatrix() const { return mProjection; }
 
+		// Where the camera is. The matrices are rebuilt from it on the next OnUsage, which is what the
+		// editor's viewport moves when it pans, and what a Camera2D writes when it follows its entity.
+		LION_API const glm::vec3& GetPosition() const { return mPosition; }
+		LION_API void SetPosition(const glm::vec3& position) { mPosition = position; }
+
 		virtual LION_API void OnResize(float32 width, float32 height) = 0;
 		virtual LION_API void OnUsage() = 0;
 

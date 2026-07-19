@@ -142,6 +142,22 @@ private:
 	Lion::DynamicLibrary mGameModule;
 
 	Lion::Reference<Lion::CameraOrthographic> mCamera;
+
+	// Where the editor is looking, and how closely — the viewport's own camera, which is not the game's.
+	// Panning and zooming move these; a running game frames itself through its own Camera2D instead.
+	glm::vec2 mViewCenter{ 0.0f, 0.0f };
+	Lion::float32 mViewZoom = 1.0f;
+
+	// Navigating the viewport, Godot-style: drag with the middle button (or space held) to pan, wheel to
+	// zoom about the cursor, F to frame the selection.
+	void HandleViewportNavigation(const ImVec2& imageMin, const ImVec2& imageSize, bool hovered);
+
+	// Frames the selection — or the whole scene when nothing is selected — the way Godot's F does.
+	void FocusViewportOnSelection();
+
+	// The world point under a viewport pixel, at the current view. Zooming about the cursor is holding
+	// this fixed while the zoom changes around it.
+	glm::vec2 ViewportToWorld(const ImVec2& screen, const ImVec2& imageMin, const ImVec2& imageSize) const;
 	Lion::Reference<Lion::Scene> mScene;
 	Lion::Reference<Lion::Framebuffer> mFramebuffer;
 	// The selection, and the one entity in it that everything single-target reads: the last one clicked.
@@ -243,6 +259,15 @@ private:
 	Lion::Entity* mReparentChild = nullptr;
 	Lion::Entity* mReparentTarget = nullptr;   // Null target with mReparentChild set means "to root".
 	bool mReparentRequested = false;
+
+	// A row dropped between two rows rather than onto one: the entity moved, the row it landed against,
+	// which side of it, and the parent that row belongs to — ordering is a sibling affair, so the moved
+	// entity joins that parent before taking its place in the order.
+	Lion::Entity* mReorderMoved = nullptr;
+	Lion::Entity* mReorderBefore = nullptr;
+	Lion::Entity* mReorderParent = nullptr;
+	bool mReorderAfter = false;
+	bool mReorderRequested = false;
 
 	static constexpr size_t kMaxUndo = 100;
 

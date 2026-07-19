@@ -2,6 +2,7 @@
 #include "EditorLayer.h"
 
 #include "../EditorGui.h"
+#include "../Expression.h"
 #include "../ProjectBuild.h"
 #include "../Projects.h"
 
@@ -331,6 +332,123 @@ void EditorLayer::OnRender()
 	EditorGui::EndFrame();
 }
 
+glm::vec2 EditorLayer::ViewportToWorld(const ImVec2& screen, const ImVec2& imageMin, const ImVec2& imageSize) const
+{
+	if (imageSize.x <= 0.0f || imageSize.y <= 0.0f)
+		return mViewCenter;
+
+	// From the image's own pixels to world units: the centre is the camera, and a pixel is 'zoom' of a
+	// world unit. Y climbs on screen and falls in the world, hence the flip.
+	const float32 offsetX = (screen.x - imageMin.x) - imageSize.x * 0.5f;
+	const float32 offsetY = (screen.y - imageMin.y) - imageSize.y * 0.5f;
+
+	return glm::vec2(mViewCenter.x + offsetX * mViewZoom, mViewCenter.y - offsetY * mViewZoom);
+}
+
+void EditorLayer::HandleViewportNavigation(const ImVec2& imageMin, const ImVec2& imageSize, bool hovered)
+{
+	// A running game frames itself; the editor's view is the editor's, and moving it while the game plays
+	// would be arguing with the game's own camera.
+	if (mPlaying)
+		return;
+
+	const ImGuiIO& io = ImGui::GetIO();
+
+	// Pan: the middle button anywhere over the image, or the left button with space held — the two hands
+	// Godot gives it, so a mouse without a middle button is not a mouse that cannot pan.
+	const bool panning = ImGui::IsMouseDragging(ImGuiMouseButton_Middle)
+		|| (ImGui::IsKeyDown(ImGuiKey_Space) && ImGui::IsMouseDragging(ImGuiMouseButton_Left));
+
+	if (panning && (hovered || ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows)))
+	{
+		const ImVec2 delta = ImGui::GetMouseDragDelta(
+			ImGui::IsMouseDragging(ImGuiMouseButton_Middle) ? ImGuiMouseButton_Middle : ImGuiMouseButton_Left);
+
+		// The world keeps up with the cursor: dragging right pulls the view left, which is what "grabbing
+		// the scene" means.
+		mViewCenter.x -= delta.x * mViewZoom;
+		mViewCenter.y += delta.y * mViewZoom;
+
+		ImGui::ResetMouseDragDelta(
+			ImGui::IsMouseDragging(ImGuiMouseButton_Middle) ? ImGuiMouseButton_Middle : ImGuiMouseButton_Left);
+	}
+
+	// Zoom about the cursor: the world point under the pointer is the one that does not move, which is
+	// what makes a wheel feel like it is zooming *there* rather than at the middle of the screen.
+	if (hovered && io.MouseWheel != 0.0f)
+	{
+		const glm::vec2 anchor = ViewportToWorld(io.MousePos, imageMin, imageSize);
+
+		constexpr float32 kStep = 1.1f;
+		constexpr float32 kMinimumZoom = 0.02f;
+		constexpr float32 kMaximumZoom = 50.0f;
+
+		mViewZoom = ImClamp(mViewZoom * std::pow(kStep, -io.MouseWheel), kMinimumZoom, kMaximumZoom);
+
+		const glm::vec2 after = ViewportToWorld(io.MousePos, imageMin, imageSize);
+		mViewCenter += anchor - after;
+	}
+
+	// F frames what is selected — but not while something is being typed into, where F is a letter.
+	if (hovered && !io.WantTextInput && ImGui::IsKeyPressed(ImGuiKey_F, false))
+		FocusViewportOnSelection();
+}
+
+void EditorLayer::FocusViewportOnSelection()
+{
+	// What to frame: the selection, or the whole scene when nothing is picked — "show me where I am" is
+	// the same question either way.
+	const std::vector<Reference<Entity>>& targets = mSelection;
+
+	glm::vec2 minimum(FLT_MAX, FLT_MAX);
+	glm::vec2 maximum(-FLT_MAX, -FLT_MAX);
+	bool any = false;
+
+	const auto include = [&](const Reference<Entity>& entity)
+	{
+		const Vector position = entity->GetWorldPosition();
+		const Vector scale = entity->GetWorldScale();
+
+		// Half the entity's own size, so a sprite is framed by its extent and not by its origin. A
+		// dimensionless entity still gets a little room, or framing it would be a division by nothing.
+		const glm::vec2 extent(ImMax(std::abs(scale.x) * 0.5f, 8.0f), ImMax(std::abs(scale.y) * 0.5f, 8.0f));
+
+		minimum = glm::min(minimum, glm::vec2(position.x, position.y) - extent);
+		maximum = glm::max(maximum, glm::vec2(position.x, position.y) + extent);
+		any = true;
+	};
+
+	if (!targets.empty())
+	{
+		for (const auto& entity : targets)
+			include(entity);
+	}
+	else
+	{
+		for (const auto& entity : mScene->GetEntities())
+			if (entity->IsVisible())
+				include(entity);
+	}
+
+	if (!any)
+	{
+		mViewCenter = glm::vec2(0.0f, 0.0f);
+		mViewZoom = 1.0f;
+		return;
+	}
+
+	mViewCenter = (minimum + maximum) * 0.5f;
+
+	// Zoom to fit with room to breathe: the tighter of the two axes decides, so nothing lands off-screen.
+	if (mViewportSize.x > 0.0f && mViewportSize.y > 0.0f)
+	{
+		constexpr float32 kMargin = 1.4f;
+		const glm::vec2 span = glm::max(maximum - minimum, glm::vec2(1.0f, 1.0f)) * kMargin;
+
+		mViewZoom = ImClamp(ImMax(span.x / mViewportSize.x, span.y / mViewportSize.y), 0.02f, 50.0f);
+	}
+}
+
 void EditorLayer::RenderScene()
 {
 	// Match the framebuffer/camera to the viewport panel size measured last frame.
@@ -342,6 +460,36 @@ void EditorLayer::RenderScene()
 	{
 		mFramebuffer->Resize(targetWidth, targetHeight);
 		mCamera->OnResize(mViewportSize.x, mViewportSize.y);
+	}
+
+	// Whose eye the scene is seen through: the game's own Camera2D while it runs, and the editor's view
+	// otherwise. One camera object either way — what changes is who tells it where to be.
+	const Camera2D* current = nullptr;
+
+	if (mPlaying)
+	{
+		for (const auto& entity : mScene->GetEntities())
+		{
+			Camera2D* camera = entity->GetComponent<Camera2D>();
+
+			if (camera && camera->IsEnabled() && camera->IsCurrent())
+			{
+				current = camera;
+				break;
+			}
+		}
+	}
+
+	if (current)
+	{
+		const glm::vec2 view = current->GetViewPosition();
+		mCamera->SetPosition(glm::vec3(view.x, view.y, 0.0f));
+		mCamera->SetZoomLevel(current->GetZoom());
+	}
+	else
+	{
+		mCamera->SetPosition(glm::vec3(mViewCenter.x, mViewCenter.y, 0.0f));
+		mCamera->SetZoomLevel(mViewZoom);
 	}
 
 	// Render the scene into the framebuffer instead of the window.
@@ -1384,6 +1532,50 @@ namespace
 
 	// Lays out a property row's label and leaves the cursor on the widget. Pass a width for a widget
 	// that sizes itself; the default fills the rest of the row, minus the slot the revert arrow keeps.
+	// A number field that also takes arithmetic. ImGui parses a typed value with scanf, which reads
+	// "2+3" as 2 and stops; this reads what was actually typed — the widget keeps its own text while it
+	// is being edited — and, when that text is an expression, replaces the half-read number with the
+	// answer once the edit is committed. An ordinary edit never leaves the path it always took.
+	//
+	// Wrapped around the widget rather than replacing it, so dragging, clamping, formatting and the undo
+	// bracket all stay ImGui's and the editor's.
+	bool ApplyTypedExpression(ImGuiID id, float32& value)
+	{
+		// The text lives only while the field is in text-input mode, so it is caught then and read after,
+		// when the field has already gone.
+		static ImGuiID sTypingId = 0;
+		static std::string sTyped;
+
+		if (ImGui::TempInputIsActive(id))
+		{
+			if (const ImGuiInputTextState* state = ImGui::GetInputTextState(id))
+			{
+				sTypingId = id;
+				sTyped.assign(state->TextA.Data, static_cast<size_t>(state->TextLen));
+			}
+
+			return false;
+		}
+
+		if (sTypingId != id)
+			return false;
+
+		const std::string typed = sTyped;
+		sTypingId = 0;
+		sTyped.clear();
+
+		if (!Expression::IsExpression(typed))
+			return false;
+
+		const std::optional<float32> evaluated = Expression::Evaluate(typed);
+
+		if (!evaluated || *evaluated == value)
+			return false;
+
+		value = *evaluated;
+		return true;
+	}
+
 	void PropertyLabel(const char8* label, float32 widgetWidth = 0.0f)
 	{
 		const float32 available = ImGui::GetContentRegionAvail().x - kPropertyLabelWidth
@@ -2787,6 +2979,8 @@ void EditorLayer::DrawViewport()
 	mViewportImageMin = imageMin;
 	mViewportImageMax = ImVec2(imageMin.x + imageSize.x, imageMin.y + imageSize.y);
 
+	HandleViewportNavigation(imageMin, imageSize, imageHovered);
+
 	// The gizmo is an editing tool; hide it while the simulation is running, for folders (no
 	// meaningful transform), and for the Select tool, which only picks entities.
 	if (mSelectedEntity && !mPlaying && mTool != Tool::Select && !mSelectedEntity->IsFolder())
@@ -3387,6 +3581,54 @@ void EditorLayer::DrawHierarchy()
 		}
 	}
 
+	if (mReorderRequested && mReorderMoved && mReorderBefore && mReorderMoved != mReorderBefore)
+	{
+		// Dropping a row onto its own descendant would ask the hierarchy to contain itself.
+		if (!mReorderBefore->IsDescendantOf(mReorderMoved))
+		{
+			RecordSnapshot();
+
+			const Reference<Entity> moved = mEntityLookup.count(mReorderMoved) ? mEntityLookup[mReorderMoved] : nullptr;
+
+			if (moved)
+			{
+				// Landing between two rows means joining their parent first: an entity cannot sit in an
+				// order it is not part of.
+				if (moved->GetParent() != mReorderParent)
+					moved->SetParent(mReorderParent);
+
+				// Dropped below a row, it goes before whatever follows that row — and past the last row,
+				// before nothing, which the scene reads as the end.
+				const Entity* before = mReorderBefore;
+
+				if (mReorderAfter)
+				{
+					before = nullptr;
+					bool found = false;
+
+					for (const auto& entity : mScene->GetEntities())
+					{
+						if (found && entity.get() != moved.get() && entity->GetParent() == mReorderParent)
+						{
+							before = entity.get();
+							break;
+						}
+
+						if (entity.get() == mReorderBefore)
+							found = true;
+					}
+				}
+
+				mScene->Reorder(moved, before);
+			}
+		}
+	}
+
+	mReorderRequested = false;
+	mReorderMoved = nullptr;
+	mReorderBefore = nullptr;
+	mReorderParent = nullptr;
+
 	if (mEntityToDelete)
 	{
 		RecordSnapshot();
@@ -3614,13 +3856,49 @@ void EditorLayer::DrawEntityNode(const Reference<Entity>& entity)
 		ImGui::EndDragDropSource();
 	}
 
+	// A row is three drop zones down its height, the way Unity's hierarchy is: the top and bottom
+	// quarters put the dragged entity *between* rows, and the half in the middle drops it *onto* this one
+	// to reparent. One row, both gestures, told apart by where in it the pointer is.
 	if (ImGui::BeginDragDropTarget())
 	{
+		const ImVec2 rowMin = ImGui::GetItemRectMin();
+		const ImVec2 rowMax = ImGui::GetItemRectMax();
+		const float32 height = ImMax(rowMax.y - rowMin.y, 1.0f);
+		const float32 offset = ImClamp((ImGui::GetMousePos().y - rowMin.y) / height, 0.0f, 1.0f);
+
+		constexpr float32 kEdge = 0.25f;
+		const bool above = offset < kEdge;
+		const bool below = offset > 1.0f - kEdge;
+
+		// The line shows where it would land, drawn over the row rather than in it: the answer to "where
+		// does letting go put this?" should not need to be guessed.
+		if (above || below)
+		{
+			const float32 y = above ? rowMin.y : rowMax.y;
+			ImGui::GetWindowDrawList()->AddLine(ImVec2(rowMin.x, y), ImVec2(rowMax.x, y),
+				ImGui::GetColorU32(EditorGui::GetAccent()), 2.0f);
+		}
+
 		if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("LN_ENTITY"))
 		{
-			mReparentChild = *static_cast<Entity* const*>(payload->Data);
-			mReparentTarget = entity.get();
-			mReparentRequested = true;
+			Entity* const dropped = *static_cast<Entity* const*>(payload->Data);
+
+			if (above || below)
+			{
+				// Ordering is a sibling affair: dropping between two rows means taking this row's parent
+				// and sitting next to it, which is what makes a drag reorder rather than reparent.
+				mReorderMoved = dropped;
+				mReorderBefore = entity.get();
+				mReorderAfter = below;
+				mReorderParent = entity->GetParent();
+				mReorderRequested = true;
+			}
+			else
+			{
+				mReparentChild = dropped;
+				mReparentTarget = entity.get();
+				mReparentRequested = true;
+			}
 		}
 
 		ImGui::EndDragDropTarget();
@@ -3743,9 +4021,17 @@ bool EditorLayer::DrawFloatProperty(const char8* label, float32& value, float32 
 	ImGui::PushID(label);
 
 	PropertyLabel(label);
-	const bool changed = ImGui::DragFloat("##value", &value, speed, minimum, maximum);
+	bool changed = ImGui::DragFloat("##value", &value, speed, minimum, maximum);
 
 	if (ImGui::IsItemActivated()) BeginEdit();
+
+	// Typed arithmetic lands after the widget has read the text: it saw "2", this sees "2+3".
+	if (ApplyTypedExpression(ImGui::GetItemID(), value))
+	{
+		value = ImClamp(value, minimum, maximum);
+		changed = true;
+	}
+
 	if (ImGui::IsItemDeactivatedAfterEdit()) CommitEdit();
 
 	// A field with no default still keeps the slot, so every field in a component lines up whether or
@@ -3849,6 +4135,10 @@ bool EditorLayer::DrawVec3Control(const char* label, float values[3], float spee
 
 		ImGui::PopStyleVar();
 		if (ImGui::IsItemActivated()) BeginEdit();
+
+		if (ApplyTypedExpression(ImGui::GetItemID(), values[i]))
+			axisChanged = true;
+
 		if (ImGui::IsItemDeactivatedAfterEdit()) CommitEdit();
 
 		if (axisChanged && uniform && *uniform)
@@ -3957,6 +4247,15 @@ void EditorLayer::InspectorReflector::Field(const char8* name, int32& value)
 
 	if (ImGui::DragInt("##value", &value))
 		mEditor.ApplyReflectedField(mTypeName, name, value);
+
+	// An integer field takes arithmetic too; the answer lands on the nearest whole number.
+	float32 typed = static_cast<float32>(value);
+
+	if (ApplyTypedExpression(ImGui::GetItemID(), typed))
+	{
+		value = static_cast<int32>(std::lround(typed));
+		mEditor.ApplyReflectedField(mTypeName, name, value);
+	}
 
 	if (ImGui::IsItemActivated()) mEditor.BeginEdit();
 	if (ImGui::IsItemDeactivatedAfterEdit()) mEditor.CommitEdit();
