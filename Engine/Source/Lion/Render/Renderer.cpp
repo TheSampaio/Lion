@@ -121,9 +121,13 @@ namespace Lion
         if (self->mSpriteBuffer.empty())
             return;
 
-        // Sort sprites by depth (back to front) so transparency blends correctly.
-        std::sort(self->mSpriteBuffer.begin(), self->mSpriteBuffer.end(),
-            [](const SpriteInfo* a, const SpriteInfo* b) { return a->position.z > b->position.z; });
+        // Sort by draw order, low to high, so the highest lands on top and transparency blends over what
+        // is behind it. A *stable* sort is the whole point of the rest: sprites sharing an order keep the
+        // order they were submitted in, which is the order the scene holds its entities — the order the
+        // Hierarchy shows. Moving a row down the list therefore moves the sprite in front of the ones
+        // above it, and setting an order by hand is overriding exactly that and nothing else.
+        std::stable_sort(self->mSpriteBuffer.begin(), self->mSpriteBuffer.end(),
+            [](const SpriteInfo* a, const SpriteInfo* b) { return a->order < b->order; });
 
         // Rebuild the texture-slot table for this frame. Index 0 is reserved and never sampled.
         auto& textureSlots = self->mTextureSlots;
@@ -219,10 +223,17 @@ namespace Lion
 
         constexpr glm::vec4 white = { 1.0f, 1.0f, 1.0f, 1.0f };
 
+        // Mirroring is the texture read backwards: the quad keeps its shape, its winding and its size,
+        // and only the corner each texel is fetched from changes.
+        const float32 left = spriteInfo->flipX ? 1.0f : 0.0f;
+        const float32 right = spriteInfo->flipX ? 0.0f : 1.0f;
+        const float32 bottom = spriteInfo->flipY ? 1.0f : 0.0f;
+        const float32 top = spriteInfo->flipY ? 0.0f : 1.0f;
+
         // Top-Left
         target->position = corner(-halfWidth, halfHeight);
         target->color = white;
-        target->textureCoord = { 0.0f, 1.0f };
+        target->textureCoord = { left, top };
         target->texture = slot;
         target->entityId = entityId;
         target++;
@@ -230,7 +241,7 @@ namespace Lion
         // Bottom-Left
         target->position = corner(-halfWidth, -halfHeight);
         target->color = white;
-        target->textureCoord = { 0.0f, 0.0f };
+        target->textureCoord = { left, bottom };
         target->texture = slot;
         target->entityId = entityId;
         target++;
@@ -238,7 +249,7 @@ namespace Lion
         // Bottom-Right
         target->position = corner(halfWidth, -halfHeight);
         target->color = white;
-        target->textureCoord = { 1.0f, 0.0f };
+        target->textureCoord = { right, bottom };
         target->texture = slot;
         target->entityId = entityId;
         target++;
@@ -246,7 +257,7 @@ namespace Lion
         // Top-Right
         target->position = corner(halfWidth, halfHeight);
         target->color = white;
-        target->textureCoord = { 1.0f, 1.0f };
+        target->textureCoord = { right, top };
         target->texture = slot;
         target->entityId = entityId;
         target++;

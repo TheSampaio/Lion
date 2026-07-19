@@ -26,9 +26,22 @@ namespace Lion
 		LION_API bool IsCurrent() const { return mCurrent; }
 		LION_API void SetCurrent(bool current);
 
-		// Where the camera sits, in world space: its owner's position shifted by the offset. A camera
-		// parented to a player wants to look ahead of it, not exactly at it.
+		// Where the camera sits, in world space: its owner's position shifted by the offset, held inside
+		// the limits when they are on. A camera parented to a player wants to look ahead of it, not
+		// exactly at it — and to stop at the edge of the level rather than follow it into the void.
 		LION_API glm::vec2 GetViewPosition() const;
+
+		// The box the camera may not look past — Godot's limits, as a rectangle rather than four numbers.
+		// It bounds what the camera *sees*, so the view stops with its edge on the limit, not its centre.
+		LION_API bool HasLimits() const { return mLimited; }
+		LION_API void SetLimited(bool limited) { mLimited = limited; }
+		LION_API const Vector& GetLimitMinimum() const { return mLimitMinimum; }
+		LION_API const Vector& GetLimitMaximum() const { return mLimitMaximum; }
+		LION_API void SetLimits(const Vector& minimum, const Vector& maximum);
+
+		// How much of the world the camera shows at its zoom, in world units. The editor draws this as
+		// the framing rectangle, and the limits are applied against it.
+		LION_API glm::vec2 GetViewSize() const;
 
 		void OnAwake() override;
 		void Reflect(Reflector& reflector) override;
@@ -39,6 +52,10 @@ namespace Lion
 		float32 mZoom = 1.0f;
 		Vector mOffset;
 		bool mCurrent = true;
+
+		bool mLimited = false;
+		Vector mLimitMinimum{ -960.0f, -540.0f };
+		Vector mLimitMaximum{ 960.0f, 540.0f };
 
 		// Leaves this camera the only current one in its scene.
 		void ClaimCurrent();

@@ -39,6 +39,17 @@ namespace Lion
         Renderer::Submit(mSpriteInfo.get());
     }
 
+    void Sprite::SetOrder(int32 order)
+    {
+        mSpriteInfo->order = order;
+    }
+
+    void Sprite::SetFlip(bool flipX, bool flipY)
+    {
+        mSpriteInfo->flipX = flipX;
+        mSpriteInfo->flipY = flipY;
+    }
+
     Size Sprite::GetSize()
     {
         return mTexture->GetSize();

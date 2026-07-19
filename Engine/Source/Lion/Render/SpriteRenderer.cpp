@@ -43,6 +43,11 @@ namespace Lion
 		if (!mSprite)
 			return;
 
+		// How it is drawn travels with the submission: what it goes on top of, and which way round it is
+		// read. Set here rather than kept in the sprite, so a texture swapped underneath keeps them.
+		mSprite->SetOrder(mOrder);
+		mSprite->SetFlip(mFlipX, mFlipY);
+
 		// Draw with the owner's world transform, so children follow their parent.
 		Entity& owner = GetOwner();
 		mSprite->Draw(
@@ -55,11 +60,17 @@ namespace Lion
 	void SpriteRenderer::Serialize(Serializer& serializer) const
 	{
 		serializer.Write("texture", mTexturePath);
+		serializer.Write("order", mOrder);
+		serializer.Write("flipX", mFlipX);
+		serializer.Write("flipY", mFlipY);
 	}
 
 	void SpriteRenderer::Deserialize(const Serializer& serializer)
 	{
 		SetTexturePath(serializer.ReadString("texture"));
+		mOrder = serializer.ReadInt("order", 0);
+		mFlipX = serializer.ReadBool("flipX", false);
+		mFlipY = serializer.ReadBool("flipY", false);
 	}
 
 	LION_REGISTER_COMPONENT(SpriteRenderer)

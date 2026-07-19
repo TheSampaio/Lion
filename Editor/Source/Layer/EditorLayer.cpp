@@ -389,9 +389,8 @@ void EditorLayer::HandleViewportNavigation(const ImVec2& imageMin, const ImVec2&
 		mViewCenter += anchor - after;
 	}
 
-	// F frames what is selected — but not while something is being typed into, where F is a letter.
-	if (hovered && !io.WantTextInput && ImGui::IsKeyPressed(ImGuiKey_F, false))
-		FocusViewportOnSelection();
+	// Framing the selection is a rebindable editor shortcut (F by default), handled with the rest of
+	// them: it should work with the Hierarchy in hand, not only with the pointer over the image.
 }
 
 void EditorLayer::FocusViewportOnSelection()
@@ -2363,6 +2362,7 @@ void EditorLayer::DrawShortcuts()
 			{ ShortcutAction::GizmoMove,       "Tools",     "Move tool (translate)" },
 			{ ShortcutAction::GizmoRotate,     "Tools",     "Rotate tool" },
 			{ ShortcutAction::GizmoScale,      "Tools",     "Scale tool" },
+			{ ShortcutAction::FocusSelection,  "Viewport",  "Frame the selection" },
 			{ ShortcutAction::Deselect,        "Hierarchy", "Clear the selection" },
 				{ ShortcutAction::RenameEntity,    "Hierarchy", "Rename selected entity" },
 			{ ShortcutAction::DeleteEntity,    "Hierarchy", "Delete selected entity" },
@@ -2612,6 +2612,9 @@ void EditorLayer::ResetShortcutsToDefault()
 	// The project keys sit one Shift above the scene keys: the bigger thing, the bigger chord.
 	set(ShortcutAction::NewProject, ImGuiKey_N, true, true);
 	set(ShortcutAction::OpenProject, ImGuiKey_O, true, true);
+
+	// F frames the selection, where every 3D and 2D editor has put it.
+	set(ShortcutAction::FocusSelection, ImGuiKey_F);
 }
 
 void EditorLayer::SetSelection(const Reference<Entity>& entity)
@@ -2927,6 +2930,7 @@ void EditorLayer::HandleShortcuts()
 	if (IsShortcutPressed(ShortcutAction::OpenScene)) OpenScene();
 	if (IsShortcutPressed(ShortcutAction::SaveScene)) SaveScene();
 	if (IsShortcutPressed(ShortcutAction::SaveSceneAs)) SaveSceneAs();
+	if (IsShortcutPressed(ShortcutAction::FocusSelection)) FocusViewportOnSelection();
 	if (IsShortcutPressed(ShortcutAction::NewProject)) mOpenProjectManagerPopup = true;
 	if (IsShortcutPressed(ShortcutAction::OpenProject)) BrowseForProject();
 
@@ -3063,6 +3067,11 @@ void EditorLayer::DrawViewport()
 	// What is selected, outlined where it is — before the colliders, so a collider's line wins where the
 	// two land on the same pixel: the collider is the debug view, and a debug view nobody can read is off.
 	DrawSelectionOutline(imageMin, imageSize);
+
+	// A camera is a thing with a reach, and the reach is the part you cannot see without being shown it.
+	// Not while the game runs: then you are already looking through it.
+	if (!mPlaying)
+		DrawCameraOverlays(imageMin, imageSize);
 
 	if (mShowColliders)
 		DrawColliderOverlays(imageMin, imageSize);
@@ -3361,6 +3370,91 @@ void EditorLayer::DrawSelectionOutline(const ImVec2& imageMin, const ImVec2& ima
 		};
 
 		drawList->AddPolyline(points, 4, color, ImDrawFlags_Closed, 2.0f);
+	}
+}
+
+void EditorLayer::DrawCameraOverlays(const ImVec2& imageMin, const ImVec2& imageSize)
+{
+	if (imageSize.x <= 0.0f || imageSize.y <= 0.0f)
+		return;
+
+	const glm::mat4 viewProjection = mCamera->GetProjectionMatrix() * mCamera->GetViewMatrix();
+	ImDrawList* drawList = ImGui::GetWindowDrawList();
+
+	// The editor's overlay palette, one hue per thing it means. Orange is the selection's and green is
+	// the colliders', so a camera takes the blue nobody was using — the colour of a lens — and its limit
+	// the violet next to it: two neighbours read as one idea, and neither is mistaken for the other two.
+	// (Godot's own purple and gold sit too close to this editor's accent to stay legible beside it.)
+	constexpr ImU32 kCameraColor = IM_COL32(86, 182, 232, 255);
+	constexpr ImU32 kCameraFill = IM_COL32(86, 182, 232, 26);
+	constexpr ImU32 kLimitColor = IM_COL32(167, 132, 239, 255);
+
+	const auto worldToScreen = [&](float32 worldX, float32 worldY) -> ImVec2
+	{
+		const glm::vec4 clip = viewProjection * glm::vec4(worldX, worldY, 0.0f, 1.0f);
+		const float32 ndcX = clip.x / clip.w;
+		const float32 ndcY = clip.y / clip.w;
+		return ImVec2(
+			imageMin.x + (ndcX * 0.5f + 0.5f) * imageSize.x,
+			imageMin.y + (1.0f - (ndcY * 0.5f + 0.5f)) * imageSize.y);
+	};
+
+	for (const auto& entity : mScene->GetEntities())
+	{
+		const Camera2D* camera = entity->GetComponent<Camera2D>();
+
+		if (!camera)
+			continue;
+
+		// The limit first, so the framing rectangle reads on top of it.
+		if (camera->HasLimits())
+		{
+			const Vector minimum = camera->GetLimitMinimum();
+			const Vector maximum = camera->GetLimitMaximum();
+
+			// Dashed, because a limit is a rule rather than a thing: it is the one line in the viewport
+			// that marks where something may not go.
+			const ImVec2 corners[4] = {
+				worldToScreen(minimum.x, maximum.y), worldToScreen(maximum.x, maximum.y),
+				worldToScreen(maximum.x, minimum.y), worldToScreen(minimum.x, minimum.y) };
+
+			for (int32 side = 0; side < 4; ++side)
+			{
+				const ImVec2 from = corners[side];
+				const ImVec2 to = corners[(side + 1) % 4];
+				const float32 length = ImSqrt(ImLengthSqr(ImVec2(to.x - from.x, to.y - from.y)));
+				const int32 dashes = ImMax(static_cast<int32>(length / 12.0f), 1);
+
+				for (int32 dash = 0; dash < dashes; dash += 2)
+				{
+					const float32 start = static_cast<float32>(dash) / dashes;
+					const float32 end = ImMin(static_cast<float32>(dash + 1) / dashes, 1.0f);
+
+					drawList->AddLine(
+						ImVec2(from.x + (to.x - from.x) * start, from.y + (to.y - from.y) * start),
+						ImVec2(from.x + (to.x - from.x) * end, from.y + (to.y - from.y) * end),
+						kLimitColor, 1.5f);
+				}
+			}
+		}
+
+		// What the camera sees: its view rectangle, at its own position and zoom — where it would be
+		// looking if the game were running, limits and all.
+		const glm::vec2 center = camera->GetViewPosition();
+		const glm::vec2 half = camera->GetViewSize() * 0.5f;
+
+		const ImVec2 topLeft = worldToScreen(center.x - half.x, center.y + half.y);
+		const ImVec2 bottomRight = worldToScreen(center.x + half.x, center.y - half.y);
+
+		drawList->AddRectFilled(topLeft, bottomRight, kCameraFill);
+		drawList->AddRect(topLeft, bottomRight, kCameraColor, 0.0f, 0, 2.0f);
+
+		// A cross at the centre says which point the camera is on, which a rectangle alone does not.
+		const ImVec2 eye = worldToScreen(center.x, center.y);
+		constexpr float32 kArm = 6.0f;
+
+		drawList->AddLine(ImVec2(eye.x - kArm, eye.y), ImVec2(eye.x + kArm, eye.y), kCameraColor, 1.5f);
+		drawList->AddLine(ImVec2(eye.x, eye.y - kArm), ImVec2(eye.x, eye.y + kArm), kCameraColor, 1.5f);
 	}
 }
 
@@ -4531,6 +4625,59 @@ void EditorLayer::DrawProperties()
 				}
 				if (ImGui::IsItemHovered())
 					ImGui::SetTooltip("Browse for a sprite image");
+
+				// What it goes on top of. Zero means "wherever my row is" — the Hierarchy's order decides,
+				// so moving a row down moves the sprite in front. A number overrides that row.
+				int32 order = renderer->GetOrder();
+
+				PropertyLabel("Draw Order");
+				if (ImGui::DragInt("##order", &order))
+					ApplyToSelection<SpriteRenderer>([&](SpriteRenderer* target) { target->SetOrder(order); });
+
+				if (ImGui::IsItemActivated()) BeginEdit();
+
+				float32 typedOrder = static_cast<float32>(order);
+
+				if (ApplyTypedExpression(ImGui::GetItemID(), typedOrder))
+				{
+					order = static_cast<int32>(std::lround(typedOrder));
+					ApplyToSelection<SpriteRenderer>([&](SpriteRenderer* target) { target->SetOrder(order); });
+				}
+
+				if (ImGui::IsItemDeactivatedAfterEdit()) CommitEdit();
+
+				SameLineRowEnd();
+				if (ResetToDefaultButton("##resetorder", order != 0))
+				{
+					RecordSnapshot();
+					ApplyToSelection<SpriteRenderer>([](SpriteRenderer* target) { target->SetOrder(0); });
+				}
+
+				if (ImGui::IsItemHovered())
+					ImGui::SetTooltip("Higher draws on top. 0 follows the Hierarchy's order.");
+
+				// Mirroring, read out of the texture rather than taken out of the scale: a negative scale
+				// would flip the collider and the children with it.
+				bool flipX = renderer->IsFlippedX();
+				bool flipY = renderer->IsFlippedY();
+
+				PropertyLabel("Flip");
+				if (ImGui::Checkbox("X##flipx", &flipX))
+				{
+					RecordSnapshot();
+					ApplyToSelection<SpriteRenderer>([&](SpriteRenderer* target) { target->SetFlipX(flipX); });
+				}
+
+				ImGui::SameLine();
+
+				if (ImGui::Checkbox("Y##flipy", &flipY))
+				{
+					RecordSnapshot();
+					ApplyToSelection<SpriteRenderer>([&](SpriteRenderer* target) { target->SetFlipY(flipY); });
+				}
+
+				SameLineRowEnd();
+				ResetToDefaultButton("##resetflip", false);   // Keeps the slot, so the row lines up.
 			}
 		}
 		else if (RigidBody2D* body = dynamic_cast<RigidBody2D*>(component))

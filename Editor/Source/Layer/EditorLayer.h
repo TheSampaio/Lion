@@ -39,6 +39,7 @@ private:
 		NewScene, OpenScene, SaveScene, SaveSceneAs,
 		Deselect,
 		NewProject, OpenProject,
+		FocusSelection,
 		Count
 	};
 
@@ -329,6 +330,10 @@ private:
 	// The box around what is selected, drawn over the image for every entity in the selection.
 	void DrawSelectionOutline(const ImVec2& imageMin, const ImVec2& imageSize);
 	void DrawColliderOverlays(const ImVec2& imageMin, const ImVec2& imageSize);
+
+	// What a Camera2D frames, and the box it may not look past — drawn the way Godot draws them, so a
+	// camera is something you can see the reach of rather than guess at.
+	void DrawCameraOverlays(const ImVec2& imageMin, const ImVec2& imageSize);
 	void DrawHierarchy();
 	void DrawEntityNode(const Lion::Reference<Lion::Entity>& entity);
 	void DrawProperties();
