@@ -408,9 +408,31 @@ void EditorLayer::FocusViewportOnSelection()
 		const Vector position = entity->GetWorldPosition();
 		const Vector scale = entity->GetWorldScale();
 
-		// Half the entity's own size, so a sprite is framed by its extent and not by its origin. A
-		// dimensionless entity still gets a little room, or framing it would be a division by nothing.
-		const glm::vec2 extent(ImMax(std::abs(scale.x) * 0.5f, 8.0f), ImMax(std::abs(scale.y) * 0.5f, 8.0f));
+		// The box the entity actually occupies — its picture's size times the scale, not the scale on its
+		// own, which is 1 for everything and would frame a dot. This is the same reading the selection
+		// outline takes, so what F fills the viewport with is what the outline was drawn around.
+		float32 width = 64.0f;
+		float32 height = 64.0f;
+
+		if (const SpriteRenderer* sprite = entity->GetComponent<SpriteRenderer>())
+		{
+			const Size size = sprite->GetSize();
+			width = size.width;
+			height = size.height;
+		}
+		else if (const BoxCollider2D* box = entity->GetComponent<BoxCollider2D>())
+		{
+			width = box->GetWidth();
+			height = box->GetHeight();
+		}
+		else if (const CircleCollider2D* circle = entity->GetComponent<CircleCollider2D>())
+		{
+			width = height = circle->GetRadius() * 2.0f;
+		}
+
+		const glm::vec2 extent(
+			ImMax(std::abs(width * scale.x) * 0.5f, 1.0f),
+			ImMax(std::abs(height * scale.y) * 0.5f, 1.0f));
 
 		minimum = glm::min(minimum, glm::vec2(position.x, position.y) - extent);
 		maximum = glm::max(maximum, glm::vec2(position.x, position.y) + extent);
@@ -439,12 +461,15 @@ void EditorLayer::FocusViewportOnSelection()
 	mViewCenter = (minimum + maximum) * 0.5f;
 
 	// Zoom to fit with room to breathe: the tighter of the two axes decides, so nothing lands off-screen.
+	// Never closer than one texel to one pixel, the way Unity frames a small object — a 12-pixel ball
+	// magnified to fill the viewport is a wall of pixels, not a look at the ball.
 	if (mViewportSize.x > 0.0f && mViewportSize.y > 0.0f)
 	{
-		constexpr float32 kMargin = 1.4f;
+		constexpr float32 kMargin = 1.6f;
 		const glm::vec2 span = glm::max(maximum - minimum, glm::vec2(1.0f, 1.0f)) * kMargin;
 
-		mViewZoom = ImClamp(ImMax(span.x / mViewportSize.x, span.y / mViewportSize.y), 0.02f, 50.0f);
+		const float32 fit = ImMax(span.x / mViewportSize.x, span.y / mViewportSize.y);
+		mViewZoom = ImClamp(ImMax(fit, 1.0f), 0.02f, 50.0f);
 	}
 }
 
@@ -471,7 +496,7 @@ void EditorLayer::RenderScene()
 		{
 			Camera2D* camera = entity->GetComponent<Camera2D>();
 
-			if (camera && camera->IsEnabled() && camera->IsCurrent())
+			if (camera && camera->IsEnabled())
 			{
 				current = camera;
 				break;
@@ -1292,7 +1317,7 @@ namespace
 	// construction arguments (a collider sizes itself to the sprite). Everything else in the registry
 	// comes from the game module and is added generically, by name.
 	constexpr const char8* kBuiltInComponents[] = {
-		"SpriteRenderer", "RigidBody2D", "BoxCollider2D", "CircleCollider2D" };
+		"SpriteRenderer", "Camera2D", "RigidBody2D", "BoxCollider2D", "CircleCollider2D" };
 
 	bool IsBuiltInComponent(const std::string& name)
 	{
@@ -3386,7 +3411,6 @@ void EditorLayer::DrawCameraOverlays(const ImVec2& imageMin, const ImVec2& image
 	// the violet next to it: two neighbours read as one idea, and neither is mistaken for the other two.
 	// (Godot's own purple and gold sit too close to this editor's accent to stay legible beside it.)
 	constexpr ImU32 kCameraColor = IM_COL32(86, 182, 232, 255);
-	constexpr ImU32 kCameraFill = IM_COL32(86, 182, 232, 26);
 	constexpr ImU32 kLimitColor = IM_COL32(167, 132, 239, 255);
 
 	const auto worldToScreen = [&](float32 worldX, float32 worldY) -> ImVec2
@@ -3407,10 +3431,12 @@ void EditorLayer::DrawCameraOverlays(const ImVec2& imageMin, const ImVec2& image
 			continue;
 
 		// The limit first, so the framing rectangle reads on top of it.
-		if (camera->HasLimits())
+		if (camera->HasLimit())
 		{
-			const Vector minimum = camera->GetLimitMinimum();
-			const Vector maximum = camera->GetLimitMaximum();
+			const Vector minimum(std::min(camera->GetLimitLeft(), camera->GetLimitRight()),
+				std::min(camera->GetLimitBottom(), camera->GetLimitTop()));
+			const Vector maximum(std::max(camera->GetLimitLeft(), camera->GetLimitRight()),
+				std::max(camera->GetLimitBottom(), camera->GetLimitTop()));
 
 			// Dashed, because a limit is a rule rather than a thing: it is the one line in the viewport
 			// that marks where something may not go.
@@ -3440,13 +3466,12 @@ void EditorLayer::DrawCameraOverlays(const ImVec2& imageMin, const ImVec2& image
 
 		// What the camera sees: its view rectangle, at its own position and zoom — where it would be
 		// looking if the game were running, limits and all.
-		const glm::vec2 center = camera->GetViewPosition();
+		const glm::vec2 center = camera->GetTargetPosition();
 		const glm::vec2 half = camera->GetViewSize() * 0.5f;
 
 		const ImVec2 topLeft = worldToScreen(center.x - half.x, center.y + half.y);
 		const ImVec2 bottomRight = worldToScreen(center.x + half.x, center.y - half.y);
 
-		drawList->AddRectFilled(topLeft, bottomRight, kCameraFill);
 		drawList->AddRect(topLeft, bottomRight, kCameraColor, 0.0f, 0, 2.0f);
 
 		// A cross at the centre says which point the camera is on, which a rectangle alone does not.
@@ -4680,6 +4705,89 @@ void EditorLayer::DrawProperties()
 				ResetToDefaultButton("##resetflip", false);   // Keeps the slot, so the row lines up.
 			}
 		}
+		else if (Camera2D* camera = dynamic_cast<Camera2D*>(component))
+		{
+			if (DrawComponentHeader(ICON_MDI_MONITOR, "Camera 2D", i, remove, dragFrom, dragTo))
+			{
+				float32 zoom = camera->GetZoom();
+				if (DrawFloatProperty("Zoom", zoom, 0.01f, 0.01f, 100.0f, 1.0f))
+					ApplyToSelection<Camera2D>([&](Camera2D* target) { target->SetZoom(zoom); });
+
+				Vector offset = camera->GetOffset();
+				float32 offsetValues[3] = { offset.x, offset.y, offset.z };
+
+				PropertyLabel("Offset");
+				if (DrawVec3Control("##offset", offsetValues, 1.0f, 0.0f))
+					ApplyToSelection<Camera2D>([&](Camera2D* target)
+						{ target->SetOffset(Vector(offsetValues[0], offsetValues[1])); });
+
+				// The limit is one switch with four numbers under it — the sides of a level, which is how
+				// a level is measured. Folded away until it is on, because four numbers that do nothing
+				// are four numbers in the way.
+				bool limit = camera->HasLimit();
+
+				PropertyLabel("Limit");
+				if (ImGui::Checkbox("##limit", &limit))
+				{
+					RecordSnapshot();
+					ApplyToSelection<Camera2D>([&](Camera2D* target) { target->SetLimit(limit); });
+				}
+
+				SameLineRowEnd();
+				ResetToDefaultButton("##resetlimit", false);
+
+				if (limit)
+				{
+					ImGui::Indent();
+
+					float32 top = camera->GetLimitTop();
+					if (DrawFloatProperty("Top", top, 1.0f, -100000.0f, 100000.0f, std::nullopt))
+						ApplyToSelection<Camera2D>([&](Camera2D* target) { target->SetLimitTop(top); });
+
+					float32 right = camera->GetLimitRight();
+					if (DrawFloatProperty("Right", right, 1.0f, -100000.0f, 100000.0f, std::nullopt))
+						ApplyToSelection<Camera2D>([&](Camera2D* target) { target->SetLimitRight(right); });
+
+					float32 bottom = camera->GetLimitBottom();
+					if (DrawFloatProperty("Bottom", bottom, 1.0f, -100000.0f, 100000.0f, std::nullopt))
+						ApplyToSelection<Camera2D>([&](Camera2D* target) { target->SetLimitBottom(bottom); });
+
+					float32 left = camera->GetLimitLeft();
+					if (DrawFloatProperty("Left", left, 1.0f, -100000.0f, 100000.0f, std::nullopt))
+						ApplyToSelection<Camera2D>([&](Camera2D* target) { target->SetLimitLeft(left); });
+
+					ImGui::Unindent();
+				}
+
+				// Smoothing, the same shape: a switch, and the speeds it eases at underneath.
+				bool smooth = camera->HasSmoothing();
+
+				PropertyLabel("Smooth");
+				if (ImGui::Checkbox("##smooth", &smooth))
+				{
+					RecordSnapshot();
+					ApplyToSelection<Camera2D>([&](Camera2D* target) { target->SetSmoothing(smooth); });
+				}
+
+				SameLineRowEnd();
+				ResetToDefaultButton("##resetsmooth", false);
+
+				if (smooth)
+				{
+					ImGui::Indent();
+
+					float32 position = camera->GetPositionSmoothing();
+					if (DrawFloatProperty("Position Speed", position, 0.1f, 0.0f, 100.0f, 5.0f))
+						ApplyToSelection<Camera2D>([&](Camera2D* target) { target->SetPositionSmoothing(position); });
+
+					float32 rotation = camera->GetRotationSmoothing();
+					if (DrawFloatProperty("Rotation Speed", rotation, 0.1f, 0.0f, 100.0f, 5.0f))
+						ApplyToSelection<Camera2D>([&](Camera2D* target) { target->SetRotationSmoothing(rotation); });
+
+					ImGui::Unindent();
+				}
+			}
+		}
 		else if (RigidBody2D* body = dynamic_cast<RigidBody2D*>(component))
 		{
 			if (DrawComponentHeader(ICON_MDI_WEIGHT, "Rigid Body 2D", i, remove, dragFrom, dragTo))
@@ -4827,6 +4935,14 @@ void EditorLayer::DrawProperties()
 			for (const auto& entity : mSelection)
 				if (!entity->IsFolder() && !entity->HasComponent<SpriteRenderer>())
 					entity->AddComponent<SpriteRenderer>();
+		}
+
+		if (lacksBuiltIn.operator()<Camera2D>() && ImGui::MenuItem("Camera 2D"))
+		{
+			RecordSnapshot();
+			for (const auto& entity : mSelection)
+				if (!entity->IsFolder() && !entity->HasComponent<Camera2D>())
+					entity->AddComponent<Camera2D>();
 		}
 
 		if (lacksBuiltIn.operator()<RigidBody2D>() && ImGui::MenuItem("Rigid Body 2D"))

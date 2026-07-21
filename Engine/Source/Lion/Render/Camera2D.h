@@ -9,8 +9,9 @@ namespace Lion
 	// entity, at this component's zoom. It is what Godot's Camera2D is — a camera you place in the world
 	// like anything else, so following a player is parenting it to the player and nothing more.
 	//
-	// One camera is the current one. Marking a second current takes the title from the first, because a
-	// scene rendered through two cameras at once is a question with no answer.
+	// The scene renders through the first enabled camera it holds. There is no flag to elect one: a
+	// camera you do not want looking is a camera you disable, which is the switch every other component
+	// already has.
 	class Camera2D : public Component
 	{
 	public:
@@ -21,29 +22,51 @@ namespace Lion
 		LION_API float32 GetZoom() const { return mZoom; }
 		LION_API void SetZoom(float32 zoom);
 
-		// Whether the scene is rendered through this camera. Setting it takes the title from whichever
-		// camera in the scene held it.
-		LION_API bool IsCurrent() const { return mCurrent; }
-		LION_API void SetCurrent(bool current);
+		// Where the camera looks, relative to its owner. A camera parented to a player wants to look
+		// ahead of it, not exactly at it.
+		LION_API const Vector& GetOffset() const { return mOffset; }
+		LION_API void SetOffset(const Vector& offset) { mOffset = offset; }
 
-		// Where the camera sits, in world space: its owner's position shifted by the offset, held inside
-		// the limits when they are on. A camera parented to a player wants to look ahead of it, not
-		// exactly at it — and to stop at the edge of the level rather than follow it into the void.
+		// The edges the camera may not look past, each its own number — the four sides of a level, which
+		// is how a level is measured. They bound what the camera *sees*, so the view stops with its edge
+		// on the limit rather than its centre.
+		LION_API bool HasLimit() const { return mLimit; }
+		LION_API void SetLimit(bool limit) { mLimit = limit; }
+
+		LION_API float32 GetLimitTop() const { return mLimitTop; }
+		LION_API float32 GetLimitRight() const { return mLimitRight; }
+		LION_API float32 GetLimitBottom() const { return mLimitBottom; }
+		LION_API float32 GetLimitLeft() const { return mLimitLeft; }
+
+		LION_API void SetLimitTop(float32 value) { mLimitTop = value; }
+		LION_API void SetLimitRight(float32 value) { mLimitRight = value; }
+		LION_API void SetLimitBottom(float32 value) { mLimitBottom = value; }
+		LION_API void SetLimitLeft(float32 value) { mLimitLeft = value; }
+
+		// Catching up rather than snapping: the camera eases toward where it should be, at these speeds,
+		// which is what keeps a following camera from transmitting every twitch of what it follows.
+		LION_API bool HasSmoothing() const { return mSmooth; }
+		LION_API void SetSmoothing(bool smooth) { mSmooth = smooth; }
+
+		LION_API float32 GetPositionSmoothing() const { return mPositionSmoothing; }
+		LION_API float32 GetRotationSmoothing() const { return mRotationSmoothing; }
+		LION_API void SetPositionSmoothing(float32 speed) { mPositionSmoothing = std::max(speed, 0.0f); }
+		LION_API void SetRotationSmoothing(float32 speed) { mRotationSmoothing = std::max(speed, 0.0f); }
+
+		// Where the camera sits and how it is turned, after the offset, the limits and the smoothing.
 		LION_API glm::vec2 GetViewPosition() const;
+		LION_API float32 GetViewRotation() const;
 
-		// The box the camera may not look past — Godot's limits, as a rectangle rather than four numbers.
-		// It bounds what the camera *sees*, so the view stops with its edge on the limit, not its centre.
-		LION_API bool HasLimits() const { return mLimited; }
-		LION_API void SetLimited(bool limited) { mLimited = limited; }
-		LION_API const Vector& GetLimitMinimum() const { return mLimitMinimum; }
-		LION_API const Vector& GetLimitMaximum() const { return mLimitMaximum; }
-		LION_API void SetLimits(const Vector& minimum, const Vector& maximum);
-
-		// How much of the world the camera shows at its zoom, in world units. The editor draws this as
-		// the framing rectangle, and the limits are applied against it.
+		// How much of the world the camera shows at its zoom, in world units. The editor draws this as the
+		// framing rectangle, and the limits are applied against it.
 		LION_API glm::vec2 GetViewSize() const;
 
+		// Where the camera would sit with no smoothing — what the smoothing is easing toward. The editor
+		// draws this, since an editor is not running the game and has nothing to ease from.
+		LION_API glm::vec2 GetTargetPosition() const;
+
 		void OnAwake() override;
+		void OnUpdate() override;
 		void Reflect(Reflector& reflector) override;
 		void Serialize(Serializer& serializer) const override;
 		void Deserialize(const Serializer& serializer) override;
@@ -51,13 +74,25 @@ namespace Lion
 	private:
 		float32 mZoom = 1.0f;
 		Vector mOffset;
-		bool mCurrent = true;
 
-		bool mLimited = false;
-		Vector mLimitMinimum{ -960.0f, -540.0f };
-		Vector mLimitMaximum{ 960.0f, 540.0f };
+		bool mLimit = false;
+		float32 mLimitTop = 540.0f;
+		float32 mLimitRight = 960.0f;
+		float32 mLimitBottom = -540.0f;
+		float32 mLimitLeft = -960.0f;
 
-		// Leaves this camera the only current one in its scene.
-		void ClaimCurrent();
+		bool mSmooth = false;
+		float32 mPositionSmoothing = 5.0f;
+		float32 mRotationSmoothing = 5.0f;
+
+		// Where the camera actually is while it eases toward the target, and whether it has been there
+		// once — a camera should start framed, not fly in from the origin on the first frame.
+		glm::vec2 mSmoothedPosition{ 0.0f, 0.0f };
+		float32 mSmoothedRotation = 0.0f;
+		bool mSettled = false;
+
+		// The target held inside the limits, which is what both the smoothing and the editor's overlay
+		// are measured against.
+		glm::vec2 ClampToLimit(const glm::vec2& position) const;
 	};
 }

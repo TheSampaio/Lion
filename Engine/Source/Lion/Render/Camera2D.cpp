@@ -1,12 +1,12 @@
 #include "Engine.h"
 #include "Camera2D.h"
 
+#include <Lion/Core/Clock.h>
+#include <Lion/Core/Window.h>
 #include <Lion/Logic/ComponentRegistry.h>
 #include <Lion/Logic/Entity.h>
 #include <Lion/Logic/Reflector.h>
-#include <Lion/Logic/Scene.h>
 #include <Lion/Logic/Serializer.h>
-#include <Lion/Core/Window.h>
 
 namespace Lion
 {
@@ -22,22 +22,6 @@ namespace Lion
 		mZoom = std::clamp(zoom, kMinimumZoom, kMaximumZoom);
 	}
 
-	void Camera2D::SetCurrent(bool current)
-	{
-		mCurrent = current;
-
-		if (current)
-			ClaimCurrent();
-	}
-
-	void Camera2D::SetLimits(const Vector& minimum, const Vector& maximum)
-	{
-		// Held the right way round, whichever way round it was given: a limit box with its corners
-		// crossed is a box with no inside.
-		mLimitMinimum = Vector(std::min(minimum.x, maximum.x), std::min(minimum.y, maximum.y));
-		mLimitMaximum = Vector(std::max(minimum.x, maximum.x), std::max(minimum.y, maximum.y));
-	}
-
 	glm::vec2 Camera2D::GetViewSize() const
 	{
 		// The window is what the projection is built from, and the zoom is how much world each of its
@@ -46,45 +30,91 @@ namespace Lion
 		return glm::vec2(window.width * mZoom, window.height * mZoom);
 	}
 
-	glm::vec2 Camera2D::GetViewPosition() const
+	glm::vec2 Camera2D::ClampToLimit(const glm::vec2& position) const
 	{
-		const Vector position = GetOwner().GetWorldPosition();
-		glm::vec2 view(position.x + mOffset.x, position.y + mOffset.y);
-
-		if (!mLimited)
-			return view;
+		if (!mLimit)
+			return position;
 
 		// The limits bound what is *seen*, so the view stops with its edge against them — half a screen
-		// short of the line, not centred on it. A limit narrower than the view has no room to slide in,
-		// so the camera sits in the middle of it and shows the overspill on both sides.
+		// short of the line, not centred on it. Held the right way round whichever way round they were
+		// typed: a top below its bottom is a mistake, not an instruction.
 		const glm::vec2 half = GetViewSize() * 0.5f;
-		const glm::vec2 minimum(mLimitMinimum.x + half.x, mLimitMinimum.y + half.y);
-		const glm::vec2 maximum(mLimitMaximum.x - half.x, mLimitMaximum.y - half.y);
 
-		view.x = (minimum.x <= maximum.x) ? std::clamp(view.x, minimum.x, maximum.x)
-			: (mLimitMinimum.x + mLimitMaximum.x) * 0.5f;
-		view.y = (minimum.y <= maximum.y) ? std::clamp(view.y, minimum.y, maximum.y)
-			: (mLimitMinimum.y + mLimitMaximum.y) * 0.5f;
+		const float32 lowX = std::min(mLimitLeft, mLimitRight) + half.x;
+		const float32 highX = std::max(mLimitLeft, mLimitRight) - half.x;
+		const float32 lowY = std::min(mLimitBottom, mLimitTop) + half.y;
+		const float32 highY = std::max(mLimitBottom, mLimitTop) - half.y;
 
-		return view;
+		// A limit narrower than the view has no room to slide in, so the camera centres in it and shows
+		// the overspill on both sides rather than jittering between two impossible edges.
+		return glm::vec2(
+			(lowX <= highX) ? std::clamp(position.x, lowX, highX) : (mLimitLeft + mLimitRight) * 0.5f,
+			(lowY <= highY) ? std::clamp(position.y, lowY, highY) : (mLimitBottom + mLimitTop) * 0.5f);
+	}
+
+	glm::vec2 Camera2D::GetTargetPosition() const
+	{
+		const Vector position = GetOwner().GetWorldPosition();
+		return ClampToLimit(glm::vec2(position.x + mOffset.x, position.y + mOffset.y));
+	}
+
+	glm::vec2 Camera2D::GetViewPosition() const
+	{
+		return (mSmooth && mSettled) ? mSmoothedPosition : GetTargetPosition();
+	}
+
+	float32 Camera2D::GetViewRotation() const
+	{
+		return (mSmooth && mSettled) ? mSmoothedRotation : GetOwner().GetWorldRotation();
 	}
 
 	void Camera2D::OnAwake()
 	{
-		// A scene woken with two cameras claiming the title settles it here, in the order they wake: the
-		// last one to say it is current is the one that is.
-		if (mCurrent)
-			ClaimCurrent();
+		// A camera starts framed on its target rather than flying in from the origin.
+		mSmoothedPosition = GetTargetPosition();
+		mSmoothedRotation = GetOwner().GetWorldRotation();
+		mSettled = true;
+	}
+
+	void Camera2D::OnUpdate()
+	{
+		if (!mSmooth)
+			return;
+
+		const glm::vec2 target = GetTargetPosition();
+		const float32 targetRotation = GetOwner().GetWorldRotation();
+
+		if (!mSettled)
+		{
+			mSmoothedPosition = target;
+			mSmoothedRotation = targetRotation;
+			mSettled = true;
+			return;
+		}
+
+		// An exponential ease: each second the camera closes the same *proportion* of the gap, so the
+		// speed reads the same whatever the frame rate — a lerp against delta time does not.
+		const float32 deltaTime = Clock::GetDeltaTime();
+
+		const float32 positionBlend = 1.0f - std::exp(-mPositionSmoothing * deltaTime);
+		const float32 rotationBlend = 1.0f - std::exp(-mRotationSmoothing * deltaTime);
+
+		mSmoothedPosition += (target - mSmoothedPosition) * positionBlend;
+
+		// Turning takes the shorter way round, so a camera at 350 degrees eases to 10 rather than back
+		// through everything in between.
+		float32 difference = std::fmod(targetRotation - mSmoothedRotation + 540.0f, 360.0f) - 180.0f;
+		mSmoothedRotation += difference * rotationBlend;
 	}
 
 	void Camera2D::Reflect(Reflector& reflector)
 	{
+		// The editor draws this component itself (the limit's four sides collapse into one section), so
+		// this is what a game reads and writes through code rather than what the Inspector shows.
 		reflector.Field("Zoom", mZoom);
 		reflector.Field("Offset", mOffset);
-		reflector.Field("Current", mCurrent);
-		reflector.Field("Limited", mLimited);
-		reflector.Field("Limit Min", mLimitMinimum);
-		reflector.Field("Limit Max", mLimitMaximum);
+		reflector.Field("Limit", mLimit);
+		reflector.Field("Smooth", mSmooth);
 	}
 
 	void Camera2D::Serialize(Serializer& serializer) const
@@ -92,38 +122,34 @@ namespace Lion
 		serializer.Write("zoom", mZoom);
 		serializer.Write("offsetX", mOffset.x);
 		serializer.Write("offsetY", mOffset.y);
-		serializer.Write("current", mCurrent);
-		serializer.Write("limited", mLimited);
-		serializer.Write("limitMinX", mLimitMinimum.x);
-		serializer.Write("limitMinY", mLimitMinimum.y);
-		serializer.Write("limitMaxX", mLimitMaximum.x);
-		serializer.Write("limitMaxY", mLimitMaximum.y);
+
+		serializer.Write("limit", mLimit);
+		serializer.Write("limitTop", mLimitTop);
+		serializer.Write("limitRight", mLimitRight);
+		serializer.Write("limitBottom", mLimitBottom);
+		serializer.Write("limitLeft", mLimitLeft);
+
+		serializer.Write("smooth", mSmooth);
+		serializer.Write("positionSmoothing", mPositionSmoothing);
+		serializer.Write("rotationSmoothing", mRotationSmoothing);
 	}
 
 	void Camera2D::Deserialize(const Serializer& serializer)
 	{
 		mZoom = serializer.ReadFloat("zoom", 1.0f);
 		mOffset = Vector(serializer.ReadFloat("offsetX", 0.0f), serializer.ReadFloat("offsetY", 0.0f));
-		mCurrent = serializer.ReadBool("current", true);
-		mLimited = serializer.ReadBool("limited", false);
-		mLimitMinimum = Vector(serializer.ReadFloat("limitMinX", -960.0f), serializer.ReadFloat("limitMinY", -540.0f));
-		mLimitMaximum = Vector(serializer.ReadFloat("limitMaxX", 960.0f), serializer.ReadFloat("limitMaxY", 540.0f));
-	}
 
-	void Camera2D::ClaimCurrent()
-	{
-		const Reference<Scene> scene = GetOwner().GetScene();
+		mLimit = serializer.ReadBool("limit", false);
+		mLimitTop = serializer.ReadFloat("limitTop", 540.0f);
+		mLimitRight = serializer.ReadFloat("limitRight", 960.0f);
+		mLimitBottom = serializer.ReadFloat("limitBottom", -540.0f);
+		mLimitLeft = serializer.ReadFloat("limitLeft", -960.0f);
 
-		if (!scene)
-			return;
+		mSmooth = serializer.ReadBool("smooth", false);
+		mPositionSmoothing = serializer.ReadFloat("positionSmoothing", 5.0f);
+		mRotationSmoothing = serializer.ReadFloat("rotationSmoothing", 5.0f);
 
-		for (const auto& entity : scene->GetEntities())
-		{
-			Camera2D* other = entity->GetComponent<Camera2D>();
-
-			if (other && other != this)
-				other->mCurrent = false;
-		}
+		mSettled = false;
 	}
 
 	LION_REGISTER_COMPONENT(Camera2D)
