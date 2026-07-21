@@ -34,6 +34,7 @@
 #include <Lion/Math/Sigma.h>
 #include <Lion/Math/Transform.h>
 #include <Lion/Math/Vector.h>
+#include <Lion/Math/Vector2.h>
 
 // Platform
 #include <Lion/Platform/FileDialog.h>

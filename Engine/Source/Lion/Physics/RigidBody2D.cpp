@@ -155,12 +155,10 @@ namespace Lion
 
 		// The simulation works in world space; writing it back rebases the entity's local transform.
 		Entity& owner = GetOwner();
-		const float32 depth = owner.GetWorldPosition().z;  // Physics does not manage the sprite depth.
 
-		owner.SetWorldPosition(Vector(
+		owner.SetWorldPosition(Vector2(
 			position.x * PhysicsWorld::PixelsPerMeter,
-			position.y * PhysicsWorld::PixelsPerMeter,
-			depth));
+			position.y * PhysicsWorld::PixelsPerMeter));
 
 		owner.SetWorldRotation(angle);
 	}

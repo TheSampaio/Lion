@@ -439,12 +439,15 @@ private:
 	bool DrawFloatProperty(const Lion::char8* label, Lion::float32& value, Lion::float32 speed,
 		Lion::float32 minimum, Lion::float32 maximum, std::optional<Lion::float32> defaultValue);
 
-	// Draws an X/Y/Z vector editor with red/green/blue axis buttons (Unity/Godot-style). Clicking an
-	// axis button resets that component to resetValue, and the revert arrow at the end of the row resets
-	// all three — it only appears while they are not all resetValue, which is the field's default.
+	// Draws a vector editor with coloured axis buttons (Unity/Godot-style): X red, Y green, Z blue.
+	// Clicking an axis button resets that component to resetValue, and the revert arrow at the end of the
+	// row resets them all — it only appears while they are not all resetValue, the field's default.
 	//
-	// Pass 'uniform' for a row that can be locked (the Scale): while it is set, editing one axis moves
-	// the other two by the same proportion. Returns whether any value changed.
+	// Pass 'uniform' for a row that can be locked (the Scale): while it is set, editing one axis moves the
+	// others by the same proportion. Two axes are all a 2D transform has; three remain for what genuinely
+	// has a third. Returns whether any value changed.
+	bool DrawVectorControl(const char* label, float* values, int count, float speed, float resetValue, bool* uniform = nullptr);
+	bool DrawVec2Control(const char* label, float values[2], float speed, float resetValue, bool* uniform = nullptr);
 	bool DrawVec3Control(const char* label, float values[3], float speed, float resetValue, bool* uniform = nullptr);
 
 	// Undo/redo helpers. RecordSnapshot is for discrete actions (add/delete); BeginEdit/CommitEdit

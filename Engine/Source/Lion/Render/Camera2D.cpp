@@ -111,8 +111,9 @@ namespace Lion
 	{
 		// The editor draws this component itself (the limit's four sides collapse into one section), so
 		// this is what a game reads and writes through code rather than what the Inspector shows.
+		// The offset, the limits and the smoothing are drawn by the editor's own Camera 2D section (the
+		// four limit sides fold into one row), so what a reflection consumer sees is the plain switches.
 		reflector.Field("Zoom", mZoom);
-		reflector.Field("Offset", mOffset);
 		reflector.Field("Limit", mLimit);
 		reflector.Field("Smooth", mSmooth);
 	}
@@ -137,7 +138,7 @@ namespace Lion
 	void Camera2D::Deserialize(const Serializer& serializer)
 	{
 		mZoom = serializer.ReadFloat("zoom", 1.0f);
-		mOffset = Vector(serializer.ReadFloat("offsetX", 0.0f), serializer.ReadFloat("offsetY", 0.0f));
+		mOffset = Vector2(serializer.ReadFloat("offsetX", 0.0f), serializer.ReadFloat("offsetY", 0.0f));
 
 		mLimit = serializer.ReadBool("limit", false);
 		mLimitTop = serializer.ReadFloat("limitTop", 540.0f);

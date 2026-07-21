@@ -1,7 +1,7 @@
 #pragma once
 
 #include <Lion/Logic/Component.h>
-#include <Lion/Math/Vector.h>
+#include <Lion/Math/Vector2.h>
 
 namespace Lion
 {
@@ -24,8 +24,8 @@ namespace Lion
 
 		// Where the camera looks, relative to its owner. A camera parented to a player wants to look
 		// ahead of it, not exactly at it.
-		LION_API const Vector& GetOffset() const { return mOffset; }
-		LION_API void SetOffset(const Vector& offset) { mOffset = offset; }
+		LION_API const Vector2& GetOffset() const { return mOffset; }
+		LION_API void SetOffset(const Vector2& offset) { mOffset = offset; }
 
 		// The edges the camera may not look past, each its own number — the four sides of a level, which
 		// is how a level is measured. They bound what the camera *sees*, so the view stops with its edge
@@ -73,7 +73,7 @@ namespace Lion
 
 	private:
 		float32 mZoom = 1.0f;
-		Vector mOffset;
+		Vector2 mOffset;
 
 		bool mLimit = false;
 		float32 mLimitTop = 540.0f;

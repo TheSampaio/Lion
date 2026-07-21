@@ -10,7 +10,7 @@ namespace
 {
 	// An invisible boundary: a body and a shape, and nothing else. It has no behaviour, so it has no
 	// component of the game's own — a wall is not a kind of entity, it is an entity made of two traits.
-	Reference<Entity> CreateWall(const Vector& position, float32 width, float32 height)
+	Reference<Entity> CreateWall(const Vector2& position, float32 width, float32 height)
 	{
 		auto wall = MakeReference<Entity>();
 		wall->SetName("Wall");
@@ -36,16 +36,18 @@ void GameLayer::OnCreate()
 	const float32 halfHeight = field.height / 2.0f;
 	const float32 thickness = 20.0f;
 
-	mScene->Add(CreateWall(Vector(0.0f, halfHeight, Depth::Back), field.width, thickness));   // Top
-	mScene->Add(CreateWall(Vector(-halfWidth, 0.0f, Depth::Back), thickness, field.height));  // Left
-	mScene->Add(CreateWall(Vector(halfWidth, 0.0f, Depth::Back), thickness, field.height));   // Right
+	mScene->Add(CreateWall(Vector2(0.0f, halfHeight), field.width, thickness));   // Top
+	mScene->Add(CreateWall(Vector2(-halfWidth, 0.0f), thickness, field.height));  // Left
+	mScene->Add(CreateWall(Vector2(halfWidth, 0.0f), thickness, field.height));   // Right
 
 	// The paddle goes in before the ball, which looks the paddle up when it wakes.
 	auto paddle = MakeReference<Entity>();
 	paddle->SetName("Paddle");
-	paddle->GetTransform()->SetPosition(Vector(0.0f, -260.0f, Depth::Front));
+	paddle->GetTransform()->SetPosition(Vector2(0.0f, -260.0f));
 
-	const Size paddleSize = paddle->AddComponent<SpriteRenderer>("Sprites/Brickout/player.png")->GetSize();
+	SpriteRenderer* paddleSprite = paddle->AddComponent<SpriteRenderer>("Sprites/Brickout/player.png");
+	paddleSprite->SetOrder(Depth::Front);
+	const Size paddleSize = paddleSprite->GetSize();
 	paddle->AddComponent<RigidBody2D>(BodyType::Kinematic);  // Driven by input, unmoved by the ball's impacts.
 	paddle->AddComponent<BoxCollider2D>(paddleSize.width, paddleSize.height, 1.0f, 0.0f, 1.0f);
 	paddle->AddComponent<Paddle>();
@@ -53,9 +55,11 @@ void GameLayer::OnCreate()
 
 	auto ball = MakeReference<Entity>();
 	ball->SetName("Ball");
-	ball->GetTransform()->SetPosition(Vector(0.0f, 0.0f, Depth::Middle));
+	ball->GetTransform()->SetPosition(Vector2(0.0f, 0.0f));
 
-	const Size ballSize = ball->AddComponent<SpriteRenderer>("Sprites/Brickout/ball.png")->GetSize();
+	SpriteRenderer* ballSprite = ball->AddComponent<SpriteRenderer>("Sprites/Brickout/ball.png");
+	ballSprite->SetOrder(Depth::Middle);
+	const Size ballSize = ballSprite->GetSize();
 	ball->AddComponent<RigidBody2D>(BodyType::Dynamic, true);  // Frictionless, perfectly elastic, never spins.
 	ball->AddComponent<CircleCollider2D>(ballSize.width * 0.5f, 1.0f, 0.0f, 1.0f);
 	ball->AddComponent<Ball>();
@@ -64,9 +68,9 @@ void GameLayer::OnCreate()
 	// The round itself: the backdrop it is played on, and the field of bricks it is played against.
 	auto round = MakeReference<Entity>();
 	round->SetName("Brick Field");
-	round->GetTransform()->SetPosition(Vector(0.0f, 0.0f, Depth::Back));
+	round->GetTransform()->SetPosition(Vector2(0.0f, 0.0f));
 
-	round->AddComponent<SpriteRenderer>("Sprites/Brickout/background.jpg");
+	round->AddComponent<SpriteRenderer>("Sprites/Brickout/background.jpg")->SetOrder(Depth::Back);
 	round->AddComponent<BrickField>();
 	mScene->Add(round);
 }

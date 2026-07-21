@@ -57,9 +57,10 @@ void BrickField::SpawnBricks()
 
 			auto entity = MakeReference<Entity>();
 			entity->SetName("Brick");
-			entity->GetTransform()->SetPosition(Vector(positionX + col * spacingX, positionY - row * spacingY, Depth::Middle));
+			entity->GetTransform()->SetPosition(Vector2(positionX + col * spacingX, positionY - row * spacingY));
 
 			SpriteRenderer* renderer = entity->AddComponent<SpriteRenderer>(texture);
+			renderer->SetOrder(Depth::Middle);
 			const Size size = renderer->GetSize();
 
 			entity->AddComponent<RigidBody2D>(BodyType::Static);

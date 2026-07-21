@@ -294,8 +294,8 @@ void EditorLayer::CreateDemoScene()
 	// Background.
 	auto background = MakeReference<Entity>();
 	background->SetName("Background");
-	background->GetTransform()->SetPosition(Vector(0.0f, 0.0f, Depth::Back));
-	background->AddComponent<SpriteRenderer>("Sprites/Brickout/background.jpg");
+	background->GetTransform()->SetPosition(Vector2(0.0f, 0.0f));
+	background->AddComponent<SpriteRenderer>("Sprites/Brickout/background.jpg")->SetOrder(Depth::Back);
 	mScene->Add(background);
 
 	// A row of bricks.
@@ -303,16 +303,16 @@ void EditorLayer::CreateDemoScene()
 	{
 		auto brick = MakeReference<Entity>();
 		brick->SetName("Brick " + std::to_string(i + 1));
-		brick->GetTransform()->SetPosition(Vector(-160.0f + i * 80.0f, 60.0f, Depth::Middle));
-		brick->AddComponent<SpriteRenderer>("Sprites/Brickout/tile-" + std::to_string(i + 1) + ".png");
+		brick->GetTransform()->SetPosition(Vector2(-160.0f + i * 80.0f, 60.0f));
+		brick->AddComponent<SpriteRenderer>("Sprites/Brickout/tile-" + std::to_string(i + 1) + ".png")->SetOrder(Depth::Middle);
 		mScene->Add(brick);
 	}
 
 	// Ball (with physics, so pressing Play drops it under gravity).
 	auto ball = MakeReference<Entity>();
 	ball->SetName("Ball");
-	ball->GetTransform()->SetPosition(Vector(0.0f, 120.0f, Depth::Middle));
-	ball->AddComponent<SpriteRenderer>("Sprites/Brickout/ball.png");
+	ball->GetTransform()->SetPosition(Vector2(0.0f, 120.0f));
+	ball->AddComponent<SpriteRenderer>("Sprites/Brickout/ball.png")->SetOrder(Depth::Middle);
 	ball->AddComponent<RigidBody2D>(BodyType::Dynamic, false);
 	ball->AddComponent<CircleCollider2D>(6.0f);
 	mScene->Add(ball);
@@ -2754,7 +2754,7 @@ Reference<Entity> EditorLayer::CreateEntity(Entity* parent, const Vector* positi
 		entity->SetParent(parent);
 
 	if (position)
-		entity->SetWorldPosition(*position);
+		entity->SetWorldPosition(Vector2(*position));
 
 	SetSelection(entity);
 	mRenamingEntity = entity;   // Let the user name it right away.
@@ -3065,13 +3065,13 @@ void EditorLayer::DrawViewport()
 				if (!entity || entity->IsFolder())
 					continue;
 
-				const Vector entityPosition = entity->GetWorldPosition();
-				const Vector entityScale = entity->GetWorldScale();
+				const Vector2 entityPosition = entity->GetWorldPosition();
+				const Vector2 entityScale = entity->GetWorldScale();
 
 				switch (mTool)
 				{
 					case Tool::Move:
-						entity->SetWorldPosition(Vector(entityPosition.x + moved.x, entityPosition.y + moved.y, entityPosition.z));
+						entity->SetWorldPosition(Vector2(entityPosition.x + moved.x, entityPosition.y + moved.y));
 						break;
 
 					case Tool::Rotate:
@@ -3079,7 +3079,7 @@ void EditorLayer::DrawViewport()
 						break;
 
 					case Tool::Scale:
-						entity->SetWorldScale(Vector(entityScale.x * scaleX, entityScale.y * scaleY, entityScale.z));
+						entity->SetWorldScale(Vector2(entityScale.x * scaleX, entityScale.y * scaleY));
 						break;
 
 					default:
@@ -4170,7 +4170,17 @@ bool EditorLayer::DrawFloatProperty(const char8* label, float32& value, float32 
 	return changed;
 }
 
+bool EditorLayer::DrawVec2Control(const char* label, float values[2], float speed, float resetValue, bool* uniform)
+{
+	return DrawVectorControl(label, values, 2, speed, resetValue, uniform);
+}
+
 bool EditorLayer::DrawVec3Control(const char* label, float values[3], float speed, float resetValue, bool* uniform)
+{
+	return DrawVectorControl(label, values, 3, speed, resetValue, uniform);
+}
+
+bool EditorLayer::DrawVectorControl(const char* label, float* values, int count, float speed, float resetValue, bool* uniform)
 {
 	struct Axis { const char8* name; ImVec4 color; ImVec4 hovered; };
 	static const Axis axes[3] = {
@@ -4201,7 +4211,7 @@ bool EditorLayer::DrawVec3Control(const char* label, float values[3], float spee
 	// hold its slot, so the three rows of a Transform stay in one column.
 	const float32 rowEnd = 2.0f * (RowEndSlot() + kRowEndGap);
 	const float32 controlsWidth = ImGui::GetContentRegionAvail().x - kVectorLabelWidth - rowEnd;
-	const float32 axisWidth = (controlsWidth - 2.0f * gap) / 3.0f;
+	const float32 axisWidth = (controlsWidth - static_cast<float32>(count - 1) * gap) / static_cast<float32>(count);
 	const float32 dragWidth = ImMax(axisWidth - badge - gap, 12.0f);
 
 	ImGui::AlignTextToFramePadding();
@@ -4212,7 +4222,7 @@ bool EditorLayer::DrawVec3Control(const char* label, float values[3], float spee
 	// the fields sit on it, so a SameLine cannot drift them apart.
 	const float32 rowY = ImGui::GetCursorPosY();
 
-	for (int32 i = 0; i < 3; ++i)
+	for (int32 i = 0; i < count; ++i)
 	{
 		if (i > 0)
 			ImGui::SameLine(0.0f, gap);
@@ -4265,7 +4275,7 @@ bool EditorLayer::DrawVec3Control(const char* label, float values[3], float spee
 			// A scale of zero has no proportion to keep, so the axes simply meet where this one went.
 			const float32 factor = (before != 0.0f) ? (values[i] / before) : 0.0f;
 
-			for (int32 other = 0; other < 3; ++other)
+			for (int32 other = 0; other < count; ++other)
 				if (other != i)
 					values[other] = (factor != 0.0f) ? (values[other] * factor) : values[i];
 		}
@@ -4290,7 +4300,9 @@ bool EditorLayer::DrawVec3Control(const char* label, float values[3], float spee
 		ImGui::Dummy(ImVec2(RowEndSlot(), RowEndSlot()));
 	}
 
-	const bool modified = (values[0] != resetValue) || (values[1] != resetValue) || (values[2] != resetValue);
+	bool modified = false;
+	for (int32 i = 0; i < count; ++i)
+		modified |= (values[i] != resetValue);
 
 	ImGui::SameLine(0.0f, kRowEndGap);
 	ImGui::SetCursorPosY(rowY);
@@ -4299,7 +4311,8 @@ bool EditorLayer::DrawVec3Control(const char* label, float values[3], float spee
 	if (ResetToDefaultButton("##reset", modified))
 	{
 		RecordSnapshot();
-		values[0] = values[1] = values[2] = resetValue;
+		for (int32 i = 0; i < count; ++i)
+			values[i] = resetValue;
 		changed = true;
 	}
 
@@ -4569,23 +4582,24 @@ void EditorLayer::DrawProperties()
 		// has in common. The values shown are the primary's; the value written is written to all of them.
 		const Reference<Transform> transform = mSelectedEntity->GetTransform();
 
-		Vector position = transform->GetPosition();
-		float32 positionValues[3] = { position.x, position.y, position.z };
-		if (DrawVec3Control("Position", positionValues, 1.0f, 0.0f))
+		Vector2 position = transform->GetPosition();
+		float32 positionValues[2] = { position.x, position.y };
+		if (DrawVec2Control("Position", positionValues, 1.0f, 0.0f))
 			for (const auto& entity : mSelection)
-				entity->GetTransform()->SetPosition(Vector(positionValues[0], positionValues[1], positionValues[2]));
+				entity->GetTransform()->SetPosition(Vector2(positionValues[0], positionValues[1]));
 
-		Vector rotation = transform->GetRotation();
-		float32 rotationValues[3] = { rotation.x, rotation.y, rotation.z };
-		if (DrawVec3Control("Rotation", rotationValues, 0.5f, 0.0f))
+		// A rotation on a plane is one angle, not a vector whose X and Y meant nothing — one field, in
+		// degrees, is the whole of it.
+		float32 rotation = transform->GetRotation();
+		if (DrawFloatProperty("Rotation", rotation, 0.5f, 0.0f, 0.0f, 0.0f))
 			for (const auto& entity : mSelection)
-				entity->GetTransform()->SetRotation(Vector(rotationValues[0], rotationValues[1], rotationValues[2]));
+				entity->GetTransform()->SetRotation(rotation);
 
-		Vector scale = transform->GetScale();
-		float32 scaleValues[3] = { scale.x, scale.y, scale.z };
-		if (DrawVec3Control("Scale", scaleValues, 0.01f, 1.0f, &mScaleUniform))
+		Vector2 scale = transform->GetScale();
+		float32 scaleValues[2] = { scale.x, scale.y };
+		if (DrawVec2Control("Scale", scaleValues, 0.01f, 1.0f, &mScaleUniform))
 			for (const auto& entity : mSelection)
-				entity->GetTransform()->SetScale(Vector(scaleValues[0], scaleValues[1], scaleValues[2]));
+				entity->GetTransform()->SetScale(Vector2(scaleValues[0], scaleValues[1]));
 	}
 
 	// Draw components in their stored order so a newly added one always appears at the end; headers
@@ -4713,13 +4727,12 @@ void EditorLayer::DrawProperties()
 				if (DrawFloatProperty("Zoom", zoom, 0.01f, 0.01f, 100.0f, 1.0f))
 					ApplyToSelection<Camera2D>([&](Camera2D* target) { target->SetZoom(zoom); });
 
-				Vector offset = camera->GetOffset();
-				float32 offsetValues[3] = { offset.x, offset.y, offset.z };
+				Vector2 offset = camera->GetOffset();
+				float32 offsetValues[2] = { offset.x, offset.y };
 
-				PropertyLabel("Offset");
-				if (DrawVec3Control("##offset", offsetValues, 1.0f, 0.0f))
+				if (DrawVec2Control("Offset", offsetValues, 1.0f, 0.0f))
 					ApplyToSelection<Camera2D>([&](Camera2D* target)
-						{ target->SetOffset(Vector(offsetValues[0], offsetValues[1])); });
+						{ target->SetOffset(Vector2(offsetValues[0], offsetValues[1])); });
 
 				// The limit is one switch with four numbers under it — the sides of a level, which is how
 				// a level is measured. Folded away until it is on, because four numbers that do nothing
