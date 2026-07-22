@@ -4332,7 +4332,7 @@ bool EditorLayer::DrawTransformVector(const char* label, float* values, int coun
 
 	ImGui::PushID(label);
 
-	// The field carries its unit in its own format, so the number and its "°" read as one thing. ImGui
+	// The field carries its unit in its own format, so the number and any suffix read as one thing. ImGui
 	// trims the suffix when the field is typed into, so arithmetic and expressions still work.
 	char format[16];
 	std::snprintf(format, sizeof(format), "%%.3f%s%s", (unit && *unit) ? " " : "", unit ? unit : "");
@@ -4412,6 +4412,19 @@ bool EditorLayer::DrawTransformVector(const char* label, float* values, int coun
 					values[other] = (factor != 0.0f) ? (values[other] * factor) : values[i];
 		}
 
+		// This axis's own revert arrow, in the row's second end slot (the first is the padlock's), centred
+		// against the field. One per axis, so X, Y and Z reset independently; it shows only while the value
+		// is off its default, and resets nothing but its own row.
+		const float32 resetX = ImGui::GetContentRegionMax().x - rightWidth + 2.0f * kRowEndGap + RowEndSlot();
+		ImGui::SetCursorPos(ImVec2(resetX, rowY + (rowHeight - RowEndSlot()) * 0.5f));
+
+		if (ResetToDefaultButton("##reset", values[i] != resetValue))
+		{
+			RecordSnapshot();
+			values[i] = resetValue;
+			changed = true;
+		}
+
 		changed |= axisChanged;
 		ImGui::PopID();
 	}
@@ -4420,31 +4433,15 @@ bool EditorLayer::DrawTransformVector(const char* label, float* values, int coun
 	ImGui::SetCursorPos(ImVec2(0.0f, groupOrigin.y + (groupHeight - ImGui::GetTextLineHeight()) * 0.5f));
 	ImGui::TextUnformatted(label);
 
-	// The row-end glyphs, centred down the group on the right: the padlock (scale only), then the revert
-	// arrow, which appears only while a value is off its default.
-	bool modified = false;
-	for (int32 i = 0; i < count; ++i)
-		modified |= (values[i] != resetValue);
-
-	const float32 glyphY = groupOrigin.y + (groupHeight - RowEndSlot()) * 0.5f;
-	float32 glyphX = ImGui::GetContentRegionMax().x - rightWidth + kRowEndGap;
-
+	// The uniform-scale padlock (scale only), centred down the group in the first end slot. The revert
+	// arrows are per axis, drawn beside each field in the second slot, so the padlock stands alone here.
 	if (uniform)
 	{
+		const float32 glyphY = groupOrigin.y + (groupHeight - RowEndSlot()) * 0.5f;
+		const float32 glyphX = ImGui::GetContentRegionMax().x - rightWidth + kRowEndGap;
 		ImGui::SetCursorPos(ImVec2(glyphX, glyphY));
 		if (LockButton("##uniform", *uniform))
 			*uniform = !*uniform;
-	}
-
-	glyphX += RowEndSlot() + kRowEndGap;
-	ImGui::SetCursorPos(ImVec2(glyphX, glyphY));
-
-	if (ResetToDefaultButton("##reset", modified))
-	{
-		RecordSnapshot();
-		for (int32 i = 0; i < count; ++i)
-			values[i] = resetValue;
-		changed = true;
 	}
 
 	// Leave the cursor below the whole group, so the next property does not climb into it.
@@ -4725,7 +4722,7 @@ void EditorLayer::DrawProperties()
 		// A rotation on a plane is one angle, not a vector whose X and Y meant nothing — one field, in
 		// degrees, turning about Z, so it wears the Z tag (axis base 2).
 		float32 rotationValue[1] = { transform->GetRotation() };
-		if (DrawTransformVector("Rotation", rotationValue, 1, 0.5f, 0.0f, "\xC2\xB0", nullptr, 2))
+		if (DrawTransformVector("Rotation", rotationValue, 1, 0.5f, 0.0f, "", nullptr, 2))
 			for (const auto& entity : mSelection)
 				entity->GetTransform()->SetRotation(rotationValue[0]);
 
