@@ -4318,11 +4318,13 @@ bool EditorLayer::DrawVectorControl(const char* label, float* values, int count,
 bool EditorLayer::DrawTransformVector(const char* label, float* values, int count, float speed,
 	float resetValue, const char* unit, bool* uniform, int axisBase)
 {
+	// A solid plate carries the axis colour at full strength — a translucent one only muddied it against
+	// the dark field — with the letter in near-white so it reads on top.
 	struct Axis { const char8* letter; ImU32 tint; ImU32 tag; };
 	static const Axis axes[3] = {
-		{ "X", IM_COL32(176, 64, 75, 255), IM_COL32(176, 64, 75, 70) },    // Red   #b0404b
-		{ "Y", IM_COL32(73, 137, 72, 255), IM_COL32(73, 137, 72, 70) },    // Green #498948
-		{ "Z", IM_COL32(55, 103, 175, 255), IM_COL32(55, 103, 175, 70) },  // Blue  #3767af
+		{ "X", IM_COL32(236, 236, 236, 255), IM_COL32(176, 64, 75, 255) },   // Red   #b0404b
+		{ "Y", IM_COL32(236, 236, 236, 255), IM_COL32(73, 137, 72, 255) },   // Green #498948
+		{ "Z", IM_COL32(236, 236, 236, 255), IM_COL32(55, 103, 175, 255) },  // Blue  #3767af
 	};
 
 	bool changed = false;
