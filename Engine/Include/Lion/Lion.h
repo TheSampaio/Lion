@@ -34,6 +34,7 @@
 #include <Lion/Math/Sigma.h>
 #include <Lion/Math/Transform.h>
 #include <Lion/Math/Vector.h>
+#include <Lion/Math/Vector2.h>
 
 // Platform
 #include <Lion/Platform/FileDialog.h>
@@ -47,6 +48,7 @@
 // Render
 #include <Lion/Render/CameraOrthographic.h>
 #include <Lion/Render/Framebuffer.h>
+#include <Lion/Render/Camera2D.h>
 #include <Lion/Render/Graphics.h>
 #include <Lion/Render/Renderer.h>
 #include <Lion/Render/Sprite.h>

@@ -3,10 +3,11 @@
 
 namespace Lion
 {
-    const float32 Depth::Back = 1.0f;
-    const float32 Depth::Lower = 0.80f;
-    const float32 Depth::Middle = 0.60f;
-    const float32 Depth::Upper = 0.40f;
-    const float32 Depth::Front = 0.20f;
-    const float32 Depth::Overlay = 0.0f;
+    // Spaced out, so a sprite can be slipped between two named layers without renaming them.
+    const int32 Depth::Back = 0;
+    const int32 Depth::Lower = 10;
+    const int32 Depth::Middle = 20;
+    const int32 Depth::Upper = 30;
+    const int32 Depth::Front = 40;
+    const int32 Depth::Overlay = 50;
 }

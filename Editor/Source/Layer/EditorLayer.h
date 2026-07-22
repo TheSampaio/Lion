@@ -39,6 +39,7 @@ private:
 		NewScene, OpenScene, SaveScene, SaveSceneAs,
 		Deselect,
 		NewProject, OpenProject,
+		FocusSelection,
 		Count
 	};
 
@@ -142,6 +143,22 @@ private:
 	Lion::DynamicLibrary mGameModule;
 
 	Lion::Reference<Lion::CameraOrthographic> mCamera;
+
+	// Where the editor is looking, and how closely — the viewport's own camera, which is not the game's.
+	// Panning and zooming move these; a running game frames itself through its own Camera2D instead.
+	glm::vec2 mViewCenter{ 0.0f, 0.0f };
+	Lion::float32 mViewZoom = 1.0f;
+
+	// Navigating the viewport, Godot-style: drag with the middle button (or space held) to pan, wheel to
+	// zoom about the cursor, F to frame the selection.
+	void HandleViewportNavigation(const ImVec2& imageMin, const ImVec2& imageSize, bool hovered);
+
+	// Frames the selection — or the whole scene when nothing is selected — the way Godot's F does.
+	void FocusViewportOnSelection();
+
+	// The world point under a viewport pixel, at the current view. Zooming about the cursor is holding
+	// this fixed while the zoom changes around it.
+	glm::vec2 ViewportToWorld(const ImVec2& screen, const ImVec2& imageMin, const ImVec2& imageSize) const;
 	Lion::Reference<Lion::Scene> mScene;
 	Lion::Reference<Lion::Framebuffer> mFramebuffer;
 	// The selection, and the one entity in it that everything single-target reads: the last one clicked.
@@ -244,6 +261,15 @@ private:
 	Lion::Entity* mReparentTarget = nullptr;   // Null target with mReparentChild set means "to root".
 	bool mReparentRequested = false;
 
+	// A row dropped between two rows rather than onto one: the entity moved, the row it landed against,
+	// which side of it, and the parent that row belongs to — ordering is a sibling affair, so the moved
+	// entity joins that parent before taking its place in the order.
+	Lion::Entity* mReorderMoved = nullptr;
+	Lion::Entity* mReorderBefore = nullptr;
+	Lion::Entity* mReorderParent = nullptr;
+	bool mReorderAfter = false;
+	bool mReorderRequested = false;
+
 	static constexpr size_t kMaxUndo = 100;
 
 	void CreateDemoScene();
@@ -304,6 +330,10 @@ private:
 	// The box around what is selected, drawn over the image for every entity in the selection.
 	void DrawSelectionOutline(const ImVec2& imageMin, const ImVec2& imageSize);
 	void DrawColliderOverlays(const ImVec2& imageMin, const ImVec2& imageSize);
+
+	// What a Camera2D frames, and the box it may not look past — drawn the way Godot draws them, so a
+	// camera is something you can see the reach of rather than guess at.
+	void DrawCameraOverlays(const ImVec2& imageMin, const ImVec2& imageSize);
 	void DrawHierarchy();
 	void DrawEntityNode(const Lion::Reference<Lion::Entity>& entity);
 	void DrawProperties();
@@ -409,13 +439,24 @@ private:
 	bool DrawFloatProperty(const Lion::char8* label, Lion::float32& value, Lion::float32 speed,
 		Lion::float32 minimum, Lion::float32 maximum, std::optional<Lion::float32> defaultValue);
 
-	// Draws an X/Y/Z vector editor with red/green/blue axis buttons (Unity/Godot-style). Clicking an
-	// axis button resets that component to resetValue, and the revert arrow at the end of the row resets
-	// all three — it only appears while they are not all resetValue, which is the field's default.
+	// Draws a vector editor with coloured axis buttons (Unity/Godot-style): X red, Y green, Z blue.
+	// Clicking an axis button resets that component to resetValue, and the revert arrow at the end of the
+	// row resets them all — it only appears while they are not all resetValue, the field's default.
 	//
-	// Pass 'uniform' for a row that can be locked (the Scale): while it is set, editing one axis moves
-	// the other two by the same proportion. Returns whether any value changed.
+	// Pass 'uniform' for a row that can be locked (the Scale): while it is set, editing one axis moves the
+	// others by the same proportion. Two axes are all a 2D transform has; three remain for what genuinely
+	// has a third. Returns whether any value changed.
+	bool DrawVectorControl(const char* label, float* values, int count, float speed, float resetValue, bool* uniform = nullptr);
 	bool DrawVec3Control(const char* label, float values[3], float speed, float resetValue, bool* uniform = nullptr);
+
+	// The Transform's own vector row, Godot-style: the property named on the left, each component stacked
+	// on its own line with a lowercase coloured axis letter and a unit ("px", "°"), and the row-end
+	// widgets — the scale's lock, the revert arrow — centred against the whole group. Stacking reads far
+	// better than three fields crammed across one line, which is the shape a 2D transform never needed.
+	// 'unit' is the suffix each field wears; 'uniform' turns on the scale padlock. Returns whether any
+	// value changed.
+	bool DrawTransformVector(const char* label, float* values, int count, float speed, float resetValue,
+		const char* unit, bool* uniform = nullptr, int axisBase = 0);
 
 	// Undo/redo helpers. RecordSnapshot is for discrete actions (add/delete); BeginEdit/CommitEdit
 	// group a continuous edit (a gizmo or slider drag) into a single undo step.

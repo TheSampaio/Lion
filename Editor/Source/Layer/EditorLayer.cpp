@@ -2,6 +2,7 @@
 #include "EditorLayer.h"
 
 #include "../EditorGui.h"
+#include "../Expression.h"
 #include "../ProjectBuild.h"
 #include "../Projects.h"
 
@@ -293,8 +294,8 @@ void EditorLayer::CreateDemoScene()
 	// Background.
 	auto background = MakeReference<Entity>();
 	background->SetName("Background");
-	background->GetTransform()->SetPosition(Vector(0.0f, 0.0f, Depth::Back));
-	background->AddComponent<SpriteRenderer>("Sprites/Brickout/background.jpg");
+	background->GetTransform()->SetPosition(Vector2(0.0f, 0.0f));
+	background->AddComponent<SpriteRenderer>("Sprites/Brickout/background.jpg")->SetOrder(Depth::Back);
 	mScene->Add(background);
 
 	// A row of bricks.
@@ -302,16 +303,16 @@ void EditorLayer::CreateDemoScene()
 	{
 		auto brick = MakeReference<Entity>();
 		brick->SetName("Brick " + std::to_string(i + 1));
-		brick->GetTransform()->SetPosition(Vector(-160.0f + i * 80.0f, 60.0f, Depth::Middle));
-		brick->AddComponent<SpriteRenderer>("Sprites/Brickout/tile-" + std::to_string(i + 1) + ".png");
+		brick->GetTransform()->SetPosition(Vector2(-160.0f + i * 80.0f, 60.0f));
+		brick->AddComponent<SpriteRenderer>("Sprites/Brickout/tile-" + std::to_string(i + 1) + ".png")->SetOrder(Depth::Middle);
 		mScene->Add(brick);
 	}
 
 	// Ball (with physics, so pressing Play drops it under gravity).
 	auto ball = MakeReference<Entity>();
 	ball->SetName("Ball");
-	ball->GetTransform()->SetPosition(Vector(0.0f, 120.0f, Depth::Middle));
-	ball->AddComponent<SpriteRenderer>("Sprites/Brickout/ball.png");
+	ball->GetTransform()->SetPosition(Vector2(0.0f, 120.0f));
+	ball->AddComponent<SpriteRenderer>("Sprites/Brickout/ball.png")->SetOrder(Depth::Middle);
 	ball->AddComponent<RigidBody2D>(BodyType::Dynamic, false);
 	ball->AddComponent<CircleCollider2D>(6.0f);
 	mScene->Add(ball);
@@ -331,6 +332,147 @@ void EditorLayer::OnRender()
 	EditorGui::EndFrame();
 }
 
+glm::vec2 EditorLayer::ViewportToWorld(const ImVec2& screen, const ImVec2& imageMin, const ImVec2& imageSize) const
+{
+	if (imageSize.x <= 0.0f || imageSize.y <= 0.0f)
+		return mViewCenter;
+
+	// From the image's own pixels to world units: the centre is the camera, and a pixel is 'zoom' of a
+	// world unit. Y climbs on screen and falls in the world, hence the flip.
+	const float32 offsetX = (screen.x - imageMin.x) - imageSize.x * 0.5f;
+	const float32 offsetY = (screen.y - imageMin.y) - imageSize.y * 0.5f;
+
+	return glm::vec2(mViewCenter.x + offsetX * mViewZoom, mViewCenter.y - offsetY * mViewZoom);
+}
+
+void EditorLayer::HandleViewportNavigation(const ImVec2& imageMin, const ImVec2& imageSize, bool hovered)
+{
+	// A running game frames itself; the editor's view is the editor's, and moving it while the game plays
+	// would be arguing with the game's own camera.
+	if (mPlaying)
+		return;
+
+	const ImGuiIO& io = ImGui::GetIO();
+
+	// Pan: the middle button anywhere over the image, or the left button with space held — the two hands
+	// Godot gives it, so a mouse without a middle button is not a mouse that cannot pan.
+	const bool panning = ImGui::IsMouseDragging(ImGuiMouseButton_Middle)
+		|| (ImGui::IsKeyDown(ImGuiKey_Space) && ImGui::IsMouseDragging(ImGuiMouseButton_Left));
+
+	if (panning && (hovered || ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows)))
+	{
+		const ImVec2 delta = ImGui::GetMouseDragDelta(
+			ImGui::IsMouseDragging(ImGuiMouseButton_Middle) ? ImGuiMouseButton_Middle : ImGuiMouseButton_Left);
+
+		// The world keeps up with the cursor: dragging right pulls the view left, which is what "grabbing
+		// the scene" means.
+		mViewCenter.x -= delta.x * mViewZoom;
+		mViewCenter.y += delta.y * mViewZoom;
+
+		ImGui::ResetMouseDragDelta(
+			ImGui::IsMouseDragging(ImGuiMouseButton_Middle) ? ImGuiMouseButton_Middle : ImGuiMouseButton_Left);
+	}
+
+	// Zoom about the cursor: the world point under the pointer is the one that does not move, which is
+	// what makes a wheel feel like it is zooming *there* rather than at the middle of the screen.
+	if (hovered && io.MouseWheel != 0.0f)
+	{
+		const glm::vec2 anchor = ViewportToWorld(io.MousePos, imageMin, imageSize);
+
+		constexpr float32 kStep = 1.1f;
+		constexpr float32 kMinimumZoom = 0.02f;
+		constexpr float32 kMaximumZoom = 50.0f;
+
+		mViewZoom = ImClamp(mViewZoom * std::pow(kStep, -io.MouseWheel), kMinimumZoom, kMaximumZoom);
+
+		const glm::vec2 after = ViewportToWorld(io.MousePos, imageMin, imageSize);
+		mViewCenter += anchor - after;
+	}
+
+	// Framing the selection is a rebindable editor shortcut (F by default), handled with the rest of
+	// them: it should work with the Hierarchy in hand, not only with the pointer over the image.
+}
+
+void EditorLayer::FocusViewportOnSelection()
+{
+	// What to frame: the selection, or the whole scene when nothing is picked — "show me where I am" is
+	// the same question either way.
+	const std::vector<Reference<Entity>>& targets = mSelection;
+
+	glm::vec2 minimum(FLT_MAX, FLT_MAX);
+	glm::vec2 maximum(-FLT_MAX, -FLT_MAX);
+	bool any = false;
+
+	const auto include = [&](const Reference<Entity>& entity)
+	{
+		const Vector position = entity->GetWorldPosition();
+		const Vector scale = entity->GetWorldScale();
+
+		// The box the entity actually occupies — its picture's size times the scale, not the scale on its
+		// own, which is 1 for everything and would frame a dot. This is the same reading the selection
+		// outline takes, so what F fills the viewport with is what the outline was drawn around.
+		float32 width = 64.0f;
+		float32 height = 64.0f;
+
+		if (const SpriteRenderer* sprite = entity->GetComponent<SpriteRenderer>())
+		{
+			const Size size = sprite->GetSize();
+			width = size.width;
+			height = size.height;
+		}
+		else if (const BoxCollider2D* box = entity->GetComponent<BoxCollider2D>())
+		{
+			width = box->GetWidth();
+			height = box->GetHeight();
+		}
+		else if (const CircleCollider2D* circle = entity->GetComponent<CircleCollider2D>())
+		{
+			width = height = circle->GetRadius() * 2.0f;
+		}
+
+		const glm::vec2 extent(
+			ImMax(std::abs(width * scale.x) * 0.5f, 1.0f),
+			ImMax(std::abs(height * scale.y) * 0.5f, 1.0f));
+
+		minimum = glm::min(minimum, glm::vec2(position.x, position.y) - extent);
+		maximum = glm::max(maximum, glm::vec2(position.x, position.y) + extent);
+		any = true;
+	};
+
+	if (!targets.empty())
+	{
+		for (const auto& entity : targets)
+			include(entity);
+	}
+	else
+	{
+		for (const auto& entity : mScene->GetEntities())
+			if (entity->IsVisible())
+				include(entity);
+	}
+
+	if (!any)
+	{
+		mViewCenter = glm::vec2(0.0f, 0.0f);
+		mViewZoom = 1.0f;
+		return;
+	}
+
+	mViewCenter = (minimum + maximum) * 0.5f;
+
+	// Zoom to fit with room to breathe: the tighter of the two axes decides, so nothing lands off-screen.
+	// Never closer than one texel to one pixel, the way Unity frames a small object — a 12-pixel ball
+	// magnified to fill the viewport is a wall of pixels, not a look at the ball.
+	if (mViewportSize.x > 0.0f && mViewportSize.y > 0.0f)
+	{
+		constexpr float32 kMargin = 1.6f;
+		const glm::vec2 span = glm::max(maximum - minimum, glm::vec2(1.0f, 1.0f)) * kMargin;
+
+		const float32 fit = ImMax(span.x / mViewportSize.x, span.y / mViewportSize.y);
+		mViewZoom = ImClamp(ImMax(fit, 1.0f), 0.02f, 50.0f);
+	}
+}
+
 void EditorLayer::RenderScene()
 {
 	// Match the framebuffer/camera to the viewport panel size measured last frame.
@@ -342,6 +484,36 @@ void EditorLayer::RenderScene()
 	{
 		mFramebuffer->Resize(targetWidth, targetHeight);
 		mCamera->OnResize(mViewportSize.x, mViewportSize.y);
+	}
+
+	// Whose eye the scene is seen through: the game's own Camera2D while it runs, and the editor's view
+	// otherwise. One camera object either way — what changes is who tells it where to be.
+	const Camera2D* current = nullptr;
+
+	if (mPlaying)
+	{
+		for (const auto& entity : mScene->GetEntities())
+		{
+			Camera2D* camera = entity->GetComponent<Camera2D>();
+
+			if (camera && camera->IsEnabled())
+			{
+				current = camera;
+				break;
+			}
+		}
+	}
+
+	if (current)
+	{
+		const glm::vec2 view = current->GetViewPosition();
+		mCamera->SetPosition(glm::vec3(view.x, view.y, 0.0f));
+		mCamera->SetZoomLevel(current->GetZoom());
+	}
+	else
+	{
+		mCamera->SetPosition(glm::vec3(mViewCenter.x, mViewCenter.y, 0.0f));
+		mCamera->SetZoomLevel(mViewZoom);
 	}
 
 	// Render the scene into the framebuffer instead of the window.
@@ -1145,7 +1317,7 @@ namespace
 	// construction arguments (a collider sizes itself to the sprite). Everything else in the registry
 	// comes from the game module and is added generically, by name.
 	constexpr const char8* kBuiltInComponents[] = {
-		"SpriteRenderer", "RigidBody2D", "BoxCollider2D", "CircleCollider2D" };
+		"SpriteRenderer", "Camera2D", "RigidBody2D", "BoxCollider2D", "CircleCollider2D" };
 
 	bool IsBuiltInComponent(const std::string& name)
 	{
@@ -1384,6 +1556,50 @@ namespace
 
 	// Lays out a property row's label and leaves the cursor on the widget. Pass a width for a widget
 	// that sizes itself; the default fills the rest of the row, minus the slot the revert arrow keeps.
+	// A number field that also takes arithmetic. ImGui parses a typed value with scanf, which reads
+	// "2+3" as 2 and stops; this reads what was actually typed — the widget keeps its own text while it
+	// is being edited — and, when that text is an expression, replaces the half-read number with the
+	// answer once the edit is committed. An ordinary edit never leaves the path it always took.
+	//
+	// Wrapped around the widget rather than replacing it, so dragging, clamping, formatting and the undo
+	// bracket all stay ImGui's and the editor's.
+	bool ApplyTypedExpression(ImGuiID id, float32& value)
+	{
+		// The text lives only while the field is in text-input mode, so it is caught then and read after,
+		// when the field has already gone.
+		static ImGuiID sTypingId = 0;
+		static std::string sTyped;
+
+		if (ImGui::TempInputIsActive(id))
+		{
+			if (const ImGuiInputTextState* state = ImGui::GetInputTextState(id))
+			{
+				sTypingId = id;
+				sTyped.assign(state->TextA.Data, static_cast<size_t>(state->TextLen));
+			}
+
+			return false;
+		}
+
+		if (sTypingId != id)
+			return false;
+
+		const std::string typed = sTyped;
+		sTypingId = 0;
+		sTyped.clear();
+
+		if (!Expression::IsExpression(typed))
+			return false;
+
+		const std::optional<float32> evaluated = Expression::Evaluate(typed);
+
+		if (!evaluated || *evaluated == value)
+			return false;
+
+		value = *evaluated;
+		return true;
+	}
+
 	void PropertyLabel(const char8* label, float32 widgetWidth = 0.0f)
 	{
 		const float32 available = ImGui::GetContentRegionAvail().x - kPropertyLabelWidth
@@ -2171,6 +2387,7 @@ void EditorLayer::DrawShortcuts()
 			{ ShortcutAction::GizmoMove,       "Tools",     "Move tool (translate)" },
 			{ ShortcutAction::GizmoRotate,     "Tools",     "Rotate tool" },
 			{ ShortcutAction::GizmoScale,      "Tools",     "Scale tool" },
+			{ ShortcutAction::FocusSelection,  "Viewport",  "Frame the selection" },
 			{ ShortcutAction::Deselect,        "Hierarchy", "Clear the selection" },
 				{ ShortcutAction::RenameEntity,    "Hierarchy", "Rename selected entity" },
 			{ ShortcutAction::DeleteEntity,    "Hierarchy", "Delete selected entity" },
@@ -2420,6 +2637,9 @@ void EditorLayer::ResetShortcutsToDefault()
 	// The project keys sit one Shift above the scene keys: the bigger thing, the bigger chord.
 	set(ShortcutAction::NewProject, ImGuiKey_N, true, true);
 	set(ShortcutAction::OpenProject, ImGuiKey_O, true, true);
+
+	// F frames the selection, where every 3D and 2D editor has put it.
+	set(ShortcutAction::FocusSelection, ImGuiKey_F);
 }
 
 void EditorLayer::SetSelection(const Reference<Entity>& entity)
@@ -2534,7 +2754,7 @@ Reference<Entity> EditorLayer::CreateEntity(Entity* parent, const Vector* positi
 		entity->SetParent(parent);
 
 	if (position)
-		entity->SetWorldPosition(*position);
+		entity->SetWorldPosition(Vector2(*position));
 
 	SetSelection(entity);
 	mRenamingEntity = entity;   // Let the user name it right away.
@@ -2735,6 +2955,7 @@ void EditorLayer::HandleShortcuts()
 	if (IsShortcutPressed(ShortcutAction::OpenScene)) OpenScene();
 	if (IsShortcutPressed(ShortcutAction::SaveScene)) SaveScene();
 	if (IsShortcutPressed(ShortcutAction::SaveSceneAs)) SaveSceneAs();
+	if (IsShortcutPressed(ShortcutAction::FocusSelection)) FocusViewportOnSelection();
 	if (IsShortcutPressed(ShortcutAction::NewProject)) mOpenProjectManagerPopup = true;
 	if (IsShortcutPressed(ShortcutAction::OpenProject)) BrowseForProject();
 
@@ -2786,6 +3007,8 @@ void EditorLayer::DrawViewport()
 	// Kept for the dim: it darkens everything the game is not.
 	mViewportImageMin = imageMin;
 	mViewportImageMax = ImVec2(imageMin.x + imageSize.x, imageMin.y + imageSize.y);
+
+	HandleViewportNavigation(imageMin, imageSize, imageHovered);
 
 	// The gizmo is an editing tool; hide it while the simulation is running, for folders (no
 	// meaningful transform), and for the Select tool, which only picks entities.
@@ -2842,13 +3065,13 @@ void EditorLayer::DrawViewport()
 				if (!entity || entity->IsFolder())
 					continue;
 
-				const Vector entityPosition = entity->GetWorldPosition();
-				const Vector entityScale = entity->GetWorldScale();
+				const Vector2 entityPosition = entity->GetWorldPosition();
+				const Vector2 entityScale = entity->GetWorldScale();
 
 				switch (mTool)
 				{
 					case Tool::Move:
-						entity->SetWorldPosition(Vector(entityPosition.x + moved.x, entityPosition.y + moved.y, entityPosition.z));
+						entity->SetWorldPosition(Vector2(entityPosition.x + moved.x, entityPosition.y + moved.y));
 						break;
 
 					case Tool::Rotate:
@@ -2856,7 +3079,7 @@ void EditorLayer::DrawViewport()
 						break;
 
 					case Tool::Scale:
-						entity->SetWorldScale(Vector(entityScale.x * scaleX, entityScale.y * scaleY, entityScale.z));
+						entity->SetWorldScale(Vector2(entityScale.x * scaleX, entityScale.y * scaleY));
 						break;
 
 					default:
@@ -2869,6 +3092,11 @@ void EditorLayer::DrawViewport()
 	// What is selected, outlined where it is — before the colliders, so a collider's line wins where the
 	// two land on the same pixel: the collider is the debug view, and a debug view nobody can read is off.
 	DrawSelectionOutline(imageMin, imageSize);
+
+	// A camera is a thing with a reach, and the reach is the part you cannot see without being shown it.
+	// Not while the game runs: then you are already looking through it.
+	if (!mPlaying)
+		DrawCameraOverlays(imageMin, imageSize);
 
 	if (mShowColliders)
 		DrawColliderOverlays(imageMin, imageSize);
@@ -3170,6 +3398,91 @@ void EditorLayer::DrawSelectionOutline(const ImVec2& imageMin, const ImVec2& ima
 	}
 }
 
+void EditorLayer::DrawCameraOverlays(const ImVec2& imageMin, const ImVec2& imageSize)
+{
+	if (imageSize.x <= 0.0f || imageSize.y <= 0.0f)
+		return;
+
+	const glm::mat4 viewProjection = mCamera->GetProjectionMatrix() * mCamera->GetViewMatrix();
+	ImDrawList* drawList = ImGui::GetWindowDrawList();
+
+	// The editor's overlay palette, one hue per thing it means. Orange is the selection's and green is
+	// the colliders', so a camera takes the blue nobody was using — the colour of a lens — and its limit
+	// the violet next to it: two neighbours read as one idea, and neither is mistaken for the other two.
+	// (Godot's own purple and gold sit too close to this editor's accent to stay legible beside it.)
+	constexpr ImU32 kCameraColor = IM_COL32(86, 182, 232, 255);
+	constexpr ImU32 kLimitColor = IM_COL32(167, 132, 239, 255);
+
+	const auto worldToScreen = [&](float32 worldX, float32 worldY) -> ImVec2
+	{
+		const glm::vec4 clip = viewProjection * glm::vec4(worldX, worldY, 0.0f, 1.0f);
+		const float32 ndcX = clip.x / clip.w;
+		const float32 ndcY = clip.y / clip.w;
+		return ImVec2(
+			imageMin.x + (ndcX * 0.5f + 0.5f) * imageSize.x,
+			imageMin.y + (1.0f - (ndcY * 0.5f + 0.5f)) * imageSize.y);
+	};
+
+	for (const auto& entity : mScene->GetEntities())
+	{
+		const Camera2D* camera = entity->GetComponent<Camera2D>();
+
+		if (!camera)
+			continue;
+
+		// The limit first, so the framing rectangle reads on top of it.
+		if (camera->HasLimit())
+		{
+			const Vector minimum(std::min(camera->GetLimitLeft(), camera->GetLimitRight()),
+				std::min(camera->GetLimitBottom(), camera->GetLimitTop()));
+			const Vector maximum(std::max(camera->GetLimitLeft(), camera->GetLimitRight()),
+				std::max(camera->GetLimitBottom(), camera->GetLimitTop()));
+
+			// Dashed, because a limit is a rule rather than a thing: it is the one line in the viewport
+			// that marks where something may not go.
+			const ImVec2 corners[4] = {
+				worldToScreen(minimum.x, maximum.y), worldToScreen(maximum.x, maximum.y),
+				worldToScreen(maximum.x, minimum.y), worldToScreen(minimum.x, minimum.y) };
+
+			for (int32 side = 0; side < 4; ++side)
+			{
+				const ImVec2 from = corners[side];
+				const ImVec2 to = corners[(side + 1) % 4];
+				const float32 length = ImSqrt(ImLengthSqr(ImVec2(to.x - from.x, to.y - from.y)));
+				const int32 dashes = ImMax(static_cast<int32>(length / 12.0f), 1);
+
+				for (int32 dash = 0; dash < dashes; dash += 2)
+				{
+					const float32 start = static_cast<float32>(dash) / dashes;
+					const float32 end = ImMin(static_cast<float32>(dash + 1) / dashes, 1.0f);
+
+					drawList->AddLine(
+						ImVec2(from.x + (to.x - from.x) * start, from.y + (to.y - from.y) * start),
+						ImVec2(from.x + (to.x - from.x) * end, from.y + (to.y - from.y) * end),
+						kLimitColor, 1.5f);
+				}
+			}
+		}
+
+		// What the camera sees: its view rectangle, at its own position and zoom — where it would be
+		// looking if the game were running, limits and all.
+		const glm::vec2 center = camera->GetTargetPosition();
+		const glm::vec2 half = camera->GetViewSize() * 0.5f;
+
+		const ImVec2 topLeft = worldToScreen(center.x - half.x, center.y + half.y);
+		const ImVec2 bottomRight = worldToScreen(center.x + half.x, center.y - half.y);
+
+		drawList->AddRect(topLeft, bottomRight, kCameraColor, 0.0f, 0, 2.0f);
+
+		// A cross at the centre says which point the camera is on, which a rectangle alone does not.
+		const ImVec2 eye = worldToScreen(center.x, center.y);
+		constexpr float32 kArm = 6.0f;
+
+		drawList->AddLine(ImVec2(eye.x - kArm, eye.y), ImVec2(eye.x + kArm, eye.y), kCameraColor, 1.5f);
+		drawList->AddLine(ImVec2(eye.x, eye.y - kArm), ImVec2(eye.x, eye.y + kArm), kCameraColor, 1.5f);
+	}
+}
+
 void EditorLayer::DrawColliderOverlays(const ImVec2& imageMin, const ImVec2& imageSize)
 {
 	if (imageSize.x <= 0.0f || imageSize.y <= 0.0f)
@@ -3386,6 +3699,54 @@ void EditorLayer::DrawHierarchy()
 			mReparentChild->SetParent(mReparentTarget);
 		}
 	}
+
+	if (mReorderRequested && mReorderMoved && mReorderBefore && mReorderMoved != mReorderBefore)
+	{
+		// Dropping a row onto its own descendant would ask the hierarchy to contain itself.
+		if (!mReorderBefore->IsDescendantOf(mReorderMoved))
+		{
+			RecordSnapshot();
+
+			const Reference<Entity> moved = mEntityLookup.count(mReorderMoved) ? mEntityLookup[mReorderMoved] : nullptr;
+
+			if (moved)
+			{
+				// Landing between two rows means joining their parent first: an entity cannot sit in an
+				// order it is not part of.
+				if (moved->GetParent() != mReorderParent)
+					moved->SetParent(mReorderParent);
+
+				// Dropped below a row, it goes before whatever follows that row — and past the last row,
+				// before nothing, which the scene reads as the end.
+				const Entity* before = mReorderBefore;
+
+				if (mReorderAfter)
+				{
+					before = nullptr;
+					bool found = false;
+
+					for (const auto& entity : mScene->GetEntities())
+					{
+						if (found && entity.get() != moved.get() && entity->GetParent() == mReorderParent)
+						{
+							before = entity.get();
+							break;
+						}
+
+						if (entity.get() == mReorderBefore)
+							found = true;
+					}
+				}
+
+				mScene->Reorder(moved, before);
+			}
+		}
+	}
+
+	mReorderRequested = false;
+	mReorderMoved = nullptr;
+	mReorderBefore = nullptr;
+	mReorderParent = nullptr;
 
 	if (mEntityToDelete)
 	{
@@ -3614,13 +3975,49 @@ void EditorLayer::DrawEntityNode(const Reference<Entity>& entity)
 		ImGui::EndDragDropSource();
 	}
 
+	// A row is three drop zones down its height, the way Unity's hierarchy is: the top and bottom
+	// quarters put the dragged entity *between* rows, and the half in the middle drops it *onto* this one
+	// to reparent. One row, both gestures, told apart by where in it the pointer is.
 	if (ImGui::BeginDragDropTarget())
 	{
+		const ImVec2 rowMin = ImGui::GetItemRectMin();
+		const ImVec2 rowMax = ImGui::GetItemRectMax();
+		const float32 height = ImMax(rowMax.y - rowMin.y, 1.0f);
+		const float32 offset = ImClamp((ImGui::GetMousePos().y - rowMin.y) / height, 0.0f, 1.0f);
+
+		constexpr float32 kEdge = 0.25f;
+		const bool above = offset < kEdge;
+		const bool below = offset > 1.0f - kEdge;
+
+		// The line shows where it would land, drawn over the row rather than in it: the answer to "where
+		// does letting go put this?" should not need to be guessed.
+		if (above || below)
+		{
+			const float32 y = above ? rowMin.y : rowMax.y;
+			ImGui::GetWindowDrawList()->AddLine(ImVec2(rowMin.x, y), ImVec2(rowMax.x, y),
+				ImGui::GetColorU32(EditorGui::GetAccent()), 2.0f);
+		}
+
 		if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("LN_ENTITY"))
 		{
-			mReparentChild = *static_cast<Entity* const*>(payload->Data);
-			mReparentTarget = entity.get();
-			mReparentRequested = true;
+			Entity* const dropped = *static_cast<Entity* const*>(payload->Data);
+
+			if (above || below)
+			{
+				// Ordering is a sibling affair: dropping between two rows means taking this row's parent
+				// and sitting next to it, which is what makes a drag reorder rather than reparent.
+				mReorderMoved = dropped;
+				mReorderBefore = entity.get();
+				mReorderAfter = below;
+				mReorderParent = entity->GetParent();
+				mReorderRequested = true;
+			}
+			else
+			{
+				mReparentChild = dropped;
+				mReparentTarget = entity.get();
+				mReparentRequested = true;
+			}
 		}
 
 		ImGui::EndDragDropTarget();
@@ -3743,9 +4140,17 @@ bool EditorLayer::DrawFloatProperty(const char8* label, float32& value, float32 
 	ImGui::PushID(label);
 
 	PropertyLabel(label);
-	const bool changed = ImGui::DragFloat("##value", &value, speed, minimum, maximum);
+	bool changed = ImGui::DragFloat("##value", &value, speed, minimum, maximum);
 
 	if (ImGui::IsItemActivated()) BeginEdit();
+
+	// Typed arithmetic lands after the widget has read the text: it saw "2", this sees "2+3".
+	if (ApplyTypedExpression(ImGui::GetItemID(), value))
+	{
+		value = ImClamp(value, minimum, maximum);
+		changed = true;
+	}
+
 	if (ImGui::IsItemDeactivatedAfterEdit()) CommitEdit();
 
 	// A field with no default still keeps the slot, so every field in a component lines up whether or
@@ -3766,6 +4171,11 @@ bool EditorLayer::DrawFloatProperty(const char8* label, float32& value, float32 
 }
 
 bool EditorLayer::DrawVec3Control(const char* label, float values[3], float speed, float resetValue, bool* uniform)
+{
+	return DrawVectorControl(label, values, 3, speed, resetValue, uniform);
+}
+
+bool EditorLayer::DrawVectorControl(const char* label, float* values, int count, float speed, float resetValue, bool* uniform)
 {
 	struct Axis { const char8* name; ImVec4 color; ImVec4 hovered; };
 	static const Axis axes[3] = {
@@ -3796,7 +4206,7 @@ bool EditorLayer::DrawVec3Control(const char* label, float values[3], float spee
 	// hold its slot, so the three rows of a Transform stay in one column.
 	const float32 rowEnd = 2.0f * (RowEndSlot() + kRowEndGap);
 	const float32 controlsWidth = ImGui::GetContentRegionAvail().x - kVectorLabelWidth - rowEnd;
-	const float32 axisWidth = (controlsWidth - 2.0f * gap) / 3.0f;
+	const float32 axisWidth = (controlsWidth - static_cast<float32>(count - 1) * gap) / static_cast<float32>(count);
 	const float32 dragWidth = ImMax(axisWidth - badge - gap, 12.0f);
 
 	ImGui::AlignTextToFramePadding();
@@ -3807,7 +4217,7 @@ bool EditorLayer::DrawVec3Control(const char* label, float values[3], float spee
 	// the fields sit on it, so a SameLine cannot drift them apart.
 	const float32 rowY = ImGui::GetCursorPosY();
 
-	for (int32 i = 0; i < 3; ++i)
+	for (int32 i = 0; i < count; ++i)
 	{
 		if (i > 0)
 			ImGui::SameLine(0.0f, gap);
@@ -3849,6 +4259,10 @@ bool EditorLayer::DrawVec3Control(const char* label, float values[3], float spee
 
 		ImGui::PopStyleVar();
 		if (ImGui::IsItemActivated()) BeginEdit();
+
+		if (ApplyTypedExpression(ImGui::GetItemID(), values[i]))
+			axisChanged = true;
+
 		if (ImGui::IsItemDeactivatedAfterEdit()) CommitEdit();
 
 		if (axisChanged && uniform && *uniform)
@@ -3856,7 +4270,7 @@ bool EditorLayer::DrawVec3Control(const char* label, float values[3], float spee
 			// A scale of zero has no proportion to keep, so the axes simply meet where this one went.
 			const float32 factor = (before != 0.0f) ? (values[i] / before) : 0.0f;
 
-			for (int32 other = 0; other < 3; ++other)
+			for (int32 other = 0; other < count; ++other)
 				if (other != i)
 					values[other] = (factor != 0.0f) ? (values[other] * factor) : values[i];
 		}
@@ -3881,7 +4295,9 @@ bool EditorLayer::DrawVec3Control(const char* label, float values[3], float spee
 		ImGui::Dummy(ImVec2(RowEndSlot(), RowEndSlot()));
 	}
 
-	const bool modified = (values[0] != resetValue) || (values[1] != resetValue) || (values[2] != resetValue);
+	bool modified = false;
+	for (int32 i = 0; i < count; ++i)
+		modified |= (values[i] != resetValue);
 
 	ImGui::SameLine(0.0f, kRowEndGap);
 	ImGui::SetCursorPosY(rowY);
@@ -3890,9 +4306,146 @@ bool EditorLayer::DrawVec3Control(const char* label, float values[3], float spee
 	if (ResetToDefaultButton("##reset", modified))
 	{
 		RecordSnapshot();
-		values[0] = values[1] = values[2] = resetValue;
+		for (int32 i = 0; i < count; ++i)
+			values[i] = resetValue;
 		changed = true;
 	}
+
+	ImGui::PopID();
+	return changed;
+}
+
+bool EditorLayer::DrawTransformVector(const char* label, float* values, int count, float speed,
+	float resetValue, const char* unit, bool* uniform, int axisBase)
+{
+	// A solid plate carries the axis colour at full strength — a translucent one only muddied it against
+	// the dark field — with the letter in near-white so it reads on top.
+	struct Axis { const char8* letter; ImU32 tint; ImU32 tag; };
+	static const Axis axes[3] = {
+		{ "X", IM_COL32(236, 236, 236, 255), IM_COL32(176, 64, 75, 255) },   // Red   #b0404b
+		{ "Y", IM_COL32(236, 236, 236, 255), IM_COL32(73, 137, 72, 255) },   // Green #498948
+		{ "Z", IM_COL32(236, 236, 236, 255), IM_COL32(55, 103, 175, 255) },  // Blue  #3767af
+	};
+
+	bool changed = false;
+	const ImGuiStyle& style = ImGui::GetStyle();
+
+	ImGui::PushID(label);
+
+	// The field carries its unit in its own format, so the number and any suffix read as one thing. ImGui
+	// trims the suffix when the field is typed into, so arithmetic and expressions still work.
+	char format[16];
+	std::snprintf(format, sizeof(format), "%%.3f%s%s", (unit && *unit) ? " " : "", unit ? unit : "");
+
+	const float32 rowHeight = ImGui::GetFrameHeight();
+	const float32 rowGap = 3.0f;
+	const float32 groupHeight = count * rowHeight + (count - 1) * rowGap;
+
+	// The tag: a small rounded plate coloured by its axis, the letter centred in it. It only names the
+	// axis — resetting is the revert arrow's job — so it sits a hair inside the row and carries no click.
+	constexpr float32 kTag = 22.0f;
+	constexpr float32 kTagInset = 2.0f;
+	const float32 tagGap = 6.0f;
+
+	// Two glyphs are kept at the row's end — the padlock and the revert arrow — centred against the group.
+	const float32 rightWidth = 2.0f * (RowEndSlot() + kRowEndGap);
+
+	const ImVec2 groupOrigin = ImGui::GetCursorPos();
+	const float32 fieldLeft = kVectorLabelWidth + kTag + tagGap;
+	const float32 fieldWidth = ImMax(ImGui::GetContentRegionAvail().x - fieldLeft - rightWidth, 24.0f);
+
+	ImDrawList* drawList = ImGui::GetWindowDrawList();
+
+	// Every row wears its axis letter, coloured: X and Y for a Vector2, and the lone rotation wears Z,
+	// the axis a 2D angle turns about (its caller passes axisBase 2). The letter index counts from that
+	// base, so a scalar can name any single axis while the column stays true down the whole Transform.
+	const bool tagged = true;
+
+	for (int32 i = 0; i < count; ++i)
+	{
+		ImGui::PushID(i);
+
+		const float32 rowY = groupOrigin.y + i * (rowHeight + rowGap);
+
+		const float32 before = values[i];
+		bool axisChanged = false;
+
+		// The axis tag: a small coloured plate with the axis letter. A square a hair inside the row, so it
+		// reads a touch smaller than the field, centred in its column. It only names the axis — it takes
+		// no click, and it is the revert arrow that resets.
+		const Axis& axis = axes[axisBase + i];
+		if (tagged)
+		{
+			ImGui::SetCursorPos(ImVec2(kVectorLabelWidth, rowY));
+			const ImVec2 slot = ImGui::GetCursorScreenPos();
+
+			const float32 tagSide = rowHeight - 2.0f * kTagInset;
+			const ImVec2 tagMin(slot.x + (kTag - tagSide) * 0.5f, slot.y + kTagInset);
+			const ImVec2 tagMax(tagMin.x + tagSide, tagMin.y + tagSide);
+			drawList->AddRectFilled(tagMin, tagMax, axis.tag, style.FrameRounding);
+
+			const ImVec2 letterSize = ImGui::CalcTextSize(axis.letter);
+			drawList->AddText(ImVec2(tagMin.x + (tagSide - letterSize.x) * 0.5f, tagMin.y + (tagSide - letterSize.y) * 0.5f),
+				axis.tint, axis.letter);
+		}
+
+		// The field.
+		ImGui::SetCursorPos(ImVec2(fieldLeft, rowY));
+		ImGui::SetNextItemWidth(fieldWidth);
+
+		if (ImGui::DragFloat("##value", &values[i], speed, 0.0f, 0.0f, format))
+			axisChanged = true;
+
+		if (ImGui::IsItemActivated()) BeginEdit();
+
+		if (ApplyTypedExpression(ImGui::GetItemID(), values[i]))
+			axisChanged = true;
+
+		if (ImGui::IsItemDeactivatedAfterEdit()) CommitEdit();
+
+		if (axisChanged && uniform && *uniform)
+		{
+			const float32 factor = (before != 0.0f) ? (values[i] / before) : 0.0f;
+
+			for (int32 other = 0; other < count; ++other)
+				if (other != i)
+					values[other] = (factor != 0.0f) ? (values[other] * factor) : values[i];
+		}
+
+		// This axis's own revert arrow, in the row's second end slot (the first is the padlock's), centred
+		// against the field. One per axis, so X, Y and Z reset independently; it shows only while the value
+		// is off its default, and resets nothing but its own row.
+		const float32 resetX = ImGui::GetContentRegionMax().x - rightWidth + 2.0f * kRowEndGap + RowEndSlot();
+		ImGui::SetCursorPos(ImVec2(resetX, rowY + (rowHeight - RowEndSlot()) * 0.5f));
+
+		if (ResetToDefaultButton("##reset", values[i] != resetValue))
+		{
+			RecordSnapshot();
+			values[i] = resetValue;
+			changed = true;
+		}
+
+		changed |= axisChanged;
+		ImGui::PopID();
+	}
+
+	// The property's name, centred down the group on the left.
+	ImGui::SetCursorPos(ImVec2(0.0f, groupOrigin.y + (groupHeight - ImGui::GetTextLineHeight()) * 0.5f));
+	ImGui::TextUnformatted(label);
+
+	// The uniform-scale padlock (scale only), centred down the group in the first end slot. The revert
+	// arrows are per axis, drawn beside each field in the second slot, so the padlock stands alone here.
+	if (uniform)
+	{
+		const float32 glyphY = groupOrigin.y + (groupHeight - RowEndSlot()) * 0.5f;
+		const float32 glyphX = ImGui::GetContentRegionMax().x - rightWidth + kRowEndGap;
+		ImGui::SetCursorPos(ImVec2(glyphX, glyphY));
+		if (LockButton("##uniform", *uniform))
+			*uniform = !*uniform;
+	}
+
+	// Leave the cursor below the whole group, so the next property does not climb into it.
+	ImGui::SetCursorPos(ImVec2(groupOrigin.x, groupOrigin.y + groupHeight + style.ItemSpacing.y));
 
 	ImGui::PopID();
 	return changed;
@@ -3957,6 +4510,15 @@ void EditorLayer::InspectorReflector::Field(const char8* name, int32& value)
 
 	if (ImGui::DragInt("##value", &value))
 		mEditor.ApplyReflectedField(mTypeName, name, value);
+
+	// An integer field takes arithmetic too; the answer lands on the nearest whole number.
+	float32 typed = static_cast<float32>(value);
+
+	if (ApplyTypedExpression(ImGui::GetItemID(), typed))
+	{
+		value = static_cast<int32>(std::lround(typed));
+		mEditor.ApplyReflectedField(mTypeName, name, value);
+	}
 
 	if (ImGui::IsItemActivated()) mEditor.BeginEdit();
 	if (ImGui::IsItemDeactivatedAfterEdit()) mEditor.CommitEdit();
@@ -4151,23 +4713,24 @@ void EditorLayer::DrawProperties()
 		// has in common. The values shown are the primary's; the value written is written to all of them.
 		const Reference<Transform> transform = mSelectedEntity->GetTransform();
 
-		Vector position = transform->GetPosition();
-		float32 positionValues[3] = { position.x, position.y, position.z };
-		if (DrawVec3Control("Position", positionValues, 1.0f, 0.0f))
+		Vector2 position = transform->GetPosition();
+		float32 positionValues[2] = { position.x, position.y };
+		if (DrawTransformVector("Position", positionValues, 2, 1.0f, 0.0f, ""))
 			for (const auto& entity : mSelection)
-				entity->GetTransform()->SetPosition(Vector(positionValues[0], positionValues[1], positionValues[2]));
+				entity->GetTransform()->SetPosition(Vector2(positionValues[0], positionValues[1]));
 
-		Vector rotation = transform->GetRotation();
-		float32 rotationValues[3] = { rotation.x, rotation.y, rotation.z };
-		if (DrawVec3Control("Rotation", rotationValues, 0.5f, 0.0f))
+		// A rotation on a plane is one angle, not a vector whose X and Y meant nothing — one field, in
+		// degrees, turning about Z, so it wears the Z tag (axis base 2).
+		float32 rotationValue[1] = { transform->GetRotation() };
+		if (DrawTransformVector("Rotation", rotationValue, 1, 0.5f, 0.0f, "", nullptr, 2))
 			for (const auto& entity : mSelection)
-				entity->GetTransform()->SetRotation(Vector(rotationValues[0], rotationValues[1], rotationValues[2]));
+				entity->GetTransform()->SetRotation(rotationValue[0]);
 
-		Vector scale = transform->GetScale();
-		float32 scaleValues[3] = { scale.x, scale.y, scale.z };
-		if (DrawVec3Control("Scale", scaleValues, 0.01f, 1.0f, &mScaleUniform))
+		Vector2 scale = transform->GetScale();
+		float32 scaleValues[2] = { scale.x, scale.y };
+		if (DrawTransformVector("Scale", scaleValues, 2, 0.01f, 1.0f, "", &mScaleUniform))
 			for (const auto& entity : mSelection)
-				entity->GetTransform()->SetScale(Vector(scaleValues[0], scaleValues[1], scaleValues[2]));
+				entity->GetTransform()->SetScale(Vector2(scaleValues[0], scaleValues[1]));
 	}
 
 	// Draw components in their stored order so a newly added one always appears at the end; headers
@@ -4232,6 +4795,141 @@ void EditorLayer::DrawProperties()
 				}
 				if (ImGui::IsItemHovered())
 					ImGui::SetTooltip("Browse for a sprite image");
+
+				// What it goes on top of. Zero means "wherever my row is" — the Hierarchy's order decides,
+				// so moving a row down moves the sprite in front. A number overrides that row.
+				int32 order = renderer->GetOrder();
+
+				PropertyLabel("Draw Order");
+				if (ImGui::DragInt("##order", &order))
+					ApplyToSelection<SpriteRenderer>([&](SpriteRenderer* target) { target->SetOrder(order); });
+
+				if (ImGui::IsItemActivated()) BeginEdit();
+
+				float32 typedOrder = static_cast<float32>(order);
+
+				if (ApplyTypedExpression(ImGui::GetItemID(), typedOrder))
+				{
+					order = static_cast<int32>(std::lround(typedOrder));
+					ApplyToSelection<SpriteRenderer>([&](SpriteRenderer* target) { target->SetOrder(order); });
+				}
+
+				if (ImGui::IsItemDeactivatedAfterEdit()) CommitEdit();
+
+				SameLineRowEnd();
+				if (ResetToDefaultButton("##resetorder", order != 0))
+				{
+					RecordSnapshot();
+					ApplyToSelection<SpriteRenderer>([](SpriteRenderer* target) { target->SetOrder(0); });
+				}
+
+				if (ImGui::IsItemHovered())
+					ImGui::SetTooltip("Higher draws on top. 0 follows the Hierarchy's order.");
+
+				// Mirroring, read out of the texture rather than taken out of the scale: a negative scale
+				// would flip the collider and the children with it.
+				bool flipX = renderer->IsFlippedX();
+				bool flipY = renderer->IsFlippedY();
+
+				PropertyLabel("Flip");
+				if (ImGui::Checkbox("X##flipx", &flipX))
+				{
+					RecordSnapshot();
+					ApplyToSelection<SpriteRenderer>([&](SpriteRenderer* target) { target->SetFlipX(flipX); });
+				}
+
+				ImGui::SameLine();
+
+				if (ImGui::Checkbox("Y##flipy", &flipY))
+				{
+					RecordSnapshot();
+					ApplyToSelection<SpriteRenderer>([&](SpriteRenderer* target) { target->SetFlipY(flipY); });
+				}
+
+				SameLineRowEnd();
+				ResetToDefaultButton("##resetflip", false);   // Keeps the slot, so the row lines up.
+			}
+		}
+		else if (Camera2D* camera = dynamic_cast<Camera2D*>(component))
+		{
+			if (DrawComponentHeader(ICON_MDI_MONITOR, "Camera 2D", i, remove, dragFrom, dragTo))
+			{
+				float32 zoom = camera->GetZoom();
+				if (DrawFloatProperty("Zoom", zoom, 0.01f, 0.01f, 100.0f, 1.0f))
+					ApplyToSelection<Camera2D>([&](Camera2D* target) { target->SetZoom(zoom); });
+
+				Vector2 offset = camera->GetOffset();
+				float32 offsetValues[2] = { offset.x, offset.y };
+
+				if (DrawTransformVector("Offset", offsetValues, 2, 1.0f, 0.0f, "px"))
+					ApplyToSelection<Camera2D>([&](Camera2D* target)
+						{ target->SetOffset(Vector2(offsetValues[0], offsetValues[1])); });
+
+				// The limit is one switch with four numbers under it — the sides of a level, which is how
+				// a level is measured. Folded away until it is on, because four numbers that do nothing
+				// are four numbers in the way.
+				bool limit = camera->HasLimit();
+
+				PropertyLabel("Limit");
+				if (ImGui::Checkbox("##limit", &limit))
+				{
+					RecordSnapshot();
+					ApplyToSelection<Camera2D>([&](Camera2D* target) { target->SetLimit(limit); });
+				}
+
+				SameLineRowEnd();
+				ResetToDefaultButton("##resetlimit", false);
+
+				if (limit)
+				{
+					ImGui::Indent();
+
+					float32 top = camera->GetLimitTop();
+					if (DrawFloatProperty("Top", top, 1.0f, -100000.0f, 100000.0f, std::nullopt))
+						ApplyToSelection<Camera2D>([&](Camera2D* target) { target->SetLimitTop(top); });
+
+					float32 right = camera->GetLimitRight();
+					if (DrawFloatProperty("Right", right, 1.0f, -100000.0f, 100000.0f, std::nullopt))
+						ApplyToSelection<Camera2D>([&](Camera2D* target) { target->SetLimitRight(right); });
+
+					float32 bottom = camera->GetLimitBottom();
+					if (DrawFloatProperty("Bottom", bottom, 1.0f, -100000.0f, 100000.0f, std::nullopt))
+						ApplyToSelection<Camera2D>([&](Camera2D* target) { target->SetLimitBottom(bottom); });
+
+					float32 left = camera->GetLimitLeft();
+					if (DrawFloatProperty("Left", left, 1.0f, -100000.0f, 100000.0f, std::nullopt))
+						ApplyToSelection<Camera2D>([&](Camera2D* target) { target->SetLimitLeft(left); });
+
+					ImGui::Unindent();
+				}
+
+				// Smoothing, the same shape: a switch, and the speeds it eases at underneath.
+				bool smooth = camera->HasSmoothing();
+
+				PropertyLabel("Smooth");
+				if (ImGui::Checkbox("##smooth", &smooth))
+				{
+					RecordSnapshot();
+					ApplyToSelection<Camera2D>([&](Camera2D* target) { target->SetSmoothing(smooth); });
+				}
+
+				SameLineRowEnd();
+				ResetToDefaultButton("##resetsmooth", false);
+
+				if (smooth)
+				{
+					ImGui::Indent();
+
+					float32 position = camera->GetPositionSmoothing();
+					if (DrawFloatProperty("Position Speed", position, 0.1f, 0.0f, 100.0f, 5.0f))
+						ApplyToSelection<Camera2D>([&](Camera2D* target) { target->SetPositionSmoothing(position); });
+
+					float32 rotation = camera->GetRotationSmoothing();
+					if (DrawFloatProperty("Rotation Speed", rotation, 0.1f, 0.0f, 100.0f, 5.0f))
+						ApplyToSelection<Camera2D>([&](Camera2D* target) { target->SetRotationSmoothing(rotation); });
+
+					ImGui::Unindent();
+				}
 			}
 		}
 		else if (RigidBody2D* body = dynamic_cast<RigidBody2D*>(component))
@@ -4381,6 +5079,14 @@ void EditorLayer::DrawProperties()
 			for (const auto& entity : mSelection)
 				if (!entity->IsFolder() && !entity->HasComponent<SpriteRenderer>())
 					entity->AddComponent<SpriteRenderer>();
+		}
+
+		if (lacksBuiltIn.operator()<Camera2D>() && ImGui::MenuItem("Camera 2D"))
+		{
+			RecordSnapshot();
+			for (const auto& entity : mSelection)
+				if (!entity->IsFolder() && !entity->HasComponent<Camera2D>())
+					entity->AddComponent<Camera2D>();
 		}
 
 		if (lacksBuiltIn.operator()<RigidBody2D>() && ImGui::MenuItem("Rigid Body 2D"))

@@ -50,9 +50,20 @@ namespace Lion
 		return BodyType::Static;
 	}
 
-	static Vector VectorFromJson(const Json& array)
+	// A 2D vector from a saved array, tolerant of an old three-component one: the third was a Z that a
+	// 2D transform never used, so a scene written before this still reads.
+	static Vector2 Vector2FromJson(const Json& array)
 	{
-		return Vector(array.at(0).get<float32>(), array.at(1).get<float32>(), array.at(2).get<float32>());
+		return Vector2(array.at(0).get<float32>(), array.at(1).get<float32>());
+	}
+
+	// The rotation as a single angle, whether it was saved as one or as the old vector whose Z carried it.
+	static float32 RotationFromJson(const Json& value)
+	{
+		if (value.is_array())
+			return value.size() >= 3 ? value.at(2).get<float32>() : 0.0f;
+
+		return value.get<float32>();
 	}
 
 	// Serializes one entity (name, transform and its ordered components) into a JSON node.
@@ -73,13 +84,12 @@ namespace Lion
 			node["visible"] = false;
 
 		const Reference<Transform> transform = entity->GetTransform();
-		const Vector position = transform->GetPosition();
-		const Vector rotation = transform->GetRotation();
-		const Vector scale = transform->GetScale();
+		const Vector2 position = transform->GetPosition();
+		const Vector2 scale = transform->GetScale();
 
-		node["transform"]["position"] = { position.x, position.y, position.z };
-		node["transform"]["rotation"] = { rotation.x, rotation.y, rotation.z };
-		node["transform"]["scale"]    = { scale.x, scale.y, scale.z };
+		node["transform"]["position"] = { position.x, position.y };
+		node["transform"]["rotation"] = transform->GetRotation();
+		node["transform"]["scale"]    = { scale.x, scale.y };
 
 		// Components are written as an ordered array so the editor's display/drag order round-trips.
 		// Each one names its registered type and serializes its own fields, so user-defined components
@@ -220,9 +230,9 @@ namespace Lion
 			const Json& transform = node["transform"];
 			const Reference<Transform> target = entity->GetTransform();
 
-			if (transform.contains("position")) target->SetPosition(VectorFromJson(transform["position"]));
-			if (transform.contains("rotation")) target->SetRotation(VectorFromJson(transform["rotation"]));
-			if (transform.contains("scale"))    target->SetScale(VectorFromJson(transform["scale"]));
+			if (transform.contains("position")) target->SetPosition(Vector2FromJson(transform["position"]));
+			if (transform.contains("rotation")) target->SetRotation(RotationFromJson(transform["rotation"]));
+			if (transform.contains("scale"))    target->SetScale(Vector2FromJson(transform["scale"]));
 		}
 
 		if (node.contains("components"))

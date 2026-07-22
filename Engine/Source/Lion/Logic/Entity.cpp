@@ -39,9 +39,9 @@ namespace Lion
 			return;
 
 		// The entity keeps its place in the world; only the local transform is rebased.
-		const Vector worldPosition = GetWorldPosition();
+		const Vector2 worldPosition = GetWorldPosition();
 		const float32 worldRotation = GetWorldRotation();
-		const Vector worldScale = GetWorldScale();
+		const Vector2 worldScale = GetWorldScale();
 
 		if (mParent)
 		{
@@ -77,15 +77,15 @@ namespace Lion
 		mChildren.clear();
 	}
 
-	Vector Entity::GetWorldPosition() const
+	Vector2 Entity::GetWorldPosition() const
 	{
-		const Vector local = mTransform->GetPosition();
+		const Vector2 local = mTransform->GetPosition();
 
 		if (!mParent)
 			return local;
 
-		const Vector parentPosition = mParent->GetWorldPosition();
-		const Vector parentScale = mParent->GetWorldScale();
+		const Vector2 parentPosition = mParent->GetWorldPosition();
+		const Vector2 parentScale = mParent->GetWorldScale();
 		const float32 parentRotation = glm::radians(mParent->GetWorldRotation());
 
 		const float32 scaledX = local.x * parentScale.x;
@@ -93,30 +93,29 @@ namespace Lion
 		const float32 cosAngle = std::cos(parentRotation);
 		const float32 sinAngle = std::sin(parentRotation);
 
-		return Vector(
+		return Vector2(
 			parentPosition.x + scaledX * cosAngle - scaledY * sinAngle,
-			parentPosition.y + scaledX * sinAngle + scaledY * cosAngle,
-			parentPosition.z + local.z);
+			parentPosition.y + scaledX * sinAngle + scaledY * cosAngle);
 	}
 
 	float32 Entity::GetWorldRotation() const
 	{
-		const float32 local = mTransform->GetRotation().z;
+		const float32 local = mTransform->GetRotation();
 		return mParent ? mParent->GetWorldRotation() + local : local;
 	}
 
-	Vector Entity::GetWorldScale() const
+	Vector2 Entity::GetWorldScale() const
 	{
-		const Vector local = mTransform->GetScale();
+		const Vector2 local = mTransform->GetScale();
 
 		if (!mParent)
 			return local;
 
-		const Vector parentScale = mParent->GetWorldScale();
-		return Vector(parentScale.x * local.x, parentScale.y * local.y, parentScale.z * local.z);
+		const Vector2 parentScale = mParent->GetWorldScale();
+		return Vector2(parentScale.x * local.x, parentScale.y * local.y);
 	}
 
-	void Entity::SetWorldPosition(const Vector& position)
+	void Entity::SetWorldPosition(const Vector2& position)
 	{
 		if (!mParent)
 		{
@@ -124,8 +123,8 @@ namespace Lion
 			return;
 		}
 
-		const Vector parentPosition = mParent->GetWorldPosition();
-		const Vector parentScale = mParent->GetWorldScale();
+		const Vector2 parentPosition = mParent->GetWorldPosition();
+		const Vector2 parentScale = mParent->GetWorldScale();
 		const float32 parentRotation = glm::radians(mParent->GetWorldRotation());
 
 		// Undo the parent's rotation, then its scale, to recover the local offset.
@@ -137,20 +136,18 @@ namespace Lion
 		const float32 rotatedX = deltaX * cosAngle - deltaY * sinAngle;
 		const float32 rotatedY = deltaX * sinAngle + deltaY * cosAngle;
 
-		mTransform->SetPosition(Vector(
+		mTransform->SetPosition(Vector2(
 			parentScale.x != 0.0f ? rotatedX / parentScale.x : rotatedX,
-			parentScale.y != 0.0f ? rotatedY / parentScale.y : rotatedY,
-			position.z - parentPosition.z));
+			parentScale.y != 0.0f ? rotatedY / parentScale.y : rotatedY));
 	}
 
 	void Entity::SetWorldRotation(float32 degrees)
 	{
 		const float32 parentRotation = mParent ? mParent->GetWorldRotation() : 0.0f;
-		const Vector local = mTransform->GetRotation();
-		mTransform->SetRotation(Vector(local.x, local.y, degrees - parentRotation));
+		mTransform->SetRotation(degrees - parentRotation);
 	}
 
-	void Entity::SetWorldScale(const Vector& scale)
+	void Entity::SetWorldScale(const Vector2& scale)
 	{
 		if (!mParent)
 		{
@@ -158,11 +155,10 @@ namespace Lion
 			return;
 		}
 
-		const Vector parentScale = mParent->GetWorldScale();
-		mTransform->SetScale(Vector(
+		const Vector2 parentScale = mParent->GetWorldScale();
+		mTransform->SetScale(Vector2(
 			parentScale.x != 0.0f ? scale.x / parentScale.x : scale.x,
-			parentScale.y != 0.0f ? scale.y / parentScale.y : scale.y,
-			parentScale.z != 0.0f ? scale.z / parentScale.z : scale.z));
+			parentScale.y != 0.0f ? scale.y / parentScale.y : scale.y));
 	}
 
 	Component* Entity::AddComponentByName(const std::string& name)

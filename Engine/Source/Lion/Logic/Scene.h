@@ -43,6 +43,12 @@ namespace Lion
 		// Entities currently in the scene (used by serialization and editor panels).
 		const std::list<Reference<Entity>>& GetEntities() const { return mEntities; }
 
+		// Moves an entity to sit just before 'before' in the scene's order, or to the end when 'before' is
+		// null. The order is what the Hierarchy shows and what the scene file keeps, so dragging a row into
+		// place in the editor is this — and a list is spliced, not rebuilt, so nothing is destroyed or
+		// recreated on the way.
+		LION_API void Reorder(const Reference<Entity>& moved, const Entity* before);
+
 		// Removes every entity from the scene (used by New/Open in the editor).
 		LION_API void Clear();
 

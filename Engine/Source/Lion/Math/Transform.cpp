@@ -8,57 +8,53 @@ namespace Lion {
 	{
 	}
 
-	Transform::Transform(const Vector& position, const Vector& rotation, const Vector& scale)
+	Transform::Transform(const Vector2& position, float32 rotation, const Vector2& scale)
 		: mPosition(position), mRotation(rotation), mScale(scale)
 	{
 	}
 
-	Vector Transform::GetPosition() const
+	Vector2 Transform::GetPosition() const
 	{
 		return mPosition;
 	}
 
-	Vector Transform::GetRotation() const
+	float32 Transform::GetRotation() const
 	{
 		return mRotation;
 	}
 
-	Vector Transform::GetScale() const
+	Vector2 Transform::GetScale() const
 	{
 		return mScale;
 	}
 
-	void Transform::SetPosition(const Vector& position)
+	void Transform::SetPosition(const Vector2& position)
 	{
 		mPosition = position;
 	}
 
-	void Transform::SetRotation(const Vector& rotation)
+	void Transform::SetRotation(float32 rotation)
 	{
 		mRotation = rotation;
 	}
 
-	void Transform::SetScale(const Vector& scale)
+	void Transform::SetScale(const Vector2& scale)
 	{
 		mScale = scale;
 	}
 
-	void Transform::Translate(const Vector& position)
+	void Transform::Translate(const Vector2& delta)
 	{
-		mPosition = mPosition + position;
+		mPosition = mPosition + delta;
 	}
 
-	void Transform::Rotate(const Vector& rotation)
+	void Transform::Rotate(float32 degrees)
 	{
-		mRotation = mRotation + rotation;
+		mRotation = mRotation + degrees;
 	}
 
-	void Transform::Scale(const Vector& scale)
+	void Transform::Scale(const Vector2& factor)
 	{
-		mScale = Vector(
-			mScale.x * scale.x,
-			mScale.y * scale.y,
-			mScale.z * scale.z
-		);
+		mScale = mScale * factor;
 	}
 }

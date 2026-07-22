@@ -31,6 +31,19 @@ namespace Lion
 		// Replaces the drawn texture by loading a new one from disk (used by the editor Inspector).
 		LION_API void SetTexturePath(const std::string& filePath);
 
+		// What this sprite goes on top of. Sprites are drawn low order to high, and sprites sharing one
+		// are drawn in the order the Hierarchy lists them — so the default of zero means "wherever my row
+		// is", and setting it is overriding the row.
+		LION_API int32 GetOrder() const { return mOrder; }
+		LION_API void SetOrder(int32 order) { mOrder = order; }
+
+		// Mirroring, read out of the texture rather than taken out of the scale: flipping a sprite should
+		// not flip its collider, its children or its maths.
+		LION_API bool IsFlippedX() const { return mFlipX; }
+		LION_API bool IsFlippedY() const { return mFlipY; }
+		LION_API void SetFlipX(bool flip) { mFlipX = flip; }
+		LION_API void SetFlipY(bool flip) { mFlipY = flip; }
+
 		void OnRender() override;
 		void Serialize(Serializer& serializer) const override;
 		void Deserialize(const Serializer& serializer) override;
@@ -38,5 +51,8 @@ namespace Lion
 	private:
 		Scope<Sprite> mSprite;
 		std::string mTexturePath;
+		int32 mOrder = 0;
+		bool mFlipX = false;
+		bool mFlipY = false;
 	};
 }

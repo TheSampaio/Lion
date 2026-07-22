@@ -67,15 +67,16 @@ namespace Lion
 		// True when 'other' is somewhere up this entity's parent chain.
 		LION_API bool IsDescendantOf(const Entity* other) const;
 
-		// World-space transform, composed through the parent chain (rotation in degrees, around z).
-		LION_API Vector GetWorldPosition() const;
+		// World-space transform, composed through the parent chain (rotation in degrees, one turn on the
+		// plane).
+		LION_API Vector2 GetWorldPosition() const;
 		LION_API float32 GetWorldRotation() const;
-		LION_API Vector GetWorldScale() const;
+		LION_API Vector2 GetWorldScale() const;
 
 		// Assign a world-space transform; the local transform is derived from the parent's.
-		LION_API void SetWorldPosition(const Vector& position);
+		LION_API void SetWorldPosition(const Vector2& position);
 		LION_API void SetWorldRotation(float32 degrees);
-		LION_API void SetWorldScale(const Vector& scale);
+		LION_API void SetWorldScale(const Vector2& scale);
 
 		// Requests removal of this entity from its scene (deferred to the end of the frame).
 		LION_API void RemoveFromScene();
