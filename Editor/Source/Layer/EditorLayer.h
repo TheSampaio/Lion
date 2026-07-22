@@ -456,7 +456,7 @@ private:
 	// 'unit' is the suffix each field wears; 'uniform' turns on the scale padlock. Returns whether any
 	// value changed.
 	bool DrawTransformVector(const char* label, float* values, int count, float speed, float resetValue,
-		const char* unit, bool* uniform = nullptr);
+		const char* unit, bool* uniform = nullptr, int axisBase = 0);
 
 	// Undo/redo helpers. RecordSnapshot is for discrete actions (add/delete); BeginEdit/CommitEdit
 	// group a continuous edit (a gizmo or slider drag) into a single undo step.

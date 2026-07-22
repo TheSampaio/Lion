@@ -4316,13 +4316,13 @@ bool EditorLayer::DrawVectorControl(const char* label, float* values, int count,
 }
 
 bool EditorLayer::DrawTransformVector(const char* label, float* values, int count, float speed,
-	float resetValue, const char* unit, bool* uniform)
+	float resetValue, const char* unit, bool* uniform, int axisBase)
 {
 	struct Axis { const char8* letter; ImU32 tint; ImU32 tag; };
 	static const Axis axes[3] = {
-		{ "x", IM_COL32(214, 105, 115, 255), IM_COL32(181, 61, 69, 70) },   // Red
-		{ "y", IM_COL32(140, 200, 140, 255), IM_COL32(74, 135, 74, 70) },   // Green
-		{ "z", IM_COL32(112, 160, 216, 255), IM_COL32(56, 102, 173, 70) },  // Blue
+		{ "X", IM_COL32(176, 64, 75, 255), IM_COL32(176, 64, 75, 70) },    // Red   #b0404b
+		{ "Y", IM_COL32(73, 137, 72, 255), IM_COL32(73, 137, 72, 70) },    // Green #498948
+		{ "Z", IM_COL32(55, 103, 175, 255), IM_COL32(55, 103, 175, 70) },  // Blue  #3767af
 	};
 
 	bool changed = false;
@@ -4353,9 +4353,10 @@ bool EditorLayer::DrawTransformVector(const char* label, float* values, int coun
 
 	ImDrawList* drawList = ImGui::GetWindowDrawList();
 
-	// A lone scalar (the rotation) has only one axis, so it wears no coloured letter — but its field still
-	// starts where the tagged fields do, so the column stays true down the whole Transform.
-	const bool tagged = count > 1;
+	// Every row wears its axis letter, coloured: X and Y for a Vector2, and the lone rotation wears Z,
+	// the axis a 2D angle turns about (its caller passes axisBase 2). The letter index counts from that
+	// base, so a scalar can name any single axis while the column stays true down the whole Transform.
+	const bool tagged = true;
 
 	for (int32 i = 0; i < count; ++i)
 	{
@@ -4366,7 +4367,8 @@ bool EditorLayer::DrawTransformVector(const char* label, float* values, int coun
 		const float32 before = values[i];
 		bool axisChanged = false;
 
-		// The axis tag: a small coloured plate with the lowercase letter, which resets its own component.
+		// The axis tag: a small coloured plate with the axis letter, which resets its own component.
+		const Axis& axis = axes[axisBase + i];
 		if (tagged)
 		{
 			ImGui::SetCursorPos(ImVec2(kVectorLabelWidth, rowY));
@@ -4374,11 +4376,11 @@ bool EditorLayer::DrawTransformVector(const char* label, float* values, int coun
 			const bool tagReset = ImGui::InvisibleButton("##tag", ImVec2(kTag, rowHeight));
 
 			const ImVec2 tagMax(tagMin.x + kTag, tagMin.y + rowHeight);
-			drawList->AddRectFilled(tagMin, tagMax, axes[i].tag, style.FrameRounding);
+			drawList->AddRectFilled(tagMin, tagMax, axis.tag, style.FrameRounding);
 
-			const ImVec2 letterSize = ImGui::CalcTextSize(axes[i].letter);
+			const ImVec2 letterSize = ImGui::CalcTextSize(axis.letter);
 			drawList->AddText(ImVec2(tagMin.x + (kTag - letterSize.x) * 0.5f, tagMin.y + (rowHeight - letterSize.y) * 0.5f),
-				axes[i].tint, axes[i].letter);
+				axis.tint, axis.letter);
 
 			if (ImGui::IsItemHovered())
 				ImGui::SetTooltip("Reset");
@@ -4725,9 +4727,9 @@ void EditorLayer::DrawProperties()
 				entity->GetTransform()->SetPosition(Vector2(positionValues[0], positionValues[1]));
 
 		// A rotation on a plane is one angle, not a vector whose X and Y meant nothing — one field, in
-		// degrees. It has no coloured axis (there is only one), so it wears no tag.
+		// degrees, turning about Z, so it wears the Z tag (axis base 2).
 		float32 rotationValue[1] = { transform->GetRotation() };
-		if (DrawTransformVector("Rotation", rotationValue, 1, 0.5f, 0.0f, "\xC2\xB0"))
+		if (DrawTransformVector("Rotation", rotationValue, 1, 0.5f, 0.0f, "\xC2\xB0", nullptr, 2))
 			for (const auto& entity : mSelection)
 				entity->GetTransform()->SetRotation(rotationValue[0]);
 
