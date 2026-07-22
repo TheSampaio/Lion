@@ -4332,18 +4332,19 @@ bool EditorLayer::DrawTransformVector(const char* label, float* values, int coun
 
 	ImGui::PushID(label);
 
-	// The field carries its unit in its own format, so the number and its "px" or "°" read as one thing.
-	// ImGui trims the suffix when the field is typed into, so arithmetic and expressions still work.
+	// The field carries its unit in its own format, so the number and its "°" read as one thing. ImGui
+	// trims the suffix when the field is typed into, so arithmetic and expressions still work.
 	char format[16];
-	std::snprintf(format, sizeof(format), "%%.2f%s%s", (unit && *unit) ? " " : "", unit ? unit : "");
+	std::snprintf(format, sizeof(format), "%%.3f%s%s", (unit && *unit) ? " " : "", unit ? unit : "");
 
 	const float32 rowHeight = ImGui::GetFrameHeight();
 	const float32 rowGap = 3.0f;
 	const float32 groupHeight = count * rowHeight + (count - 1) * rowGap;
 
-	// The lowercase tag: a small rounded plate the height of the field, coloured by its axis, the letter
-	// centred in it. It resets its own component when clicked — the affordance the badges had, quieter.
+	// The tag: a small rounded plate coloured by its axis, the letter centred in it. It only names the
+	// axis — resetting is the revert arrow's job — so it sits a hair inside the row and carries no click.
 	constexpr float32 kTag = 22.0f;
+	constexpr float32 kTagInset = 2.0f;
 	const float32 tagGap = 6.0f;
 
 	// Two glyphs are kept at the row's end — the padlock and the revert arrow — centred against the group.
@@ -4369,30 +4370,23 @@ bool EditorLayer::DrawTransformVector(const char* label, float* values, int coun
 		const float32 before = values[i];
 		bool axisChanged = false;
 
-		// The axis tag: a small coloured plate with the axis letter, which resets its own component.
+		// The axis tag: a small coloured plate with the axis letter. A square a hair inside the row, so it
+		// reads a touch smaller than the field, centred in its column. It only names the axis — it takes
+		// no click, and it is the revert arrow that resets.
 		const Axis& axis = axes[axisBase + i];
 		if (tagged)
 		{
 			ImGui::SetCursorPos(ImVec2(kVectorLabelWidth, rowY));
-			const ImVec2 tagMin = ImGui::GetCursorScreenPos();
-			const bool tagReset = ImGui::InvisibleButton("##tag", ImVec2(kTag, rowHeight));
+			const ImVec2 slot = ImGui::GetCursorScreenPos();
 
-			const ImVec2 tagMax(tagMin.x + kTag, tagMin.y + rowHeight);
+			const float32 tagSide = rowHeight - 2.0f * kTagInset;
+			const ImVec2 tagMin(slot.x + (kTag - tagSide) * 0.5f, slot.y + kTagInset);
+			const ImVec2 tagMax(tagMin.x + tagSide, tagMin.y + tagSide);
 			drawList->AddRectFilled(tagMin, tagMax, axis.tag, style.FrameRounding);
 
 			const ImVec2 letterSize = ImGui::CalcTextSize(axis.letter);
-			drawList->AddText(ImVec2(tagMin.x + (kTag - letterSize.x) * 0.5f, tagMin.y + (rowHeight - letterSize.y) * 0.5f),
+			drawList->AddText(ImVec2(tagMin.x + (tagSide - letterSize.x) * 0.5f, tagMin.y + (tagSide - letterSize.y) * 0.5f),
 				axis.tint, axis.letter);
-
-			if (ImGui::IsItemHovered())
-				ImGui::SetTooltip("Reset");
-
-			if (tagReset)
-			{
-				RecordSnapshot();
-				values[i] = resetValue;
-				axisChanged = true;
-			}
 		}
 
 		// The field.
@@ -4724,7 +4718,7 @@ void EditorLayer::DrawProperties()
 
 		Vector2 position = transform->GetPosition();
 		float32 positionValues[2] = { position.x, position.y };
-		if (DrawTransformVector("Position", positionValues, 2, 1.0f, 0.0f, "px"))
+		if (DrawTransformVector("Position", positionValues, 2, 1.0f, 0.0f, ""))
 			for (const auto& entity : mSelection)
 				entity->GetTransform()->SetPosition(Vector2(positionValues[0], positionValues[1]));
 
