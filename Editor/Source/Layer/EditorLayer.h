@@ -447,8 +447,16 @@ private:
 	// others by the same proportion. Two axes are all a 2D transform has; three remain for what genuinely
 	// has a third. Returns whether any value changed.
 	bool DrawVectorControl(const char* label, float* values, int count, float speed, float resetValue, bool* uniform = nullptr);
-	bool DrawVec2Control(const char* label, float values[2], float speed, float resetValue, bool* uniform = nullptr);
 	bool DrawVec3Control(const char* label, float values[3], float speed, float resetValue, bool* uniform = nullptr);
+
+	// The Transform's own vector row, Godot-style: the property named on the left, each component stacked
+	// on its own line with a lowercase coloured axis letter and a unit ("px", "°"), and the row-end
+	// widgets — the scale's lock, the revert arrow — centred against the whole group. Stacking reads far
+	// better than three fields crammed across one line, which is the shape a 2D transform never needed.
+	// 'unit' is the suffix each field wears; 'uniform' turns on the scale padlock. Returns whether any
+	// value changed.
+	bool DrawTransformVector(const char* label, float* values, int count, float speed, float resetValue,
+		const char* unit, bool* uniform = nullptr);
 
 	// Undo/redo helpers. RecordSnapshot is for discrete actions (add/delete); BeginEdit/CommitEdit
 	// group a continuous edit (a gizmo or slider drag) into a single undo step.

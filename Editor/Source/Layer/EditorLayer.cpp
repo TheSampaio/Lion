@@ -4170,11 +4170,6 @@ bool EditorLayer::DrawFloatProperty(const char8* label, float32& value, float32 
 	return changed;
 }
 
-bool EditorLayer::DrawVec2Control(const char* label, float values[2], float speed, float resetValue, bool* uniform)
-{
-	return DrawVectorControl(label, values, 2, speed, resetValue, uniform);
-}
-
 bool EditorLayer::DrawVec3Control(const char* label, float values[3], float speed, float resetValue, bool* uniform)
 {
 	return DrawVectorControl(label, values, 3, speed, resetValue, uniform);
@@ -4315,6 +4310,147 @@ bool EditorLayer::DrawVectorControl(const char* label, float* values, int count,
 			values[i] = resetValue;
 		changed = true;
 	}
+
+	ImGui::PopID();
+	return changed;
+}
+
+bool EditorLayer::DrawTransformVector(const char* label, float* values, int count, float speed,
+	float resetValue, const char* unit, bool* uniform)
+{
+	struct Axis { const char8* letter; ImU32 tint; ImU32 tag; };
+	static const Axis axes[3] = {
+		{ "x", IM_COL32(214, 105, 115, 255), IM_COL32(181, 61, 69, 70) },   // Red
+		{ "y", IM_COL32(140, 200, 140, 255), IM_COL32(74, 135, 74, 70) },   // Green
+		{ "z", IM_COL32(112, 160, 216, 255), IM_COL32(56, 102, 173, 70) },  // Blue
+	};
+
+	bool changed = false;
+	const ImGuiStyle& style = ImGui::GetStyle();
+
+	ImGui::PushID(label);
+
+	// The field carries its unit in its own format, so the number and its "px" or "°" read as one thing.
+	// ImGui trims the suffix when the field is typed into, so arithmetic and expressions still work.
+	char format[16];
+	std::snprintf(format, sizeof(format), "%%.2f%s%s", (unit && *unit) ? " " : "", unit ? unit : "");
+
+	const float32 rowHeight = ImGui::GetFrameHeight();
+	const float32 rowGap = 3.0f;
+	const float32 groupHeight = count * rowHeight + (count - 1) * rowGap;
+
+	// The lowercase tag: a small rounded plate the height of the field, coloured by its axis, the letter
+	// centred in it. It resets its own component when clicked — the affordance the badges had, quieter.
+	constexpr float32 kTag = 22.0f;
+	const float32 tagGap = 6.0f;
+
+	// Two glyphs are kept at the row's end — the padlock and the revert arrow — centred against the group.
+	const float32 rightWidth = 2.0f * (RowEndSlot() + kRowEndGap);
+
+	const ImVec2 groupOrigin = ImGui::GetCursorPos();
+	const float32 fieldLeft = kVectorLabelWidth + kTag + tagGap;
+	const float32 fieldWidth = ImMax(ImGui::GetContentRegionAvail().x - fieldLeft - rightWidth, 24.0f);
+
+	ImDrawList* drawList = ImGui::GetWindowDrawList();
+
+	// A lone scalar (the rotation) has only one axis, so it wears no coloured letter — but its field still
+	// starts where the tagged fields do, so the column stays true down the whole Transform.
+	const bool tagged = count > 1;
+
+	for (int32 i = 0; i < count; ++i)
+	{
+		ImGui::PushID(i);
+
+		const float32 rowY = groupOrigin.y + i * (rowHeight + rowGap);
+
+		const float32 before = values[i];
+		bool axisChanged = false;
+
+		// The axis tag: a small coloured plate with the lowercase letter, which resets its own component.
+		if (tagged)
+		{
+			ImGui::SetCursorPos(ImVec2(kVectorLabelWidth, rowY));
+			const ImVec2 tagMin = ImGui::GetCursorScreenPos();
+			const bool tagReset = ImGui::InvisibleButton("##tag", ImVec2(kTag, rowHeight));
+
+			const ImVec2 tagMax(tagMin.x + kTag, tagMin.y + rowHeight);
+			drawList->AddRectFilled(tagMin, tagMax, axes[i].tag, style.FrameRounding);
+
+			const ImVec2 letterSize = ImGui::CalcTextSize(axes[i].letter);
+			drawList->AddText(ImVec2(tagMin.x + (kTag - letterSize.x) * 0.5f, tagMin.y + (rowHeight - letterSize.y) * 0.5f),
+				axes[i].tint, axes[i].letter);
+
+			if (ImGui::IsItemHovered())
+				ImGui::SetTooltip("Reset");
+
+			if (tagReset)
+			{
+				RecordSnapshot();
+				values[i] = resetValue;
+				axisChanged = true;
+			}
+		}
+
+		// The field.
+		ImGui::SetCursorPos(ImVec2(fieldLeft, rowY));
+		ImGui::SetNextItemWidth(fieldWidth);
+
+		if (ImGui::DragFloat("##value", &values[i], speed, 0.0f, 0.0f, format))
+			axisChanged = true;
+
+		if (ImGui::IsItemActivated()) BeginEdit();
+
+		if (ApplyTypedExpression(ImGui::GetItemID(), values[i]))
+			axisChanged = true;
+
+		if (ImGui::IsItemDeactivatedAfterEdit()) CommitEdit();
+
+		if (axisChanged && uniform && *uniform)
+		{
+			const float32 factor = (before != 0.0f) ? (values[i] / before) : 0.0f;
+
+			for (int32 other = 0; other < count; ++other)
+				if (other != i)
+					values[other] = (factor != 0.0f) ? (values[other] * factor) : values[i];
+		}
+
+		changed |= axisChanged;
+		ImGui::PopID();
+	}
+
+	// The property's name, centred down the group on the left.
+	ImGui::SetCursorPos(ImVec2(0.0f, groupOrigin.y + (groupHeight - ImGui::GetTextLineHeight()) * 0.5f));
+	ImGui::TextUnformatted(label);
+
+	// The row-end glyphs, centred down the group on the right: the padlock (scale only), then the revert
+	// arrow, which appears only while a value is off its default.
+	bool modified = false;
+	for (int32 i = 0; i < count; ++i)
+		modified |= (values[i] != resetValue);
+
+	const float32 glyphY = groupOrigin.y + (groupHeight - RowEndSlot()) * 0.5f;
+	float32 glyphX = ImGui::GetContentRegionMax().x - rightWidth + kRowEndGap;
+
+	if (uniform)
+	{
+		ImGui::SetCursorPos(ImVec2(glyphX, glyphY));
+		if (LockButton("##uniform", *uniform))
+			*uniform = !*uniform;
+	}
+
+	glyphX += RowEndSlot() + kRowEndGap;
+	ImGui::SetCursorPos(ImVec2(glyphX, glyphY));
+
+	if (ResetToDefaultButton("##reset", modified))
+	{
+		RecordSnapshot();
+		for (int32 i = 0; i < count; ++i)
+			values[i] = resetValue;
+		changed = true;
+	}
+
+	// Leave the cursor below the whole group, so the next property does not climb into it.
+	ImGui::SetCursorPos(ImVec2(groupOrigin.x, groupOrigin.y + groupHeight + style.ItemSpacing.y));
 
 	ImGui::PopID();
 	return changed;
@@ -4584,20 +4720,20 @@ void EditorLayer::DrawProperties()
 
 		Vector2 position = transform->GetPosition();
 		float32 positionValues[2] = { position.x, position.y };
-		if (DrawVec2Control("Position", positionValues, 1.0f, 0.0f))
+		if (DrawTransformVector("Position", positionValues, 2, 1.0f, 0.0f, "px"))
 			for (const auto& entity : mSelection)
 				entity->GetTransform()->SetPosition(Vector2(positionValues[0], positionValues[1]));
 
 		// A rotation on a plane is one angle, not a vector whose X and Y meant nothing — one field, in
-		// degrees, is the whole of it.
-		float32 rotation = transform->GetRotation();
-		if (DrawFloatProperty("Rotation", rotation, 0.5f, 0.0f, 0.0f, 0.0f))
+		// degrees. It has no coloured axis (there is only one), so it wears no tag.
+		float32 rotationValue[1] = { transform->GetRotation() };
+		if (DrawTransformVector("Rotation", rotationValue, 1, 0.5f, 0.0f, "\xC2\xB0"))
 			for (const auto& entity : mSelection)
-				entity->GetTransform()->SetRotation(rotation);
+				entity->GetTransform()->SetRotation(rotationValue[0]);
 
 		Vector2 scale = transform->GetScale();
 		float32 scaleValues[2] = { scale.x, scale.y };
-		if (DrawVec2Control("Scale", scaleValues, 0.01f, 1.0f, &mScaleUniform))
+		if (DrawTransformVector("Scale", scaleValues, 2, 0.01f, 1.0f, "", &mScaleUniform))
 			for (const auto& entity : mSelection)
 				entity->GetTransform()->SetScale(Vector2(scaleValues[0], scaleValues[1]));
 	}
@@ -4730,7 +4866,7 @@ void EditorLayer::DrawProperties()
 				Vector2 offset = camera->GetOffset();
 				float32 offsetValues[2] = { offset.x, offset.y };
 
-				if (DrawVec2Control("Offset", offsetValues, 1.0f, 0.0f))
+				if (DrawTransformVector("Offset", offsetValues, 2, 1.0f, 0.0f, "px"))
 					ApplyToSelection<Camera2D>([&](Camera2D* target)
 						{ target->SetOffset(Vector2(offsetValues[0], offsetValues[1])); });
 
