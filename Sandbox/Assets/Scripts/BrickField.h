@@ -27,7 +27,6 @@ private:
 	State mState = State::Playing;
 	Ball* mBall = nullptr;
 	Paddle* mPaddle = nullptr;
-	Lion::SpriteRenderer* mBackdrop = nullptr;
 	Lion::float32 mLoseHeight = -310.0f;
 
 	void CheckWinLose();

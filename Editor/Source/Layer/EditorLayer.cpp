@@ -3485,6 +3485,12 @@ void EditorLayer::DrawColliderOverlays(const ImVec2& imageMin, const ImVec2& ima
 
 	for (const auto& entity : mScene->GetEntities())
 	{
+		// The overlay represents colliders that currently participate in the scene. A disabled entity's
+		// rigid body has already left the simulation, so drawing it would describe stale physics state
+		// (most visibly after a Brick disables itself on impact).
+		if (!entity->IsActive())
+			continue;
+
 		// Hitboxes follow the entity's world transform (including anything inherited from a parent).
 		const Vector position = entity->GetWorldPosition();
 		const Vector scale = entity->GetWorldScale();

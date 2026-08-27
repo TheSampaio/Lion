@@ -14,11 +14,6 @@ void BrickField::OnAwake()
 	mBall = FindInScene<Ball>(GetOwner().GetScene());
 	mPaddle = FindInScene<Paddle>(GetOwner().GetScene());
 
-	// The backdrop is optional. When the conventional editor-authored Background entity exists, hide
-	// its opaque sprite at round end so the clear color communicates the result even in Shipping.
-	if (Entity* background = FindNamedEntity(GetOwner().GetScene(), "Background"))
-		mBackdrop = background->GetComponent<SpriteRenderer>();
-
 	if (!mBall || !mPaddle)
 	{
 		Log::Console(LogLevel::Error, "[BrickField] Requires a Ball and Paddle in the same scene.");
@@ -54,9 +49,6 @@ void BrickField::EndRound(State state)
 	mState = state;
 	mBall->Stop();
 
-	if (mBackdrop)
-		mBackdrop->SetEnabled(false);
-
 	if (state == State::Won)
 	{
 		Window::SetBackgroundColor(0.0f, 0.25f, 0.0f);
@@ -81,9 +73,6 @@ void BrickField::Restart()
 
 	mPaddle->Reset();
 	mBall->Reset();
-
-	if (mBackdrop)
-		mBackdrop->SetEnabled(true);
 
 	Window::SetBackgroundColor(0.05f, 0.05f, 0.05f);
 	mState = State::Playing;
