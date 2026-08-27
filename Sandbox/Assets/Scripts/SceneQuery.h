@@ -19,13 +19,25 @@ T* FindInScene(const Lion::Reference<Lion::Scene>& scene)
 	return nullptr;
 }
 
+// Finds the scene entity carrying a conventional, editor-authored name.
+inline Lion::Entity* FindNamedEntity(const Lion::Reference<Lion::Scene>& scene, const std::string& name)
+{
+	for (const auto& entity : scene->GetEntities())
+		if (entity->GetName() == name)
+			return entity.get();
+
+	return nullptr;
+}
+
+// Counts active entities carrying T. Disabled gameplay objects remain in the authored scene so a round
+// can reset them without recreating scene data from code.
 template<typename T>
-Lion::int32 CountInScene(const Lion::Reference<Lion::Scene>& scene)
+Lion::int32 CountActiveInScene(const Lion::Reference<Lion::Scene>& scene)
 {
 	Lion::int32 count = 0;
 
 	for (const auto& entity : scene->GetEntities())
-		if (entity->HasComponent<T>())
+		if (entity->IsActive() && entity->HasComponent<T>())
 			count++;
 
 	return count;

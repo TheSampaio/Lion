@@ -55,6 +55,52 @@ namespace ProjectBuild
 		}
 	}
 
+	const std::string& PlatformToolset()
+	{
+		static const std::string toolset = []
+		{
+			char8* programFiles = nullptr;
+			size_t programFilesLength = 0;
+
+			if (_dupenv_s(&programFiles, &programFilesLength, "ProgramFiles") != 0 || !programFiles)
+				return std::string("v143");
+
+			const std::filesystem::path visualStudio =
+				std::filesystem::path(programFiles) / "Microsoft Visual Studio";
+			std::free(programFiles);
+			std::string newest;
+			std::error_code error;
+
+			// Installation/version/product paths vary, but the final VC layout does not. Walking only these
+			// few directory levels avoids a recursive scan across the entire Visual Studio installation.
+			for (const auto& version : std::filesystem::directory_iterator(visualStudio, error))
+			{
+				for (const auto& product : std::filesystem::directory_iterator(version.path(), error))
+				{
+					const std::filesystem::path vc = product.path() / "MSBuild" / "Microsoft" / "VC";
+
+					for (const auto& vcVersion : std::filesystem::directory_iterator(vc, error))
+					{
+						const std::filesystem::path toolsets =
+							vcVersion.path() / "Platforms" / "x64" / "PlatformToolsets";
+
+						for (const auto& candidate : std::filesystem::directory_iterator(toolsets, error))
+						{
+							const std::string name = candidate.path().filename().string();
+
+							if (candidate.is_directory(error) && name > newest)
+								newest = name;
+						}
+					}
+				}
+			}
+
+			return newest.empty() ? std::string("v143") : newest;
+		}();
+
+		return toolset;
+	}
+
 	bool Available()
 	{
 		std::error_code error;
@@ -132,7 +178,7 @@ namespace ProjectBuild
 			<< "  <Import Project=\"$(VCTargetsPath)\\Microsoft.Cpp.Default.props\" />\n"
 			<< "  <PropertyGroup Label=\"Configuration\">\n"
 			<< "    <ConfigurationType>DynamicLibrary</ConfigurationType>\n"
-			<< "    <PlatformToolset>v143</PlatformToolset>\n"
+			<< "    <PlatformToolset>" << PlatformToolset() << "</PlatformToolset>\n"
 			<< "    <CharacterSet>Unicode</CharacterSet>\n"
 			<< "    <UseDebugLibraries>" << (debug ? "true" : "false") << "</UseDebugLibraries>\n"
 			<< "  </PropertyGroup>\n"

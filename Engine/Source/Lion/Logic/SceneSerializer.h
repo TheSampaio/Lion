@@ -5,8 +5,7 @@ namespace Lion
 	class Entity;
 	class Scene;
 
-	// Reads and writes scenes as JSON: entity transforms and their components
-	// (SpriteRenderer, RigidBody2D, BoxCollider2D, CircleCollider2D) plus the world gravity.
+	// Reads and writes scenes as JSON: entity transforms, every registered component and the world gravity.
 	class SceneSerializer
 	{
 	public:

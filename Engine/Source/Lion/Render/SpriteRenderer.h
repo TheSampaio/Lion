@@ -28,7 +28,7 @@ namespace Lion
 		// Source texture path (empty when constructed from an existing texture); used by serialization.
 		const std::string& GetTexturePath() const { return mTexturePath; }
 
-		// Replaces the drawn texture by loading a new one from disk (used by the editor Inspector).
+		// Replaces the drawn texture with the asset shared by renderers using the same resource path.
 		LION_API void SetTexturePath(const std::string& filePath);
 
 		// What this sprite goes on top of. Sprites are drawn low order to high, and sprites sharing one

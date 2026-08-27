@@ -99,11 +99,12 @@ private:
 	bool mOpenSaveLayoutPopup = false;
 	char mLayoutName[64] = {};
 
-	// "New C++ Component": scaffolds a component class into the game's source tree. The Add Component
-	// popup only records the request, since it closes on click and takes the modal's ID scope with it.
+	// "New Component": scaffolds a component class through the selected language backend. The Add
+	// Component popup only records the request, since it closes on click and takes the modal's ID scope.
 	bool mOpenNewComponentPopup = false;
 	char mNewComponentName[64] = {};
 	char mNewComponentFolder[64] = "Scripts";   // Where it lands, under the game's assets.
+	int mNewComponentLanguage = 0;                // Index into ComponentScripts::Languages().
 
 	// Project Manager (opened from the title-bar project tab): the game the editor has open, the ones it
 	// has opened before, and the fields of the "New Project" form. The recents are read at startup and
@@ -272,7 +273,7 @@ private:
 
 	static constexpr size_t kMaxUndo = 100;
 
-	void CreateDemoScene();
+	void LoadDemoScene();
 	void RenderScene();
 	void DrawUI();
 	// The editor draws its own caption: the engine's mark, the menus and the window's buttons. Two rows
@@ -373,9 +374,9 @@ private:
 	static std::string LayoutPath(const std::string& name);
 	static bool IsValidLayoutName(const std::string& name);  // Rejects names that would escape the folder.
 
-	// "New C++ Component" (Unreal-style): name the type, and the editor writes the
-	// .h/.cpp into the game's source tree. The new class is compiled into the game module on the next
-	// build, which is when it starts showing up in Add Component.
+	// "New Component" (Unreal-style): name the type and choose a source language. The current C++
+	// backend writes .h/.cpp files and compiles them into the game module; another language plugs into
+	// the same boundary without changing scenes, reflection, or the Add Component registry.
 	void DrawNewComponentPopup();
 	bool GenerateComponent(const std::string& name, const std::string& folder);
 

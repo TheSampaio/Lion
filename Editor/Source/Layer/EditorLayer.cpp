@@ -3,6 +3,7 @@
 
 #include "../EditorGui.h"
 #include "../Expression.h"
+#include "../ComponentScripts.h"
 #include "../ProjectBuild.h"
 #include "../Projects.h"
 
@@ -160,7 +161,7 @@ void EditorLayer::OnCreate()
 		return;
 	}
 
-	CreateDemoScene();
+	LoadDemoScene();
 }
 
 void EditorLayer::OnUpdate()
@@ -289,33 +290,12 @@ void EditorLayer::StopPlay()
 	Log::Console(LogLevel::Information, "[Editor] Play mode stopped.");
 }
 
-void EditorLayer::CreateDemoScene()
+void EditorLayer::LoadDemoScene()
 {
-	// Background.
-	auto background = MakeReference<Entity>();
-	background->SetName("Background");
-	background->GetTransform()->SetPosition(Vector2(0.0f, 0.0f));
-	background->AddComponent<SpriteRenderer>("Sprites/Brickout/background.jpg")->SetOrder(Depth::Back);
-	mScene->Add(background);
+	const std::filesystem::path scene = Projects::DefaultProjectDirectory() / "Assets" / "Scenes" / "Main.lnscene";
 
-	// A row of bricks.
-	for (int32 i = 0; i < 5; i++)
-	{
-		auto brick = MakeReference<Entity>();
-		brick->SetName("Brick " + std::to_string(i + 1));
-		brick->GetTransform()->SetPosition(Vector2(-160.0f + i * 80.0f, 60.0f));
-		brick->AddComponent<SpriteRenderer>("Sprites/Brickout/tile-" + std::to_string(i + 1) + ".png")->SetOrder(Depth::Middle);
-		mScene->Add(brick);
-	}
-
-	// Ball (with physics, so pressing Play drops it under gravity).
-	auto ball = MakeReference<Entity>();
-	ball->SetName("Ball");
-	ball->GetTransform()->SetPosition(Vector2(0.0f, 120.0f));
-	ball->AddComponent<SpriteRenderer>("Sprites/Brickout/ball.png")->SetOrder(Depth::Middle);
-	ball->AddComponent<RigidBody2D>(BodyType::Dynamic, false);
-	ball->AddComponent<CircleCollider2D>(6.0f);
-	mScene->Add(ball);
+	if (!LoadScene(scene.string()))
+		Log::Console(LogLevel::Error, "[Editor] Could not open the built-in Brickout scene.");
 }
 
 void EditorLayer::OnRender()
@@ -1373,7 +1353,7 @@ namespace
 		return project.empty() ? project : (project / "Assets");
 	}
 
-	// The folder a component is generated into, as typed in the New C++ Component popup: a path under
+	// The folder a component is generated into, as typed in the New Component popup: a path under
 	// the game's assets. A script is one of the game's own files, so it belongs where its sprites and
 	// shaders are — in the Project panel, the only place the editor ever shows the game's contents. It
 	// is compiled into the module and does not ship beside it (see the asset copy in Sandbox/premake5.lua).
@@ -2092,7 +2072,7 @@ void EditorLayer::DrawProject()
 			CreateAssetFolder();
 
 		// The component lands where you are standing: the popup opens with this folder already in it.
-		if (ImGui::MenuItem("New C++ Component..."))
+		if (ImGui::MenuItem("New Component..."))
 		{
 			const std::string folder = mProjectPath.empty() ? std::string("Scripts") : mProjectPath;
 			const size_t copied = folder.copy(mNewComponentFolder, sizeof(mNewComponentFolder) - 1);
@@ -2119,7 +2099,7 @@ namespace
 		if (extension == ".png" || extension == ".jpg" || extension == ".jpeg" || extension == ".bmp")
 			return ICON_MDI_IMAGE_OUTLINE;
 
-		if (extension == ".h" || extension == ".cpp")
+		if (extension == ".h" || extension == ".cpp" || extension == ".cs")
 			return ICON_MDI_CODE_TAGS;
 
 		if (extension == ".glsl")
@@ -2907,7 +2887,7 @@ void EditorLayer::HandleShortcuts()
 		return;
 
 	// A modal owns the keyboard for as long as it is up — whether or not one of its fields happens to
-	// hold focus at that moment. Without this, a class name typed into the New C++ Component dialog
+	// hold focus at that moment. Without this, a class name typed into the New Component dialog
 	// also ran whatever the editor binds those letters to, so an "e" would switch the gizmo tool.
 	//
 	// An active text field owns it for the same reason: any action can be rebound to a plain letter,
@@ -5159,7 +5139,7 @@ void EditorLayer::DrawProperties()
 		// Scaffold a brand new component class into the game's source tree, Unreal-style.
 		ImGui::Separator();
 
-		if (ImGui::MenuItem("New C++ Component..."))
+		if (ImGui::MenuItem("New Component..."))
 			mOpenNewComponentPopup = true;
 
 		ImGui::EndPopup();
@@ -5969,6 +5949,7 @@ void EditorLayer::CompileGameModule()
 			" \"" + (root / "Lion.sln").string() + "\""
 			" -t:Runtime\\Game"
 			" -p:BuildProjectReferences=false"
+			" -p:PlatformToolset=" + ProjectBuild::PlatformToolset() +
 			" -p:Configuration=" + BuildConfiguration() +
 			" -p:Platform=x64 -v:minimal -nologo";
 	}
@@ -5989,6 +5970,7 @@ void EditorLayer::CompileGameModule()
 		build =
 			"\"" + MSBuildPath() + "\""
 			" \"" + ProjectBuild::VcxprojPath(active).string() + "\""
+			" -p:PlatformToolset=" + ProjectBuild::PlatformToolset() +
 			" -p:Configuration=" + BuildConfiguration() +
 			" -p:Platform=x64 -v:minimal -nologo";
 	}
@@ -6112,77 +6094,15 @@ bool EditorLayer::GenerateComponent(const std::string& name, const std::string& 
 		return false;
 	}
 
-	std::error_code error;
-	std::filesystem::create_directories(directory, error);
+	const std::vector<ComponentScripts::LanguageInfo>& languages = ComponentScripts::Languages();
+	const int index = std::clamp(mNewComponentLanguage, 0, static_cast<int>(languages.size()) - 1);
+	std::string error;
 
-	if (error)
+	if (!ComponentScripts::Generate(languages[index].language, name, directory, error))
 	{
-		Log::Console(LogLevel::Error, LION_FORMAT_TEXT("[Editor] Could not create '{}': {}.", directory.generic_string(), error.message()));
+		Log::Console(LogLevel::Error, LION_FORMAT_TEXT("[Editor] Could not create '{}': {}", name, error));
 		return false;
 	}
-
-	const std::filesystem::path headerPath = directory / (name + ".h");
-	const std::filesystem::path sourcePath = directory / (name + ".cpp");
-
-	if (std::filesystem::exists(headerPath, error) || std::filesystem::exists(sourcePath, error))
-	{
-		Log::Console(LogLevel::Error, LION_FORMAT_TEXT("[Editor] A component named '{}' already exists.", name));
-		return false;
-	}
-
-	std::ofstream header(headerPath);
-	std::ofstream source(sourcePath);
-
-	if (!header.is_open() || !source.is_open())
-	{
-		Log::Console(LogLevel::Error, LION_FORMAT_TEXT("[Editor] Could not write '{}'.", directory.generic_string()));
-		return false;
-	}
-
-	// Always a Component, never another component: an entity is what things are made of, and a component
-	// is one trait of it. A trait that needs another one asks its owner for it — GetOwner() is right
-	// there — and that reads better than a class that is two things at once.
-	header
-		<< "#pragma once\n\n"
-		<< "#include <Lion/Lion.h>\n"
-		<< "\n"
-		<< "// Component defined by the game. Being compiled into the game module is all it takes for the\n"
-		<< "// editor to list it under Add Component: loading the module registers it with the engine.\n"
-		<< "//\n"
-		<< "// Override the lifecycle hooks to give it behaviour, and name a field in Reflect to have it\n"
-		<< "// appear in the Inspector and be saved with the scene — describing it once is describing it.\n"
-		<< "// GetOwner() reaches the entity it is attached to, and through it every other component on it.\n"
-		<< "class " << name << " : public Lion::Component\n"
-		<< "{\n"
-		<< "public:\n"
-		<< "\tvoid OnAwake() override;\n"
-		<< "\tvoid OnUpdate() override;\n\n"
-		<< "\tvoid Reflect(Lion::Reflector& reflector) override;\n\n"
-		<< "private:\n"
-		<< "\tLion::float32 mSpeed = 1.0f;\n"
-		<< "};\n";
-
-	source
-		<< "#include \"" << name << ".h\"\n\n"
-		<< "#include <Lion/Logic/ComponentRegistry.h>\n"
-		<< "#include <Lion/Logic/Reflector.h>\n\n"
-		<< "using namespace Lion;\n\n"
-		<< "void " << name << "::OnAwake()\n"
-		<< "{\n"
-		<< "}\n\n"
-		<< "void " << name << "::OnUpdate()\n"
-		<< "{\n"
-		<< "}\n\n"
-		<< "// The fields the editor shows and the scene file keeps. One list, both jobs.\n"
-		<< "void " << name << "::Reflect(Reflector& reflector)\n"
-		<< "{\n"
-		<< "\treflector.Field(\"Speed\", mSpeed);\n"
-		<< "}\n\n"
-		<< "// Binds the class to its name, so scenes can reference it and the editor can list it.\n"
-		<< "LION_REGISTER_COMPONENT(" << name << ")\n";
-
-	header.close();
-	source.close();
 
 	Log::Console(LogLevel::Success, LION_FORMAT_TEXT("[Editor] Created '{}' in {}.", name, directory.generic_string()));
 
@@ -6199,14 +6119,37 @@ void EditorLayer::DrawNewComponentPopup()
 	{
 		mOpenNewComponentPopup = false;
 		mNewComponentName[0] = '\0';
-		ImGui::OpenPopup("New C++ Component");
+		ImGui::OpenPopup("New Component");
 	}
 
 	const ImVec2 center = ImGui::GetMainViewport()->GetCenter();
 	ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
 
-	if (!ImGui::BeginPopupModal("New C++ Component", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+	if (!ImGui::BeginPopupModal("New Component", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
 		return;
+
+	const std::vector<ComponentScripts::LanguageInfo>& languages = ComponentScripts::Languages();
+	mNewComponentLanguage = std::clamp(mNewComponentLanguage, 0, static_cast<int>(languages.size()) - 1);
+
+	ImGui::TextUnformatted("Language");
+	ImGui::SetNextItemWidth(320.0f);
+	if (ImGui::BeginCombo("##language", languages[mNewComponentLanguage].displayName))
+	{
+		for (int index = 0; index < static_cast<int>(languages.size()); ++index)
+		{
+			const bool selected = index == mNewComponentLanguage;
+
+			if (ImGui::Selectable(languages[index].displayName, selected))
+				mNewComponentLanguage = index;
+
+			if (selected)
+				ImGui::SetItemDefaultFocus();
+		}
+
+		ImGui::EndCombo();
+	}
+
+	ImGui::Spacing();
 
 	ImGui::TextUnformatted("Class name");
 
@@ -6276,7 +6219,9 @@ void EditorLayer::DrawNewComponentPopup()
 	else if (!name.empty() && ComponentRegistry::Contains(name))
 		ImGui::TextColored(LogLevelColor(LogLevel::Error), "A component of that name is already registered.");
 	else
-		ImGui::TextDisabled("%s", (directory / (name.empty() ? "<name>" : name)).generic_string().append(".h/.cpp").c_str());
+		ImGui::TextDisabled("%s%s",
+			(directory / (name.empty() ? "<name>" : name)).generic_string().c_str(),
+			languages[mNewComponentLanguage].fileSuffix);
 
 	ImGui::Spacing();
 	ImGui::BeginDisabled(!valid);
@@ -6404,7 +6349,7 @@ void EditorLayer::OpenProject(const std::filesystem::path& folder)
 	mRedoStack.clear();
 
 	if (folder.lexically_normal() == Projects::DefaultProjectDirectory().lexically_normal())
-		CreateDemoScene();
+		LoadDemoScene();
 
 	const std::string name = ProjectDisplayName(folder);
 	Log::Console(LogLevel::Success, LION_FORMAT_TEXT("[Editor] Opened project '{}'.", name));

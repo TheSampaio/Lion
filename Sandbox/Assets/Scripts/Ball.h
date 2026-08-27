@@ -12,6 +12,7 @@ public:
 	void OnAwake() override;
 	void OnUpdate() override;
 	void OnCollision(Lion::Entity& other) override;
+	void Reflect(Lion::Reflector& reflector) override;
 
 	// Re-attaches the ball to the paddle, ready to be launched again.
 	void Reset();
@@ -27,10 +28,10 @@ private:
 		Launched,  // In play.
 	};
 
-	static constexpr Lion::float32 kSpeed = 430.0f;            // Constant travel speed (pixels/s).
-	static constexpr Lion::float32 kMinVerticalRatio = 0.35f;  // Keeps the ball from going flat.
-	static constexpr Lion::float32 kMaxBounceDegrees = 60.0f;  // Paddle steering range from vertical.
-	static constexpr Lion::float32 kAttachGap = 2.0f;          // Small gap above the paddle.
+	Lion::float32 mSpeed = 430.0f;            // Constant travel speed (pixels/s).
+	Lion::float32 mMinVerticalRatio = 0.35f;  // Keeps the ball from going flat.
+	Lion::float32 mMaxBounceDegrees = 60.0f;  // Paddle steering range from vertical.
+	Lion::float32 mAttachGap = 2.0f;          // Small gap above the paddle.
 
 	State mState = State::Attached;
 	Paddle* mPaddle = nullptr;

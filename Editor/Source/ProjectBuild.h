@@ -16,6 +16,10 @@
 // the machine (found through vswhere, as Unreal needs it), and nothing of the engine's source tree.
 namespace ProjectBuild
 {
+	// Visual Studio C++ toolset available on this machine (for example v143 or v145).
+	// Falls back to v143 when the installation cannot be inspected.
+	const std::string& PlatformToolset();
+
 	// Whether there is anything to compile against: the Include and Bin folders beside the editor.
 	bool Available();
 

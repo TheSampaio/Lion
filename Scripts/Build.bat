@@ -51,15 +51,27 @@ IF NOT EXIST %VSWHERE% (
 )
 
 FOR /F "usebackq tokens=*" %%i IN (`%VSWHERE% -latest -requires Microsoft.Component.MSBuild -find MSBuild\**\Bin\MSBuild.exe`) DO SET MSBUILD=%%i
+FOR /F "usebackq tokens=*" %%i IN (`%VSWHERE% -latest -requires Microsoft.Component.MSBuild -property installationPath`) DO SET VSINSTALL=%%i
 
 IF NOT DEFINED MSBUILD (
     ECHO [Lion] MSBuild was not found. Install the "Desktop development with C++" workload.
     EXIT /B 1
 )
 
+:: Premake's vs2022 action writes v143, while newer Visual Studio releases can carry only their current
+:: toolset. An MSBuild property safely retargets generated projects to the newest toolset actually present;
+:: on Visual Studio 2022 this still resolves to v143.
+SET PLATFORM_TOOLSET=
+FOR /D %%v IN ("%VSINSTALL%\MSBuild\Microsoft\VC\v*") DO (
+    FOR /D %%i IN ("%%v\Platforms\x64\PlatformToolsets\v*") DO SET PLATFORM_TOOLSET=%%~nxi
+)
+
+SET TOOLSET_ARGUMENT=
+IF DEFINED PLATFORM_TOOLSET SET TOOLSET_ARGUMENT=-p:PlatformToolset=%PLATFORM_TOOLSET%
+
 ECHO [Lion] Building %CONFIG%...
-"%MSBUILD%" Lion.sln -p:Configuration=%CONFIG% -p:Platform=x64 -m -v:minimal -nologo || EXIT /B 1
+"%MSBUILD%" Lion.sln -p:Configuration=%CONFIG% -p:Platform=x64 %TOOLSET_ARGUMENT% -m -v:minimal -nologo || EXIT /B 1
 
 ECHO.
-ECHO [Lion] Done. The editor is at Build\Bin\%CONFIG%\Editor\Lion.exe
+ECHO [Lion] Done. The editor is at Build\Bin\%CONFIG%\Mane\Lion.exe
 ENDLOCAL

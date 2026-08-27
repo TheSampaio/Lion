@@ -1,6 +1,7 @@
 #include "Engine.h"
 #include "SpriteRenderer.h"
 
+#include <Lion/Core/Asset.h>
 #include <Lion/Logic/ComponentRegistry.h>
 #include <Lion/Logic/Entity.h>
 #include <Lion/Logic/Serializer.h>
@@ -14,7 +15,7 @@ namespace Lion
 		// An empty path leaves the renderer sprite-less (e.g. a default-constructed instance that
 		// deserialization is about to point at a real texture), so no bogus load of "" is attempted.
 		if (!filePath.empty())
-			mSprite = MakeScope<Sprite>(filePath);
+			mSprite = MakeScope<Sprite>(Asset::LoadTexture(filePath, filePath));
 	}
 
 	SpriteRenderer::SpriteRenderer(const Reference<Texture>& texture)
@@ -34,7 +35,9 @@ namespace Lion
 		if (filePath == mTexturePath)
 			return;
 
-		mSprite = filePath.empty() ? nullptr : MakeScope<Sprite>(filePath);
+		mSprite = filePath.empty()
+			? nullptr
+			: MakeScope<Sprite>(Asset::LoadTexture(filePath, filePath));
 		mTexturePath = filePath;
 	}
 

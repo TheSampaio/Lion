@@ -11,14 +11,20 @@ class Paddle : public Lion::Component
 public:
 	void OnAwake() override;
 	void OnUpdate() override;
+	void Reflect(Lion::Reflector& reflector) override;
+
+	// Returns the paddle to the position authored in the scene.
+	void Reset();
 
 	// The paddle's half extents: the ball bounces off its width and rests on top of its height.
 	Lion::float32 GetHalfWidth() const;
 	Lion::float32 GetHalfHeight() const;
 
 private:
-	static constexpr Lion::float32 kSpeed = 500.0f;
+	Lion::float32 mSpeed = 500.0f;
+	Lion::float32 mHorizontalLimit = 350.0f;
 
 	Lion::RigidBody2D* mBody = nullptr;
 	Lion::SpriteRenderer* mRenderer = nullptr;
+	Lion::Vector2 mStartPosition;
 };
