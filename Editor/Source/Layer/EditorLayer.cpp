@@ -52,6 +52,7 @@ namespace
 {
 	// Defined with the rest of the project machinery further down the file; the boot needs it before that
 	// point is reached.
+	std::filesystem::path ActiveProjectDirectory();
 	void SetActiveProjectDirectory(const std::filesystem::path& project);
 }
 
@@ -105,8 +106,8 @@ void EditorLayer::OnCreate()
 	mScene = MakeReference<Scene>();
 
 	FramebufferSpecification spec;
-	spec.width = 1280;
-	spec.height = 720;
+	spec.width = Window::kDefaultViewportWidth;
+	spec.height = Window::kDefaultViewportHeight;
 	spec.hasEntityId = true;   // Secondary attachment for pixel-perfect viewport picking.
 	mFramebuffer = Framebuffer::Create(spec);
 
@@ -121,7 +122,7 @@ void EditorLayer::OnCreate()
 	// The project this session is about, handed over as the process was started: --project from the
 	// Project Manager, or a .lnproject double-clicked in Explorer, which arrives as a bare path whose
 	// folder is the project. The editor initialises on it — the built-in on its demo, any other project
-	// on a fresh scene with its own module built and hot-swapped in as soon as the build answers. Without
+	// on its recorded default scene after its own module is ready. Without
 	// one (the --no-project-manager skip, or a bare debugger launch), the built-in demo it is. A scene is
 	// not an answer: scenes open inside the editor, the way they do in Unreal and Visual Studio.
 	std::filesystem::path requested;
@@ -146,22 +147,11 @@ void EditorLayer::OnCreate()
 	if (!requested.empty() && Projects::IsProjectFolder(requested)
 		&& requested.lexically_normal() != Projects::DefaultProjectDirectory().lexically_normal())
 	{
-		SetActiveProjectDirectory(requested);
-		RememberRecentProject(requested);
-
-		Log::Console(LogLevel::Success,
-			LION_FORMAT_TEXT("[Editor] Opened project '{}'.", Projects::DisplayName(requested)));
-
-		// The project's own module is built against the SDK beside the editor — dev tree or distributed
-		// install alike. Without an SDK there is nothing to build with, and nothing worth a warning at
-		// every boot: the project opens with the module already on disk.
-		if (ProjectBuild::Available())
-			CompileGameModule();
-
+		OpenProject(requested);
 		return;
 	}
 
-	LoadDemoScene();
+	LoadProjectDefaultScene(Projects::DefaultProjectDirectory());
 }
 
 void EditorLayer::OnUpdate()
@@ -290,12 +280,34 @@ void EditorLayer::StopPlay()
 	Log::Console(LogLevel::Information, "[Editor] Play mode stopped.");
 }
 
-void EditorLayer::LoadDemoScene()
+void EditorLayer::LoadProjectDefaultScene(const std::filesystem::path& project)
 {
-	const std::filesystem::path scene = Projects::DefaultProjectDirectory() / "Assets" / "Scenes" / "Main.lnscene";
+	const std::filesystem::path scene = Projects::DefaultScene(project);
 
-	if (!LoadScene(scene.string()))
-		Log::Console(LogLevel::Error, "[Editor] Could not open the built-in Brickout scene.");
+	if (!scene.empty() && !LoadScene(scene.string()))
+		Log::Console(LogLevel::Error, LION_FORMAT_TEXT("[Editor] Could not open the default scene for '{}'.",
+			Projects::DisplayName(project)));
+
+	// A project opens as a new editing context. Loading its scene must not leave the previous project's
+	// state — or the temporary empty scene — reachable through Undo.
+	mUndoStack.clear();
+	mRedoStack.clear();
+}
+
+void EditorLayer::LoadPendingProjectScene()
+{
+	const std::string path = std::move(mPendingScenePath);
+	mPendingScenePath.clear();
+
+	if (path.empty())
+		return;
+
+	if (!LoadScene(path))
+		Log::Console(LogLevel::Error, LION_FORMAT_TEXT("[Editor] Could not open the default scene for '{}'.",
+			Projects::DisplayName(ActiveProjectDirectory())));
+
+	mUndoStack.clear();
+	mRedoStack.clear();
 }
 
 void EditorLayer::OnRender()
@@ -378,6 +390,22 @@ void EditorLayer::FocusViewportOnSelection()
 	// What to frame: the selection, or the whole scene when nothing is picked — "show me where I am" is
 	// the same question either way.
 	const std::vector<Reference<Entity>>& targets = mSelection;
+
+	// A camera is not framed like an ordinary object. F means "show exactly what this camera records":
+	// its target fills the viewport's height, while a different panel aspect naturally crops or exposes
+	// the sides. The blue frame is suppressed in this state, so the panel itself is the recorded frame.
+	if (targets.size() == 1)
+	{
+		if (const Camera2D* camera = targets.front()->GetComponent<Camera2D>())
+		{
+			mViewCenter = camera->GetTargetPosition();
+
+			if (mViewportSize.y > 0.0f)
+				mViewZoom = camera->GetZoomForViewportHeight(mViewportSize.y);
+
+			return;
+		}
+	}
 
 	glm::vec2 minimum(FLT_MAX, FLT_MAX);
 	glm::vec2 maximum(-FLT_MAX, -FLT_MAX);
@@ -488,7 +516,8 @@ void EditorLayer::RenderScene()
 	{
 		const glm::vec2 view = current->GetViewPosition();
 		mCamera->SetPosition(glm::vec3(view.x, view.y, 0.0f));
-		mCamera->SetZoomLevel(current->GetZoom());
+
+		mCamera->SetZoomLevel(current->GetZoomForViewportHeight(mCamera->GetViewportHeight()));
 	}
 	else
 	{
@@ -3448,6 +3477,12 @@ void EditorLayer::DrawCameraOverlays(const ImVec2& imageMin, const ImVec2& image
 		// looking if the game were running, limits and all.
 		const glm::vec2 center = camera->GetTargetPosition();
 		const glm::vec2 half = camera->GetViewSize() * 0.5f;
+		const bool framedAsPlayerView = IsSelected(entity.get())
+			&& glm::length(glm::vec2(mViewCenter) - center) < 0.01f
+			&& std::abs(imageSize.y * mViewZoom - camera->GetViewSize().y) < 0.5f;
+
+		if (framedAsPlayerView)
+			continue;
 
 		const ImVec2 topLeft = worldToScreen(center.x - half.x, center.y + half.y);
 		const ImVec2 bottomRight = worldToScreen(center.x + half.x, center.y - half.y);
@@ -3470,7 +3505,8 @@ void EditorLayer::DrawColliderOverlays(const ImVec2& imageMin, const ImVec2& ima
 
 	const glm::mat4 viewProjection = mCamera->GetProjectionMatrix() * mCamera->GetViewMatrix();
 	ImDrawList* drawList = ImGui::GetWindowDrawList();
-	const ImU32 color = IM_COL32(80, 220, 120, 255);  // Unity-like collider green.
+	const ImU32 activeColor = IM_COL32(80, 220, 120, 255);    // Unity-like collider green.
+	const ImU32 inactiveColor = IM_COL32(67, 126, 88, 180);   // Same hue, quiet enough to read as dormant.
 
 	// Projects a world-space point (in pixels, z = 0) to a screen position inside the viewport image.
 	const auto worldToScreen = [&](float32 worldX, float32 worldY) -> ImVec2
@@ -3485,11 +3521,10 @@ void EditorLayer::DrawColliderOverlays(const ImVec2& imageMin, const ImVec2& ima
 
 	for (const auto& entity : mScene->GetEntities())
 	{
-		// The overlay represents colliders that currently participate in the scene. A disabled entity's
-		// rigid body has already left the simulation, so drawing it would describe stale physics state
-		// (most visibly after a Brick disables itself on impact).
-		if (!entity->IsActive())
-			continue;
+		// An inactive entity still belongs to the authored scene, so its collider remains inspectable. The
+		// weaker green distinguishes it from live physics; actual deletion removes the entity from this list
+		// and therefore removes its overlay altogether.
+		const ImU32 color = entity->IsActive() ? activeColor : inactiveColor;
 
 		// Hitboxes follow the entity's world transform (including anything inherited from a parent).
 		const Vector position = entity->GetWorldPosition();
@@ -4838,18 +4873,18 @@ void EditorLayer::DrawProperties()
 		}
 		else if (Camera2D* camera = dynamic_cast<Camera2D*>(component))
 		{
-			if (DrawComponentHeader(ICON_MDI_MONITOR, "Camera 2D", i, remove, dragFrom, dragTo))
+			if (DrawComponentHeader(ICON_MDI_CAMERA, "Camera 2D", i, remove, dragFrom, dragTo))
 			{
-				float32 zoom = camera->GetZoom();
-				if (DrawFloatProperty("Zoom", zoom, 0.01f, 0.01f, 100.0f, 1.0f))
-					ApplyToSelection<Camera2D>([&](Camera2D* target) { target->SetZoom(zoom); });
-
 				Vector2 offset = camera->GetOffset();
 				float32 offsetValues[2] = { offset.x, offset.y };
 
-				if (DrawTransformVector("Offset", offsetValues, 2, 1.0f, 0.0f, "px"))
+				if (DrawTransformVector("Offset", offsetValues, 2, 1.0f, 0.0f, ""))
 					ApplyToSelection<Camera2D>([&](Camera2D* target)
 						{ target->SetOffset(Vector2(offsetValues[0], offsetValues[1])); });
+
+				float32 zoom = camera->GetZoom();
+				if (DrawTransformVector("Zoom", &zoom, 1, 0.01f, 1.0f, "", nullptr, 2))
+					ApplyToSelection<Camera2D>([&](Camera2D* target) { target->SetZoom(zoom); });
 
 				// The limit is one switch with four numbers under it — the sides of a level, which is how
 				// a level is measured. Folded away until it is on, because four numbers that do nothing
@@ -5073,6 +5108,8 @@ void EditorLayer::DrawProperties()
 			for (const auto& entity : mSelection)
 				if (!entity->IsFolder() && !entity->HasComponent<Camera2D>())
 					entity->AddComponent<Camera2D>();
+
+			FocusViewportOnSelection();
 		}
 
 		if (lacksBuiltIn.operator()<RigidBody2D>() && ImGui::MenuItem("Rigid Body 2D"))
@@ -5466,7 +5503,8 @@ void EditorLayer::SaveScene()
 		return;
 	}
 
-	SceneSerializer::Serialize(mScene, mScenePath);
+	if (SceneSerializer::Serialize(mScene, mScenePath))
+		Projects::RememberDefaultScene(ActiveProjectDirectory(), mScenePath);
 }
 
 void EditorLayer::SaveSceneAs()
@@ -5476,9 +5514,12 @@ void EditorLayer::SaveSceneAs()
 	if (path.empty())
 		return;
 
-	SceneSerializer::Serialize(mScene, path);
-	mScenePath = path;
-	RememberRecentScene(path);
+	if (SceneSerializer::Serialize(mScene, path))
+	{
+		mScenePath = path;
+		RememberRecentScene(path);
+		Projects::RememberDefaultScene(ActiveProjectDirectory(), path);
+	}
 }
 
 float32 EditorLayer::DrawMenuBar(const ImVec2& barMin, const ImVec2& barMax)
@@ -6036,14 +6077,24 @@ void EditorLayer::PollGameBuild()
 
 	if (result.exitCode != 0)
 	{
-		Log::Console(LogLevel::Error, "[Editor] The game module failed to compile; the loaded one is unchanged.");
+		// Project opening still completes with the last module available. The scene file remains authoritative;
+		// components unavailable in that module are skipped without modifying it on disk.
+		if (!mPendingScenePath.empty())
+		{
+			ReloadGameModule();
+			LoadPendingProjectScene();
+		}
+
+		Log::Console(LogLevel::Error, "[Editor] The game module failed to compile; the last available build was loaded.");
 		DismissBusyToasts();
 		PushToast("The game module failed to compile", false);
+
 		return;
 	}
 
 	// Only now, back on the main thread, is it safe to swap the module out.
 	ReloadGameModule();
+	LoadPendingProjectScene();
 }
 
 void EditorLayer::UnloadGameModule()
@@ -6346,16 +6397,14 @@ void EditorLayer::OpenProject(const std::filesystem::path& folder)
 	mProjectDirty = true;
 
 	// The editor initialises on the project, the way an engine opens a game: what was open belonged to the
-	// project being left, and so did its history. The built-in Sandbox comes up on its demo scene; any
-	// other project on a fresh one.
+	// project being left, and so did its history. Its default waits until the matching module is loaded,
+	// because deserializing beforehand would discard components that only that module can create.
 	mScene->Clear();
 	SetSelection(nullptr);
 	mScenePath.clear();
 	mUndoStack.clear();
 	mRedoStack.clear();
-
-	if (folder.lexically_normal() == Projects::DefaultProjectDirectory().lexically_normal())
-		LoadDemoScene();
+	mPendingScenePath = Projects::DefaultScene(folder).string();
 
 	const std::string name = ProjectDisplayName(folder);
 	Log::Console(LogLevel::Success, LION_FORMAT_TEXT("[Editor] Opened project '{}'.", name));
@@ -6371,6 +6420,14 @@ void EditorLayer::OpenProject(const std::filesystem::path& folder)
 
 	if (switchedToBuiltIn ? !Projects::EngineRootDirectory().empty() : ProjectBuild::Available())
 		CompileGameModule();
+
+	// A distributed editor can open a previously built project without an SDK, and a missing compiler
+	// must not turn project opening into an empty viewport. Load the best module already on disk now.
+	if (!mBuilding)
+	{
+		ReloadGameModule();
+		LoadPendingProjectScene();
+	}
 }
 
 bool EditorLayer::CreateProject(const std::string& name, const std::filesystem::path& location)

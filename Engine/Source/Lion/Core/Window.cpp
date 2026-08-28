@@ -19,7 +19,7 @@ namespace Lion
     }
 
     Window::Window()
-        : mData{ "Lion Engine", 800, 600 },  // resizable/eventCallback keep their defaults.
+        : mData{ "Lion Engine", kDefaultViewportWidth, kDefaultViewportHeight },
         mBackgroundColor{ 0.0f, 0.0f, 0.0f },
         mBackend(WindowBackend::Create())
     {

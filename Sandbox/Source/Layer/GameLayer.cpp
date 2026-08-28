@@ -1,7 +1,5 @@
 #include "GameLayer.h"
 
-#include "../../Assets/Scripts/SceneQuery.h"
-
 #include <Lion/Core/Filesystem.h>
 
 using namespace Lion;
@@ -19,7 +17,7 @@ void GameLayer::OnCreate()
 		return;
 	}
 
-	mSceneCamera = FindInScene<Camera2D>(mScene);
+	mSceneCamera = mScene->FindComponent<Camera2D>();
 }
 
 void GameLayer::OnUpdate()
@@ -33,7 +31,8 @@ void GameLayer::OnRender()
 	{
 		const glm::vec2 position = mSceneCamera->GetViewPosition();
 		mCamera->SetPosition(glm::vec3(position.x, position.y, 0.0f));
-		mCamera->SetZoomLevel(mSceneCamera->GetZoom());
+
+		mCamera->SetZoomLevel(mSceneCamera->GetZoomForViewportHeight(mCamera->GetViewportHeight()));
 	}
 
 	Renderer::RenderBegin(mCamera);

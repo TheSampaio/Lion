@@ -171,6 +171,7 @@ private:
 	Lion::Reference<Lion::Entity> mRenamingEntity;  // Entity whose name is being edited inline (F2 / context menu).
 	char mHierarchyFilter[64] = {};                 // The Hierarchy's search box: a name, or part of one.
 	std::string mScenePath;                         // The scene on disk, empty until it has been saved once.
+	std::string mPendingScenePath;                  // Loaded after the selected project's module is ready.
 	glm::vec2 mViewportSize{ 0.0f, 0.0f };
 	Lion::Vector mViewportMenuPosition;   // Where the mouse was when the viewport's context menu opened.
 
@@ -273,7 +274,8 @@ private:
 
 	static constexpr size_t kMaxUndo = 100;
 
-	void LoadDemoScene();
+	void LoadProjectDefaultScene(const std::filesystem::path& project);
+	void LoadPendingProjectScene();
 	void RenderScene();
 	void DrawUI();
 	// The editor draws its own caption: the engine's mark, the menus and the window's buttons. Two rows

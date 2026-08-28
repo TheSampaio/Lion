@@ -55,6 +55,10 @@ source of truth when this guide is only a summary.
 - Scene paths and serialized asset paths are resource-relative and use forward slashes. Never save a
   machine-specific absolute asset path.
 - Editor icons use the established Material Design icon helpers and the shared 16 px / 24 px scale.
+- Keep editor UI harmonious across panels, tabs, and modals: reuse established icons, spacing, alignment,
+  breathing room, control order, and interaction patterns before introducing a new visual rule.
+- When a prototype or game needs reusable behavior, evaluate whether it belongs in the engine as a
+  general-purpose API. Keep game-specific rules client-side, and ask the user when that boundary is unclear.
 - New or removed C++ files require regenerating the Visual Studio projects because Premake file lists are
   globs captured at generation time.
 

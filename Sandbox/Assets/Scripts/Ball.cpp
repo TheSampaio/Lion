@@ -1,6 +1,5 @@
 #include "Ball.h"
 #include "Paddle.h"
-#include "SceneQuery.h"
 
 #include <Lion/Logic/ComponentRegistry.h>
 #include <Lion/Logic/Reflector.h>
@@ -11,7 +10,7 @@ void Ball::OnAwake()
 {
 	mBody = GetOwner().GetComponent<RigidBody2D>();
 	mRenderer = GetOwner().GetComponent<SpriteRenderer>();
-	mPaddle = FindInScene<Paddle>(GetOwner().GetScene());
+	mPaddle = GetOwner().GetScene()->FindComponent<Paddle>();
 
 	if (!mBody || !mRenderer || !mPaddle)
 	{

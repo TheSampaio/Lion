@@ -40,6 +40,14 @@ namespace Projects
 	// the way Godot's shows which engine a project was made with.
 	std::string EngineVersion(const std::filesystem::path& project);
 
+	// The scene a project opens with. New projects record Assets/Scenes/Main.lnscene; older projects fall
+	// back to Main, then to their earliest scene. The returned path is absolute and empty when none exists.
+	std::filesystem::path DefaultScene(const std::filesystem::path& project);
+
+	// Records the first scene saved by a project as its default. Later saves preserve that choice so scene
+	// selection can become an explicit project setting without changing today's contract.
+	void RememberDefaultScene(const std::filesystem::path& project, const std::filesystem::path& scene);
+
 	// The recently-opened projects, newest first, dead entries dropped — with the built-in Sandbox appended
 	// when absent: it is the one project never opened through the manager, and it must stay reachable.
 	std::vector<std::string> LoadRecent();
@@ -48,9 +56,9 @@ namespace Projects
 	// recent, not a second entry.
 	void Remember(const std::filesystem::path& folder);
 
-	// Scaffolds <location>/<name>: the marker, the Assets and Source folders, and a game module complete
-	// enough to compile from the first build. Returns the project's folder, or an empty path with 'error'
-	// saying why not.
+	// Scaffolds <location>/<name>: the marker, an empty Assets/Scenes/Main.lnscene, the Source folder, and a
+	// game module complete enough to compile from the first build. Returns the project's folder, or an empty
+	// path with 'error' saying why not.
 	std::filesystem::path CreateOnDisk(const std::string& name, const std::filesystem::path& location, std::string& error);
 
 	// One row of the Project Manager's list: everything the window shows about a project, read once per

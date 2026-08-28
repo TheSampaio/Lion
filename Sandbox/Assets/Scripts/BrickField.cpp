@@ -2,7 +2,6 @@
 #include "Ball.h"
 #include "Brick.h"
 #include "Paddle.h"
-#include "SceneQuery.h"
 
 #include <Lion/Logic/ComponentRegistry.h>
 #include <Lion/Logic/Reflector.h>
@@ -11,8 +10,8 @@ using namespace Lion;
 
 void BrickField::OnAwake()
 {
-	mBall = FindInScene<Ball>(GetOwner().GetScene());
-	mPaddle = FindInScene<Paddle>(GetOwner().GetScene());
+	mBall = GetOwner().GetScene()->FindComponent<Ball>();
+	mPaddle = GetOwner().GetScene()->FindComponent<Paddle>();
 
 	if (!mBall || !mPaddle)
 	{
@@ -37,7 +36,7 @@ void BrickField::Reflect(Reflector& reflector)
 
 void BrickField::CheckWinLose()
 {
-	if (CountActiveInScene<Brick>(GetOwner().GetScene()) == 0)
+	if (GetOwner().GetScene()->CountActiveComponents<Brick>() == 0)
 		EndRound(State::Won);
 
 	else if (mBall->GetOwner().GetWorldPosition().y < mLoseHeight)

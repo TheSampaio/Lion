@@ -1,8 +1,9 @@
 #pragma once
 
+#include <Lion/Logic/Entity.h>
+
 namespace Lion
 {
-	class Entity;
 	class PhysicsWorld;
 
 	template<typename T>
@@ -42,6 +43,32 @@ namespace Lion
 
 		// Entities currently in the scene (used by serialization and editor panels).
 		const std::list<Reference<Entity>>& GetEntities() const { return mEntities; }
+
+		// Returns the first component of T attached to an entity in scene order, including inactive
+		// entities. Returns nullptr when the scene carries none.
+		template<typename T>
+		T* FindComponent() const
+		{
+			for (const auto& entity : mEntities)
+				if (T* found = entity->GetComponent<T>())
+					return found;
+
+			return nullptr;
+		}
+
+		// Returns how many active entities carry a component of T. Inactive entities stay authored in the
+		// scene but do not participate in its current simulation.
+		template<typename T>
+		int32 CountActiveComponents() const
+		{
+			int32 count = 0;
+
+			for (const auto& entity : mEntities)
+				if (entity->IsActive() && entity->HasComponent<T>())
+					count++;
+
+			return count;
+		}
 
 		// Moves an entity to sit just before 'before' in the scene's order, or to the end when 'before' is
 		// null. The order is what the Hierarchy shows and what the scene file keeps, so dragging a row into

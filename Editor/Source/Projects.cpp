@@ -19,6 +19,14 @@ namespace Projects
 		// The game's folder inside the engine tree, relative to its root — the folder, not the VS project
 		// name. It is what the walk below recognises the root by.
 		constexpr const Lion::char8* kGameFolder = "Sandbox";
+		constexpr const Lion::char8* kDefaultScene = "Assets/Scenes/Main.lnscene";
+
+		struct ProjectMarker
+		{
+			std::string name;
+			std::string engine;
+			std::string scene;
+		};
 
 		std::filesystem::path RecentFile()
 		{
@@ -84,6 +92,32 @@ namespace Projects
 			return {};
 		}
 
+		ProjectMarker ReadMarker(const std::filesystem::path& project)
+		{
+			const std::filesystem::path marker = MarkerPath(project);
+
+			if (marker.empty())
+				return {};
+
+			std::ifstream file(marker);
+			std::stringstream buffer;
+			buffer << file.rdbuf();
+
+			try
+			{
+				const nlohmann::json content = nlohmann::json::parse(Lion::Vault::Unseal(buffer.str()));
+				return {
+					content.value("name", marker.stem().generic_string()),
+					content.value("engine", std::string()),
+					content.value("scene", std::string())
+				};
+			}
+			catch (const std::exception&)
+			{
+				return {};
+			}
+		}
+
 		// The name becomes a folder and a file, so it is held to what a folder and a file can carry.
 		bool IsValidName(const std::string& name)
 		{
@@ -95,10 +129,10 @@ namespace Projects
 		// JSON library the engine serializes scenes with — not a string with braces in it, which is a
 		// serializer waiting to disagree with the real one — and it leaves sealed, the way a scene does:
 		// the engine's files wear the engine's seal, whichever kind they are.
-		void WriteMarker(const std::filesystem::path& project, const std::string& name, const std::string& version)
+		void WriteMarker(const std::filesystem::path& project, const ProjectMarker& data)
 		{
 			const std::filesystem::path existing = MarkerPath(project);
-			const std::filesystem::path renamed = project / (name + kFileExtension);
+			const std::filesystem::path renamed = project / (data.name + kFileExtension);
 
 			std::error_code error;
 
@@ -106,11 +140,40 @@ namespace Projects
 				std::filesystem::remove(existing, error);
 
 			nlohmann::json content;
-			content["name"] = name;
-			content["engine"] = version;
+			content["name"] = data.name;
+			content["engine"] = data.engine;
+
+			if (!data.scene.empty())
+				content["scene"] = data.scene;
 
 			std::ofstream marker(renamed);
 			marker << Lion::Vault::Seal(content.dump(2));
+		}
+
+		std::filesystem::path ValidScenePath(
+			const std::filesystem::path& project, const std::filesystem::path& scene)
+		{
+			if (project.empty() || scene.empty() || scene.extension() != ".lnscene")
+				return {};
+
+			std::error_code error;
+			const std::filesystem::path projectPath = std::filesystem::weakly_canonical(project, error);
+
+			if (error)
+				return {};
+
+			const std::filesystem::path scenePath = std::filesystem::weakly_canonical(
+				scene.is_absolute() ? scene : project / scene, error);
+
+			if (error)
+				return {};
+
+			const std::filesystem::path relative = scenePath.lexically_relative(projectPath);
+
+			if (relative.empty() || *relative.begin() == "..")
+				return {};
+
+			return scenePath;
 		}
 
 		// A folder's last-write moment as "YYYY-MM-DD HH:MM", local time — the column Godot's manager keeps.
@@ -216,27 +279,86 @@ namespace Projects
 
 	std::string EngineVersion(const std::filesystem::path& project)
 	{
-		const std::filesystem::path marker = MarkerPath(project);
+		return ReadMarker(project).engine;
+	}
 
-		if (marker.empty())
+	std::filesystem::path DefaultScene(const std::filesystem::path& project)
+	{
+		if (!IsProjectFolder(project))
 			return {};
 
-		// Read the way it was written — unsealed, then the JSON library, not a string search. Unseal gives
-		// plain text back unchanged, so a marker written by hand still reads; a marker edited into
-		// something else records nothing.
-		std::ifstream file(marker);
-		std::stringstream buffer;
-		buffer << file.rdbuf();
+		const ProjectMarker marker = ReadMarker(project);
 
-		try
+		if (const std::filesystem::path recorded = ValidScenePath(project, marker.scene); !recorded.empty())
 		{
-			const nlohmann::json content = nlohmann::json::parse(Lion::Vault::Unseal(buffer.str()));
-			return content.value("engine", std::string());
+			std::error_code error;
+
+			if (std::filesystem::is_regular_file(recorded, error))
+				return recorded;
 		}
-		catch (const std::exception&)
+
+		const std::filesystem::path conventional = project / kDefaultScene;
+		std::error_code error;
+
+		if (std::filesystem::is_regular_file(conventional, error))
+			return conventional;
+
+		// Old and hand-authored projects did not record a default. Their oldest scene is the closest stable
+		// approximation of "the first one saved" and is only discovered when a project opens, never per frame.
+		std::filesystem::path oldest;
+		std::filesystem::file_time_type oldestTime = std::filesystem::file_time_type::max();
+		const std::filesystem::path assets = project / "Assets";
+
+		for (const auto& entry : std::filesystem::recursive_directory_iterator(assets, error))
 		{
-			return {};
+			if (error)
+				break;
+
+			std::error_code entryError;
+
+			if (!entry.is_regular_file(entryError) || entryError || entry.path().extension() != ".lnscene")
+				continue;
+
+			const auto edited = entry.last_write_time(entryError);
+
+			if (!entryError && (oldest.empty() || edited < oldestTime
+				|| (edited == oldestTime && entry.path().generic_string() < oldest.generic_string())))
+			{
+				oldest = entry.path();
+				oldestTime = edited;
+			}
 		}
+
+		return oldest;
+	}
+
+	void RememberDefaultScene(const std::filesystem::path& project, const std::filesystem::path& scene)
+	{
+		if (!IsProjectFolder(project)
+			|| project.lexically_normal() == DefaultProjectDirectory().lexically_normal())
+			return;
+
+		ProjectMarker marker = ReadMarker(project);
+
+		if (!marker.scene.empty())
+			return;
+
+		const std::filesystem::path valid = ValidScenePath(project, scene);
+
+		if (valid.empty())
+			return;
+
+		marker.name = marker.name.empty() ? project.filename().generic_string() : marker.name;
+		marker.engine = marker.engine.empty() ? std::string(Lion::kVersion) : marker.engine;
+
+		std::error_code error;
+		const std::filesystem::path projectPath = std::filesystem::weakly_canonical(project, error);
+
+		if (error)
+			return;
+
+		marker.scene = valid.lexically_relative(projectPath).generic_string();
+		WriteMarker(project, marker);
 	}
 
 	std::vector<std::string> LoadRecent()
@@ -309,8 +431,19 @@ namespace Projects
 			return {};
 		}
 
-		// The marker that names the project and records which engine made it.
-		WriteMarker(folder, name, Lion::kVersion);
+		// A fresh project opens on a real but empty scene. It contains no implicit camera or entity; the
+		// developer owns every authored choice from the first frame.
+		const std::filesystem::path scenePath = folder / kDefaultScene;
+
+		if (!Lion::SceneSerializer::Serialize(Lion::MakeReference<Lion::Scene>(), scenePath.string()))
+		{
+			error = "Could not create the project's default scene.";
+			return {};
+		}
+
+		// The marker names the project, records which engine made it, and keeps resource-relative startup
+		// state independent of where the project is moved.
+		WriteMarker(folder, { name, Lion::kVersion, kDefaultScene });
 
 		// A game module the editor and launcher can load: the exported entry point every project needs,
 		// empty but complete, so the project compiles from the first build. Components added to it are
@@ -430,8 +563,10 @@ namespace Projects
 
 		// The version the old marker recorded survives the new name; a project without one was made by no
 		// recorded engine until now, so it takes the running one.
-		const std::string version = EngineVersion(folder);
-		WriteMarker(folder, newName, version.empty() ? std::string(Lion::kVersion) : version);
+		ProjectMarker marker = ReadMarker(folder);
+		marker.name = newName;
+		marker.engine = marker.engine.empty() ? std::string(Lion::kVersion) : marker.engine;
+		WriteMarker(folder, marker);
 		return true;
 	}
 
