@@ -4,7 +4,7 @@ using namespace Lion;
 
 void CoreLayer::OnAttach()
 {
-	Window::SetSize(800, 600);
+	Window::SetSize(Window::kDefaultViewportWidth, Window::kDefaultViewportHeight);
 	Window::SetResizable(false);
 	Window::SetTitle("Brickout");
 	Window::SetBackgroundColor(0.05f, 0.05f, 0.05f);

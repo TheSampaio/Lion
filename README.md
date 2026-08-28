@@ -22,7 +22,7 @@
     <h2>🚀 Preview</h2>
     <p>Coming soon — screenshots, demos, and GIFs will be added here.</p>
     <img src=".github/image/lion-engine-showcase-transparent.png" alt="Lion Engine Showcase">
-    <p>The bundled <strong>Brickout</strong> sandbox is a playable, physics-driven demo. Move the paddle with <kbd>A</kbd> / <kbd>D</kbd>; the ball bounces off the walls and destroys bricks on contact.</p>
+    <p>The bundled <strong>Brickout</strong> sandbox is a playable, physics-driven demo authored in <code>Assets/Scenes/Main.lnscene</code>. Move with <kbd>A</kbd> / <kbd>D</kbd> or the arrow keys, launch with <kbd>Space</kbd> / <kbd>Enter</kbd>, and press <kbd>R</kbd> after winning or losing to reset the round.</p>
   </div>
   <div id="features">
     <h2>✨ Features</h2>
@@ -41,7 +41,7 @@
     <ul>
       <li><strong>Scene editing</strong> — a viewport with <a href="https://github.com/CedricGuillemet/ImGuizmo">ImGuizmo</a> tools, multi-selection, drag-and-drop parenting, undo/redo, and play / pause / step / stop against the live scene.</li>
       <li><strong>Inspector</strong> — every component drawn from its own reflection, with per-field revert, a uniform-scale padlock, and required components pulled in automatically (<code>LION_REQUIRES</code>).</li>
-      <li><strong>Hot reload</strong> — scaffold a C++ component from the editor, compile it, and the module is swapped back in without restarting: the editor loads a private copy of the DLL so the original stays writable.</li>
+      <li><strong>Component source workflow</strong> — scaffold a component from the editor’s language picker, compile it, and hot-reload it without restarting. C++ is the current backend; source generation is isolated behind a language boundary so C# can be added without changing scenes, reflection, the Inspector, or component registration.</li>
       <li><strong>Content Browser, Console and Statistics</strong> — create, rename and delete project assets; a console that collapses repeats and renders through a clipper; frame, renderer and scene counters.</li>
       <li><strong>Its own window</strong> — a caption the editor draws itself, and <code>.lnproject</code> files registered with Windows on first run, so Explorer shows a project with the engine’s icon and a double-click opens it here — scenes open inside the editor.</li>
     </ul>
@@ -75,6 +75,7 @@
 ├── Editor                  # The editor (Lion.exe)
 │   └── Source
 │       ├── Layer           # EditorLayer: viewport, panels, gizmos, hot reload
+│       ├── ComponentScripts # Language-specific component source generation
 │       ├── EditorGui       # Dear ImGui lifecycle, theme and fonts
 │       ├── ModuleSymbols   # Debug symbols for the module's private copy
 │       └── Sealer          # "Lion.exe --seal": the build sealing a shipped game's assets
@@ -83,6 +84,7 @@
 │
 ├── Sandbox                 # The game module (lion-game.dll)
 │   ├── Assets
+│   │   ├── Scenes          # Main.lnscene: the complete authored Brickout level
 │   │   ├── Scripts         # The game's components: Ball, Paddle, Brick, BrickField...
 │   │   ├── Shaders
 │   │   └── Sprites

@@ -61,6 +61,10 @@ namespace Lion
 		// framing rectangle, and the limits are applied against it.
 		LION_API glm::vec2 GetViewSize() const;
 
+		// Converts this logical frame to the world-units-per-pixel zoom an orthographic render target needs.
+		// Height is authoritative, so targets with another aspect crop or expose only their sides.
+		LION_API float32 GetZoomForViewportHeight(float32 viewportHeight) const;
+
 		// Where the camera would sit with no smoothing — what the smoothing is easing toward. The editor
 		// draws this, since an editor is not running the game and has nothing to ease from.
 		LION_API glm::vec2 GetTargetPosition() const;

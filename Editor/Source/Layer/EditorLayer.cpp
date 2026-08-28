@@ -3,6 +3,7 @@
 
 #include "../EditorGui.h"
 #include "../Expression.h"
+#include "../ComponentScripts.h"
 #include "../ProjectBuild.h"
 #include "../Projects.h"
 
@@ -51,6 +52,7 @@ namespace
 {
 	// Defined with the rest of the project machinery further down the file; the boot needs it before that
 	// point is reached.
+	std::filesystem::path ActiveProjectDirectory();
 	void SetActiveProjectDirectory(const std::filesystem::path& project);
 }
 
@@ -104,8 +106,8 @@ void EditorLayer::OnCreate()
 	mScene = MakeReference<Scene>();
 
 	FramebufferSpecification spec;
-	spec.width = 1280;
-	spec.height = 720;
+	spec.width = Window::kDefaultViewportWidth;
+	spec.height = Window::kDefaultViewportHeight;
 	spec.hasEntityId = true;   // Secondary attachment for pixel-perfect viewport picking.
 	mFramebuffer = Framebuffer::Create(spec);
 
@@ -120,7 +122,7 @@ void EditorLayer::OnCreate()
 	// The project this session is about, handed over as the process was started: --project from the
 	// Project Manager, or a .lnproject double-clicked in Explorer, which arrives as a bare path whose
 	// folder is the project. The editor initialises on it — the built-in on its demo, any other project
-	// on a fresh scene with its own module built and hot-swapped in as soon as the build answers. Without
+	// on its recorded default scene after its own module is ready. Without
 	// one (the --no-project-manager skip, or a bare debugger launch), the built-in demo it is. A scene is
 	// not an answer: scenes open inside the editor, the way they do in Unreal and Visual Studio.
 	std::filesystem::path requested;
@@ -145,22 +147,11 @@ void EditorLayer::OnCreate()
 	if (!requested.empty() && Projects::IsProjectFolder(requested)
 		&& requested.lexically_normal() != Projects::DefaultProjectDirectory().lexically_normal())
 	{
-		SetActiveProjectDirectory(requested);
-		RememberRecentProject(requested);
-
-		Log::Console(LogLevel::Success,
-			LION_FORMAT_TEXT("[Editor] Opened project '{}'.", Projects::DisplayName(requested)));
-
-		// The project's own module is built against the SDK beside the editor — dev tree or distributed
-		// install alike. Without an SDK there is nothing to build with, and nothing worth a warning at
-		// every boot: the project opens with the module already on disk.
-		if (ProjectBuild::Available())
-			CompileGameModule();
-
+		OpenProject(requested);
 		return;
 	}
 
-	CreateDemoScene();
+	LoadProjectDefaultScene(Projects::DefaultProjectDirectory());
 }
 
 void EditorLayer::OnUpdate()
@@ -289,33 +280,34 @@ void EditorLayer::StopPlay()
 	Log::Console(LogLevel::Information, "[Editor] Play mode stopped.");
 }
 
-void EditorLayer::CreateDemoScene()
+void EditorLayer::LoadProjectDefaultScene(const std::filesystem::path& project)
 {
-	// Background.
-	auto background = MakeReference<Entity>();
-	background->SetName("Background");
-	background->GetTransform()->SetPosition(Vector2(0.0f, 0.0f));
-	background->AddComponent<SpriteRenderer>("Sprites/Brickout/background.jpg")->SetOrder(Depth::Back);
-	mScene->Add(background);
+	const std::filesystem::path scene = Projects::DefaultScene(project);
 
-	// A row of bricks.
-	for (int32 i = 0; i < 5; i++)
-	{
-		auto brick = MakeReference<Entity>();
-		brick->SetName("Brick " + std::to_string(i + 1));
-		brick->GetTransform()->SetPosition(Vector2(-160.0f + i * 80.0f, 60.0f));
-		brick->AddComponent<SpriteRenderer>("Sprites/Brickout/tile-" + std::to_string(i + 1) + ".png")->SetOrder(Depth::Middle);
-		mScene->Add(brick);
-	}
+	if (!scene.empty() && !LoadScene(scene.string()))
+		Log::Console(LogLevel::Error, LION_FORMAT_TEXT("[Editor] Could not open the default scene for '{}'.",
+			Projects::DisplayName(project)));
 
-	// Ball (with physics, so pressing Play drops it under gravity).
-	auto ball = MakeReference<Entity>();
-	ball->SetName("Ball");
-	ball->GetTransform()->SetPosition(Vector2(0.0f, 120.0f));
-	ball->AddComponent<SpriteRenderer>("Sprites/Brickout/ball.png")->SetOrder(Depth::Middle);
-	ball->AddComponent<RigidBody2D>(BodyType::Dynamic, false);
-	ball->AddComponent<CircleCollider2D>(6.0f);
-	mScene->Add(ball);
+	// A project opens as a new editing context. Loading its scene must not leave the previous project's
+	// state — or the temporary empty scene — reachable through Undo.
+	mUndoStack.clear();
+	mRedoStack.clear();
+}
+
+void EditorLayer::LoadPendingProjectScene()
+{
+	const std::string path = std::move(mPendingScenePath);
+	mPendingScenePath.clear();
+
+	if (path.empty())
+		return;
+
+	if (!LoadScene(path))
+		Log::Console(LogLevel::Error, LION_FORMAT_TEXT("[Editor] Could not open the default scene for '{}'.",
+			Projects::DisplayName(ActiveProjectDirectory())));
+
+	mUndoStack.clear();
+	mRedoStack.clear();
 }
 
 void EditorLayer::OnRender()
@@ -398,6 +390,22 @@ void EditorLayer::FocusViewportOnSelection()
 	// What to frame: the selection, or the whole scene when nothing is picked — "show me where I am" is
 	// the same question either way.
 	const std::vector<Reference<Entity>>& targets = mSelection;
+
+	// A camera is not framed like an ordinary object. F means "show exactly what this camera records":
+	// its target fills the viewport's height, while a different panel aspect naturally crops or exposes
+	// the sides. The blue frame is suppressed in this state, so the panel itself is the recorded frame.
+	if (targets.size() == 1)
+	{
+		if (const Camera2D* camera = targets.front()->GetComponent<Camera2D>())
+		{
+			mViewCenter = camera->GetTargetPosition();
+
+			if (mViewportSize.y > 0.0f)
+				mViewZoom = camera->GetZoomForViewportHeight(mViewportSize.y);
+
+			return;
+		}
+	}
 
 	glm::vec2 minimum(FLT_MAX, FLT_MAX);
 	glm::vec2 maximum(-FLT_MAX, -FLT_MAX);
@@ -508,7 +516,8 @@ void EditorLayer::RenderScene()
 	{
 		const glm::vec2 view = current->GetViewPosition();
 		mCamera->SetPosition(glm::vec3(view.x, view.y, 0.0f));
-		mCamera->SetZoomLevel(current->GetZoom());
+
+		mCamera->SetZoomLevel(current->GetZoomForViewportHeight(mCamera->GetViewportHeight()));
 	}
 	else
 	{
@@ -1373,7 +1382,7 @@ namespace
 		return project.empty() ? project : (project / "Assets");
 	}
 
-	// The folder a component is generated into, as typed in the New C++ Component popup: a path under
+	// The folder a component is generated into, as typed in the New Component popup: a path under
 	// the game's assets. A script is one of the game's own files, so it belongs where its sprites and
 	// shaders are — in the Project panel, the only place the editor ever shows the game's contents. It
 	// is compiled into the module and does not ship beside it (see the asset copy in Sandbox/premake5.lua).
@@ -2092,7 +2101,7 @@ void EditorLayer::DrawProject()
 			CreateAssetFolder();
 
 		// The component lands where you are standing: the popup opens with this folder already in it.
-		if (ImGui::MenuItem("New C++ Component..."))
+		if (ImGui::MenuItem("New Component..."))
 		{
 			const std::string folder = mProjectPath.empty() ? std::string("Scripts") : mProjectPath;
 			const size_t copied = folder.copy(mNewComponentFolder, sizeof(mNewComponentFolder) - 1);
@@ -2119,7 +2128,7 @@ namespace
 		if (extension == ".png" || extension == ".jpg" || extension == ".jpeg" || extension == ".bmp")
 			return ICON_MDI_IMAGE_OUTLINE;
 
-		if (extension == ".h" || extension == ".cpp")
+		if (extension == ".h" || extension == ".cpp" || extension == ".cs")
 			return ICON_MDI_CODE_TAGS;
 
 		if (extension == ".glsl")
@@ -2907,7 +2916,7 @@ void EditorLayer::HandleShortcuts()
 		return;
 
 	// A modal owns the keyboard for as long as it is up — whether or not one of its fields happens to
-	// hold focus at that moment. Without this, a class name typed into the New C++ Component dialog
+	// hold focus at that moment. Without this, a class name typed into the New Component dialog
 	// also ran whatever the editor binds those letters to, so an "e" would switch the gizmo tool.
 	//
 	// An active text field owns it for the same reason: any action can be rebound to a plain letter,
@@ -3468,6 +3477,13 @@ void EditorLayer::DrawCameraOverlays(const ImVec2& imageMin, const ImVec2& image
 		// looking if the game were running, limits and all.
 		const glm::vec2 center = camera->GetTargetPosition();
 		const glm::vec2 half = camera->GetViewSize() * 0.5f;
+		// When the viewport itself is already the recorded frame, drawing that same rectangle on its edge
+		// leaves a clipped one-pixel remnant. Selection is irrelevant here: the panel is the frame.
+		const bool framedAsPlayerView = glm::length(glm::vec2(mViewCenter) - center) < 0.01f
+			&& std::abs(imageSize.y * mViewZoom - camera->GetViewSize().y) < 0.5f;
+
+		if (framedAsPlayerView)
+			continue;
 
 		const ImVec2 topLeft = worldToScreen(center.x - half.x, center.y + half.y);
 		const ImVec2 bottomRight = worldToScreen(center.x + half.x, center.y - half.y);
@@ -3490,7 +3506,8 @@ void EditorLayer::DrawColliderOverlays(const ImVec2& imageMin, const ImVec2& ima
 
 	const glm::mat4 viewProjection = mCamera->GetProjectionMatrix() * mCamera->GetViewMatrix();
 	ImDrawList* drawList = ImGui::GetWindowDrawList();
-	const ImU32 color = IM_COL32(80, 220, 120, 255);  // Unity-like collider green.
+	const ImU32 activeColor = IM_COL32(80, 220, 120, 255);    // Unity-like collider green.
+	const ImU32 inactiveColor = IM_COL32(67, 126, 88, 180);   // Same hue, quiet enough to read as dormant.
 
 	// Projects a world-space point (in pixels, z = 0) to a screen position inside the viewport image.
 	const auto worldToScreen = [&](float32 worldX, float32 worldY) -> ImVec2
@@ -3505,6 +3522,11 @@ void EditorLayer::DrawColliderOverlays(const ImVec2& imageMin, const ImVec2& ima
 
 	for (const auto& entity : mScene->GetEntities())
 	{
+		// An inactive entity still belongs to the authored scene, so its collider remains inspectable. The
+		// weaker green distinguishes it from live physics; actual deletion removes the entity from this list
+		// and therefore removes its overlay altogether.
+		const ImU32 color = entity->IsActive() ? activeColor : inactiveColor;
+
 		// Hitboxes follow the entity's world transform (including anything inherited from a parent).
 		const Vector position = entity->GetWorldPosition();
 		const Vector scale = entity->GetWorldScale();
@@ -4852,18 +4874,18 @@ void EditorLayer::DrawProperties()
 		}
 		else if (Camera2D* camera = dynamic_cast<Camera2D*>(component))
 		{
-			if (DrawComponentHeader(ICON_MDI_MONITOR, "Camera 2D", i, remove, dragFrom, dragTo))
+			if (DrawComponentHeader(ICON_MDI_CAMERA, "Camera 2D", i, remove, dragFrom, dragTo))
 			{
-				float32 zoom = camera->GetZoom();
-				if (DrawFloatProperty("Zoom", zoom, 0.01f, 0.01f, 100.0f, 1.0f))
-					ApplyToSelection<Camera2D>([&](Camera2D* target) { target->SetZoom(zoom); });
-
 				Vector2 offset = camera->GetOffset();
 				float32 offsetValues[2] = { offset.x, offset.y };
 
-				if (DrawTransformVector("Offset", offsetValues, 2, 1.0f, 0.0f, "px"))
+				if (DrawTransformVector("Offset", offsetValues, 2, 1.0f, 0.0f, ""))
 					ApplyToSelection<Camera2D>([&](Camera2D* target)
 						{ target->SetOffset(Vector2(offsetValues[0], offsetValues[1])); });
+
+				float32 zoom = camera->GetZoom();
+				if (DrawTransformVector("Zoom", &zoom, 1, 0.01f, 1.0f, "", nullptr, 2))
+					ApplyToSelection<Camera2D>([&](Camera2D* target) { target->SetZoom(zoom); });
 
 				// The limit is one switch with four numbers under it — the sides of a level, which is how
 				// a level is measured. Folded away until it is on, because four numbers that do nothing
@@ -5087,6 +5109,8 @@ void EditorLayer::DrawProperties()
 			for (const auto& entity : mSelection)
 				if (!entity->IsFolder() && !entity->HasComponent<Camera2D>())
 					entity->AddComponent<Camera2D>();
+
+			FocusViewportOnSelection();
 		}
 
 		if (lacksBuiltIn.operator()<RigidBody2D>() && ImGui::MenuItem("Rigid Body 2D"))
@@ -5159,7 +5183,7 @@ void EditorLayer::DrawProperties()
 		// Scaffold a brand new component class into the game's source tree, Unreal-style.
 		ImGui::Separator();
 
-		if (ImGui::MenuItem("New C++ Component..."))
+		if (ImGui::MenuItem("New Component..."))
 			mOpenNewComponentPopup = true;
 
 		ImGui::EndPopup();
@@ -5480,7 +5504,8 @@ void EditorLayer::SaveScene()
 		return;
 	}
 
-	SceneSerializer::Serialize(mScene, mScenePath);
+	if (SceneSerializer::Serialize(mScene, mScenePath))
+		Projects::RememberDefaultScene(ActiveProjectDirectory(), mScenePath);
 }
 
 void EditorLayer::SaveSceneAs()
@@ -5490,9 +5515,12 @@ void EditorLayer::SaveSceneAs()
 	if (path.empty())
 		return;
 
-	SceneSerializer::Serialize(mScene, path);
-	mScenePath = path;
-	RememberRecentScene(path);
+	if (SceneSerializer::Serialize(mScene, path))
+	{
+		mScenePath = path;
+		RememberRecentScene(path);
+		Projects::RememberDefaultScene(ActiveProjectDirectory(), path);
+	}
 }
 
 float32 EditorLayer::DrawMenuBar(const ImVec2& barMin, const ImVec2& barMax)
@@ -5969,6 +5997,7 @@ void EditorLayer::CompileGameModule()
 			" \"" + (root / "Lion.sln").string() + "\""
 			" -t:Runtime\\Game"
 			" -p:BuildProjectReferences=false"
+			" -p:PlatformToolset=" + ProjectBuild::PlatformToolset() +
 			" -p:Configuration=" + BuildConfiguration() +
 			" -p:Platform=x64 -v:minimal -nologo";
 	}
@@ -5989,6 +6018,7 @@ void EditorLayer::CompileGameModule()
 		build =
 			"\"" + MSBuildPath() + "\""
 			" \"" + ProjectBuild::VcxprojPath(active).string() + "\""
+			" -p:PlatformToolset=" + ProjectBuild::PlatformToolset() +
 			" -p:Configuration=" + BuildConfiguration() +
 			" -p:Platform=x64 -v:minimal -nologo";
 	}
@@ -6048,14 +6078,24 @@ void EditorLayer::PollGameBuild()
 
 	if (result.exitCode != 0)
 	{
-		Log::Console(LogLevel::Error, "[Editor] The game module failed to compile; the loaded one is unchanged.");
+		// Project opening still completes with the last module available. The scene file remains authoritative;
+		// components unavailable in that module are skipped without modifying it on disk.
+		if (!mPendingScenePath.empty())
+		{
+			ReloadGameModule();
+			LoadPendingProjectScene();
+		}
+
+		Log::Console(LogLevel::Error, "[Editor] The game module failed to compile; the last available build was loaded.");
 		DismissBusyToasts();
 		PushToast("The game module failed to compile", false);
+
 		return;
 	}
 
 	// Only now, back on the main thread, is it safe to swap the module out.
 	ReloadGameModule();
+	LoadPendingProjectScene();
 }
 
 void EditorLayer::UnloadGameModule()
@@ -6112,77 +6152,15 @@ bool EditorLayer::GenerateComponent(const std::string& name, const std::string& 
 		return false;
 	}
 
-	std::error_code error;
-	std::filesystem::create_directories(directory, error);
+	const std::vector<ComponentScripts::LanguageInfo>& languages = ComponentScripts::Languages();
+	const int index = std::clamp(mNewComponentLanguage, 0, static_cast<int>(languages.size()) - 1);
+	std::string error;
 
-	if (error)
+	if (!ComponentScripts::Generate(languages[index].language, name, directory, error))
 	{
-		Log::Console(LogLevel::Error, LION_FORMAT_TEXT("[Editor] Could not create '{}': {}.", directory.generic_string(), error.message()));
+		Log::Console(LogLevel::Error, LION_FORMAT_TEXT("[Editor] Could not create '{}': {}", name, error));
 		return false;
 	}
-
-	const std::filesystem::path headerPath = directory / (name + ".h");
-	const std::filesystem::path sourcePath = directory / (name + ".cpp");
-
-	if (std::filesystem::exists(headerPath, error) || std::filesystem::exists(sourcePath, error))
-	{
-		Log::Console(LogLevel::Error, LION_FORMAT_TEXT("[Editor] A component named '{}' already exists.", name));
-		return false;
-	}
-
-	std::ofstream header(headerPath);
-	std::ofstream source(sourcePath);
-
-	if (!header.is_open() || !source.is_open())
-	{
-		Log::Console(LogLevel::Error, LION_FORMAT_TEXT("[Editor] Could not write '{}'.", directory.generic_string()));
-		return false;
-	}
-
-	// Always a Component, never another component: an entity is what things are made of, and a component
-	// is one trait of it. A trait that needs another one asks its owner for it — GetOwner() is right
-	// there — and that reads better than a class that is two things at once.
-	header
-		<< "#pragma once\n\n"
-		<< "#include <Lion/Lion.h>\n"
-		<< "\n"
-		<< "// Component defined by the game. Being compiled into the game module is all it takes for the\n"
-		<< "// editor to list it under Add Component: loading the module registers it with the engine.\n"
-		<< "//\n"
-		<< "// Override the lifecycle hooks to give it behaviour, and name a field in Reflect to have it\n"
-		<< "// appear in the Inspector and be saved with the scene — describing it once is describing it.\n"
-		<< "// GetOwner() reaches the entity it is attached to, and through it every other component on it.\n"
-		<< "class " << name << " : public Lion::Component\n"
-		<< "{\n"
-		<< "public:\n"
-		<< "\tvoid OnAwake() override;\n"
-		<< "\tvoid OnUpdate() override;\n\n"
-		<< "\tvoid Reflect(Lion::Reflector& reflector) override;\n\n"
-		<< "private:\n"
-		<< "\tLion::float32 mSpeed = 1.0f;\n"
-		<< "};\n";
-
-	source
-		<< "#include \"" << name << ".h\"\n\n"
-		<< "#include <Lion/Logic/ComponentRegistry.h>\n"
-		<< "#include <Lion/Logic/Reflector.h>\n\n"
-		<< "using namespace Lion;\n\n"
-		<< "void " << name << "::OnAwake()\n"
-		<< "{\n"
-		<< "}\n\n"
-		<< "void " << name << "::OnUpdate()\n"
-		<< "{\n"
-		<< "}\n\n"
-		<< "// The fields the editor shows and the scene file keeps. One list, both jobs.\n"
-		<< "void " << name << "::Reflect(Reflector& reflector)\n"
-		<< "{\n"
-		<< "\treflector.Field(\"Speed\", mSpeed);\n"
-		<< "}\n\n"
-		<< "// Binds the class to its name, so scenes can reference it and the editor can list it.\n"
-		<< "LION_REGISTER_COMPONENT(" << name << ")\n";
-
-	header.close();
-	source.close();
 
 	Log::Console(LogLevel::Success, LION_FORMAT_TEXT("[Editor] Created '{}' in {}.", name, directory.generic_string()));
 
@@ -6199,14 +6177,37 @@ void EditorLayer::DrawNewComponentPopup()
 	{
 		mOpenNewComponentPopup = false;
 		mNewComponentName[0] = '\0';
-		ImGui::OpenPopup("New C++ Component");
+		ImGui::OpenPopup("New Component");
 	}
 
 	const ImVec2 center = ImGui::GetMainViewport()->GetCenter();
 	ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
 
-	if (!ImGui::BeginPopupModal("New C++ Component", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+	if (!ImGui::BeginPopupModal("New Component", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
 		return;
+
+	const std::vector<ComponentScripts::LanguageInfo>& languages = ComponentScripts::Languages();
+	mNewComponentLanguage = std::clamp(mNewComponentLanguage, 0, static_cast<int>(languages.size()) - 1);
+
+	ImGui::TextUnformatted("Language");
+	ImGui::SetNextItemWidth(320.0f);
+	if (ImGui::BeginCombo("##language", languages[mNewComponentLanguage].displayName))
+	{
+		for (int index = 0; index < static_cast<int>(languages.size()); ++index)
+		{
+			const bool selected = index == mNewComponentLanguage;
+
+			if (ImGui::Selectable(languages[index].displayName, selected))
+				mNewComponentLanguage = index;
+
+			if (selected)
+				ImGui::SetItemDefaultFocus();
+		}
+
+		ImGui::EndCombo();
+	}
+
+	ImGui::Spacing();
 
 	ImGui::TextUnformatted("Class name");
 
@@ -6276,7 +6277,9 @@ void EditorLayer::DrawNewComponentPopup()
 	else if (!name.empty() && ComponentRegistry::Contains(name))
 		ImGui::TextColored(LogLevelColor(LogLevel::Error), "A component of that name is already registered.");
 	else
-		ImGui::TextDisabled("%s", (directory / (name.empty() ? "<name>" : name)).generic_string().append(".h/.cpp").c_str());
+		ImGui::TextDisabled("%s%s",
+			(directory / (name.empty() ? "<name>" : name)).generic_string().c_str(),
+			languages[mNewComponentLanguage].fileSuffix);
 
 	ImGui::Spacing();
 	ImGui::BeginDisabled(!valid);
@@ -6395,16 +6398,14 @@ void EditorLayer::OpenProject(const std::filesystem::path& folder)
 	mProjectDirty = true;
 
 	// The editor initialises on the project, the way an engine opens a game: what was open belonged to the
-	// project being left, and so did its history. The built-in Sandbox comes up on its demo scene; any
-	// other project on a fresh one.
+	// project being left, and so did its history. Its default waits until the matching module is loaded,
+	// because deserializing beforehand would discard components that only that module can create.
 	mScene->Clear();
 	SetSelection(nullptr);
 	mScenePath.clear();
 	mUndoStack.clear();
 	mRedoStack.clear();
-
-	if (folder.lexically_normal() == Projects::DefaultProjectDirectory().lexically_normal())
-		CreateDemoScene();
+	mPendingScenePath = Projects::DefaultScene(folder).string();
 
 	const std::string name = ProjectDisplayName(folder);
 	Log::Console(LogLevel::Success, LION_FORMAT_TEXT("[Editor] Opened project '{}'.", name));
@@ -6420,6 +6421,14 @@ void EditorLayer::OpenProject(const std::filesystem::path& folder)
 
 	if (switchedToBuiltIn ? !Projects::EngineRootDirectory().empty() : ProjectBuild::Available())
 		CompileGameModule();
+
+	// A distributed editor can open a previously built project without an SDK, and a missing compiler
+	// must not turn project opening into an empty viewport. Load the best module already on disk now.
+	if (!mBuilding)
+	{
+		ReloadGameModule();
+		LoadPendingProjectScene();
+	}
 }
 
 bool EditorLayer::CreateProject(const std::string& name, const std::filesystem::path& location)

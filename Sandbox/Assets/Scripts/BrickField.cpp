@@ -1,20 +1,23 @@
 #include "BrickField.h"
 #include "Ball.h"
 #include "Brick.h"
-#include "SceneQuery.h"
+#include "Paddle.h"
 
 #include <Lion/Logic/ComponentRegistry.h>
+#include <Lion/Logic/Reflector.h>
 
 using namespace Lion;
 
 void BrickField::OnAwake()
 {
-	mBall = FindInScene<Ball>(GetOwner().GetScene());
+	mBall = GetOwner().GetScene()->FindComponent<Ball>();
+	mPaddle = GetOwner().GetScene()->FindComponent<Paddle>();
 
-	// Losing happens once the ball falls below the bottom edge of the screen.
-	mLoseThresholdY = -(Window::GetSize().height / 2.0f);
-
-	SpawnBricks();
+	if (!mBall || !mPaddle)
+	{
+		Log::Console(LogLevel::Error, "[BrickField] Requires a Ball and Paddle in the same scene.");
+		SetEnabled(false);
+	}
 }
 
 void BrickField::OnUpdate()
@@ -26,58 +29,17 @@ void BrickField::OnUpdate()
 		Restart();
 }
 
-void BrickField::SpawnBricks()
+void BrickField::Reflect(Reflector& reflector)
 {
-	const float32 spacingX = 80.0f;
-	const float32 spacingY = 40.0f;
-	const int32 colCount = 8;
-	const int32 rowCount = 5;
-
-	const float32 positionOffset = 10.0f;
-	const float32 positionX = -(colCount * (spacingX - positionOffset)) / 2.0f;  // Centers the whole field.
-	const float32 positionY = 200.0f;
-
-	const Reference<Scene> scene = GetOwner().GetScene();
-
-	// World coordinate system: (0,0) is the center of the screen.
-	for (int32 row = 0; row < rowCount; row++)
-	{
-		for (int32 col = 0; col < colCount; col++)
-		{
-			Reference<Texture> texture;
-
-			switch (row)
-			{
-				case 0: texture = Asset::LoadTexture("brick_red",    "Sprites/Brickout/tile-3.png"); break;
-				case 1: texture = Asset::LoadTexture("brick_green",  "Sprites/Brickout/tile-1.png"); break;
-				case 2: texture = Asset::LoadTexture("brick_blue",   "Sprites/Brickout/tile-2.png"); break;
-				case 3: texture = Asset::LoadTexture("brick_yellow", "Sprites/Brickout/tile-5.png"); break;
-				case 4: texture = Asset::LoadTexture("brick_purple", "Sprites/Brickout/tile-4.png"); break;
-			}
-
-			auto entity = MakeReference<Entity>();
-			entity->SetName("Brick");
-			entity->GetTransform()->SetPosition(Vector2(positionX + col * spacingX, positionY - row * spacingY));
-
-			SpriteRenderer* renderer = entity->AddComponent<SpriteRenderer>(texture);
-			renderer->SetOrder(Depth::Middle);
-			const Size size = renderer->GetSize();
-
-			entity->AddComponent<RigidBody2D>(BodyType::Static);
-			entity->AddComponent<BoxCollider2D>(size.width, size.height, 1.0f, 0.0f, 1.0f);
-			entity->AddComponent<Brick>();
-
-			scene->Add(entity);
-		}
-	}
+	reflector.Field("Lose Height", mLoseHeight);
 }
 
 void BrickField::CheckWinLose()
 {
-	if (CountInScene<Brick>(GetOwner().GetScene()) == 0)
+	if (GetOwner().GetScene()->CountActiveComponents<Brick>() == 0)
 		EndRound(State::Won);
 
-	else if (mBall->GetTransform()->GetPosition().y < mLoseThresholdY)
+	else if (mBall->GetOwner().GetWorldPosition().y < mLoseHeight)
 		EndRound(State::Lost);
 }
 
@@ -101,17 +63,14 @@ void BrickField::EndRound(State state)
 
 void BrickField::Restart()
 {
-	const Reference<Scene> scene = GetOwner().GetScene();
-
-	// Whatever bricks survived the round go with it. Removal is deferred, so the list being iterated is
-	// not the one being changed.
-	for (const auto& entity : scene->GetEntities())
+	for (const auto& entity : GetOwner().GetScene()->GetEntities())
 		if (entity->HasComponent<Brick>())
-			entity->RemoveFromScene();
+		{
+			entity->SetVisible(true);
+			entity->SetEnabled(true);
+		}
 
-	scene->FlushRemovals();
-
-	SpawnBricks();
+	mPaddle->Reset();
 	mBall->Reset();
 
 	Window::SetBackgroundColor(0.05f, 0.05f, 0.05f);

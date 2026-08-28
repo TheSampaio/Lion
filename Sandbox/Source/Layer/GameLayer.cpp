@@ -1,78 +1,23 @@
 #include "GameLayer.h"
 
-#include "../../Assets/Scripts/Ball.h"
-#include "../../Assets/Scripts/BrickField.h"
-#include "../../Assets/Scripts/Paddle.h"
+#include <Lion/Core/Filesystem.h>
 
 using namespace Lion;
-
-namespace
-{
-	// An invisible boundary: a body and a shape, and nothing else. It has no behaviour, so it has no
-	// component of the game's own — a wall is not a kind of entity, it is an entity made of two traits.
-	Reference<Entity> CreateWall(const Vector2& position, float32 width, float32 height)
-	{
-		auto wall = MakeReference<Entity>();
-		wall->SetName("Wall");
-		wall->GetTransform()->SetPosition(position);
-
-		wall->AddComponent<RigidBody2D>(BodyType::Static);
-		wall->AddComponent<BoxCollider2D>(width, height, 1.0f, 0.0f, 1.0f);
-
-		return wall;
-	}
-}
 
 void GameLayer::OnCreate()
 {
 	mCamera = MakeReference<CameraOrthographic>();
-
 	mScene = MakeReference<Scene>();
-	mScene->SetGravity(glm::vec2(0.0f, 0.0f));  // Brickout keeps the ball moving without gravity.
 
-	// Static walls around the play area. The bottom is intentionally open: missing the ball loses.
-	const Size field = Window::GetSize();
-	const float32 halfWidth = field.width / 2.0f;
-	const float32 halfHeight = field.height / 2.0f;
-	const float32 thickness = 20.0f;
+	const std::string scenePath = ResourceRootDirectory() + "Scenes/Main.lnscene";
 
-	mScene->Add(CreateWall(Vector2(0.0f, halfHeight), field.width, thickness));   // Top
-	mScene->Add(CreateWall(Vector2(-halfWidth, 0.0f), thickness, field.height));  // Left
-	mScene->Add(CreateWall(Vector2(halfWidth, 0.0f), thickness, field.height));   // Right
+	if (!SceneSerializer::Deserialize(mScene, scenePath))
+	{
+		Log::Console(LogLevel::Fatal, LION_FORMAT_TEXT("[Game] Could not load the main scene: '{}'.", scenePath));
+		return;
+	}
 
-	// The paddle goes in before the ball, which looks the paddle up when it wakes.
-	auto paddle = MakeReference<Entity>();
-	paddle->SetName("Paddle");
-	paddle->GetTransform()->SetPosition(Vector2(0.0f, -260.0f));
-
-	SpriteRenderer* paddleSprite = paddle->AddComponent<SpriteRenderer>("Sprites/Brickout/player.png");
-	paddleSprite->SetOrder(Depth::Front);
-	const Size paddleSize = paddleSprite->GetSize();
-	paddle->AddComponent<RigidBody2D>(BodyType::Kinematic);  // Driven by input, unmoved by the ball's impacts.
-	paddle->AddComponent<BoxCollider2D>(paddleSize.width, paddleSize.height, 1.0f, 0.0f, 1.0f);
-	paddle->AddComponent<Paddle>();
-	mScene->Add(paddle);
-
-	auto ball = MakeReference<Entity>();
-	ball->SetName("Ball");
-	ball->GetTransform()->SetPosition(Vector2(0.0f, 0.0f));
-
-	SpriteRenderer* ballSprite = ball->AddComponent<SpriteRenderer>("Sprites/Brickout/ball.png");
-	ballSprite->SetOrder(Depth::Middle);
-	const Size ballSize = ballSprite->GetSize();
-	ball->AddComponent<RigidBody2D>(BodyType::Dynamic, true);  // Frictionless, perfectly elastic, never spins.
-	ball->AddComponent<CircleCollider2D>(ballSize.width * 0.5f, 1.0f, 0.0f, 1.0f);
-	ball->AddComponent<Ball>();
-	mScene->Add(ball);
-
-	// The round itself: the backdrop it is played on, and the field of bricks it is played against.
-	auto round = MakeReference<Entity>();
-	round->SetName("Brick Field");
-	round->GetTransform()->SetPosition(Vector2(0.0f, 0.0f));
-
-	round->AddComponent<SpriteRenderer>("Sprites/Brickout/background.jpg")->SetOrder(Depth::Back);
-	round->AddComponent<BrickField>();
-	mScene->Add(round);
+	mSceneCamera = mScene->FindComponent<Camera2D>();
 }
 
 void GameLayer::OnUpdate()
@@ -82,6 +27,14 @@ void GameLayer::OnUpdate()
 
 void GameLayer::OnRender()
 {
+	if (mSceneCamera && mSceneCamera->IsEnabled())
+	{
+		const glm::vec2 position = mSceneCamera->GetViewPosition();
+		mCamera->SetPosition(glm::vec3(position.x, position.y, 0.0f));
+
+		mCamera->SetZoomLevel(mSceneCamera->GetZoomForViewportHeight(mCamera->GetViewportHeight()));
+	}
+
 	Renderer::RenderBegin(mCamera);
 	mScene->OnRender();
 	Renderer::RenderEnd();

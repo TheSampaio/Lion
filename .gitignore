@@ -18,5 +18,7 @@ Data/
 *.filters
 *.ini
 *.sln
+*.slnx
+*.slx
 *.user
 *.vcxproj

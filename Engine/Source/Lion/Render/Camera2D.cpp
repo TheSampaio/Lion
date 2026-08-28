@@ -24,10 +24,16 @@ namespace Lion
 
 	glm::vec2 Camera2D::GetViewSize() const
 	{
-		// The window is what the projection is built from, and the zoom is how much world each of its
-		// pixels covers.
-		const Size window = Window::GetSize();
-		return glm::vec2(window.width * mZoom, window.height * mZoom);
+		// A camera describes the game's logical frame, not whichever editor panel happens to display it.
+		// Render targets with another aspect fit this height and let their sides crop or extend.
+		return glm::vec2(
+			static_cast<float32>(Window::kDefaultViewportWidth) * mZoom,
+			static_cast<float32>(Window::kDefaultViewportHeight) * mZoom);
+	}
+
+	float32 Camera2D::GetZoomForViewportHeight(float32 viewportHeight) const
+	{
+		return viewportHeight > 0.0f ? GetViewSize().y / viewportHeight : mZoom;
 	}
 
 	glm::vec2 Camera2D::ClampToLimit(const glm::vec2& position) const
@@ -137,7 +143,7 @@ namespace Lion
 
 	void Camera2D::Deserialize(const Serializer& serializer)
 	{
-		mZoom = serializer.ReadFloat("zoom", 1.0f);
+		SetZoom(serializer.ReadFloat("zoom", 1.0f));
 		mOffset = Vector2(serializer.ReadFloat("offsetX", 0.0f), serializer.ReadFloat("offsetY", 0.0f));
 
 		mLimit = serializer.ReadBool("limit", false);

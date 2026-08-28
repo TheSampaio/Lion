@@ -17,6 +17,11 @@ namespace Lion
     class Window
     {
     public:
+        // Logical viewport a game starts with. Camera2D uses the same frame, so a camera placed in the editor
+        // and a fresh game window agree before a project makes either one more specific.
+        static constexpr uint32 kDefaultViewportWidth = 1280;
+        static constexpr uint32 kDefaultViewportHeight = 720;
+
         // Opaque native window handle (consumed by the graphics backend to build its surface).
         static LION_API void* GetNativeHandle() { return sInstance->mBackend->GetNativeHandle(); }
 

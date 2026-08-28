@@ -150,6 +150,14 @@ editor's own state to the executable, not to the working directory.
   is what lets the editor list, create and serialize a type it was never compiled against. Loading the
   DLL runs those static initializers — that is the whole mechanism. `Lion::LoadGameModule` /
   `UnloadGameModule` own the bookkeeping, so neither loader can forget half of it.
+- **A component's source language stops at `Editor/Source/ComponentScripts`.** Scenes, reflection, the
+  Inspector and the component registry speak only stable component names and fields; none of them knows
+  whether an implementation came from C++ or, later, C#. C++ is the only backend today. Add another
+  source generator/build path at that boundary rather than branching the entity/component model by
+  language.
+- **The Sandbox is scene-authored.** `Sandbox/Assets/Scenes/Main.lnscene` owns the complete Brickout
+  level — camera, walls, actors and every brick. `GameLayer` loads it; gameplay components provide only
+  reusable behaviour and never carry a second code-only description of the level.
 - **A project owns its build, Unreal-style.** The editor generates `<project>/Build/lion-game.vcxproj`
   (fresh file list before every compile — it is a glob) plus a `.sln` at the project root, tied to the
   **`Include/` and `Bin/` folders beside the editor**: one merged header tree (every package keeps to its

@@ -90,6 +90,12 @@ namespace Lion
 	Application::~Application()
 	{
 		Clock::Delete();
+
+		// Layers own scenes and sprites, while the asset cache keeps their shared textures alive. Both must
+		// release those GPU resources before the renderer, graphics context and window disappear.
+		mStack.reset();
+		mAsset.reset();
+
 		Renderer::Delete();
 		Graphics::Delete();
 		Input::Delete();

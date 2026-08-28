@@ -16,4 +16,5 @@ protected:
 private:
 	Lion::Reference<Lion::CameraOrthographic> mCamera;
 	Lion::Reference<Lion::Scene> mScene;
+	Lion::Camera2D* mSceneCamera = nullptr;
 };
