@@ -3477,8 +3477,9 @@ void EditorLayer::DrawCameraOverlays(const ImVec2& imageMin, const ImVec2& image
 		// looking if the game were running, limits and all.
 		const glm::vec2 center = camera->GetTargetPosition();
 		const glm::vec2 half = camera->GetViewSize() * 0.5f;
-		const bool framedAsPlayerView = IsSelected(entity.get())
-			&& glm::length(glm::vec2(mViewCenter) - center) < 0.01f
+		// When the viewport itself is already the recorded frame, drawing that same rectangle on its edge
+		// leaves a clipped one-pixel remnant. Selection is irrelevant here: the panel is the frame.
+		const bool framedAsPlayerView = glm::length(glm::vec2(mViewCenter) - center) < 0.01f
 			&& std::abs(imageSize.y * mViewZoom - camera->GetViewSize().y) < 0.5f;
 
 		if (framedAsPlayerView)
