@@ -90,7 +90,7 @@ void ProjectManagerLayer::OnAttach()
 	// A picker, not a workspace: a fixed window that cannot be resized or maximised — what would a bigger
 	// list of the same projects say? It wears the editor's own caption so the two read as one program.
 	Window::SetSize(1100, 700);
-	Window::SetTitle("Lion Engine - Project Manager");
+	Window::SetTitle("Lion's Mane - Project Manager");
 	Window::SetBackgroundColor(0.10f, 0.10f, 0.11f);
 	Window::SetResizable(false);
 	Window::SetMaximized(false);
@@ -216,7 +216,7 @@ void ProjectManagerLayer::DrawCaption(float32 width)
 			kFlipTop, kFlipBottom);
 
 	// The window's name in the middle of the strip, where a window says what it is.
-	constexpr const char8* kTitle = "Lion Engine - Project Manager";
+	constexpr const char8* kTitle = "Lion's Mane - Project Manager";
 
 	ImGui::PushFont(EditorGui::GetBoldFont());
 	const float32 titleWidth = ImGui::CalcTextSize(kTitle).x;
@@ -670,8 +670,11 @@ void ProjectManagerLayer::DrawPopups()
 		{
 			mRenameError.clear();
 
-			if (Projects::Rename(Selected()->path, mRenameBuffer, mRenameError))
+			const std::filesystem::path renamed = Projects::Rename(Selected()->path, mRenameBuffer, mRenameError);
+
+			if (!renamed.empty())
 			{
+				mSelected = renamed.generic_string();
 				Refresh();
 				ImGui::CloseCurrentPopup();
 			}

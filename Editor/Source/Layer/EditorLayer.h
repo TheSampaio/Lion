@@ -11,6 +11,8 @@
 #include <imgui/imgui.h>
 #include <ImGuizmo.h>
 
+#include "../ProjectExporter.h"
+
 // Root editor layer: sets up the window, renders a scene into a framebuffer and draws the
 // docked editor UI (menu bar + panels), displaying the framebuffer inside the Viewport panel.
 class EditorLayer : public Lion::Layer
@@ -28,7 +30,7 @@ private:
 	// New actions are appended so indices already saved in shortcuts.cfg stay valid.
 	enum class ShortcutAction
 	{
-		Undo, Redo, Play, Stop, ToggleShortcuts,
+		Undo, Redo, Play, Stop, OpenEditorSettings,
 		GizmoMove, GizmoRotate, GizmoScale, RenameEntity, DeleteEntity,
 		Pause, ToggleColliders,
 		CopyEntity, PasteEntity, DuplicateEntity,
@@ -40,6 +42,7 @@ private:
 		Deselect,
 		NewProject, OpenProject,
 		FocusSelection,
+		OpenProjectSettings,
 		Count
 	};
 
@@ -60,7 +63,8 @@ private:
 	Keybind mBinds[static_cast<int>(ShortcutAction::Count)];
 	int mRebindingIndex = -1;  // Index of the action currently capturing a new key (-1 = none).
 
-	bool mShowShortcuts = false;
+	bool mOpenEditorSettingsPopup = false;
+	bool mOpenProjectSettingsPopup = false;
 	bool mLayoutInitialized = false;
 	bool mFocusViewport = false;   // Set at boot, consumed a frame later: focus cannot be claimed while the panels are still appearing.
 
@@ -237,6 +241,16 @@ private:
 	bool mAssetRenameFocus = false;
 	std::string mAssetToDelete;                // Relative path awaiting the confirmation modal.
 
+	// The project's named input actions. They live under Assets/Config so the same resource-relative file
+	// is copied into a standalone build and loaded by the engine before the first game layer is created.
+	std::vector<Lion::InputAction> mInputActions;
+	char mInputFilter[64] = {};
+	char mNewInputAction[64] = {};
+	int mInputBindingAction = -1;
+	bool mOpenInputBindingPopup = false;
+	Lion::InputBinding mInputBindingDraft;
+	std::string mProjectSettingsError;
+
 	// What is in that folder, read once and kept.
 	//
 	// The panel used to walk the directory twice per frame — two round trips to the file system for a list
@@ -354,7 +368,17 @@ private:
 	void ScanProjectDirectory(const std::filesystem::path& directory);
 	void RenameAsset(const std::string& assetPath, const std::string& name);
 	void DrawDeleteAssetPopup();   // Deleting a file is not an undo step, so it is a question first.
-	void DrawShortcuts();
+	void DrawEditorSettings();
+	void DrawEditorGeneralSettings();
+	void DrawShortcutsTab();
+	void DrawProjectSettings();
+	void DrawProjectGeneralSettings();
+	void DrawInputSettings();
+	void DrawInputBindingPopup();
+	void LoadProjectInputMap();
+	void SaveProjectInputMap();
+	void LoadEditorSettings();
+	void SaveEditorSettings() const;
 
 	// Drawn over the panels rather than in one of them.
 	void DrawPlayModeDim();        // Everything but the game goes dark while the game is running.
@@ -365,7 +389,7 @@ private:
 
 	void BuildDefaultLayout(unsigned int dockspaceId);
 
-	// Dock layout management (Window > Layouts). A layout is just an imgui.ini saved under
+	// Dock layout management (Editor > Layouts). A layout is just an imgui.ini saved under
 	// "Layouts/<name>.ini", so loading one restores every panel's dock node, position and size.
 	void ApplyPendingLayout();                        // Consumes a pending reset/load, before any window is drawn.
 	void DrawLayoutMenu();                            // The "Layouts" submenu: default, saved ones, save, delete.
@@ -429,6 +453,14 @@ private:
 
 	std::future<GameBuild> mGameBuild;
 	bool mBuilding = false;
+
+	bool mOpenExportPopup = false;
+	char mExportLocation[512] = {};
+	std::future<ProjectExporter::Result> mExport;
+	bool mExporting = false;
+	void DrawExportPopup();
+	void StartExport();
+	void PollExport();
 
 	// Draws a collapsing header for a component with a right-aligned "X" remove button and
 	// drag-to-reorder support. Returns whether the body is open; sets removeRequested when the X is

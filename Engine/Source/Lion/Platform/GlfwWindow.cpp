@@ -680,6 +680,48 @@ namespace Lion
 		return glfwGetKey(mWindow, keyCode) == GLFW_RELEASE;
 	}
 
+	bool GlfwWindow::IsMouseButtonPressed(int32 button) const
+	{
+		return glfwGetMouseButton(mWindow, button) == GLFW_PRESS;
+	}
+
+	bool GlfwWindow::IsGamepadConnected(int32 gamepad) const
+	{
+		const int32 joystick = GLFW_JOYSTICK_1 + gamepad;
+		return gamepad >= 0 && gamepad <= GLFW_JOYSTICK_LAST - GLFW_JOYSTICK_1
+			&& glfwJoystickIsGamepad(joystick) == GLFW_TRUE;
+	}
+
+	std::string GlfwWindow::GetGamepadName(int32 gamepad) const
+	{
+		if (!IsGamepadConnected(gamepad))
+			return {};
+
+		const char8* name = glfwGetGamepadName(GLFW_JOYSTICK_1 + gamepad);
+		return name ? name : std::string();
+	}
+
+	bool GlfwWindow::IsGamepadButtonPressed(int32 gamepad, int32 button) const
+	{
+		if (!IsGamepadConnected(gamepad) || button < 0 || button > GLFW_GAMEPAD_BUTTON_LAST)
+			return false;
+
+		GLFWgamepadstate state = {};
+		return glfwGetGamepadState(GLFW_JOYSTICK_1 + gamepad, &state) == GLFW_TRUE
+			&& state.buttons[button] == GLFW_PRESS;
+	}
+
+	float32 GlfwWindow::GetGamepadAxis(int32 gamepad, int32 axis) const
+	{
+		if (!IsGamepadConnected(gamepad) || axis < 0 || axis > GLFW_GAMEPAD_AXIS_LAST)
+			return 0.0f;
+
+		GLFWgamepadstate state = {};
+		return glfwGetGamepadState(GLFW_JOYSTICK_1 + gamepad, &state) == GLFW_TRUE
+			? state.axes[axis]
+			: 0.0f;
+	}
+
 	void GlfwWindow::Minimize()
 	{
 		glfwIconifyWindow(mWindow);

@@ -4,6 +4,58 @@ namespace Lion
 {
 	class Application;
 
+	enum class InputDevice
+	{
+		Keyboard,
+		MouseButton,
+		GamepadButton,
+		GamepadAxis,
+	};
+
+	enum class GamepadButton
+	{
+		A = GLFW_GAMEPAD_BUTTON_A,
+		B = GLFW_GAMEPAD_BUTTON_B,
+		X = GLFW_GAMEPAD_BUTTON_X,
+		Y = GLFW_GAMEPAD_BUTTON_Y,
+		LeftBumper = GLFW_GAMEPAD_BUTTON_LEFT_BUMPER,
+		RightBumper = GLFW_GAMEPAD_BUTTON_RIGHT_BUMPER,
+		Back = GLFW_GAMEPAD_BUTTON_BACK,
+		Start = GLFW_GAMEPAD_BUTTON_START,
+		Guide = GLFW_GAMEPAD_BUTTON_GUIDE,
+		LeftThumb = GLFW_GAMEPAD_BUTTON_LEFT_THUMB,
+		RightThumb = GLFW_GAMEPAD_BUTTON_RIGHT_THUMB,
+		DpadUp = GLFW_GAMEPAD_BUTTON_DPAD_UP,
+		DpadRight = GLFW_GAMEPAD_BUTTON_DPAD_RIGHT,
+		DpadDown = GLFW_GAMEPAD_BUTTON_DPAD_DOWN,
+		DpadLeft = GLFW_GAMEPAD_BUTTON_DPAD_LEFT,
+	};
+
+	enum class GamepadAxis
+	{
+		LeftX = GLFW_GAMEPAD_AXIS_LEFT_X,
+		LeftY = GLFW_GAMEPAD_AXIS_LEFT_Y,
+		RightX = GLFW_GAMEPAD_AXIS_RIGHT_X,
+		RightY = GLFW_GAMEPAD_AXIS_RIGHT_Y,
+		LeftTrigger = GLFW_GAMEPAD_AXIS_LEFT_TRIGGER,
+		RightTrigger = GLFW_GAMEPAD_AXIS_RIGHT_TRIGGER,
+	};
+
+	struct InputBinding
+	{
+		InputDevice device = InputDevice::Keyboard;
+		int32 code = 0;
+		float32 scale = 1.0f;
+		int32 gamepad = -1;   // -1 listens to every connected gamepad; 0..15 selects one.
+	};
+
+	struct InputAction
+	{
+		std::string name;
+		float32 deadzone = 0.2f;
+		std::vector<InputBinding> bindings;
+	};
+
     // Enumerates all keyboard keys
     enum class KeyCode
     {
@@ -118,6 +170,8 @@ namespace Lion
 	class Input
 	{
 	public:
+		static constexpr const char8* kDefaultActionMapFile = "Config/Input.lninput";
+
         // Checks if the key is pressed every frames.
         static LION_API bool GetKeyPress(KeyCode keyCode);
 
@@ -127,6 +181,24 @@ namespace Lion
         // Checks if the key was pressed in the last frame.
         static LION_API bool GetKeyTap(KeyCode keyCode);
 
+		static LION_API bool GetMouseButtonPress(int32 button);
+		static LION_API bool IsGamepadConnected(int32 gamepad = 0);
+		static LION_API std::string GetGamepadName(int32 gamepad = 0);
+		static LION_API bool GetGamepadButtonPress(GamepadButton button, int32 gamepad = 0);
+		static LION_API float32 GetGamepadAxis(GamepadAxis axis, int32 gamepad = 0);
+
+		// Named project actions combine keyboard, mouse and normalized GLFW gamepad bindings. A game asks
+		// for the action and stays independent of whether the player uses an Xbox, PlayStation or generic
+		// pad whose mapping GLFW understands.
+		static LION_API float32 GetActionStrength(const std::string& action);
+		static LION_API bool GetActionPress(const std::string& action);
+		static LION_API bool GetActionTap(const std::string& action);
+
+		static LION_API const std::vector<InputAction>& GetActionMap();
+		static LION_API void SetActionMap(const std::vector<InputAction>& actions);
+		static LION_API bool LoadActionMap(const std::string& path);
+		static LION_API bool SaveActionMap(const std::string& path, const std::vector<InputAction>& actions);
+
 		friend Application;
 
 	protected:
@@ -134,6 +206,7 @@ namespace Lion
 
 		static void New();
 		static void Delete();
+		static void Update();
 
 		Input(const Input&) = delete;
 		Input& operator=(const Input&) = delete;
@@ -141,6 +214,11 @@ namespace Lion
 	private:
         Input() = default;
 
-        static bool sControlKeys[256];
+		static bool sControlKeys[GLFW_KEY_LAST + 1];
+		static std::vector<InputAction> sActions;
+		static std::unordered_map<std::string, float32> sActionStrengths;
+		static std::unordered_map<std::string, float32> sPreviousActionStrengths;
+
+		static float32 EvaluateAction(const InputAction& action);
 	};
 }

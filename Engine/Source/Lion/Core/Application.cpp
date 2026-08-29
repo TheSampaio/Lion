@@ -4,6 +4,7 @@
 #include <Lion/Core/Asset.h>
 #include <Lion/Core/Clock.h>
 #include <Lion/Core/Input.h>
+#include <Lion/Core/Filesystem.h>
 #include <Lion/Core/Layer.h>
 #include <Lion/Core/Log.h>
 #include <Lion/Core/Stack.h>
@@ -122,6 +123,8 @@ namespace Lion
 		Clock::GetTimer().Start();
 
 		// Load resources
+		Input::LoadActionMap(ResolveResourcePath(Input::kDefaultActionMapFile));
+
 		for (Layer* layer : *mStack)
 			layer->OnCreate();
 
@@ -135,6 +138,7 @@ namespace Lion
 		do
 		{
 			Window::PollEvents();
+			Input::Update();
 			Frame();
 
 		} while (!Window::Close());

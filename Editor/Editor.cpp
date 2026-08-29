@@ -5,6 +5,7 @@
 #include <cstdlib>
 
 #include "Source/Sealer.h"
+#include "Source/ProjectExporter.h"
 
 namespace
 {
@@ -38,6 +39,20 @@ Lion::Application* Lion::Main()
 	// the process is over, before a window is opened or a scene is loaded.
 	if (const std::optional<int32> code = Sealer::RunFromCommandLine())
 		std::exit(*code);
+
+	// The same export path the modal uses is available to CI and release scripts. It deliberately lives on
+	// the editor executable: packaging a game is editor tooling, while the launcher remains only a player.
+	if (CommandLine::GetCount() == 4 && CommandLine::Get(1) == "--export-windows")
+	{
+		const ProjectExporter::Result result = ProjectExporter::ExportWindows(
+			CommandLine::Get(2), CommandLine::Get(3));
+
+		if (!result.buildOutput.empty())
+			std::fputs(result.buildOutput.c_str(), result.succeeded ? stdout : stderr);
+
+		std::fprintf(result.succeeded ? stdout : stderr, "%s\n", result.message.c_str());
+		std::exit(result.succeeded ? 0 : 1);
+	}
 
 	// The editor is a tool, and a tool that cannot tell you what happened is not one — so it keeps
 	// every diagnostic the engine has, whatever configuration it was built in. The build's own levels

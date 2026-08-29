@@ -125,6 +125,34 @@ namespace Projects
 				"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 _-") == std::string::npos;
 		}
 
+		std::vector<Lion::InputAction> DefaultInputActions()
+		{
+			using Lion::GamepadAxis;
+			using Lion::InputAction;
+			using Lion::InputDevice;
+			using Lion::KeyCode;
+
+			const auto action = [](const Lion::char8* name, KeyCode first, KeyCode second,
+				GamepadAxis axis, Lion::float32 direction)
+			{
+				InputAction value;
+				value.name = name;
+				value.bindings = {
+					{ InputDevice::Keyboard, static_cast<Lion::int32>(first), 1.0f, -1 },
+					{ InputDevice::Keyboard, static_cast<Lion::int32>(second), 1.0f, -1 },
+					{ InputDevice::GamepadAxis, static_cast<Lion::int32>(axis), direction, -1 },
+				};
+				return value;
+			};
+
+			return {
+				action("player_up", KeyCode::W, KeyCode::Up, GamepadAxis::LeftY, -1.0f),
+				action("player_down", KeyCode::S, KeyCode::Down, GamepadAxis::LeftY, 1.0f),
+				action("player_left", KeyCode::A, KeyCode::Left, GamepadAxis::LeftX, -1.0f),
+				action("player_right", KeyCode::D, KeyCode::Right, GamepadAxis::LeftX, 1.0f),
+			};
+		}
+
 		// Writes the marker naming the project, replacing whichever one it had. It goes through the same
 		// JSON library the engine serializes scenes with — not a string with braces in it, which is a
 		// serializer waiting to disagree with the real one — and it leaves sealed, the way a scene does:
@@ -361,6 +389,31 @@ namespace Projects
 		WriteMarker(project, marker);
 	}
 
+	bool SetDefaultScene(const std::filesystem::path& project, const std::filesystem::path& scene)
+	{
+		if (!IsProjectFolder(project)
+			|| project.lexically_normal() == DefaultProjectDirectory().lexically_normal())
+			return false;
+
+		const std::filesystem::path valid = ValidScenePath(project, scene);
+
+		if (valid.empty())
+			return false;
+
+		std::error_code error;
+		const std::filesystem::path projectPath = std::filesystem::weakly_canonical(project, error);
+
+		if (error)
+			return false;
+
+		ProjectMarker marker = ReadMarker(project);
+		marker.name = marker.name.empty() ? project.filename().generic_string() : marker.name;
+		marker.engine = marker.engine.empty() ? std::string(Lion::kVersion) : marker.engine;
+		marker.scene = valid.lexically_relative(projectPath).generic_string();
+		WriteMarker(project, marker);
+		return true;
+	}
+
 	std::vector<std::string> LoadRecent()
 	{
 		std::vector<std::string> projects;
@@ -444,6 +497,8 @@ namespace Projects
 		// The marker names the project, records which engine made it, and keeps resource-relative startup
 		// state independent of where the project is moved.
 		WriteMarker(folder, { name, Lion::kVersion, kDefaultScene });
+		Lion::Input::SaveActionMap((folder / "Assets" / Lion::Input::kDefaultActionMapFile).string(),
+			DefaultInputActions());
 
 		// A game module the editor and launcher can load: the exported entry point every project needs,
 		// empty but complete, so the project compiles from the first build. Components added to it are
@@ -547,27 +602,72 @@ namespace Projects
 		WriteRecentLines(lines);
 	}
 
-	bool Rename(const std::filesystem::path& folder, const std::string& newName, std::string& error)
+	std::filesystem::path Rename(const std::filesystem::path& folder, const std::string& newName, std::string& error)
 	{
 		if (!IsValidName(newName))
 		{
 			error = "A project name takes letters, digits, spaces, - and _ only.";
-			return false;
+			return {};
 		}
 
 		if (!IsProjectFolder(folder))
 		{
 			error = "The project is not on disk to rename.";
-			return false;
+			return {};
+		}
+
+		const std::filesystem::path source = folder.lexically_normal();
+		const std::filesystem::path destination = source.parent_path() / newName;
+		const std::string oldName = DisplayName(source);
+		std::error_code code;
+
+		if (destination != source && std::filesystem::exists(destination, code))
+		{
+			error = "'" + destination.generic_string() + "' already exists.";
+			return {};
+		}
+
+		if (destination != source)
+		{
+			std::filesystem::rename(source, destination, code);
+
+			if (code)
+			{
+				error = code.message();
+				return {};
+			}
 		}
 
 		// The version the old marker recorded survives the new name; a project without one was made by no
 		// recorded engine until now, so it takes the running one.
-		ProjectMarker marker = ReadMarker(folder);
+		ProjectMarker marker = ReadMarker(destination);
 		marker.name = newName;
 		marker.engine = marker.engine.empty() ? std::string(Lion::kVersion) : marker.engine;
-		WriteMarker(folder, marker);
-		return true;
+		WriteMarker(destination, marker);
+
+		// The generated solution carries the project name. It contains only relative paths, so moving it is
+		// enough; the generated vcxproj is refreshed before the next compile.
+		const std::filesystem::path oldSolution = destination / (oldName + ".sln");
+		const std::filesystem::path newSolution = destination / (newName + ".sln");
+
+		if (oldSolution != newSolution && std::filesystem::exists(oldSolution, code))
+			std::filesystem::rename(oldSolution, newSolution, code);
+
+		const std::string oldPath = source.generic_string();
+		const std::string newPath = destination.generic_string();
+
+		for (const std::filesystem::path& file : { RecentFile(), FavoriteFile() })
+		{
+			std::vector<std::string> lines = ReadLines(file);
+
+			for (std::string& line : lines)
+				if (line == oldPath)
+					line = newPath;
+
+			WriteLines(file, lines);
+		}
+
+		return destination;
 	}
 
 	std::filesystem::path Duplicate(const std::filesystem::path& folder, std::string& error)
@@ -598,7 +698,10 @@ namespace Projects
 
 		// The copy is its own project, named after its folder rather than the one it came from.
 		std::string renameError;
-		Rename(destination, destination.filename().generic_string(), renameError);
+		const std::filesystem::path renamed = Rename(destination, destination.filename().generic_string(), renameError);
+
+		if (!renamed.empty())
+			destination = renamed;
 
 		Remember(destination);
 		return destination;

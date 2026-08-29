@@ -88,6 +88,11 @@ namespace Lion
 		// Immediate keyboard state, using engine key codes.
 		virtual bool IsKeyPressed(int32 keyCode) const = 0;
 		virtual bool IsKeyReleased(int32 keyCode) const = 0;
+		virtual bool IsMouseButtonPressed(int32 button) const = 0;
+		virtual bool IsGamepadConnected(int32 gamepad) const = 0;
+		virtual std::string GetGamepadName(int32 gamepad) const = 0;
+		virtual bool IsGamepadButtonPressed(int32 gamepad, int32 button) const = 0;
+		virtual float32 GetGamepadAxis(int32 gamepad, int32 axis) const = 0;
 
 		// Opaque native window handle, consumed by the graphics backend to create its surface.
 		virtual void* GetNativeHandle() const = 0;

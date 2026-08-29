@@ -5,6 +5,7 @@
 #include "../Expression.h"
 #include "../ComponentScripts.h"
 #include "../ProjectBuild.h"
+#include "../ProjectExporter.h"
 #include "../Projects.h"
 
 #include <IconsMaterialDesignIcons.h>
@@ -66,7 +67,6 @@ static const char8* kPropertiesWindow = ICON_MDI_TUNE "  Properties###Properties
 static const char8* kProjectWindow    = ICON_MDI_FOLDER_MULTIPLE "  Content Browser###ContentBrowser";
 static const char8* kConsoleWindow    = ICON_MDI_CONSOLE "  Console###Console";
 static const char8* kStatisticsWindow = ICON_MDI_CHART_BAR "  Statistics###Statistics";
-static const char8* kShortcutsWindow  = ICON_MDI_KEYBOARD "  Shortcuts###Shortcuts";
 
 // Ordered by how much they are reached for: what you pick, what you edit on it, where its assets come
 // from, what the engine has to say, and how it is doing. Alt+N follows this, so the numbers you use
@@ -99,6 +99,7 @@ void EditorLayer::OnCreate()
 {
 	EditorGui::Init();
 	InitShortcuts();
+	LoadEditorSettings();
 
 	LoadGameModule();
 
@@ -151,12 +152,14 @@ void EditorLayer::OnCreate()
 		return;
 	}
 
+	LoadProjectInputMap();
 	LoadProjectDefaultScene(Projects::DefaultProjectDirectory());
 }
 
 void EditorLayer::OnUpdate()
 {
 	PollGameBuild();
+	PollExport();
 
 	// Advance the scene simulation (physics + entity scripts) while playing and not paused — or for
 	// exactly one frame when a step was requested, which is what makes a paused run inspectable.
@@ -184,6 +187,7 @@ void EditorLayer::StepOneFrame()
 
 void EditorLayer::OnDetach()
 {
+	SaveEditorSettings();
 	// The module goes before the editor does, and for the same reason a reload drops it first: the
 	// registries hold factories that are code inside it, and the scene holds components whose vtables
 	// are. Left to the process to tear down, those are destroyed after the library has been unmapped —
@@ -607,7 +611,9 @@ void EditorLayer::DrawUI()
 	DrawStatistics();
 	DrawConsole();
 	DrawProject();
-	DrawShortcuts();
+	DrawEditorSettings();
+	DrawProjectSettings();
+	DrawExportPopup();
 	DrawLayoutPopups();
 
 	DrawNewComponentPopup();
@@ -674,8 +680,6 @@ void EditorLayer::DrawPlayModeDim()
 	for (const Panel& panel : kPanels)
 		veil(panel.window);
 
-	if (mShowShortcuts)
-		veil(kShortcutsWindow);
 }
 
 void EditorLayer::DrawPanelSizeOverlay()
@@ -2368,45 +2372,107 @@ void EditorLayer::DrawDeleteAssetPopup()
 	ImGui::EndPopup();
 }
 
-void EditorLayer::DrawShortcuts()
+void EditorLayer::DrawEditorSettings()
 {
-	if (!mShowShortcuts)
+	if (mOpenEditorSettingsPopup)
+	{
+		mOpenEditorSettingsPopup = false;
+		ImGui::OpenPopup("Editor Settings");
+	}
+
+	const ImVec2 center = ImGui::GetMainViewport()->GetCenter();
+	ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+	ImGui::SetNextWindowSize(ImVec2(860.0f, 620.0f), ImGuiCond_Appearing);
+
+	if (!ImGui::BeginPopupModal("Editor Settings", nullptr))
 		return;
 
-	ImGui::SetNextWindowSize(ImVec2(800.0f, 600.0f), ImGuiCond_FirstUseEver);
+	if (ImGui::BeginTabBar("##editor_settings_tabs"))
+	{
+		if (ImGui::BeginTabItem("General"))
+		{
+			DrawEditorGeneralSettings();
+			ImGui::EndTabItem();
+		}
 
-	if (ImGui::Begin(kShortcutsWindow, &mShowShortcuts))
+		if (ImGui::BeginTabItem("Shortcuts"))
+		{
+			DrawShortcutsTab();
+			ImGui::EndTabItem();
+		}
+
+		ImGui::EndTabBar();
+	}
+
+	const float32 closeWidth = 96.0f;
+	ImGui::SetCursorPos(ImVec2(ImGui::GetWindowWidth() - closeWidth - ImGui::GetStyle().WindowPadding.x,
+		ImGui::GetWindowHeight() - ImGui::GetFrameHeight() - ImGui::GetStyle().WindowPadding.y));
+
+	if (ImGui::Button("Close", ImVec2(closeWidth, 0.0f)))
+		ImGui::CloseCurrentPopup();
+
+	ImGui::EndPopup();
+}
+
+void EditorLayer::DrawEditorGeneralSettings()
+{
+	ImGui::SeparatorText("Viewport");
+
+	if (ImGui::Checkbox("Show collider overlays", &mShowColliders))
+		SaveEditorSettings();
+
+	ImGui::TextDisabled("Collider outlines are an editor visualization and are never exported.");
+
+	ImGui::Spacing();
+	ImGui::SeparatorText("Workspace");
+
+	if (ImGui::Button("Reset Layout to Default"))
+	{
+		mLayoutRequest = LayoutRequest::Reset;
+		mLayoutToLoad.clear();
+	}
+
+	ImGui::Spacing();
+	ImGui::SeparatorText("About");
+	ImGui::TextUnformatted(kEditorName);
+	ImGui::TextDisabled("Lion Engine %s", kVersion);
+}
+
+void EditorLayer::DrawShortcutsTab()
+{
+	ImGui::BeginChild("##shortcut_settings", ImVec2(0.0f, -ImGui::GetFrameHeightWithSpacing() * 2.0f));
 	{
 		// The rebindable actions, grouped by category (order defines the display order).
 		struct Row { ShortcutAction action; const char8* category; const char8* name; };
 		static const Row rows[] = {
+			{ ShortcutAction::OpenEditorSettings,  "General",   "Open Editor Settings" },
+			{ ShortcutAction::Undo,                "General",   "Undo" },
+			{ ShortcutAction::Redo,                "General",   "Redo" },
 			{ ShortcutAction::NewProject,      "Project",   "New project..." },
 			{ ShortcutAction::OpenProject,     "Project",   "Open a project..." },
+			{ ShortcutAction::OpenProjectSettings, "Project", "Open Project Settings" },
+			{ ShortcutAction::CompileModule,   "Project",   "Compile the game module" },
+			{ ShortcutAction::ReloadModule,    "Project",   "Reload the game module" },
 			{ ShortcutAction::NewScene,        "Scene",     "New scene" },
-				{ ShortcutAction::OpenScene,       "Scene",     "Open a scene" },
-				{ ShortcutAction::SaveScene,       "Scene",     "Save the scene" },
-				{ ShortcutAction::SaveSceneAs,     "Scene",     "Save the scene as..." },
-				{ ShortcutAction::ToggleShortcuts, "General",   "Toggle Shortcuts panel" },
-			{ ShortcutAction::Undo,            "General",   "Undo" },
-			{ ShortcutAction::Redo,            "General",   "Redo" },
+			{ ShortcutAction::OpenScene,       "Scene",     "Open a scene" },
+			{ ShortcutAction::SaveScene,       "Scene",     "Save the scene" },
+			{ ShortcutAction::SaveSceneAs,     "Scene",     "Save the scene as..." },
 			{ ShortcutAction::Play,            "Play Mode", "Play (run the simulation)" },
 			{ ShortcutAction::Pause,           "Play Mode", "Pause / resume the simulation" },
 			{ ShortcutAction::Stop,            "Play Mode", "Stop (return to edited state)" },
+			{ ShortcutAction::StepFrame,       "Play Mode", "Step one frame" },
 			{ ShortcutAction::ToolSelect,      "Tools",     "Select tool" },
 			{ ShortcutAction::GizmoMove,       "Tools",     "Move tool (translate)" },
 			{ ShortcutAction::GizmoRotate,     "Tools",     "Rotate tool" },
 			{ ShortcutAction::GizmoScale,      "Tools",     "Scale tool" },
 			{ ShortcutAction::FocusSelection,  "Viewport",  "Frame the selection" },
+			{ ShortcutAction::ToggleColliders, "Viewport",  "Toggle collider hitboxes" },
 			{ ShortcutAction::Deselect,        "Hierarchy", "Clear the selection" },
-				{ ShortcutAction::RenameEntity,    "Hierarchy", "Rename selected entity" },
+			{ ShortcutAction::RenameEntity,    "Hierarchy", "Rename selected entity" },
 			{ ShortcutAction::DeleteEntity,    "Hierarchy", "Delete selected entity" },
 			{ ShortcutAction::CopyEntity,      "Hierarchy", "Copy selected entity" },
 			{ ShortcutAction::PasteEntity,     "Hierarchy", "Paste entity from clipboard" },
 			{ ShortcutAction::DuplicateEntity, "Hierarchy", "Duplicate selected entity" },
-			{ ShortcutAction::StepFrame,       "Play Mode", "Step one frame" },
-			{ ShortcutAction::ToggleColliders, "Viewport",  "Toggle collider hitboxes" },
-			{ ShortcutAction::CompileModule,   "Game",      "Compile the game module" },
-			{ ShortcutAction::ReloadModule,    "Game",      "Reload the game module" },
 			{ ShortcutAction::ToggleHierarchy,  "Panels",   "Show/hide Scene Hierarchy" },
 			{ ShortcutAction::ToggleProperties, "Panels",   "Show/hide Properties" },
 			{ ShortcutAction::ToggleProject,    "Panels",   "Show/hide Project" },
@@ -2500,8 +2566,432 @@ void EditorLayer::DrawShortcuts()
 			}
 		}
 	}
+	ImGui::EndChild();
+}
 
-	ImGui::End();
+namespace
+{
+	struct InputChoice
+	{
+		const char8* name;
+		int32 code;
+	};
+
+	const InputChoice kKeyboardChoices[] = {
+		{ "A", GLFW_KEY_A }, { "B", GLFW_KEY_B }, { "C", GLFW_KEY_C }, { "D", GLFW_KEY_D },
+		{ "E", GLFW_KEY_E }, { "F", GLFW_KEY_F }, { "G", GLFW_KEY_G }, { "H", GLFW_KEY_H },
+		{ "I", GLFW_KEY_I }, { "J", GLFW_KEY_J }, { "K", GLFW_KEY_K }, { "L", GLFW_KEY_L },
+		{ "M", GLFW_KEY_M }, { "N", GLFW_KEY_N }, { "O", GLFW_KEY_O }, { "P", GLFW_KEY_P },
+		{ "Q", GLFW_KEY_Q }, { "R", GLFW_KEY_R }, { "S", GLFW_KEY_S }, { "T", GLFW_KEY_T },
+		{ "U", GLFW_KEY_U }, { "V", GLFW_KEY_V }, { "W", GLFW_KEY_W }, { "X", GLFW_KEY_X },
+		{ "Y", GLFW_KEY_Y }, { "Z", GLFW_KEY_Z },
+		{ "Up", GLFW_KEY_UP }, { "Down", GLFW_KEY_DOWN }, { "Left", GLFW_KEY_LEFT }, { "Right", GLFW_KEY_RIGHT },
+		{ "Space", GLFW_KEY_SPACE }, { "Enter", GLFW_KEY_ENTER }, { "Escape", GLFW_KEY_ESCAPE },
+		{ "Left Shift", GLFW_KEY_LEFT_SHIFT }, { "Left Control", GLFW_KEY_LEFT_CONTROL },
+		{ "Tab", GLFW_KEY_TAB }, { "Backspace", GLFW_KEY_BACKSPACE },
+	};
+
+	const InputChoice kMouseChoices[] = {
+		{ "Left Button", GLFW_MOUSE_BUTTON_LEFT },
+		{ "Right Button", GLFW_MOUSE_BUTTON_RIGHT },
+		{ "Middle Button", GLFW_MOUSE_BUTTON_MIDDLE },
+		{ "Button 4", GLFW_MOUSE_BUTTON_4 }, { "Button 5", GLFW_MOUSE_BUTTON_5 },
+	};
+
+	const InputChoice kGamepadButtonChoices[] = {
+		{ "A / Cross", GLFW_GAMEPAD_BUTTON_A }, { "B / Circle", GLFW_GAMEPAD_BUTTON_B },
+		{ "X / Square", GLFW_GAMEPAD_BUTTON_X }, { "Y / Triangle", GLFW_GAMEPAD_BUTTON_Y },
+		{ "Left Bumper", GLFW_GAMEPAD_BUTTON_LEFT_BUMPER }, { "Right Bumper", GLFW_GAMEPAD_BUTTON_RIGHT_BUMPER },
+		{ "Back / Share", GLFW_GAMEPAD_BUTTON_BACK }, { "Start / Options", GLFW_GAMEPAD_BUTTON_START },
+		{ "Guide", GLFW_GAMEPAD_BUTTON_GUIDE }, { "Left Stick", GLFW_GAMEPAD_BUTTON_LEFT_THUMB },
+		{ "Right Stick", GLFW_GAMEPAD_BUTTON_RIGHT_THUMB }, { "D-pad Up", GLFW_GAMEPAD_BUTTON_DPAD_UP },
+		{ "D-pad Right", GLFW_GAMEPAD_BUTTON_DPAD_RIGHT }, { "D-pad Down", GLFW_GAMEPAD_BUTTON_DPAD_DOWN },
+		{ "D-pad Left", GLFW_GAMEPAD_BUTTON_DPAD_LEFT },
+	};
+
+	const InputChoice kGamepadAxisChoices[] = {
+		{ "Left Stick X", GLFW_GAMEPAD_AXIS_LEFT_X }, { "Left Stick Y", GLFW_GAMEPAD_AXIS_LEFT_Y },
+		{ "Right Stick X", GLFW_GAMEPAD_AXIS_RIGHT_X }, { "Right Stick Y", GLFW_GAMEPAD_AXIS_RIGHT_Y },
+		{ "Left Trigger", GLFW_GAMEPAD_AXIS_LEFT_TRIGGER }, { "Right Trigger", GLFW_GAMEPAD_AXIS_RIGHT_TRIGGER },
+	};
+
+	template<size_t Size>
+	const char8* ChoiceName(const InputChoice (&choices)[Size], int32 code)
+	{
+		for (const InputChoice& choice : choices)
+			if (choice.code == code)
+				return choice.name;
+
+		return "Unknown";
+	}
+
+	bool IsInputActionNameValid(const std::string& name)
+	{
+		if (name.empty() || std::isdigit(static_cast<unsigned char>(name.front())))
+			return false;
+
+		return std::all_of(name.begin(), name.end(), [](char8 character)
+			{
+				return std::isalnum(static_cast<unsigned char>(character)) || character == '_';
+			});
+	}
+
+	std::string Lower(std::string value)
+	{
+		std::transform(value.begin(), value.end(), value.begin(), [](unsigned char character)
+			{ return static_cast<char8>(std::tolower(character)); });
+		return value;
+	}
+
+	std::string InputBindingText(const InputBinding& binding)
+	{
+		switch (binding.device)
+		{
+			case InputDevice::Keyboard:
+				return std::string("Keyboard: ") + ChoiceName(kKeyboardChoices, binding.code);
+			case InputDevice::MouseButton:
+				return std::string("Mouse: ") + ChoiceName(kMouseChoices, binding.code);
+			case InputDevice::GamepadButton:
+				return std::string("Gamepad: ") + ChoiceName(kGamepadButtonChoices, binding.code);
+			case InputDevice::GamepadAxis:
+				return std::string("Gamepad: ") + ChoiceName(kGamepadAxisChoices, binding.code)
+					+ (binding.scale < 0.0f ? " -" : " +");
+		}
+
+		return "Unknown";
+	}
+}
+
+void EditorLayer::DrawProjectSettings()
+{
+	if (mOpenProjectSettingsPopup)
+	{
+		mOpenProjectSettingsPopup = false;
+		LoadProjectInputMap();
+		ImGui::OpenPopup("Project Settings");
+	}
+
+	const ImVec2 center = ImGui::GetMainViewport()->GetCenter();
+	ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+	ImGui::SetNextWindowSize(ImVec2(920.0f, 650.0f), ImGuiCond_Appearing);
+
+	if (!ImGui::BeginPopupModal("Project Settings", nullptr))
+		return;
+
+	if (ImGui::BeginTabBar("##project_settings_tabs"))
+	{
+		if (ImGui::BeginTabItem("General"))
+		{
+			DrawProjectGeneralSettings();
+			ImGui::EndTabItem();
+		}
+
+		if (ImGui::BeginTabItem("Input"))
+		{
+			DrawInputSettings();
+			ImGui::EndTabItem();
+		}
+
+		ImGui::EndTabBar();
+	}
+
+	DrawInputBindingPopup();
+
+	const float32 closeWidth = 96.0f;
+	ImGui::SetCursorPos(ImVec2(ImGui::GetWindowWidth() - closeWidth - ImGui::GetStyle().WindowPadding.x,
+		ImGui::GetWindowHeight() - ImGui::GetFrameHeight() - ImGui::GetStyle().WindowPadding.y));
+
+	if (ImGui::Button("Close", ImVec2(closeWidth, 0.0f)))
+		ImGui::CloseCurrentPopup();
+
+	ImGui::EndPopup();
+}
+
+void EditorLayer::DrawProjectGeneralSettings()
+{
+	const std::filesystem::path project = ActiveProjectDirectory();
+	const std::filesystem::path scene = Projects::DefaultScene(project);
+
+	ImGui::SeparatorText("Project");
+	ImGui::TextUnformatted("Name");
+	ImGui::SameLine(160.0f);
+	ImGui::TextUnformatted(Projects::DisplayName(project).c_str());
+
+	ImGui::TextUnformatted("Root Path");
+	ImGui::SameLine(160.0f);
+	ImGui::TextDisabled("%s", project.generic_string().c_str());
+
+	ImGui::Spacing();
+	ImGui::SeparatorText("Startup");
+	ImGui::TextUnformatted("Default Scene");
+	ImGui::SameLine(160.0f);
+	ImGui::TextDisabled("%s", scene.empty() ? "None" : scene.lexically_relative(project).generic_string().c_str());
+
+	const bool builtIn = project.lexically_normal() == Projects::DefaultProjectDirectory().lexically_normal();
+	ImGui::BeginDisabled(mScenePath.empty() || builtIn);
+
+	if (ImGui::Button("Use Current Scene"))
+	{
+		if (Projects::SetDefaultScene(project, mScenePath))
+			mProjectSettingsError.clear();
+		else
+			mProjectSettingsError = "The current scene must be saved inside this project.";
+	}
+
+	ImGui::EndDisabled();
+
+	if (builtIn)
+		ImGui::TextDisabled("The built-in Sandbox always starts from Assets/Scenes/Main.lnscene.");
+	else if (!mProjectSettingsError.empty())
+		ImGui::TextColored(LogLevelColor(LogLevel::Error), "%s", mProjectSettingsError.c_str());
+}
+
+void EditorLayer::LoadProjectInputMap()
+{
+	const std::filesystem::path file = GameAssetsDirectory() / Input::kDefaultActionMapFile;
+	mInputActions.clear();
+	Input::SetActionMap({});
+
+	if (Input::LoadActionMap(file.string()))
+		mInputActions = Input::GetActionMap();
+}
+
+void EditorLayer::SaveProjectInputMap()
+{
+	const std::filesystem::path file = GameAssetsDirectory() / Input::kDefaultActionMapFile;
+	Input::SetActionMap(mInputActions);
+
+	if (!Input::SaveActionMap(file.string(), mInputActions))
+		mProjectSettingsError = "Could not save Assets/Config/Input.lninput.";
+	else
+		mProjectSettingsError.clear();
+}
+
+void EditorLayer::DrawInputSettings()
+{
+	ImGui::SetNextItemWidth(280.0f);
+	ImGui::InputTextWithHint("##input_filter", "Filter by name", mInputFilter, IM_ARRAYSIZE(mInputFilter));
+
+	ImGui::SameLine();
+	ImGui::SetNextItemWidth(-92.0f);
+	const bool submitted = ImGui::InputTextWithHint("##new_input_action", "Add new action", mNewInputAction,
+		IM_ARRAYSIZE(mNewInputAction), ImGuiInputTextFlags_EnterReturnsTrue);
+	ImGui::SameLine();
+
+	const std::string newName = mNewInputAction;
+	const bool duplicate = std::any_of(mInputActions.begin(), mInputActions.end(), [&](const InputAction& action)
+		{ return action.name == newName; });
+	const bool canAdd = IsInputActionNameValid(newName) && !duplicate;
+
+	ImGui::BeginDisabled(!canAdd);
+	if (ImGui::Button("Add", ImVec2(80.0f, 0.0f)) || (submitted && canAdd))
+	{
+		mInputActions.push_back({ newName, 0.2f, {} });
+		mNewInputAction[0] = '\0';
+		SaveProjectInputMap();
+	}
+	ImGui::EndDisabled();
+
+	if (!newName.empty() && (!IsInputActionNameValid(newName) || duplicate))
+		ImGui::TextDisabled(duplicate ? "That action already exists." : "Use letters, digits and _, not starting with a digit.");
+
+	ImGui::Spacing();
+
+	if (ImGui::BeginTable("##input_actions", 4,
+		ImGuiTableFlags_BordersInnerH | ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable,
+		ImVec2(0.0f, -ImGui::GetFrameHeightWithSpacing() * 2.0f)))
+	{
+		ImGui::TableSetupColumn("Action", ImGuiTableColumnFlags_WidthStretch, 0.50f);
+		ImGui::TableSetupColumn("Deadzone", ImGuiTableColumnFlags_WidthFixed, 120.0f);
+		ImGui::TableSetupColumn("Bindings", ImGuiTableColumnFlags_WidthFixed, 80.0f);
+		ImGui::TableSetupColumn("##remove", ImGuiTableColumnFlags_WidthFixed, 32.0f);
+		ImGui::TableHeadersRow();
+
+		int removeAction = -1;
+		const std::string filter = Lower(mInputFilter);
+
+		for (int actionIndex = 0; actionIndex < static_cast<int>(mInputActions.size()); ++actionIndex)
+		{
+			InputAction& action = mInputActions[actionIndex];
+
+			if (!filter.empty() && Lower(action.name).find(filter) == std::string::npos)
+				continue;
+
+			ImGui::PushID(actionIndex);
+			ImGui::TableNextRow();
+			ImGui::TableSetColumnIndex(0);
+			const bool open = ImGui::TreeNodeEx("##action", ImGuiTreeNodeFlags_SpanAllColumns,
+				"%s", action.name.c_str());
+
+			ImGui::TableSetColumnIndex(1);
+			ImGui::SetNextItemWidth(-1.0f);
+			ImGui::DragFloat("##deadzone", &action.deadzone, 0.01f, 0.0f, 0.95f, "%.2f");
+			if (ImGui::IsItemDeactivatedAfterEdit())
+				SaveProjectInputMap();
+
+			ImGui::TableSetColumnIndex(2);
+			ImGui::Text("%d", static_cast<int32>(action.bindings.size()));
+
+			ImGui::TableSetColumnIndex(3);
+			if (ImGui::SmallButton(ICON_MDI_DELETE_OUTLINE))
+				removeAction = actionIndex;
+
+			if (open)
+			{
+				int removeBinding = -1;
+
+				for (int bindingIndex = 0; bindingIndex < static_cast<int>(action.bindings.size()); ++bindingIndex)
+				{
+					ImGui::TableNextRow();
+					ImGui::TableSetColumnIndex(0);
+					ImGui::Indent();
+					ImGui::TextUnformatted(InputBindingText(action.bindings[bindingIndex]).c_str());
+					ImGui::Unindent();
+					ImGui::TableSetColumnIndex(2);
+					ImGui::TextDisabled("%s", action.bindings[bindingIndex].gamepad < 0
+						? "All pads" : ("Pad " + std::to_string(action.bindings[bindingIndex].gamepad + 1)).c_str());
+					ImGui::TableSetColumnIndex(3);
+					ImGui::PushID(bindingIndex);
+					if (ImGui::SmallButton(ICON_MDI_CLOSE))
+						removeBinding = bindingIndex;
+					ImGui::PopID();
+				}
+
+				if (removeBinding >= 0)
+				{
+					action.bindings.erase(action.bindings.begin() + removeBinding);
+					SaveProjectInputMap();
+				}
+
+				ImGui::TableNextRow();
+				ImGui::TableSetColumnIndex(0);
+				ImGui::Indent();
+				if (ImGui::SmallButton(ICON_MDI_PLUS "  Add Binding"))
+				{
+					mInputBindingAction = actionIndex;
+					mInputBindingDraft = { InputDevice::Keyboard, GLFW_KEY_SPACE, 1.0f, -1 };
+					mOpenInputBindingPopup = true;
+				}
+				ImGui::Unindent();
+				ImGui::TreePop();
+			}
+
+			ImGui::PopID();
+		}
+
+		if (removeAction >= 0)
+		{
+			mInputActions.erase(mInputActions.begin() + removeAction);
+			SaveProjectInputMap();
+		}
+
+		ImGui::EndTable();
+	}
+
+	for (int32 gamepad = 0; gamepad < 4; ++gamepad)
+	{
+		if (!Input::IsGamepadConnected(gamepad))
+			continue;
+
+		ImGui::TextDisabled("Gamepad %d: %s", gamepad + 1, Input::GetGamepadName(gamepad).c_str());
+	}
+
+	if (!mProjectSettingsError.empty())
+		ImGui::TextColored(LogLevelColor(LogLevel::Error), "%s", mProjectSettingsError.c_str());
+}
+
+void EditorLayer::DrawInputBindingPopup()
+{
+	if (mOpenInputBindingPopup)
+	{
+		mOpenInputBindingPopup = false;
+		ImGui::OpenPopup("Add Input Binding");
+	}
+
+	if (!ImGui::BeginPopupModal("Add Input Binding", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+		return;
+
+	static const char8* devices[] = { "Keyboard", "Mouse Button", "Gamepad Button", "Gamepad Axis" };
+	int device = static_cast<int>(mInputBindingDraft.device);
+
+	ImGui::TextUnformatted("Device");
+	ImGui::SetNextItemWidth(340.0f);
+	if (ImGui::Combo("##binding_device", &device, devices, IM_ARRAYSIZE(devices)))
+	{
+		mInputBindingDraft.device = static_cast<InputDevice>(device);
+		mInputBindingDraft.scale = 1.0f;
+		mInputBindingDraft.code = device == static_cast<int>(InputDevice::Keyboard) ? GLFW_KEY_SPACE : 0;
+	}
+
+	const auto drawChoices = [&](const char8* label, const auto& choices)
+	{
+		ImGui::TextUnformatted(label);
+		ImGui::SetNextItemWidth(340.0f);
+
+		if (ImGui::BeginCombo("##binding_code", ChoiceName(choices, mInputBindingDraft.code)))
+		{
+			for (const InputChoice& choice : choices)
+			{
+				const bool selected = choice.code == mInputBindingDraft.code;
+				if (ImGui::Selectable(choice.name, selected))
+					mInputBindingDraft.code = choice.code;
+				if (selected)
+					ImGui::SetItemDefaultFocus();
+			}
+			ImGui::EndCombo();
+		}
+	};
+
+	switch (mInputBindingDraft.device)
+	{
+		case InputDevice::Keyboard:      drawChoices("Key", kKeyboardChoices); break;
+		case InputDevice::MouseButton:   drawChoices("Button", kMouseChoices); break;
+		case InputDevice::GamepadButton: drawChoices("Button", kGamepadButtonChoices); break;
+		case InputDevice::GamepadAxis:   drawChoices("Axis", kGamepadAxisChoices); break;
+	}
+
+	if (mInputBindingDraft.device == InputDevice::GamepadButton
+		|| mInputBindingDraft.device == InputDevice::GamepadAxis)
+	{
+		const char8* pads[] = { "All Gamepads", "Gamepad 1", "Gamepad 2", "Gamepad 3", "Gamepad 4" };
+		int pad = mInputBindingDraft.gamepad + 1;
+		ImGui::TextUnformatted("Gamepad");
+		ImGui::SetNextItemWidth(340.0f);
+		if (ImGui::Combo("##binding_gamepad", &pad, pads, IM_ARRAYSIZE(pads)))
+			mInputBindingDraft.gamepad = pad - 1;
+	}
+
+	if (mInputBindingDraft.device == InputDevice::GamepadAxis
+		&& mInputBindingDraft.code != GLFW_GAMEPAD_AXIS_LEFT_TRIGGER
+		&& mInputBindingDraft.code != GLFW_GAMEPAD_AXIS_RIGHT_TRIGGER)
+	{
+		const char8* directions[] = { "Positive", "Negative" };
+		int direction = mInputBindingDraft.scale < 0.0f ? 1 : 0;
+		ImGui::TextUnformatted("Direction");
+		ImGui::SetNextItemWidth(340.0f);
+		if (ImGui::Combo("##binding_direction", &direction, directions, IM_ARRAYSIZE(directions)))
+			mInputBindingDraft.scale = direction == 0 ? 1.0f : -1.0f;
+	}
+
+	ImGui::Spacing();
+	const bool validAction = mInputBindingAction >= 0
+		&& mInputBindingAction < static_cast<int>(mInputActions.size());
+	ImGui::BeginDisabled(!validAction);
+
+	if (ImGui::Button("Add", ImVec2(96.0f, 0.0f)))
+	{
+		mInputActions[mInputBindingAction].bindings.push_back(mInputBindingDraft);
+		SaveProjectInputMap();
+		ImGui::CloseCurrentPopup();
+	}
+
+	ImGui::EndDisabled();
+	ImGui::SameLine();
+
+	if (ImGui::Button("Cancel", ImVec2(96.0f, 0.0f)) || ImGui::IsKeyPressed(ImGuiKey_Escape))
+		ImGui::CloseCurrentPopup();
+
+	ImGui::EndPopup();
 }
 
 void EditorLayer::RecordSnapshot()
@@ -2597,6 +3087,32 @@ namespace
 	{
 		return EditorDataDirectory() / "lion-shortcuts.ini";
 	}
+
+	std::filesystem::path EditorSettingsFile()
+	{
+		return EditorDataDirectory() / "lion-editor.ini";
+	}
+}
+
+void EditorLayer::LoadEditorSettings()
+{
+	std::ifstream file(EditorSettingsFile());
+	std::string name;
+	int value = 0;
+
+	while (file >> name >> value)
+		if (name == "show_colliders")
+			mShowColliders = value != 0;
+}
+
+void EditorLayer::SaveEditorSettings() const
+{
+	std::error_code error;
+	std::filesystem::create_directories(EditorDataDirectory(), error);
+	std::ofstream file(EditorSettingsFile(), std::ios::trunc);
+
+	if (file.is_open())
+		file << "show_colliders " << (mShowColliders ? 1 : 0) << '\n';
 }
 
 void EditorLayer::ResetShortcutsToDefault()
@@ -2610,7 +3126,7 @@ void EditorLayer::ResetShortcutsToDefault()
 	set(ShortcutAction::Redo, ImGuiKey_Y, true);
 	set(ShortcutAction::Play, ImGuiKey_F5);
 	set(ShortcutAction::Stop, ImGuiKey_F8);
-	set(ShortcutAction::ToggleShortcuts, ImGuiKey_F10);
+	set(ShortcutAction::OpenEditorSettings, ImGuiKey_F10);
 	set(ShortcutAction::GizmoMove, ImGuiKey_W);
 	set(ShortcutAction::GizmoRotate, ImGuiKey_E);
 	set(ShortcutAction::GizmoScale, ImGuiKey_R);
@@ -2649,6 +3165,7 @@ void EditorLayer::ResetShortcutsToDefault()
 
 	// F frames the selection, where every 3D and 2D editor has put it.
 	set(ShortcutAction::FocusSelection, ImGuiKey_F);
+	set(ShortcutAction::OpenProjectSettings, ImGuiKey_F11);
 }
 
 void EditorLayer::SetSelection(const Reference<Entity>& entity)
@@ -2911,7 +3428,7 @@ std::string EditorLayer::KeybindToString(const Keybind& bind) const
 
 void EditorLayer::HandleShortcuts()
 {
-	// Don't trigger actions while the user is capturing a new key in the Shortcuts panel.
+	// Don't trigger actions while the user is capturing a new key in Editor Settings.
 	if (mRebindingIndex >= 0)
 		return;
 
@@ -2927,7 +3444,8 @@ void EditorLayer::HandleShortcuts()
 	if (IsShortcutPressed(ShortcutAction::Play)) StartPlay();
 	if (IsShortcutPressed(ShortcutAction::Pause)) TogglePause();
 	if (IsShortcutPressed(ShortcutAction::Stop)) StopPlay();
-	if (IsShortcutPressed(ShortcutAction::ToggleShortcuts)) mShowShortcuts = !mShowShortcuts;
+	if (IsShortcutPressed(ShortcutAction::OpenEditorSettings)) mOpenEditorSettingsPopup = true;
+	if (IsShortcutPressed(ShortcutAction::OpenProjectSettings)) mOpenProjectSettingsPopup = true;
 	if (IsShortcutPressed(ShortcutAction::ToggleColliders)) mShowColliders = !mShowColliders;
 	if (IsShortcutPressed(ShortcutAction::StepFrame)) StepOneFrame();
 	if (IsShortcutPressed(ShortcutAction::CompileModule)) CompileGameModule();
@@ -5658,8 +6176,14 @@ float32 EditorLayer::DrawMenuBar(const ImVec2& barMin, const ImVec2& barMax)
 			ImGui::EndMenu();
 		}
 
-		if (ImGui::BeginMenu("Game"))
+		if (ImGui::BeginMenu("Project"))
 		{
+			if (ImGui::MenuItem(ICON_MDI_COG_OUTLINE "  Project Settings...",
+				ShortcutText(ShortcutAction::OpenProjectSettings).c_str()))
+				mOpenProjectSettingsPopup = true;
+
+			ImGui::Separator();
+
 			if (ImGui::MenuItem(ICON_MDI_HAMMER_WRENCH "  Compile", ShortcutText(ShortcutAction::CompileModule).c_str(), false, !mBuilding))
 				CompileGameModule();
 
@@ -5672,18 +6196,28 @@ float32 EditorLayer::DrawMenuBar(const ImVec2& barMin, const ImVec2& barMax)
 			if (ImGui::IsItemHovered())
 				ImGui::SetTooltip("Pick up an already-rebuilt Game.dll without restarting the editor");
 
+			ImGui::Separator();
+
+			if (ImGui::MenuItem(ICON_MDI_EXPORT "  Export Game...", nullptr, false, !mBuilding && !mExporting))
+				mOpenExportPopup = true;
+
 			ImGui::EndMenu();
 		}
 
-		if (ImGui::BeginMenu("Window"))
+		if (ImGui::BeginMenu("Editor"))
 		{
+			if (ImGui::MenuItem(ICON_MDI_COG_OUTLINE "  Editor Settings...",
+				ShortcutText(ShortcutAction::OpenEditorSettings).c_str()))
+				mOpenEditorSettingsPopup = true;
+
+			ImGui::Separator();
 			DrawLayoutMenu();
 			ImGui::EndMenu();
 		}
 
 		if (ImGui::BeginMenu("Help"))
 		{
-			ImGui::MenuItem(ICON_MDI_KEYBOARD "  Shortcuts", ShortcutText(ShortcutAction::ToggleShortcuts).c_str(), &mShowShortcuts);
+			ImGui::TextDisabled("Lion's Mane  %s", kVersion);
 			ImGui::EndMenu();
 		}
 
@@ -5953,6 +6487,118 @@ bool EditorLayer::LoadGameModule()
 		Log::Console(LogLevel::Success, "[Editor] Loaded the game module.");
 
 	return loaded;
+}
+
+void EditorLayer::DrawExportPopup()
+{
+	if (mOpenExportPopup)
+	{
+		mOpenExportPopup = false;
+
+		if (mExportLocation[0] == '\0')
+		{
+			const std::string suggested = (ActiveProjectDirectory().parent_path() / "Exports").generic_string();
+			const size_t copied = suggested.copy(mExportLocation, sizeof(mExportLocation) - 1);
+			mExportLocation[copied] = '\0';
+		}
+
+		ImGui::OpenPopup("Export Game");
+	}
+
+	const ImVec2 center = ImGui::GetMainViewport()->GetCenter();
+	ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+
+	if (!ImGui::BeginPopupModal("Export Game", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+		return;
+
+	ImGui::TextUnformatted("Windows Desktop");
+	ImGui::TextDisabled("Builds Shipping and creates a player-ready folder without source files.");
+	ImGui::Spacing();
+	ImGui::TextUnformatted("Destination");
+
+	const ImGuiStyle& style = ImGui::GetStyle();
+	const float32 browseWidth = ImGui::CalcTextSize(ICON_MDI_FOLDER_OPEN).x + style.FramePadding.x * 2.0f;
+	ImGui::SetNextItemWidth(440.0f - browseWidth - style.ItemInnerSpacing.x);
+	ImGui::InputText("##export_location", mExportLocation, IM_ARRAYSIZE(mExportLocation));
+	ImGui::SameLine(0.0f, style.ItemInnerSpacing.x);
+
+	if (ImGui::Button(ICON_MDI_FOLDER_OPEN "##export_browse"))
+	{
+		const std::string picked = FileDialog::OpenFolder(mExportLocation);
+
+		if (!picked.empty())
+		{
+			const size_t copied = picked.copy(mExportLocation, sizeof(mExportLocation) - 1);
+			mExportLocation[copied] = '\0';
+		}
+	}
+
+	ImGui::Spacing();
+	ImGui::BeginDisabled(mExportLocation[0] == '\0' || mExporting || mBuilding);
+
+	if (ImGui::Button("Export", ImVec2(96.0f, 0.0f)))
+	{
+		StartExport();
+		ImGui::CloseCurrentPopup();
+	}
+
+	ImGui::EndDisabled();
+	ImGui::SameLine();
+
+	if (ImGui::Button("Cancel", ImVec2(96.0f, 0.0f)) || ImGui::IsKeyPressed(ImGuiKey_Escape))
+		ImGui::CloseCurrentPopup();
+
+	ImGui::EndPopup();
+}
+
+void EditorLayer::StartExport()
+{
+	if (mExporting || mExportLocation[0] == '\0')
+		return;
+
+	const std::filesystem::path project = ActiveProjectDirectory();
+	const std::filesystem::path destination = mExportLocation;
+	Log::Console(LogLevel::Information, "[Editor] Exporting the game for Windows...");
+	PushToast("Exporting the Windows game", true);
+	mExporting = true;
+	mExport = std::async(std::launch::async, [project, destination]
+		{ return ProjectExporter::ExportWindows(project, destination); });
+}
+
+void EditorLayer::PollExport()
+{
+	if (!mExporting || !mExport.valid()
+		|| mExport.wait_for(std::chrono::seconds(0)) != std::future_status::ready)
+		return;
+
+	const ProjectExporter::Result result = mExport.get();
+	mExporting = false;
+	DismissBusyToasts();
+
+	std::istringstream lines(result.buildOutput);
+	std::string line;
+
+	while (std::getline(lines, line))
+	{
+		while (!line.empty() && (line.back() == '\r' || line.back() == ' '))
+			line.pop_back();
+
+		if (!line.empty())
+			Log::Console(line.find("error") == std::string::npos ? LogLevel::Information : LogLevel::Error,
+				"[Export] " + line);
+	}
+
+	if (result.succeeded)
+	{
+		Log::Console(LogLevel::Success,
+			LION_FORMAT_TEXT("[Editor] {} Output: {}", result.message, result.outputDirectory.generic_string()));
+		PushToast("Export complete", false);
+	}
+	else
+	{
+		Log::Console(LogLevel::Error, "[Editor] Export failed: " + result.message);
+		PushToast("Export failed", false);
+	}
 }
 
 void EditorLayer::CompileGameModule()
@@ -6392,6 +7038,7 @@ void EditorLayer::OpenProject(const std::filesystem::path& folder)
 		return;
 
 	SetActiveProjectDirectory(folder);
+	LoadProjectInputMap();
 
 	// The Content Browser returns to the new project's root, and its listing is stale by definition.
 	mProjectPath.clear();
