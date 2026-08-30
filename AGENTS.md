@@ -118,6 +118,29 @@ Apply these to every change:
 - Icon sizes are even and follow a 4 px grid. Use `kIconSize` (16) for toolbars, rows, filters, menus,
   tabs, component headers, and row-end widgets; use `kIconTitle` (24) for the single panel heading icon.
   Do not spell ad-hoc sizes at call sites or substitute text placeholders for missing icons.
+- Disclosure triangles follow the Scene Hierarchy exactly: ImGui `RenderArrow` at scale `0.70`, pointing
+  right while closed and down while open. Use the shared `EditorGui::DrawDisclosureArrow` for custom
+  controls and native `TreeNode`/`CollapsingHeader` behavior elsewhere; never hand-draw a replacement or
+  read an item's rectangle after opening a popup.
+- Component and Statistics headers use the same `DrawSectionHeader` primitive without per-panel offsets.
+  Its icon begins at `headerMin.x + fontSize + 12`, and its label begins 8 px after the 16 px icon. A new
+  collapsible section must reuse that primitive so arrow-to-icon spacing cannot drift between panels.
+- UI geometry comes from the shared ImGui style and editor helpers: the 2 px spacing grid in
+  `EditorGui::SetDarkTheme`, `kIconSize`/`kIconTitle`, `DrawSectionHeader`, row-end helpers, and compact
+  combo helpers. Do not introduce local padding, icon sizes, arrows, colours, or control behavior when a
+  shared metric or primitive already exists.
+- `EditorGui::SetDarkTheme` is the source of truth for palette and base metrics: 18 px UI text,
+  `WindowPadding` 8x8, `FramePadding` 8x4, `CellPadding` 6x4, `ItemSpacing` 8x6,
+  `ItemInnerSpacing` 6x4, 20 px indentation, 4 px frame/tab rounding, and 6 px window/child/popup rounding.
+  Change these centrally rather than overriding a panel. Use the regular font for controls and body text;
+  reserve the bold font for headings and deliberate emphasis already established by a neighbouring panel.
+- Workspace entity and asset selection uses `EditorGui::GetAccent()` consistently. A selected row stays
+  fully accented while hovered; an unselected hover uses the translucent accent. Project Manager rows use
+  the shared neutral `Header` palette. One logical row must be one full-width hover target, including
+  embedded lanes such as a favourite star, so its background never breaks into rectangles.
+- Full-width action buttons keep icons in a fixed left lane and centre the label in the complete button.
+  Preserve typography, frame height, disabled alpha, hit target, and keyboard behavior from ImGui rather
+  than simulating a button with unrelated draw calls.
 - When a prototype needs reusable behavior, decide whether it is a general engine API or game-specific
   client behavior. Ask the user when that boundary is genuinely unclear.
 

@@ -362,16 +362,11 @@ void ProjectManagerLayer::DrawToolbar()
 
 	ImGui::SetNextItemWidth(kSortWidth);
 
+	ImDrawList* sortDraw = ImGui::GetWindowDrawList();
+	const ImVec2 sortMin = ImGui::GetCursorScreenPos();
+	const ImVec2 sortMax(sortMin.x + kSortWidth, sortMin.y + ImGui::GetFrameHeight());
 	const bool sortOpen = ImGui::BeginCombo("##sort", kSortNames[sort], ImGuiComboFlags_NoArrowButton);
-	const ImVec2 sortMin = ImGui::GetItemRectMin();
-	const ImVec2 sortMax = ImGui::GetItemRectMax();
-	const float32 triangle = 5.0f;
-	const ImVec2 triangleCenter(sortMax.x - 10.0f, (sortMin.y + sortMax.y) * 0.5f + 1.0f);
-	ImGui::GetForegroundDrawList()->AddTriangleFilled(
-		ImVec2(triangleCenter.x - triangle, triangleCenter.y - triangle * 0.5f),
-		ImVec2(triangleCenter.x + triangle, triangleCenter.y - triangle * 0.5f),
-		ImVec2(triangleCenter.x, triangleCenter.y + triangle * 0.5f),
-		ImGui::GetColorU32(ImGuiCol_Text));
+	EditorGui::DrawDisclosureArrow(sortDraw, sortMin, sortMax, sortOpen, ImGui::GetColorU32(ImGuiCol_Text));
 
 	if (sortOpen)
 	{

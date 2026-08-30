@@ -57,8 +57,7 @@ namespace
 	std::filesystem::path ActiveProjectDirectory();
 	void SetActiveProjectDirectory(const std::filesystem::path& project);
 	void DrawIcon(const ImVec2& origin, const ImVec2& box, const char8* icon, ImU32 color, float32 pixels);
-	bool DrawSectionHeader(const char8* id, const char8* icon, const char8* name, ImGuiTreeNodeFlags flags,
-		float32 iconOffset = 0.0f);
+	bool DrawSectionHeader(const char8* id, const char8* icon, const char8* name, ImGuiTreeNodeFlags flags);
 }
 
 // Every panel's window name: the icon it wears on its tab, the name it goes by, and the id a saved layout
@@ -889,14 +888,13 @@ void EditorLayer::DrawToast()
 
 namespace
 {
-	bool DrawSectionHeader(const char8* id, const char8* icon, const char8* name, ImGuiTreeNodeFlags flags,
-		float32 iconOffset)
+	bool DrawSectionHeader(const char8* id, const char8* icon, const char8* name, ImGuiTreeNodeFlags flags)
 	{
 		ImGui::SetNextItemAllowOverlap();
 		const bool open = ImGui::CollapsingHeader(id, flags);
 		const ImVec2 headerMin = ImGui::GetItemRectMin();
 		const ImVec2 headerMax = ImGui::GetItemRectMax();
-		const float32 iconX = headerMin.x + ImGui::GetFontSize() + 12.0f + iconOffset;
+		const float32 iconX = headerMin.x + ImGui::GetFontSize() + 12.0f;
 		const float32 rowHeight = headerMax.y - headerMin.y;
 		const ImU32 textColor = ImGui::GetColorU32(ImGuiCol_Text);
 
@@ -907,23 +905,16 @@ namespace
 		return open;
 	}
 
-	// Inspector and modal combo arrows use the same compact triangle instead of ImGui's full-height arrow
-	// button. Keeping this in one primitive prevents each enum field from inventing its own proportions.
+	// Inspector and modal combos use the same disclosure arrow as the Scene Hierarchy. Their rectangle is
+	// captured before BeginCombo: opening the popup changes ImGui's current window and its last item data.
 	bool BeginCompactCombo(const char8* id, const char8* preview)
 	{
 		ImDrawList* draw = ImGui::GetWindowDrawList();
+		const ImVec2 minimum = ImGui::GetCursorScreenPos();
+		const ImVec2 maximum(minimum.x + ImGui::CalcItemWidth(), minimum.y + ImGui::GetFrameHeight());
 		const bool open = ImGui::BeginCombo(id, preview, ImGuiComboFlags_NoArrowButton);
-		const ImVec2 minimum = ImGui::GetItemRectMin();
-		const ImVec2 maximum = ImGui::GetItemRectMax();
-		constexpr float32 kTriangle = 3.5f;
-		const ImVec2 center(maximum.x - ImGui::GetStyle().FramePadding.x - kTriangle,
-			(minimum.y + maximum.y) * 0.5f + 1.0f);
 
-		draw->AddTriangleFilled(
-			ImVec2(center.x - kTriangle, center.y - kTriangle * 0.5f),
-			ImVec2(center.x + kTriangle, center.y - kTriangle * 0.5f),
-			ImVec2(center.x, center.y + kTriangle * 0.5f),
-			ImGui::GetColorU32(ImGuiCol_Text));
+		EditorGui::DrawDisclosureArrow(draw, minimum, maximum, open, ImGui::GetColorU32(ImGuiCol_Text));
 
 		return open;
 	}
@@ -998,10 +989,7 @@ void EditorLayer::DrawStatistics()
 		return true;
 	};
 
-	constexpr float32 kStatisticsIconBreathingRoom = 2.0f;
-
-	if (DrawSectionHeader("###statistics_frame", ICON_MDI_CLOCK, "Frame", ImGuiTreeNodeFlags_DefaultOpen,
-		kStatisticsIconBreathingRoom)
+	if (DrawSectionHeader("###statistics_frame", ICON_MDI_CLOCK, "Frame", ImGuiTreeNodeFlags_DefaultOpen)
 		&& beginTable("Frame"))
 	{
 		row("FPS", "%.1f", io.Framerate);
@@ -1010,8 +998,7 @@ void EditorLayer::DrawStatistics()
 		ImGui::EndTable();
 	}
 
-	if (DrawSectionHeader("###statistics_renderer", ICON_MDI_CHART_BAR, "Renderer", ImGuiTreeNodeFlags_DefaultOpen,
-		kStatisticsIconBreathingRoom)
+	if (DrawSectionHeader("###statistics_renderer", ICON_MDI_CHART_BAR, "Renderer", ImGuiTreeNodeFlags_DefaultOpen)
 		&& beginTable("Renderer"))
 	{
 		// The batch's whole job is to turn many sprites into few draw calls, and none of that shows from
@@ -1029,8 +1016,7 @@ void EditorLayer::DrawStatistics()
 		ImGui::EndTable();
 	}
 
-	if (DrawSectionHeader("###statistics_scene", ICON_MDI_CUBE_OUTLINE, "Scene", ImGuiTreeNodeFlags_DefaultOpen,
-		kStatisticsIconBreathingRoom)
+	if (DrawSectionHeader("###statistics_scene", ICON_MDI_CUBE_OUTLINE, "Scene", ImGuiTreeNodeFlags_DefaultOpen)
 		&& beginTable("Scene"))
 	{
 		int32 components = 0;
@@ -1052,8 +1038,7 @@ void EditorLayer::DrawStatistics()
 		ImGui::EndTable();
 	}
 
-	if (DrawSectionHeader("###statistics_viewport", ICON_MDI_MONITOR, "Viewport", ImGuiTreeNodeFlags_DefaultOpen,
-		kStatisticsIconBreathingRoom)
+	if (DrawSectionHeader("###statistics_viewport", ICON_MDI_MONITOR, "Viewport", ImGuiTreeNodeFlags_DefaultOpen)
 		&& beginTable("Viewport"))
 	{
 		row("Render target", "%.0f x %.0f", mViewportSize.x, mViewportSize.y);

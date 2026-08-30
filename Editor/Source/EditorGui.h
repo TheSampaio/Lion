@@ -1,8 +1,9 @@
 #pragma once
 
 struct ImFont;
+struct ImDrawList;
+struct ImVec2;
 struct ImVec4;
-struct ImFont;
 
 // Dear ImGui lifecycle for the editor (GLFW + OpenGL 3 backends).
 //
@@ -35,4 +36,9 @@ public:
 	// hand use this rather than the copy merged into the text, so they stay sharp at any size down from it.
 	static ImFont* GetIconFont();
 	static Lion::float32 GetIconAtlasSize();
+
+	// Draws the shared disclosure triangle inside a control rectangle. Closed controls point right and
+	// open controls point down, at the exact 0.70 scale used by Scene Hierarchy tree nodes.
+	static void DrawDisclosureArrow(ImDrawList* draw, const ImVec2& minimum, const ImVec2& maximum,
+		bool open, unsigned int color);
 };

@@ -40,6 +40,21 @@ ImFont* EditorGui::GetBoldFont() { return sBoldFont; }
 ImFont* EditorGui::GetIconFont() { return sIconFont; }
 float32 EditorGui::GetIconAtlasSize() { return kIconAtlasSize; }
 
+void EditorGui::DrawDisclosureArrow(ImDrawList* draw, const ImVec2& minimum, const ImVec2& maximum,
+	bool open, unsigned int color)
+{
+	// ImGui's TreeNodeBehavior uses 0.70 for the Scene Hierarchy. RenderArrow positions its geometry from
+	// a top-left origin, so derive that origin from the control rectangle instead of reading LastItemData:
+	// a combo changes the current window when its popup opens, and LastItemData then belongs to that popup.
+	constexpr float32 kDisclosureScale = 0.70f;
+	const float32 fontSize = ImGui::GetFontSize();
+	const ImVec2 origin(
+		maximum.x - ImGui::GetStyle().FramePadding.x - fontSize,
+		(minimum.y + maximum.y) * 0.5f - fontSize * 0.5f * kDisclosureScale);
+
+	ImGui::RenderArrow(draw, origin, color, open ? ImGuiDir_Down : ImGuiDir_Right, kDisclosureScale);
+}
+
 // The icon font, twice over: merged into the text so an icon can sit inline with a label, and standalone at
 // atlas resolution so a hand-drawn icon is sharp at 20, 24 or 32 pixels. One .ttf, two ImFonts.
 void LoadIconFont()
