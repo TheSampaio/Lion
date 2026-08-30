@@ -55,6 +55,8 @@ namespace
 	// point is reached.
 	std::filesystem::path ActiveProjectDirectory();
 	void SetActiveProjectDirectory(const std::filesystem::path& project);
+	void DrawIcon(const ImVec2& origin, const ImVec2& box, const char8* icon, ImU32 color, float32 pixels);
+	bool DrawSectionHeader(const char8* id, const char8* icon, const char8* name, ImGuiTreeNodeFlags flags);
 }
 
 // Every panel's window name: the icon it wears on its tab, the name it goes by, and the id a saved layout
@@ -872,6 +874,26 @@ void EditorLayer::DrawToast()
 	}
 }
 
+namespace
+{
+	bool DrawSectionHeader(const char8* id, const char8* icon, const char8* name, ImGuiTreeNodeFlags flags)
+	{
+		ImGui::SetNextItemAllowOverlap();
+		const bool open = ImGui::CollapsingHeader(id, flags);
+		const ImVec2 headerMin = ImGui::GetItemRectMin();
+		const ImVec2 headerMax = ImGui::GetItemRectMax();
+		const float32 iconX = headerMin.x + ImGui::GetFontSize() + 12.0f;
+		const float32 rowHeight = headerMax.y - headerMin.y;
+		const ImU32 textColor = ImGui::GetColorU32(ImGuiCol_Text);
+
+		DrawIcon(ImVec2(iconX, headerMin.y), ImVec2(kIconSize, rowHeight), icon, textColor, kIconSize);
+		ImGui::GetWindowDrawList()->AddText(
+			ImVec2(iconX + kIconSize + 8.0f, ImFloor(headerMin.y + (rowHeight - ImGui::GetTextLineHeight()) * 0.5f)),
+			textColor, name);
+		return open;
+	}
+}
+
 void EditorLayer::DrawStatistics()
 {
 	if (!mShowStatistics)
@@ -914,7 +936,8 @@ void EditorLayer::DrawStatistics()
 		return true;
 	};
 
-	if (ImGui::CollapsingHeader(ICON_MDI_CLOCK "  Frame", ImGuiTreeNodeFlags_DefaultOpen) && beginTable("Frame"))
+	if (DrawSectionHeader("###statistics_frame", ICON_MDI_CLOCK, "Frame", ImGuiTreeNodeFlags_DefaultOpen)
+		&& beginTable("Frame"))
 	{
 		row("FPS", "%.1f", io.Framerate);
 		row("Frame time", "%.3f ms", 1000.0f / io.Framerate);
@@ -922,7 +945,8 @@ void EditorLayer::DrawStatistics()
 		ImGui::EndTable();
 	}
 
-	if (ImGui::CollapsingHeader(ICON_MDI_CHART_BAR "  Renderer", ImGuiTreeNodeFlags_DefaultOpen) && beginTable("Renderer"))
+	if (DrawSectionHeader("###statistics_renderer", ICON_MDI_CHART_BAR, "Renderer", ImGuiTreeNodeFlags_DefaultOpen)
+		&& beginTable("Renderer"))
 	{
 		// The batch's whole job is to turn many sprites into few draw calls, and none of that shows from
 		// the outside. These are the numbers that say whether it is doing it.
@@ -939,7 +963,8 @@ void EditorLayer::DrawStatistics()
 		ImGui::EndTable();
 	}
 
-	if (ImGui::CollapsingHeader(ICON_MDI_CUBE_OUTLINE "  Scene", ImGuiTreeNodeFlags_DefaultOpen) && beginTable("Scene"))
+	if (DrawSectionHeader("###statistics_scene", ICON_MDI_CUBE_OUTLINE, "Scene", ImGuiTreeNodeFlags_DefaultOpen)
+		&& beginTable("Scene"))
 	{
 		int32 components = 0;
 		int32 bodies = 0;
@@ -960,7 +985,8 @@ void EditorLayer::DrawStatistics()
 		ImGui::EndTable();
 	}
 
-	if (ImGui::CollapsingHeader(ICON_MDI_MONITOR "  Viewport", ImGuiTreeNodeFlags_DefaultOpen) && beginTable("Viewport"))
+	if (DrawSectionHeader("###statistics_viewport", ICON_MDI_MONITOR, "Viewport", ImGuiTreeNodeFlags_DefaultOpen)
+		&& beginTable("Viewport"))
 	{
 		row("Render target", "%.0f x %.0f", mViewportSize.x, mViewportSize.y);
 		row("Window", "%d x %d", static_cast<int32>(io.DisplaySize.x), static_cast<int32>(io.DisplaySize.y));
@@ -972,9 +998,6 @@ void EditorLayer::DrawStatistics()
 
 namespace
 {
-	// Defined further down, next to the other icon helpers, but needed here for the console's filter icons.
-	void DrawIcon(const ImVec2& origin, const ImVec2& box, const char8* icon, ImU32 color, float32 pixels);
-
 	// Console severity buckets, mirroring the three filter toggles (Unity-style).
 	enum class LogBucket { Error, Warning, Info };
 
@@ -2804,34 +2827,63 @@ void EditorLayer::DrawInputSettings()
 		connectedCount++;
 	}
 
-	const float32 deviceHeight = ImGui::GetFrameHeightWithSpacing() * 2.15f;
-	ImGui::BeginChild("##input_devices", ImVec2(0.0f, deviceHeight), true);
-	if (connectedGamepad >= 0)
+	const ImGuiStyle& style = ImGui::GetStyle();
+	const ImVec4 inputBodyColor(20.0f / 255.0f, 21.0f / 255.0f, 23.0f / 255.0f, 1.0f);
+	const float32 deviceHeight = ImGui::GetFrameHeight() + style.WindowPadding.y * 2.0f;
+	ImGui::PushStyleColor(ImGuiCol_ChildBg, ImGui::GetStyleColorVec4(ImGuiCol_FrameBg));
+	ImGui::BeginChild("##input_devices", ImVec2(0.0f, deviceHeight), true,
+		ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+	ImGui::AlignTextToFramePadding();
+
+	if (ImGui::BeginTable("##input_device_status", 2, ImGuiTableFlags_SizingStretchProp))
 	{
-		ImGui::TextUnformatted(ICON_MDI_GAMEPAD "  Connected controller");
-		ImGui::SameLine();
-		ImGui::TextColored(LogLevelColor(LogLevel::Success), "%s", Input::GetGamepadName(connectedGamepad).c_str());
-		ImGui::SameLine();
-		ImGui::TextDisabled(connectedCount == 1 ? "(Pad %d)" : "(Pad %d, %d connected)",
-			connectedGamepad + 1, connectedCount);
-		ImGui::TextDisabled("Left stick  X %+.2f   Y %+.2f",
-			Input::GetGamepadAxis(GamepadAxis::LeftX, connectedGamepad),
-			Input::GetGamepadAxis(GamepadAxis::LeftY, connectedGamepad));
+		ImGui::TableSetupColumn("status", ImGuiTableColumnFlags_WidthStretch);
+		ImGui::TableSetupColumn("details", ImGuiTableColumnFlags_WidthFixed, 330.0f);
+		ImGui::TableNextRow();
+		ImGui::TableSetColumnIndex(0);
+
+		if (connectedGamepad >= 0)
+		{
+			std::string controllerName = Input::GetGamepadName(connectedGamepad);
+			const size_t technicalSuffix = controllerName.rfind(" (");
+
+			if (technicalSuffix != std::string::npos && controllerName.back() == ')')
+				controllerName.erase(technicalSuffix);
+
+			ImGui::TextUnformatted(ICON_MDI_GAMEPAD "  Controller connected");
+			ImGui::SameLine();
+			ImGui::TextColored(LogLevelColor(LogLevel::Success), "%s", controllerName.c_str());
+			ImGui::TableSetColumnIndex(1);
+			const float32 leftX = Input::GetGamepadAxis(GamepadAxis::LeftX, connectedGamepad);
+			const float32 leftY = Input::GetGamepadAxis(GamepadAxis::LeftY, connectedGamepad);
+
+			if (connectedCount == 1)
+				ImGui::TextDisabled("Pad %d   Left stick  X %+.2f  Y %+.2f", connectedGamepad + 1, leftX, leftY);
+			else
+				ImGui::TextDisabled("Pad %d of %d   Left stick  X %+.2f  Y %+.2f",
+					connectedGamepad + 1, connectedCount, leftX, leftY);
+		}
+		else
+		{
+			ImGui::TextDisabled(ICON_MDI_GAMEPAD "  No controller connected");
+			ImGui::TableSetColumnIndex(1);
+			ImGui::TextDisabled("Xbox, PlayStation and compatible controllers");
+		}
+
+		ImGui::EndTable();
 	}
-	else
-	{
-		ImGui::TextDisabled(ICON_MDI_GAMEPAD "  No mapped controller detected");
-		ImGui::TextDisabled("Xbox, PlayStation and compatible pads use GLFW's standard gamepad mapping.");
-	}
+
 	ImGui::EndChild();
+	ImGui::PopStyleColor();
 
 	ImGui::Spacing();
-	const float32 filterWidth = ImGui::GetContentRegionAvail().x * 0.38f;
+	const float32 addWidth = 124.0f;
+	const float32 filterWidth = ImGui::GetContentRegionAvail().x * 0.30f;
 	ImGui::SetNextItemWidth(filterWidth);
 	ImGui::InputTextWithHint("##input_filter", ICON_MDI_MAGNIFY "  Filter actions", mInputFilter, IM_ARRAYSIZE(mInputFilter));
 
 	ImGui::SameLine();
-	ImGui::SetNextItemWidth(-ImGui::GetFrameHeightWithSpacing());
+	ImGui::SetNextItemWidth(-addWidth - style.ItemSpacing.x);
 	const bool submitted = ImGui::InputTextWithHint("##new_input_action", "New action name", mNewInputAction,
 		IM_ARRAYSIZE(mNewInputAction), ImGuiInputTextFlags_EnterReturnsTrue);
 	ImGui::SameLine();
@@ -2842,7 +2894,7 @@ void EditorLayer::DrawInputSettings()
 	const bool canAdd = IsInputActionNameValid(newName) && !duplicate;
 
 	ImGui::BeginDisabled(!canAdd);
-	if (ImGui::Button(ICON_MDI_PLUS "##add_input_action") || (submitted && canAdd))
+	if (ImGui::Button(ICON_MDI_PLUS "  Add action", ImVec2(addWidth, 0.0f)) || (submitted && canAdd))
 	{
 		mInputActions.push_back({ newName, 0.2f, {} });
 		mNewInputAction[0] = '\0';
@@ -2856,90 +2908,120 @@ void EditorLayer::DrawInputSettings()
 		ImGui::TextDisabled(duplicate ? "That action already exists." : "Use letters, digits and _, not starting with a digit.");
 
 	ImGui::Spacing();
+	const float32 summaryHeight = ImGui::GetTextLineHeightWithSpacing() + style.ItemSpacing.y;
+	ImGui::BeginChild("##input_action_list", ImVec2(0.0f, -summaryHeight));
+	int removeAction = -1;
+	const std::string filter = Lower(mInputFilter);
 
-	const ImVec4 inputGridColor(20.0f / 255.0f, 21.0f / 255.0f, 23.0f / 255.0f, 1.0f);
-	ImGui::PushStyleColor(ImGuiCol_TableRowBg, inputGridColor);
-	ImGui::PushStyleColor(ImGuiCol_TableRowBgAlt, inputGridColor);
-	if (ImGui::BeginTable("##input_actions", 4,
-		ImGuiTableFlags_BordersInnerH | ImGuiTableFlags_BordersOuterH | ImGuiTableFlags_RowBg
-			| ImGuiTableFlags_ScrollY,
-		ImVec2(0.0f, -ImGui::GetTextLineHeightWithSpacing())))
+	for (int actionIndex = 0; actionIndex < static_cast<int>(mInputActions.size()); ++actionIndex)
 	{
-		ImGui::TableSetupScrollFreeze(0, 1);
-		ImGui::TableSetupColumn("Action", ImGuiTableColumnFlags_WidthStretch, 0.60f);
-		ImGui::TableSetupColumn("Deadzone", ImGuiTableColumnFlags_WidthFixed, 120.0f);
-		ImGui::TableSetupColumn("Device", ImGuiTableColumnFlags_WidthFixed, 120.0f);
-		ImGui::TableSetupColumn("##actions", ImGuiTableColumnFlags_WidthFixed, 84.0f);
-		ImGui::TableHeadersRow();
+		InputAction& action = mInputActions[actionIndex];
 
-		int removeAction = -1;
-		const std::string filter = Lower(mInputFilter);
+		if (!filter.empty() && Lower(action.name).find(filter) == std::string::npos)
+			continue;
 
-		for (int actionIndex = 0; actionIndex < static_cast<int>(mInputActions.size()); ++actionIndex)
+		ImGui::PushID(actionIndex);
+		ImGui::SetNextItemAllowOverlap();
+		const bool open = ImGui::CollapsingHeader("##action",
+			ImGuiTreeNodeFlags_SpanAvailWidth | ImGuiTreeNodeFlags_AllowOverlap);
+		const ImVec2 headerMin = ImGui::GetItemRectMin();
+		const ImVec2 headerMax = ImGui::GetItemRectMax();
+		const ImVec2 cursorAfterHeader = ImGui::GetCursorScreenPos();
+		const float32 headerHeight = headerMax.y - headerMin.y;
+		const float32 buttonSize = headerHeight - 6.0f;
+		const float32 deleteX = headerMax.x - buttonSize - 4.0f;
+		const float32 addX = deleteX - buttonSize - style.ItemSpacing.x;
+		const float32 textY = ImFloor(headerMin.y + (headerHeight - ImGui::GetTextLineHeight()) * 0.5f);
+		ImDrawList* drawList = ImGui::GetWindowDrawList();
+		drawList->AddText(ImVec2(headerMin.x + ImGui::GetFontSize() + 12.0f, textY),
+			ImGui::GetColorU32(ImGuiCol_Text), action.name.c_str());
+
+		char8 summary[96];
+		std::snprintf(summary, sizeof(summary), "Deadzone %.2f    %d binding%s", action.deadzone,
+			static_cast<int32>(action.bindings.size()), action.bindings.size() == 1 ? "" : "s");
+		const ImVec2 summarySize = ImGui::CalcTextSize(summary);
+		drawList->AddText(ImVec2(addX - style.ItemSpacing.x - summarySize.x, textY),
+			ImGui::GetColorU32(ImGuiCol_TextDisabled), summary);
+
+		ImGui::SetCursorScreenPos(ImVec2(addX, headerMin.y + 3.0f));
+		if (ImGui::Button(ICON_MDI_PLUS "##add_binding", ImVec2(buttonSize, buttonSize)))
 		{
-			InputAction& action = mInputActions[actionIndex];
+			mInputBindingAction = actionIndex;
+			mInputBindingIndex = -1;
+			mInputBindingDraft = { InputDevice::Keyboard, GLFW_KEY_SPACE, 1.0f, -1 };
+			mOpenInputBindingPopup = true;
+		}
+		if (ImGui::IsItemHovered())
+			ImGui::SetTooltip("Add binding");
 
-			if (!filter.empty() && Lower(action.name).find(filter) == std::string::npos)
-				continue;
+		ImGui::SetCursorScreenPos(ImVec2(deleteX, headerMin.y + 3.0f));
+		if (ImGui::Button(ICON_MDI_DELETE_OUTLINE "##remove_action", ImVec2(buttonSize, buttonSize)))
+			removeAction = actionIndex;
+		if (ImGui::IsItemHovered())
+			ImGui::SetTooltip("Remove action");
+		ImGui::SetCursorScreenPos(cursorAfterHeader);
 
-			ImGui::PushID(actionIndex);
-			ImGui::TableNextRow();
-			ImGui::TableSetColumnIndex(0);
-			const bool open = ImGui::TreeNodeEx("##action", ImGuiTreeNodeFlags_SpanAllColumns,
-				"%s", action.name.c_str());
+		if (open)
+		{
+			const float32 bodyHeight = style.WindowPadding.y * 2.0f + ImGui::GetFrameHeight()
+				+ ImGui::GetTextLineHeightWithSpacing() + style.ItemSpacing.y * 2.0f
+				+ ImGui::GetFrameHeightWithSpacing() * ImMax(1, static_cast<int32>(action.bindings.size()));
+			ImGui::PushStyleColor(ImGuiCol_ChildBg, inputBodyColor);
+			ImGui::BeginChild("##action_body", ImVec2(0.0f, bodyHeight), true,
+				ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 
-			ImGui::TableSetColumnIndex(1);
-			ImGui::SetNextItemWidth(-1.0f);
+			ImGui::AlignTextToFramePadding();
+			ImGui::TextUnformatted("Deadzone");
+			ImGui::SameLine(160.0f);
+			ImGui::SetNextItemWidth(260.0f);
+			ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.055f, 0.057f, 0.063f, 1.0f));
 			ImGui::DragFloat("##deadzone", &action.deadzone, 0.01f, 0.0f, 0.95f, "%.2f");
+			ImGui::PopStyleColor();
 			if (ImGui::IsItemDeactivatedAfterEdit())
 				SaveProjectInputMap();
 
-			ImGui::TableSetColumnIndex(2);
-			ImGui::TextDisabled("%d binding%s", static_cast<int32>(action.bindings.size()),
-				action.bindings.size() == 1 ? "" : "s");
+			ImGui::Spacing();
+			ImGui::TextUnformatted("Bindings");
+			const char8* bindingColumns = "Input  /  Device";
+			ImGui::SameLine(ImGui::GetWindowWidth() - style.WindowPadding.x - ImGui::CalcTextSize(bindingColumns).x);
+			ImGui::TextDisabled("%s", bindingColumns);
+			ImGui::Separator();
 
-			ImGui::TableSetColumnIndex(3);
-			if (ImGui::SmallButton(ICON_MDI_PLUS "##add_binding"))
+			int removeBinding = -1;
+			if (ImGui::BeginTable("##bindings", 3,
+				ImGuiTableFlags_BordersInnerH | ImGuiTableFlags_SizingStretchProp))
 			{
-				mInputBindingAction = actionIndex;
-				mInputBindingIndex = -1;
-				mInputBindingDraft = { InputDevice::Keyboard, GLFW_KEY_SPACE, 1.0f, -1 };
-				mOpenInputBindingPopup = true;
-			}
-			if (ImGui::IsItemHovered())
-				ImGui::SetTooltip("Add binding");
-			ImGui::SameLine();
-			if (ImGui::SmallButton(ICON_MDI_DELETE_OUTLINE "##remove_action"))
-				removeAction = actionIndex;
-			if (ImGui::IsItemHovered())
-				ImGui::SetTooltip("Remove action");
+				ImGui::TableSetupColumn("Input", ImGuiTableColumnFlags_WidthStretch);
+				ImGui::TableSetupColumn("Device", ImGuiTableColumnFlags_WidthFixed, 150.0f);
+				ImGui::TableSetupColumn("##binding_actions", ImGuiTableColumnFlags_WidthFixed, 76.0f);
 
-			if (open)
-			{
-				int removeBinding = -1;
+				if (action.bindings.empty())
+				{
+					ImGui::TableNextRow(ImGuiTableRowFlags_None, ImGui::GetFrameHeight());
+					ImGui::TableSetColumnIndex(0);
+					ImGui::TextDisabled("No bindings. Use + to add one.");
+				}
 
 				for (int bindingIndex = 0; bindingIndex < static_cast<int>(action.bindings.size()); ++bindingIndex)
 				{
-					ImGui::TableNextRow();
+					InputBinding& binding = action.bindings[bindingIndex];
+					ImGui::TableNextRow(ImGuiTableRowFlags_None, ImGui::GetFrameHeightWithSpacing());
 					ImGui::TableSetColumnIndex(0);
-					ImGui::Indent();
-					ImGui::Text("%s  %s", InputBindingIcon(action.bindings[bindingIndex].device),
-						InputBindingText(action.bindings[bindingIndex]).c_str());
-					ImGui::Unindent();
+					ImGui::AlignTextToFramePadding();
+					ImGui::Text("%s  %s", InputBindingIcon(binding.device), InputBindingText(binding).c_str());
 					ImGui::TableSetColumnIndex(1);
-					ImGui::TextDisabled("-");
+					ImGui::AlignTextToFramePadding();
+					ImGui::TextDisabled("%s", binding.gamepad < 0
+						? (binding.device == InputDevice::Keyboard ? "Keyboard"
+							: binding.device == InputDevice::MouseButton ? "Mouse" : "All pads")
+						: ("Pad " + std::to_string(binding.gamepad + 1)).c_str());
 					ImGui::TableSetColumnIndex(2);
-					ImGui::TextDisabled("%s", action.bindings[bindingIndex].gamepad < 0
-						? (action.bindings[bindingIndex].device == InputDevice::Keyboard ? "Keyboard"
-							: action.bindings[bindingIndex].device == InputDevice::MouseButton ? "Mouse" : "All pads")
-						: ("Pad " + std::to_string(action.bindings[bindingIndex].gamepad + 1)).c_str());
-					ImGui::TableSetColumnIndex(3);
 					ImGui::PushID(bindingIndex);
 					if (ImGui::SmallButton(ICON_MDI_PENCIL "##edit_binding"))
 					{
 						mInputBindingAction = actionIndex;
 						mInputBindingIndex = bindingIndex;
-						mInputBindingDraft = action.bindings[bindingIndex];
+						mInputBindingDraft = binding;
 						mOpenInputBindingPopup = true;
 					}
 					if (ImGui::IsItemHovered())
@@ -2952,27 +3034,38 @@ void EditorLayer::DrawInputSettings()
 					ImGui::PopID();
 				}
 
-				if (removeBinding >= 0)
-				{
-					action.bindings.erase(action.bindings.begin() + removeBinding);
-					SaveProjectInputMap();
-				}
-
-				ImGui::TreePop();
+				ImGui::EndTable();
 			}
 
-			ImGui::PopID();
+			if (removeBinding >= 0)
+			{
+				action.bindings.erase(action.bindings.begin() + removeBinding);
+				SaveProjectInputMap();
+			}
+
+			ImGui::EndChild();
+			ImGui::PopStyleColor();
 		}
 
-		if (removeAction >= 0)
-		{
-			mInputActions.erase(mInputActions.begin() + removeAction);
-			SaveProjectInputMap();
-		}
-
-		ImGui::EndTable();
+		ImGui::Spacing();
+		ImGui::PopID();
 	}
-	ImGui::PopStyleColor(2);
+
+	ImGui::EndChild();
+
+	if (removeAction >= 0)
+	{
+		mInputActions.erase(mInputActions.begin() + removeAction);
+		SaveProjectInputMap();
+	}
+
+	int32 bindingCount = 0;
+	for (const InputAction& action : mInputActions)
+		bindingCount += static_cast<int32>(action.bindings.size());
+
+	ImGui::Separator();
+	ImGui::TextDisabled("%d action%s  /  %d binding%s", static_cast<int32>(mInputActions.size()),
+		mInputActions.size() == 1 ? "" : "s", bindingCount, bindingCount == 1 ? "" : "s");
 
 	if (!mProjectSettingsError.empty())
 		ImGui::TextColored(LogLevelColor(LogLevel::Error), "%s", mProjectSettingsError.c_str());
@@ -4710,27 +4803,14 @@ bool EditorLayer::DrawComponentHeader(const char8* icon, const char8* name, int 
 	const ImGuiStyle& style = ImGui::GetStyle();
 	const float32 lineHeight = ImGui::GetFontSize() + style.FramePadding.y * 2.0f;
 
-	// The header draws the arrow and the background; the icon and the name are painted onto it, so the icon
-	// sits a hair after the arrow instead of at the wide default label offset — that offset was the gap.
-	ImGui::SetNextItemAllowOverlap();
-	const bool open = ImGui::CollapsingHeader("###header",
+	// Components and the other editor sections share this header primitive, so the arrow, icon and label
+	// keep one rhythm everywhere instead of acquiring panel-specific offsets.
+	const bool open = DrawSectionHeader("###header", icon, name,
 		ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_SpanAvailWidth | ImGuiTreeNodeFlags_AllowOverlap);
 
 	// Exact header bounds, so the remove button sits flush against its right edge.
 	const ImVec2 headerMin = ImGui::GetItemRectMin();
 	const ImVec2 headerMax = ImGui::GetItemRectMax();
-
-	// Icon then name, laid out by hand: the arrow takes about a font's width, the icon follows it with a
-	// little air, and the name follows the icon.
-	const float32 iconX = headerMin.x + ImGui::GetFontSize() + 12.0f;
-	const float32 rowHeight = headerMax.y - headerMin.y;
-	const ImU32 textColor = ImGui::GetColorU32(ImGuiCol_Text);
-
-	DrawIcon(ImVec2(iconX, headerMin.y), ImVec2(kIconSize, rowHeight), icon, textColor, kIconSize);
-
-	ImGui::GetWindowDrawList()->AddText(
-		ImVec2(iconX + kIconSize + 8.0f, ImFloor(headerMin.y + (rowHeight - ImGui::GetTextLineHeight()) * 0.5f)),
-		textColor, name);
 
 	// A negative index is a fixed component — the Transform — which reorders into nothing and cannot be
 	// removed. Everything below is for the ones that can.
