@@ -906,6 +906,54 @@ namespace
 			textColor, name);
 		return open;
 	}
+
+	// Inspector and modal combo arrows use the same compact triangle instead of ImGui's full-height arrow
+	// button. Keeping this in one primitive prevents each enum field from inventing its own proportions.
+	bool BeginCompactCombo(const char8* id, const char8* preview)
+	{
+		ImDrawList* draw = ImGui::GetWindowDrawList();
+		const bool open = ImGui::BeginCombo(id, preview, ImGuiComboFlags_NoArrowButton);
+		const ImVec2 minimum = ImGui::GetItemRectMin();
+		const ImVec2 maximum = ImGui::GetItemRectMax();
+		constexpr float32 kTriangle = 3.5f;
+		const ImVec2 center(maximum.x - ImGui::GetStyle().FramePadding.x - kTriangle,
+			(minimum.y + maximum.y) * 0.5f + 1.0f);
+
+		draw->AddTriangleFilled(
+			ImVec2(center.x - kTriangle, center.y - kTriangle * 0.5f),
+			ImVec2(center.x + kTriangle, center.y - kTriangle * 0.5f),
+			ImVec2(center.x, center.y + kTriangle * 0.5f),
+			ImGui::GetColorU32(ImGuiCol_Text));
+
+		return open;
+	}
+
+	bool CompactCombo(const char8* id, int32& selected, const char8* const* items, int32 count)
+	{
+		selected = std::clamp(selected, 0, count - 1);
+		bool changed = false;
+
+		if (BeginCompactCombo(id, items[selected]))
+		{
+			for (int32 option = 0; option < count; ++option)
+			{
+				const bool current = selected == option;
+
+				if (ImGui::Selectable(items[option], current))
+				{
+					selected = option;
+					changed = true;
+				}
+
+				if (current)
+					ImGui::SetItemDefaultFocus();
+			}
+
+			ImGui::EndCombo();
+		}
+
+		return changed;
+	}
 }
 
 void EditorLayer::DrawStatistics()
@@ -2291,17 +2339,20 @@ bool EditorLayer::DrawAssetEntry(const std::string& name, const std::string& ass
 	// Hovered and clicked in the engine's orange, the same as the Hierarchy and the console: one selection
 	// colour across the editor.
 	const ImVec4 accent = EditorGui::GetAccent();
-	ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(accent.x, accent.y, accent.z, 0.30f));
+	const bool selected = mSelectedAsset == assetPath;
+	ImGui::PushStyleColor(ImGuiCol_Header, accent);
+	ImGui::PushStyleColor(ImGuiCol_HeaderHovered,
+		selected ? accent : ImVec4(accent.x, accent.y, accent.z, 0.30f));
 	ImGui::PushStyleColor(ImGuiCol_HeaderActive, accent);
 
 	const std::string label = std::string(folder ? ICON_MDI_FOLDER : AssetIcon(name)) + "  " + name;
-	const bool activated = ImGui::Selectable(label.c_str(), mSelectedAsset == assetPath,
+	const bool activated = ImGui::Selectable(label.c_str(), selected,
 		ImGuiSelectableFlags_AllowDoubleClick);
 
 	if (activated)
 		mSelectedAsset = assetPath;
 
-	ImGui::PopStyleColor(2);
+	ImGui::PopStyleColor(3);
 
 	if (dimmed)
 		ImGui::PopStyleColor();
@@ -3310,7 +3361,7 @@ void EditorLayer::DrawInputBindingPopup()
 
 	ImGui::TextUnformatted(ICON_MDI_TUNE "  Device");
 	ImGui::SetNextItemWidth(340.0f);
-	if (ImGui::Combo("##binding_device", &device, devices, IM_ARRAYSIZE(devices)))
+	if (CompactCombo("##binding_device", device, devices, IM_ARRAYSIZE(devices)))
 	{
 		mInputBindingDraft.device = static_cast<InputDevice>(device);
 		mInputBindingDraft.scale = 1.0f;
@@ -3322,7 +3373,7 @@ void EditorLayer::DrawInputBindingPopup()
 		ImGui::Text("%s  %s", InputBindingIcon(mInputBindingDraft.device), label);
 		ImGui::SetNextItemWidth(340.0f);
 
-		if (ImGui::BeginCombo("##binding_code", ChoiceName(choices, mInputBindingDraft.code)))
+		if (BeginCompactCombo("##binding_code", ChoiceName(choices, mInputBindingDraft.code)))
 		{
 			for (const InputChoice& choice : choices)
 			{
@@ -3351,7 +3402,7 @@ void EditorLayer::DrawInputBindingPopup()
 		int pad = mInputBindingDraft.gamepad + 1;
 		ImGui::TextUnformatted(ICON_MDI_GAMEPAD "  Gamepad");
 		ImGui::SetNextItemWidth(340.0f);
-		if (ImGui::Combo("##binding_gamepad", &pad, pads, IM_ARRAYSIZE(pads)))
+		if (CompactCombo("##binding_gamepad", pad, pads, IM_ARRAYSIZE(pads)))
 			mInputBindingDraft.gamepad = pad - 1;
 	}
 
@@ -3363,7 +3414,7 @@ void EditorLayer::DrawInputBindingPopup()
 		int direction = mInputBindingDraft.scale < 0.0f ? 1 : 0;
 		ImGui::TextUnformatted(ICON_MDI_SWAP_HORIZONTAL "  Direction");
 		ImGui::SetNextItemWidth(340.0f);
-		if (ImGui::Combo("##binding_direction", &direction, directions, IM_ARRAYSIZE(directions)))
+		if (CompactCombo("##binding_direction", direction, directions, IM_ARRAYSIZE(directions)))
 			mInputBindingDraft.scale = direction == 0 ? 1.0f : -1.0f;
 	}
 
@@ -5559,7 +5610,7 @@ void EditorLayer::InspectorReflector::Field(const char8* name, std::string& valu
 		ImGui::PushID(name);
 		PropertyLabel(name);
 
-		if (ImGui::Combo("##value", &selected, buses, IM_ARRAYSIZE(buses)))
+		if (CompactCombo("##value", selected, buses, IM_ARRAYSIZE(buses)))
 		{
 			mEditor.RecordSnapshot();
 			value = buses[selected];
@@ -5971,7 +6022,7 @@ void EditorLayer::DrawProperties()
 
 				int32 typeIndex = static_cast<int32>(body->GetBodyType());
 				PropertyLabel("Type");
-				if (ImGui::Combo("##type", &typeIndex, bodyTypes, IM_ARRAYSIZE(bodyTypes)))
+				if (CompactCombo("##type", typeIndex, bodyTypes, IM_ARRAYSIZE(bodyTypes)))
 				{
 					RecordSnapshot();
 					ApplyToSelection<RigidBody2D>([&](RigidBody2D* target) { target->SetBodyType(static_cast<BodyType>(typeIndex)); });
@@ -7461,7 +7512,7 @@ void EditorLayer::DrawNewComponentPopup()
 
 	ImGui::TextUnformatted("Language");
 	ImGui::SetNextItemWidth(320.0f);
-	if (ImGui::BeginCombo("##language", languages[mNewComponentLanguage].displayName))
+	if (BeginCompactCombo("##language", languages[mNewComponentLanguage].displayName))
 	{
 		for (int index = 0; index < static_cast<int>(languages.size()); ++index)
 		{
