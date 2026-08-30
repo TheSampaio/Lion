@@ -1825,6 +1825,25 @@ namespace
 		DrawIcon(origin, ImVec2(box, box), icon, color, pixels);
 	}
 
+	bool IconButton(const char8* id, const char8* icon, float32 size, const char8* tooltip)
+	{
+		const ImVec2 origin = ImGui::GetCursorScreenPos();
+		const bool clicked = ImGui::InvisibleButton(id, ImVec2(size, size));
+		const bool hovered = ImGui::IsItemHovered();
+		const bool active = ImGui::IsItemActive();
+		const ImGuiCol background = active ? ImGuiCol_ButtonActive
+			: hovered ? ImGuiCol_ButtonHovered : ImGuiCol_Button;
+
+		ImGui::GetWindowDrawList()->AddRectFilled(origin, ImVec2(origin.x + size, origin.y + size),
+			ImGui::GetColorU32(background), ImGui::GetStyle().FrameRounding);
+		DrawIcon(origin, size, icon, ImGui::GetColorU32(ImGuiCol_Text), kIconSize);
+
+		if (hovered && tooltip)
+			ImGui::SetTooltip("%s", tooltip);
+
+		return clicked;
+	}
+
 	// An icon drawn inline, as if it were a word, at an exact pixel size — larger than the merged inline
 	// glyphs. It claims its own space and leaves the cursor after it, so a SameLine puts the next item beside
 	// it, which is how the Inspector sets a large mark before an entity's name.
@@ -2944,21 +2963,17 @@ void EditorLayer::DrawInputSettings()
 			ImGui::GetColorU32(ImGuiCol_TextDisabled), summary);
 
 		ImGui::SetCursorScreenPos(ImVec2(addX, headerMin.y + 3.0f));
-		if (ImGui::Button(ICON_MDI_PLUS "##add_binding", ImVec2(buttonSize, buttonSize)))
+		if (IconButton("##add_binding", ICON_MDI_PLUS, buttonSize, "Add binding"))
 		{
 			mInputBindingAction = actionIndex;
 			mInputBindingIndex = -1;
 			mInputBindingDraft = { InputDevice::Keyboard, GLFW_KEY_SPACE, 1.0f, -1 };
 			mOpenInputBindingPopup = true;
 		}
-		if (ImGui::IsItemHovered())
-			ImGui::SetTooltip("Add binding");
 
 		ImGui::SetCursorScreenPos(ImVec2(deleteX, headerMin.y + 3.0f));
-		if (ImGui::Button(ICON_MDI_DELETE_OUTLINE "##remove_action", ImVec2(buttonSize, buttonSize)))
+		if (IconButton("##remove_action", ICON_MDI_DELETE_OUTLINE, buttonSize, "Remove action"))
 			removeAction = actionIndex;
-		if (ImGui::IsItemHovered())
-			ImGui::SetTooltip("Remove action");
 		ImGui::SetCursorScreenPos(cursorAfterHeader);
 
 		if (open)
@@ -3017,20 +3032,16 @@ void EditorLayer::DrawInputSettings()
 						: ("Pad " + std::to_string(binding.gamepad + 1)).c_str());
 					ImGui::TableSetColumnIndex(2);
 					ImGui::PushID(bindingIndex);
-					if (ImGui::SmallButton(ICON_MDI_PENCIL "##edit_binding"))
+					if (IconButton("##edit_binding", ICON_MDI_PENCIL, RowEndSlot(), "Edit binding"))
 					{
 						mInputBindingAction = actionIndex;
 						mInputBindingIndex = bindingIndex;
 						mInputBindingDraft = binding;
 						mOpenInputBindingPopup = true;
 					}
-					if (ImGui::IsItemHovered())
-						ImGui::SetTooltip("Edit binding");
 					ImGui::SameLine();
-					if (ImGui::SmallButton(ICON_MDI_DELETE_OUTLINE "##remove_binding"))
+					if (IconButton("##remove_binding", ICON_MDI_DELETE_OUTLINE, RowEndSlot(), "Remove binding"))
 						removeBinding = bindingIndex;
-					if (ImGui::IsItemHovered())
-						ImGui::SetTooltip("Remove binding");
 					ImGui::PopID();
 				}
 
