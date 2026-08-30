@@ -2849,7 +2849,6 @@ void EditorLayer::DrawInputSettings()
 	ImGui::PushStyleColor(ImGuiCol_ChildBg, ImGui::GetStyleColorVec4(ImGuiCol_FrameBg));
 	ImGui::BeginChild("##input_devices", ImVec2(0.0f, deviceHeight), true,
 		ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
-	ImGui::AlignTextToFramePadding();
 	ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(style.CellPadding.x, 0.0f));
 
 	if (ImGui::BeginTable("##input_device_status", 2, ImGuiTableFlags_SizingStretchProp))
@@ -2858,6 +2857,7 @@ void EditorLayer::DrawInputSettings()
 		ImGui::TableSetupColumn("details", ImGuiTableColumnFlags_WidthFixed, 330.0f);
 		ImGui::TableNextRow();
 		ImGui::TableSetColumnIndex(0);
+		ImGui::AlignTextToFramePadding();
 
 		if (connectedGamepad >= 0)
 		{
@@ -2871,6 +2871,7 @@ void EditorLayer::DrawInputSettings()
 			ImGui::SameLine();
 			ImGui::TextColored(LogLevelColor(LogLevel::Success), "%s", controllerName.c_str());
 			ImGui::TableSetColumnIndex(1);
+			ImGui::AlignTextToFramePadding();
 			const float32 testWidth = 72.0f;
 			const std::string padLabel = "Pad " + std::to_string(connectedGamepad + 1);
 			const float32 controlsWidth = ImGui::CalcTextSize(padLabel.c_str()).x
@@ -2888,6 +2889,7 @@ void EditorLayer::DrawInputSettings()
 		{
 			ImGui::TextDisabled(ICON_MDI_GAMEPAD "  No controller connected");
 			ImGui::TableSetColumnIndex(1);
+			ImGui::AlignTextToFramePadding();
 			ImGui::TextDisabled("Xbox, PlayStation and compatible controllers");
 		}
 
