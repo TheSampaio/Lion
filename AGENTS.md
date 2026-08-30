@@ -119,9 +119,11 @@ Apply these to every change:
   tabs, component headers, and row-end widgets; use `kIconTitle` (24) for the single panel heading icon.
   Do not spell ad-hoc sizes at call sites or substitute text placeholders for missing icons.
 - Disclosure triangles follow the Scene Hierarchy exactly: ImGui `RenderArrow` at scale `0.70`, pointing
-  right while closed and down while open. Use the shared `EditorGui::DrawDisclosureArrow` for custom
-  controls and native `TreeNode`/`CollapsingHeader` behavior elsewhere; never hand-draw a replacement or
-  read an item's rectangle after opening a popup.
+  right while closed and down while open. Native `TreeNode`/`CollapsingHeader` behavior is the source of
+  truth; never hand-draw a replacement.
+- Combo boxes are the explicit direction exception: their triangle points down while closed and up while
+  open, still at scale `0.70`. Custom combos use `EditorGui::DrawComboArrow`; capture their rectangle before
+  opening the popup because an open combo changes ImGui's current window and last item data.
 - Component and Statistics headers use the same `DrawSectionHeader` primitive without per-panel offsets.
   Its icon begins at `headerMin.x + fontSize + 12`, and its label begins 8 px after the 16 px icon. A new
   collapsible section must reuse that primitive so arrow-to-icon spacing cannot drift between panels.

@@ -914,7 +914,7 @@ namespace
 		const ImVec2 maximum(minimum.x + ImGui::CalcItemWidth(), minimum.y + ImGui::GetFrameHeight());
 		const bool open = ImGui::BeginCombo(id, preview, ImGuiComboFlags_NoArrowButton);
 
-		EditorGui::DrawDisclosureArrow(draw, minimum, maximum, open, ImGui::GetColorU32(ImGuiCol_Text));
+		EditorGui::DrawComboArrow(draw, minimum, maximum, open, ImGui::GetColorU32(ImGuiCol_Text));
 
 		return open;
 	}

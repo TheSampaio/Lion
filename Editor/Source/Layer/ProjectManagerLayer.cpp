@@ -366,7 +366,7 @@ void ProjectManagerLayer::DrawToolbar()
 	const ImVec2 sortMin = ImGui::GetCursorScreenPos();
 	const ImVec2 sortMax(sortMin.x + kSortWidth, sortMin.y + ImGui::GetFrameHeight());
 	const bool sortOpen = ImGui::BeginCombo("##sort", kSortNames[sort], ImGuiComboFlags_NoArrowButton);
-	EditorGui::DrawDisclosureArrow(sortDraw, sortMin, sortMax, sortOpen, ImGui::GetColorU32(ImGuiCol_Text));
+	EditorGui::DrawComboArrow(sortDraw, sortMin, sortMax, sortOpen, ImGui::GetColorU32(ImGuiCol_Text));
 
 	if (sortOpen)
 	{
