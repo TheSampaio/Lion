@@ -2850,6 +2850,7 @@ void EditorLayer::DrawInputSettings()
 	ImGui::BeginChild("##input_devices", ImVec2(0.0f, deviceHeight), true,
 		ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 	ImGui::AlignTextToFramePadding();
+	ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(style.CellPadding.x, 0.0f));
 
 	if (ImGui::BeginTable("##input_device_status", 2, ImGuiTableFlags_SizingStretchProp))
 	{
@@ -2892,6 +2893,7 @@ void EditorLayer::DrawInputSettings()
 
 		ImGui::EndTable();
 	}
+	ImGui::PopStyleVar();
 
 	ImGui::EndChild();
 	ImGui::PopStyleColor();
