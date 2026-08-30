@@ -2833,7 +2833,6 @@ void EditorLayer::SaveProjectInputMap()
 void EditorLayer::DrawInputSettings()
 {
 	int32 connectedGamepad = -1;
-	int32 connectedCount = 0;
 
 	for (int32 gamepad = 0; gamepad < 16; ++gamepad)
 	{
@@ -2842,8 +2841,6 @@ void EditorLayer::DrawInputSettings()
 
 		if (connectedGamepad < 0)
 			connectedGamepad = gamepad;
-
-		connectedCount++;
 	}
 
 	const ImGuiStyle& style = ImGui::GetStyle();
@@ -2873,14 +2870,18 @@ void EditorLayer::DrawInputSettings()
 			ImGui::SameLine();
 			ImGui::TextColored(LogLevelColor(LogLevel::Success), "%s", controllerName.c_str());
 			ImGui::TableSetColumnIndex(1);
-			const float32 leftX = Input::GetGamepadAxis(GamepadAxis::LeftX, connectedGamepad);
-			const float32 leftY = Input::GetGamepadAxis(GamepadAxis::LeftY, connectedGamepad);
+			const float32 testWidth = 72.0f;
+			const std::string padLabel = "Pad " + std::to_string(connectedGamepad + 1);
+			const float32 controlsWidth = ImGui::CalcTextSize(padLabel.c_str()).x
+				+ style.ItemSpacing.x + testWidth;
+			ImGui::SetCursorPosX(ImGui::GetCursorPosX()
+				+ ImMax(ImGui::GetContentRegionAvail().x - controlsWidth, 0.0f));
+			ImGui::TextDisabled("%s", padLabel.c_str());
+			ImGui::SameLine();
+			ImGui::Button("Test##controller_test", ImVec2(testWidth, 0.0f));
 
-			if (connectedCount == 1)
-				ImGui::TextDisabled("Pad %d   Left stick  X %+.2f  Y %+.2f", connectedGamepad + 1, leftX, leftY);
-			else
-				ImGui::TextDisabled("Pad %d of %d   Left stick  X %+.2f  Y %+.2f",
-					connectedGamepad + 1, connectedCount, leftX, leftY);
+			if (ImGui::IsItemHovered())
+				ImGui::SetTooltip("Controller test will be implemented later.");
 		}
 		else
 		{
