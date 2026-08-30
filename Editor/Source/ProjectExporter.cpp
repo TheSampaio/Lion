@@ -83,7 +83,7 @@ namespace ProjectExporter
 
 				const std::filesystem::path extension = it->path().extension();
 
-				if (extension == ".cpp" || extension == ".h" || extension == ".hpp")
+				if (extension == ".cpp" || extension == ".h" || extension == ".hpp" || extension == ".lnexport")
 					continue;
 
 				const std::filesystem::path target = destination / it->path().lexically_relative(assets);
@@ -138,11 +138,20 @@ namespace ProjectExporter
 		}
 	}
 
-	Result ExportWindows(const std::filesystem::path& project, const std::filesystem::path& destination)
+	Result ExportWindows(const std::filesystem::path& project, const Options& options)
 	{
 		Result result;
+		const std::filesystem::path& destination = options.destination;
+		std::error_code code;
+		const std::filesystem::path projectDirectory = std::filesystem::absolute(project, code).lexically_normal();
 
-		if (!Projects::IsProjectFolder(project))
+		if (code)
+		{
+			result.message = "Could not resolve the active project: " + code.message();
+			return result;
+		}
+
+		if (!Projects::IsProjectFolder(projectDirectory))
 		{
 			result.message = "The active project is not available on disk.";
 			return result;
@@ -163,8 +172,6 @@ namespace ProjectExporter
 			: root / "Build" / "Bin" / "Shipping" / "Mane";
 
 		const std::filesystem::path launcher = runtime / "lion-launcher.exe";
-		std::error_code code;
-
 		if (!std::filesystem::is_regular_file(launcher, code) || !ProjectBuild::Available(sdk))
 		{
 			result.message = "The Windows Shipping runtime is unavailable. Build the Shipping configuration first.";
@@ -173,15 +180,27 @@ namespace ProjectExporter
 
 		std::string buildError;
 
-		if (!ProjectBuild::Build(project, "Shipping", sdk, result.buildOutput, buildError))
+		if (!ProjectBuild::Build(projectDirectory, "Shipping", sdk, result.buildOutput, buildError))
 		{
 			result.message = buildError;
 			return result;
 		}
 
-		const std::string gameName = Projects::DisplayName(project);
+		const std::string gameName = Projects::DisplayName(projectDirectory);
+		std::filesystem::path executableName = options.executableName.empty() ? gameName : options.executableName;
+		executableName = executableName.filename();
+
+		if (executableName.extension() == ".exe")
+			executableName.replace_extension();
+
+		if (executableName.empty() || executableName == "." || executableName == "..")
+		{
+			result.message = "Choose a valid executable name.";
+			return result;
+		}
+
 		const std::filesystem::path output = destination / gameName;
-		const std::filesystem::path absoluteProject = std::filesystem::absolute(project, code).lexically_normal();
+		const std::filesystem::path absoluteProject = projectDirectory;
 		const std::filesystem::path absoluteDestination = std::filesystem::absolute(destination, code).lexically_normal();
 		const std::filesystem::path destinationInsideProject = absoluteDestination.lexically_relative(absoluteProject);
 
@@ -220,14 +239,14 @@ namespace ProjectExporter
 
 		std::string copyError;
 
-		if (!CopyFile(launcher, staging / (gameName + ".exe"), copyError)
+		if (!CopyFile(launcher, staging / (executableName.string() + ".exe"), copyError)
 			|| !CopyFile(runtime / "lion-core.dll", staging / "lion-core.dll", copyError)
 			|| !CopyFile(runtime / "lion-platform.dll", staging / "lion-platform.dll", copyError)
-			|| !CopyFile(ProjectBuild::ModulePath(project, "Shipping"), staging / Lion::kGameModuleFile, copyError)
-			|| !CopyDirectory(runtime / "Icons", staging / "Icons", copyError)
-			|| !CopyDirectory(runtime / "Licenses", staging / "Licenses", copyError)
-			|| !CopyAssets(project / "Assets", staging, copyError)
-			|| !SealAssets(staging, copyError))
+			|| !CopyFile(ProjectBuild::ModulePath(projectDirectory, "Shipping"), staging / Lion::kGameModuleFile, copyError)
+			|| (options.includeIcons && !CopyDirectory(runtime / "Icons", staging / "Icons", copyError))
+			|| (options.includeLicenses && !CopyDirectory(runtime / "Licenses", staging / "Licenses", copyError))
+			|| !CopyAssets(projectDirectory / "Assets", staging, copyError)
+			|| (options.sealAssets && !SealAssets(staging, copyError)))
 			return fail(copyError);
 
 		std::filesystem::rename(staging, output, code);
@@ -239,5 +258,12 @@ namespace ProjectExporter
 		result.outputDirectory = output;
 		result.message = "Exported " + gameName + " for Windows.";
 		return result;
+	}
+
+	Result ExportWindows(const std::filesystem::path& project, const std::filesystem::path& destination)
+	{
+		Options options;
+		options.destination = destination;
+		return ExportWindows(project, options);
 	}
 }

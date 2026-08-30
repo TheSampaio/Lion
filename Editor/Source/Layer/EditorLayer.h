@@ -247,6 +247,7 @@ private:
 	char mInputFilter[64] = {};
 	char mNewInputAction[64] = {};
 	int mInputBindingAction = -1;
+	int mInputBindingIndex = -1;
 	bool mOpenInputBindingPopup = false;
 	Lion::InputBinding mInputBindingDraft;
 	std::string mProjectSettingsError;
@@ -456,6 +457,10 @@ private:
 
 	bool mOpenExportPopup = false;
 	char mExportLocation[512] = {};
+	char mExportExecutableName[128] = {};
+	bool mExportSealAssets = true;
+	bool mExportIncludeLicenses = true;
+	bool mExportIncludeIcons = true;
 	std::future<ProjectExporter::Result> mExport;
 	bool mExporting = false;
 	void DrawExportPopup();

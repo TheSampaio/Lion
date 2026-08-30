@@ -128,6 +128,7 @@ namespace Projects
 		std::vector<Lion::InputAction> DefaultInputActions()
 		{
 			using Lion::GamepadAxis;
+			using Lion::GamepadButton;
 			using Lion::InputAction;
 			using Lion::InputDevice;
 			using Lion::KeyCode;
@@ -145,11 +146,24 @@ namespace Projects
 				return value;
 			};
 
+			const auto buttonAction = [](const Lion::char8* name, KeyCode key, GamepadButton button)
+			{
+				InputAction value;
+				value.name = name;
+				value.bindings = {
+					{ InputDevice::Keyboard, static_cast<Lion::int32>(key), 1.0f, -1 },
+					{ InputDevice::GamepadButton, static_cast<Lion::int32>(button), 1.0f, -1 },
+				};
+				return value;
+			};
+
 			return {
 				action("player_up", KeyCode::W, KeyCode::Up, GamepadAxis::LeftY, -1.0f),
 				action("player_down", KeyCode::S, KeyCode::Down, GamepadAxis::LeftY, 1.0f),
 				action("player_left", KeyCode::A, KeyCode::Left, GamepadAxis::LeftX, -1.0f),
 				action("player_right", KeyCode::D, KeyCode::Right, GamepadAxis::LeftX, 1.0f),
+				buttonAction("player_launch", KeyCode::Space, GamepadButton::Start),
+				buttonAction("player_reset", KeyCode::R, GamepadButton::Back),
 			};
 		}
 

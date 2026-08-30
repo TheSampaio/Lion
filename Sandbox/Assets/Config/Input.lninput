@@ -35,6 +35,22 @@
         { "device": "keyboard", "code": 262, "scale": 1.0, "gamepad": -1 },
         { "device": "gamepad_axis", "code": 0, "scale": 1.0, "gamepad": -1 }
       ]
+    },
+    {
+      "name": "player_launch",
+      "deadzone": 0.2,
+      "bindings": [
+        { "device": "keyboard", "code": 32, "scale": 1.0, "gamepad": -1 },
+        { "device": "gamepad_button", "code": 7, "scale": 1.0, "gamepad": -1 }
+      ]
+    },
+    {
+      "name": "player_reset",
+      "deadzone": 0.2,
+      "bindings": [
+        { "device": "keyboard", "code": 82, "scale": 1.0, "gamepad": -1 },
+        { "device": "gamepad_button", "code": 6, "scale": 1.0, "gamepad": -1 }
+      ]
     }
   ]
 }

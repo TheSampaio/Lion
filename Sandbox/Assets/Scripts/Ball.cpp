@@ -32,8 +32,8 @@ void Ball::OnUpdate()
 	{
 		FollowPaddle();
 
-		// Launch the ball with Space or Enter, mostly upward with a slight rightward lean.
-		if (Input::GetKeyPress(KeyCode::Space) || Input::GetKeyPress(KeyCode::Return))
+		// Launch through the project action so keyboard and gamepad remain interchangeable.
+		if (Input::GetActionTap("player_launch"))
 		{
 			mState = State::Launched;
 			mBody->SetLinearVelocity(glm::normalize(glm::vec2(1.0f, 2.0f)) * mSpeed);

@@ -914,7 +914,7 @@ void EditorLayer::DrawStatistics()
 		return true;
 	};
 
-	if (ImGui::CollapsingHeader("Frame", ImGuiTreeNodeFlags_DefaultOpen) && beginTable("Frame"))
+	if (ImGui::CollapsingHeader(ICON_MDI_CLOCK "  Frame", ImGuiTreeNodeFlags_DefaultOpen) && beginTable("Frame"))
 	{
 		row("FPS", "%.1f", io.Framerate);
 		row("Frame time", "%.3f ms", 1000.0f / io.Framerate);
@@ -922,7 +922,7 @@ void EditorLayer::DrawStatistics()
 		ImGui::EndTable();
 	}
 
-	if (ImGui::CollapsingHeader("Renderer", ImGuiTreeNodeFlags_DefaultOpen) && beginTable("Renderer"))
+	if (ImGui::CollapsingHeader(ICON_MDI_CHART_BAR "  Renderer", ImGuiTreeNodeFlags_DefaultOpen) && beginTable("Renderer"))
 	{
 		// The batch's whole job is to turn many sprites into few draw calls, and none of that shows from
 		// the outside. These are the numbers that say whether it is doing it.
@@ -939,7 +939,7 @@ void EditorLayer::DrawStatistics()
 		ImGui::EndTable();
 	}
 
-	if (ImGui::CollapsingHeader("Scene", ImGuiTreeNodeFlags_DefaultOpen) && beginTable("Scene"))
+	if (ImGui::CollapsingHeader(ICON_MDI_CUBE_OUTLINE "  Scene", ImGuiTreeNodeFlags_DefaultOpen) && beginTable("Scene"))
 	{
 		int32 components = 0;
 		int32 bodies = 0;
@@ -960,7 +960,7 @@ void EditorLayer::DrawStatistics()
 		ImGui::EndTable();
 	}
 
-	if (ImGui::CollapsingHeader("Viewport", ImGuiTreeNodeFlags_DefaultOpen) && beginTable("Viewport"))
+	if (ImGui::CollapsingHeader(ICON_MDI_MONITOR "  Viewport", ImGuiTreeNodeFlags_DefaultOpen) && beginTable("Viewport"))
 	{
 		row("Render target", "%.0f x %.0f", mViewportSize.x, mViewportSize.y);
 		row("Window", "%d x %d", static_cast<int32>(io.DisplaySize.x), static_cast<int32>(io.DisplaySize.y));
@@ -2384,8 +2384,11 @@ void EditorLayer::DrawEditorSettings()
 	ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
 	ImGui::SetNextWindowSize(ImVec2(860.0f, 620.0f), ImGuiCond_Appearing);
 
-	if (!ImGui::BeginPopupModal("Editor Settings", nullptr))
+	if (!ImGui::BeginPopupModal("Editor Settings", nullptr, ImGuiWindowFlags_NoResize))
 		return;
+
+	const float32 footerHeight = ImGui::GetFrameHeightWithSpacing() + ImGui::GetStyle().ItemSpacing.y;
+	ImGui::BeginChild("##editor_settings_body", ImVec2(0.0f, -footerHeight));
 
 	if (ImGui::BeginTabBar("##editor_settings_tabs"))
 	{
@@ -2403,10 +2406,11 @@ void EditorLayer::DrawEditorSettings()
 
 		ImGui::EndTabBar();
 	}
+	ImGui::EndChild();
+	ImGui::Separator();
 
 	const float32 closeWidth = 96.0f;
-	ImGui::SetCursorPos(ImVec2(ImGui::GetWindowWidth() - closeWidth - ImGui::GetStyle().WindowPadding.x,
-		ImGui::GetWindowHeight() - ImGui::GetFrameHeight() - ImGui::GetStyle().WindowPadding.y));
+	ImGui::SetCursorPosX(ImGui::GetWindowWidth() - closeWidth - ImGui::GetStyle().WindowPadding.x);
 
 	if (ImGui::Button("Close", ImVec2(closeWidth, 0.0f)))
 		ImGui::CloseCurrentPopup();
@@ -2440,7 +2444,7 @@ void EditorLayer::DrawEditorGeneralSettings()
 
 void EditorLayer::DrawShortcutsTab()
 {
-	ImGui::BeginChild("##shortcut_settings", ImVec2(0.0f, -ImGui::GetFrameHeightWithSpacing() * 2.0f));
+	ImGui::BeginChild("##shortcut_settings", ImVec2(0.0f, 0.0f));
 	{
 		// The rebindable actions, grouped by category (order defines the display order).
 		struct Row { ShortcutAction action; const char8* category; const char8* name; };
@@ -2602,7 +2606,7 @@ namespace
 		{ "A / Cross", GLFW_GAMEPAD_BUTTON_A }, { "B / Circle", GLFW_GAMEPAD_BUTTON_B },
 		{ "X / Square", GLFW_GAMEPAD_BUTTON_X }, { "Y / Triangle", GLFW_GAMEPAD_BUTTON_Y },
 		{ "Left Bumper", GLFW_GAMEPAD_BUTTON_LEFT_BUMPER }, { "Right Bumper", GLFW_GAMEPAD_BUTTON_RIGHT_BUMPER },
-		{ "Back / Share", GLFW_GAMEPAD_BUTTON_BACK }, { "Start / Options", GLFW_GAMEPAD_BUTTON_START },
+		{ "Select / Back / Share", GLFW_GAMEPAD_BUTTON_BACK }, { "Start / Options", GLFW_GAMEPAD_BUTTON_START },
 		{ "Guide", GLFW_GAMEPAD_BUTTON_GUIDE }, { "Left Stick", GLFW_GAMEPAD_BUTTON_LEFT_THUMB },
 		{ "Right Stick", GLFW_GAMEPAD_BUTTON_RIGHT_THUMB }, { "D-pad Up", GLFW_GAMEPAD_BUTTON_DPAD_UP },
 		{ "D-pad Right", GLFW_GAMEPAD_BUTTON_DPAD_RIGHT }, { "D-pad Down", GLFW_GAMEPAD_BUTTON_DPAD_DOWN },
@@ -2648,17 +2652,30 @@ namespace
 		switch (binding.device)
 		{
 			case InputDevice::Keyboard:
-				return std::string("Keyboard: ") + ChoiceName(kKeyboardChoices, binding.code);
+				return ChoiceName(kKeyboardChoices, binding.code);
 			case InputDevice::MouseButton:
-				return std::string("Mouse: ") + ChoiceName(kMouseChoices, binding.code);
+				return ChoiceName(kMouseChoices, binding.code);
 			case InputDevice::GamepadButton:
-				return std::string("Gamepad: ") + ChoiceName(kGamepadButtonChoices, binding.code);
+				return ChoiceName(kGamepadButtonChoices, binding.code);
 			case InputDevice::GamepadAxis:
-				return std::string("Gamepad: ") + ChoiceName(kGamepadAxisChoices, binding.code)
+				return std::string(ChoiceName(kGamepadAxisChoices, binding.code))
 					+ (binding.scale < 0.0f ? " -" : " +");
 		}
 
 		return "Unknown";
+	}
+
+	const char8* InputBindingIcon(InputDevice device)
+	{
+		switch (device)
+		{
+			case InputDevice::Keyboard:      return ICON_MDI_KEYBOARD;
+			case InputDevice::MouseButton:   return ICON_MDI_MOUSE;
+			case InputDevice::GamepadButton: return ICON_MDI_GAMEPAD_VARIANT;
+			case InputDevice::GamepadAxis:   return ICON_MDI_GAMEPAD;
+		}
+
+		return ICON_MDI_TUNE;
 	}
 }
 
@@ -2675,8 +2692,11 @@ void EditorLayer::DrawProjectSettings()
 	ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
 	ImGui::SetNextWindowSize(ImVec2(920.0f, 650.0f), ImGuiCond_Appearing);
 
-	if (!ImGui::BeginPopupModal("Project Settings", nullptr))
+	if (!ImGui::BeginPopupModal("Project Settings", nullptr, ImGuiWindowFlags_NoResize))
 		return;
+
+	const float32 footerHeight = ImGui::GetFrameHeightWithSpacing() + ImGui::GetStyle().ItemSpacing.y;
+	ImGui::BeginChild("##project_settings_body", ImVec2(0.0f, -footerHeight));
 
 	if (ImGui::BeginTabBar("##project_settings_tabs"))
 	{
@@ -2694,12 +2714,13 @@ void EditorLayer::DrawProjectSettings()
 
 		ImGui::EndTabBar();
 	}
+	ImGui::EndChild();
 
 	DrawInputBindingPopup();
+	ImGui::Separator();
 
 	const float32 closeWidth = 96.0f;
-	ImGui::SetCursorPos(ImVec2(ImGui::GetWindowWidth() - closeWidth - ImGui::GetStyle().WindowPadding.x,
-		ImGui::GetWindowHeight() - ImGui::GetFrameHeight() - ImGui::GetStyle().WindowPadding.y));
+	ImGui::SetCursorPosX(ImGui::GetWindowWidth() - closeWidth - ImGui::GetStyle().WindowPadding.x);
 
 	if (ImGui::Button("Close", ImVec2(closeWidth, 0.0f)))
 		ImGui::CloseCurrentPopup();
@@ -2769,12 +2790,49 @@ void EditorLayer::SaveProjectInputMap()
 
 void EditorLayer::DrawInputSettings()
 {
-	ImGui::SetNextItemWidth(280.0f);
-	ImGui::InputTextWithHint("##input_filter", "Filter by name", mInputFilter, IM_ARRAYSIZE(mInputFilter));
+	int32 connectedGamepad = -1;
+	int32 connectedCount = 0;
+
+	for (int32 gamepad = 0; gamepad < 16; ++gamepad)
+	{
+		if (!Input::IsGamepadConnected(gamepad))
+			continue;
+
+		if (connectedGamepad < 0)
+			connectedGamepad = gamepad;
+
+		connectedCount++;
+	}
+
+	const float32 deviceHeight = ImGui::GetFrameHeightWithSpacing() * 2.15f;
+	ImGui::BeginChild("##input_devices", ImVec2(0.0f, deviceHeight), true);
+	if (connectedGamepad >= 0)
+	{
+		ImGui::TextUnformatted(ICON_MDI_GAMEPAD "  Connected controller");
+		ImGui::SameLine();
+		ImGui::TextColored(LogLevelColor(LogLevel::Success), "%s", Input::GetGamepadName(connectedGamepad).c_str());
+		ImGui::SameLine();
+		ImGui::TextDisabled(connectedCount == 1 ? "(Pad %d)" : "(Pad %d, %d connected)",
+			connectedGamepad + 1, connectedCount);
+		ImGui::TextDisabled("Left stick  X %+.2f   Y %+.2f",
+			Input::GetGamepadAxis(GamepadAxis::LeftX, connectedGamepad),
+			Input::GetGamepadAxis(GamepadAxis::LeftY, connectedGamepad));
+	}
+	else
+	{
+		ImGui::TextDisabled(ICON_MDI_GAMEPAD "  No mapped controller detected");
+		ImGui::TextDisabled("Xbox, PlayStation and compatible pads use GLFW's standard gamepad mapping.");
+	}
+	ImGui::EndChild();
+
+	ImGui::Spacing();
+	const float32 filterWidth = ImGui::GetContentRegionAvail().x * 0.38f;
+	ImGui::SetNextItemWidth(filterWidth);
+	ImGui::InputTextWithHint("##input_filter", ICON_MDI_MAGNIFY "  Filter actions", mInputFilter, IM_ARRAYSIZE(mInputFilter));
 
 	ImGui::SameLine();
-	ImGui::SetNextItemWidth(-92.0f);
-	const bool submitted = ImGui::InputTextWithHint("##new_input_action", "Add new action", mNewInputAction,
+	ImGui::SetNextItemWidth(-ImGui::GetFrameHeightWithSpacing());
+	const bool submitted = ImGui::InputTextWithHint("##new_input_action", "New action name", mNewInputAction,
 		IM_ARRAYSIZE(mNewInputAction), ImGuiInputTextFlags_EnterReturnsTrue);
 	ImGui::SameLine();
 
@@ -2784,27 +2842,34 @@ void EditorLayer::DrawInputSettings()
 	const bool canAdd = IsInputActionNameValid(newName) && !duplicate;
 
 	ImGui::BeginDisabled(!canAdd);
-	if (ImGui::Button("Add", ImVec2(80.0f, 0.0f)) || (submitted && canAdd))
+	if (ImGui::Button(ICON_MDI_PLUS "##add_input_action") || (submitted && canAdd))
 	{
 		mInputActions.push_back({ newName, 0.2f, {} });
 		mNewInputAction[0] = '\0';
 		SaveProjectInputMap();
 	}
 	ImGui::EndDisabled();
+	if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+		ImGui::SetTooltip("Add action");
 
 	if (!newName.empty() && (!IsInputActionNameValid(newName) || duplicate))
 		ImGui::TextDisabled(duplicate ? "That action already exists." : "Use letters, digits and _, not starting with a digit.");
 
 	ImGui::Spacing();
 
+	const ImVec4 inputGridColor(20.0f / 255.0f, 21.0f / 255.0f, 23.0f / 255.0f, 1.0f);
+	ImGui::PushStyleColor(ImGuiCol_TableRowBg, inputGridColor);
+	ImGui::PushStyleColor(ImGuiCol_TableRowBgAlt, inputGridColor);
 	if (ImGui::BeginTable("##input_actions", 4,
-		ImGuiTableFlags_BordersInnerH | ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable,
-		ImVec2(0.0f, -ImGui::GetFrameHeightWithSpacing() * 2.0f)))
+		ImGuiTableFlags_BordersInnerH | ImGuiTableFlags_BordersOuterH | ImGuiTableFlags_RowBg
+			| ImGuiTableFlags_ScrollY,
+		ImVec2(0.0f, -ImGui::GetTextLineHeightWithSpacing())))
 	{
-		ImGui::TableSetupColumn("Action", ImGuiTableColumnFlags_WidthStretch, 0.50f);
+		ImGui::TableSetupScrollFreeze(0, 1);
+		ImGui::TableSetupColumn("Action", ImGuiTableColumnFlags_WidthStretch, 0.60f);
 		ImGui::TableSetupColumn("Deadzone", ImGuiTableColumnFlags_WidthFixed, 120.0f);
-		ImGui::TableSetupColumn("Bindings", ImGuiTableColumnFlags_WidthFixed, 80.0f);
-		ImGui::TableSetupColumn("##remove", ImGuiTableColumnFlags_WidthFixed, 32.0f);
+		ImGui::TableSetupColumn("Device", ImGuiTableColumnFlags_WidthFixed, 120.0f);
+		ImGui::TableSetupColumn("##actions", ImGuiTableColumnFlags_WidthFixed, 84.0f);
 		ImGui::TableHeadersRow();
 
 		int removeAction = -1;
@@ -2830,11 +2895,24 @@ void EditorLayer::DrawInputSettings()
 				SaveProjectInputMap();
 
 			ImGui::TableSetColumnIndex(2);
-			ImGui::Text("%d", static_cast<int32>(action.bindings.size()));
+			ImGui::TextDisabled("%d binding%s", static_cast<int32>(action.bindings.size()),
+				action.bindings.size() == 1 ? "" : "s");
 
 			ImGui::TableSetColumnIndex(3);
-			if (ImGui::SmallButton(ICON_MDI_DELETE_OUTLINE))
+			if (ImGui::SmallButton(ICON_MDI_PLUS "##add_binding"))
+			{
+				mInputBindingAction = actionIndex;
+				mInputBindingIndex = -1;
+				mInputBindingDraft = { InputDevice::Keyboard, GLFW_KEY_SPACE, 1.0f, -1 };
+				mOpenInputBindingPopup = true;
+			}
+			if (ImGui::IsItemHovered())
+				ImGui::SetTooltip("Add binding");
+			ImGui::SameLine();
+			if (ImGui::SmallButton(ICON_MDI_DELETE_OUTLINE "##remove_action"))
 				removeAction = actionIndex;
+			if (ImGui::IsItemHovered())
+				ImGui::SetTooltip("Remove action");
 
 			if (open)
 			{
@@ -2845,15 +2923,32 @@ void EditorLayer::DrawInputSettings()
 					ImGui::TableNextRow();
 					ImGui::TableSetColumnIndex(0);
 					ImGui::Indent();
-					ImGui::TextUnformatted(InputBindingText(action.bindings[bindingIndex]).c_str());
+					ImGui::Text("%s  %s", InputBindingIcon(action.bindings[bindingIndex].device),
+						InputBindingText(action.bindings[bindingIndex]).c_str());
 					ImGui::Unindent();
+					ImGui::TableSetColumnIndex(1);
+					ImGui::TextDisabled("-");
 					ImGui::TableSetColumnIndex(2);
 					ImGui::TextDisabled("%s", action.bindings[bindingIndex].gamepad < 0
-						? "All pads" : ("Pad " + std::to_string(action.bindings[bindingIndex].gamepad + 1)).c_str());
+						? (action.bindings[bindingIndex].device == InputDevice::Keyboard ? "Keyboard"
+							: action.bindings[bindingIndex].device == InputDevice::MouseButton ? "Mouse" : "All pads")
+						: ("Pad " + std::to_string(action.bindings[bindingIndex].gamepad + 1)).c_str());
 					ImGui::TableSetColumnIndex(3);
 					ImGui::PushID(bindingIndex);
-					if (ImGui::SmallButton(ICON_MDI_CLOSE))
+					if (ImGui::SmallButton(ICON_MDI_PENCIL "##edit_binding"))
+					{
+						mInputBindingAction = actionIndex;
+						mInputBindingIndex = bindingIndex;
+						mInputBindingDraft = action.bindings[bindingIndex];
+						mOpenInputBindingPopup = true;
+					}
+					if (ImGui::IsItemHovered())
+						ImGui::SetTooltip("Edit binding");
+					ImGui::SameLine();
+					if (ImGui::SmallButton(ICON_MDI_DELETE_OUTLINE "##remove_binding"))
 						removeBinding = bindingIndex;
+					if (ImGui::IsItemHovered())
+						ImGui::SetTooltip("Remove binding");
 					ImGui::PopID();
 				}
 
@@ -2863,16 +2958,6 @@ void EditorLayer::DrawInputSettings()
 					SaveProjectInputMap();
 				}
 
-				ImGui::TableNextRow();
-				ImGui::TableSetColumnIndex(0);
-				ImGui::Indent();
-				if (ImGui::SmallButton(ICON_MDI_PLUS "  Add Binding"))
-				{
-					mInputBindingAction = actionIndex;
-					mInputBindingDraft = { InputDevice::Keyboard, GLFW_KEY_SPACE, 1.0f, -1 };
-					mOpenInputBindingPopup = true;
-				}
-				ImGui::Unindent();
 				ImGui::TreePop();
 			}
 
@@ -2887,14 +2972,7 @@ void EditorLayer::DrawInputSettings()
 
 		ImGui::EndTable();
 	}
-
-	for (int32 gamepad = 0; gamepad < 4; ++gamepad)
-	{
-		if (!Input::IsGamepadConnected(gamepad))
-			continue;
-
-		ImGui::TextDisabled("Gamepad %d: %s", gamepad + 1, Input::GetGamepadName(gamepad).c_str());
-	}
+	ImGui::PopStyleColor(2);
 
 	if (!mProjectSettingsError.empty())
 		ImGui::TextColored(LogLevelColor(LogLevel::Error), "%s", mProjectSettingsError.c_str());
@@ -2905,16 +2983,16 @@ void EditorLayer::DrawInputBindingPopup()
 	if (mOpenInputBindingPopup)
 	{
 		mOpenInputBindingPopup = false;
-		ImGui::OpenPopup("Add Input Binding");
+		ImGui::OpenPopup("Input Binding");
 	}
 
-	if (!ImGui::BeginPopupModal("Add Input Binding", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+	if (!ImGui::BeginPopupModal("Input Binding", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoResize))
 		return;
 
 	static const char8* devices[] = { "Keyboard", "Mouse Button", "Gamepad Button", "Gamepad Axis" };
 	int device = static_cast<int>(mInputBindingDraft.device);
 
-	ImGui::TextUnformatted("Device");
+	ImGui::TextUnformatted(ICON_MDI_TUNE "  Device");
 	ImGui::SetNextItemWidth(340.0f);
 	if (ImGui::Combo("##binding_device", &device, devices, IM_ARRAYSIZE(devices)))
 	{
@@ -2925,7 +3003,7 @@ void EditorLayer::DrawInputBindingPopup()
 
 	const auto drawChoices = [&](const char8* label, const auto& choices)
 	{
-		ImGui::TextUnformatted(label);
+		ImGui::Text("%s  %s", InputBindingIcon(mInputBindingDraft.device), label);
 		ImGui::SetNextItemWidth(340.0f);
 
 		if (ImGui::BeginCombo("##binding_code", ChoiceName(choices, mInputBindingDraft.code)))
@@ -2955,7 +3033,7 @@ void EditorLayer::DrawInputBindingPopup()
 	{
 		const char8* pads[] = { "All Gamepads", "Gamepad 1", "Gamepad 2", "Gamepad 3", "Gamepad 4" };
 		int pad = mInputBindingDraft.gamepad + 1;
-		ImGui::TextUnformatted("Gamepad");
+		ImGui::TextUnformatted(ICON_MDI_GAMEPAD "  Gamepad");
 		ImGui::SetNextItemWidth(340.0f);
 		if (ImGui::Combo("##binding_gamepad", &pad, pads, IM_ARRAYSIZE(pads)))
 			mInputBindingDraft.gamepad = pad - 1;
@@ -2967,7 +3045,7 @@ void EditorLayer::DrawInputBindingPopup()
 	{
 		const char8* directions[] = { "Positive", "Negative" };
 		int direction = mInputBindingDraft.scale < 0.0f ? 1 : 0;
-		ImGui::TextUnformatted("Direction");
+		ImGui::TextUnformatted(ICON_MDI_SWAP_HORIZONTAL "  Direction");
 		ImGui::SetNextItemWidth(340.0f);
 		if (ImGui::Combo("##binding_direction", &direction, directions, IM_ARRAYSIZE(directions)))
 			mInputBindingDraft.scale = direction == 0 ? 1.0f : -1.0f;
@@ -2978,9 +3056,13 @@ void EditorLayer::DrawInputBindingPopup()
 		&& mInputBindingAction < static_cast<int>(mInputActions.size());
 	ImGui::BeginDisabled(!validAction);
 
-	if (ImGui::Button("Add", ImVec2(96.0f, 0.0f)))
+	const bool editing = mInputBindingIndex >= 0;
+	if (ImGui::Button(editing ? "Save" : "Add", ImVec2(96.0f, 0.0f)))
 	{
-		mInputActions[mInputBindingAction].bindings.push_back(mInputBindingDraft);
+		if (editing && mInputBindingIndex < static_cast<int>(mInputActions[mInputBindingAction].bindings.size()))
+			mInputActions[mInputBindingAction].bindings[mInputBindingIndex] = mInputBindingDraft;
+		else
+			mInputActions[mInputBindingAction].bindings.push_back(mInputBindingDraft);
 		SaveProjectInputMap();
 		ImGui::CloseCurrentPopup();
 	}
@@ -3126,7 +3208,7 @@ void EditorLayer::ResetShortcutsToDefault()
 	set(ShortcutAction::Redo, ImGuiKey_Y, true);
 	set(ShortcutAction::Play, ImGuiKey_F5);
 	set(ShortcutAction::Stop, ImGuiKey_F8);
-	set(ShortcutAction::OpenEditorSettings, ImGuiKey_F10);
+	set(ShortcutAction::OpenEditorSettings, ImGuiKey_F11);
 	set(ShortcutAction::GizmoMove, ImGuiKey_W);
 	set(ShortcutAction::GizmoRotate, ImGuiKey_E);
 	set(ShortcutAction::GizmoScale, ImGuiKey_R);
@@ -3165,7 +3247,7 @@ void EditorLayer::ResetShortcutsToDefault()
 
 	// F frames the selection, where every 3D and 2D editor has put it.
 	set(ShortcutAction::FocusSelection, ImGuiKey_F);
-	set(ShortcutAction::OpenProjectSettings, ImGuiKey_F11);
+	set(ShortcutAction::OpenProjectSettings, ImGuiKey_F10);
 }
 
 void EditorLayer::SetSelection(const Reference<Entity>& entity)
@@ -3368,6 +3450,18 @@ void EditorLayer::LoadShortcuts()
 	{
 		if (index >= 0 && index < static_cast<int>(ShortcutAction::Count))
 			mBinds[index] = { static_cast<ImGuiKey>(key), ctrl != 0, shift != 0, alt != 0 };
+	}
+
+	Keybind& editor = mBinds[static_cast<int>(ShortcutAction::OpenEditorSettings)];
+	Keybind& project = mBinds[static_cast<int>(ShortcutAction::OpenProjectSettings)];
+
+	// Migrate the former built-in pair without replacing shortcuts the user deliberately rebound.
+	if (editor.key == ImGuiKey_F10 && !editor.ctrl && !editor.shift && !editor.alt
+		&& project.key == ImGuiKey_F11 && !project.ctrl && !project.shift && !project.alt)
+	{
+		editor.key = ImGuiKey_F11;
+		project.key = ImGuiKey_F10;
+		SaveShortcuts();
 	}
 }
 
@@ -5392,7 +5486,7 @@ void EditorLayer::DrawProperties()
 		}
 		else if (Camera2D* camera = dynamic_cast<Camera2D*>(component))
 		{
-			if (DrawComponentHeader(ICON_MDI_CAMERA, "Camera 2D", i, remove, dragFrom, dragTo))
+			if (DrawComponentHeader(ICON_MDI_VIDEO, "Camera 2D", i, remove, dragFrom, dragTo))
 			{
 				Vector2 offset = camera->GetOffset();
 				float32 offsetValues[2] = { offset.x, offset.y };
@@ -6178,7 +6272,7 @@ float32 EditorLayer::DrawMenuBar(const ImVec2& barMin, const ImVec2& barMax)
 
 		if (ImGui::BeginMenu("Project"))
 		{
-			if (ImGui::MenuItem(ICON_MDI_COG_OUTLINE "  Project Settings...",
+			if (ImGui::MenuItem(ICON_MDI_TUNE "  Settings...",
 				ShortcutText(ShortcutAction::OpenProjectSettings).c_str()))
 				mOpenProjectSettingsPopup = true;
 
@@ -6198,15 +6292,15 @@ float32 EditorLayer::DrawMenuBar(const ImVec2& barMin, const ImVec2& barMax)
 
 			ImGui::Separator();
 
-			if (ImGui::MenuItem(ICON_MDI_EXPORT "  Export Game...", nullptr, false, !mBuilding && !mExporting))
+			if (ImGui::MenuItem(ICON_MDI_PACKAGE_VARIANT_CLOSED "  Export...", nullptr, false, !mBuilding && !mExporting))
 				mOpenExportPopup = true;
 
 			ImGui::EndMenu();
 		}
 
-		if (ImGui::BeginMenu("Editor"))
+		if (ImGui::BeginMenu("Window"))
 		{
-			if (ImGui::MenuItem(ICON_MDI_COG_OUTLINE "  Editor Settings...",
+			if (ImGui::MenuItem(ICON_MDI_TUNE "  Settings...",
 				ShortcutText(ShortcutAction::OpenEditorSettings).c_str()))
 				mOpenEditorSettingsPopup = true;
 
@@ -6217,7 +6311,10 @@ float32 EditorLayer::DrawMenuBar(const ImVec2& barMin, const ImVec2& barMax)
 
 		if (ImGui::BeginMenu("Help"))
 		{
-			ImGui::TextDisabled("Lion's Mane  %s", kVersion);
+			ImGui::MenuItem(ICON_MDI_INFORMATION_OUTLINE "  About");
+			ImGui::MenuItem(ICON_MDI_BOOK_OPEN_PAGE_VARIANT "  Documentation");
+			ImGui::Separator();
+			ImGui::MenuItem(ICON_MDI_HEART "  Donate");
 			ImGui::EndMenu();
 		}
 
@@ -6353,7 +6450,7 @@ void EditorLayer::ApplyPendingLayout()
 
 void EditorLayer::DrawLayoutMenu()
 {
-	if (!ImGui::BeginMenu("Layouts"))
+	if (!ImGui::BeginMenu(ICON_MDI_VIEW_DASHBOARD "  Layouts..."))
 		return;
 
 	if (ImGui::MenuItem(ICON_MDI_VIEW_DASHBOARD_OUTLINE "  Default"))
@@ -6494,6 +6591,7 @@ void EditorLayer::DrawExportPopup()
 	if (mOpenExportPopup)
 	{
 		mOpenExportPopup = false;
+		const std::string projectName = Projects::DisplayName(ActiveProjectDirectory());
 
 		if (mExportLocation[0] == '\0')
 		{
@@ -6502,51 +6600,168 @@ void EditorLayer::DrawExportPopup()
 			mExportLocation[copied] = '\0';
 		}
 
-		ImGui::OpenPopup("Export Game");
+		if (mExportExecutableName[0] == '\0')
+		{
+			const size_t copied = projectName.copy(mExportExecutableName, sizeof(mExportExecutableName) - 1);
+			mExportExecutableName[copied] = '\0';
+		}
+
+		ImGui::OpenPopup("Export");
 	}
 
 	const ImVec2 center = ImGui::GetMainViewport()->GetCenter();
 	ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+	ImGui::SetNextWindowSize(ImVec2(980.0f, 680.0f), ImGuiCond_Appearing);
 
-	if (!ImGui::BeginPopupModal("Export Game", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+	if (!ImGui::BeginPopupModal("Export", nullptr, ImGuiWindowFlags_NoResize))
 		return;
 
-	ImGui::TextUnformatted("Windows Desktop");
-	ImGui::TextDisabled("Builds Shipping and creates a player-ready folder without source files.");
-	ImGui::Spacing();
-	ImGui::TextUnformatted("Destination");
-
 	const ImGuiStyle& style = ImGui::GetStyle();
-	const float32 browseWidth = ImGui::CalcTextSize(ICON_MDI_FOLDER_OPEN).x + style.FramePadding.x * 2.0f;
-	ImGui::SetNextItemWidth(440.0f - browseWidth - style.ItemInnerSpacing.x);
-	ImGui::InputText("##export_location", mExportLocation, IM_ARRAYSIZE(mExportLocation));
-	ImGui::SameLine(0.0f, style.ItemInnerSpacing.x);
+	const float32 footerHeight = ImGui::GetFrameHeightWithSpacing() + style.ItemSpacing.y;
+	ImGui::BeginChild("##export_body", ImVec2(0.0f, -footerHeight));
 
-	if (ImGui::Button(ICON_MDI_FOLDER_OPEN "##export_browse"))
+	if (ImGui::BeginTable("##export_layout", 2, ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_Resizable))
 	{
-		const std::string picked = FileDialog::OpenFolder(mExportLocation);
+		ImGui::TableSetupColumn("Presets", ImGuiTableColumnFlags_WidthFixed, 220.0f);
+		ImGui::TableSetupColumn("Configuration", ImGuiTableColumnFlags_WidthStretch);
+		ImGui::TableNextRow();
+		ImGui::TableSetColumnIndex(0);
 
-		if (!picked.empty())
+		ImGui::TextUnformatted("Presets");
+		const float32 addWidth = ImGui::CalcTextSize(ICON_MDI_PLUS).x + style.FramePadding.x * 2.0f;
+		const float32 copyWidth = ImGui::CalcTextSize(ICON_MDI_CONTENT_COPY).x + style.FramePadding.x * 2.0f;
+		const float32 presetButtonsWidth = addWidth + copyWidth + style.ItemSpacing.x;
+		ImGui::SameLine(ImGui::GetCursorPosX() + ImGui::GetContentRegionAvail().x - presetButtonsWidth);
+		ImGui::BeginDisabled();
+		ImGui::SmallButton(ICON_MDI_PLUS "##add_export_preset");
+		if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+			ImGui::SetTooltip("Additional platforms will appear here when export templates are available.");
+		ImGui::SameLine();
+		ImGui::SmallButton(ICON_MDI_CONTENT_COPY "##duplicate_export_preset");
+		ImGui::EndDisabled();
+		ImGui::Spacing();
+
+		ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(ImGuiCol_TabSelected));
+		ImGui::Button(ICON_MDI_MICROSOFT_WINDOWS "  Windows (Shipping)\n     Runnable",
+			ImVec2(-1.0f, ImGui::GetFrameHeightWithSpacing() * 2.0f));
+		ImGui::PopStyleColor();
+
+		ImGui::Spacing();
+		ImGui::TextDisabled("One runnable preset is available.");
+		ImGui::TextDisabled("More platforms can be added later\nthrough dedicated export templates.");
+
+		ImGui::TableSetColumnIndex(1);
+		ImGui::TextUnformatted(ICON_MDI_PACKAGE_VARIANT_CLOSED "  Windows (Shipping)");
+		ImGui::SameLine();
+		ImGui::TextColored(LogLevelColor(LogLevel::Success), "Runnable");
+
+		ImGui::Separator();
+		ImGui::TextUnformatted("Export path");
+		ImGui::SameLine(128.0f);
+		const float32 browseWidth = ImGui::CalcTextSize(ICON_MDI_FOLDER_OPEN).x + style.FramePadding.x * 2.0f;
+		ImGui::SetNextItemWidth(-browseWidth - style.ItemInnerSpacing.x);
+		ImGui::InputText("##export_location", mExportLocation, IM_ARRAYSIZE(mExportLocation));
+		ImGui::SameLine(0.0f, style.ItemInnerSpacing.x);
+
+		if (ImGui::Button(ICON_MDI_FOLDER_OPEN "##export_browse"))
 		{
-			const size_t copied = picked.copy(mExportLocation, sizeof(mExportLocation) - 1);
-			mExportLocation[copied] = '\0';
+			const std::string picked = FileDialog::OpenFolder(mExportLocation);
+
+			if (!picked.empty())
+			{
+				const size_t copied = picked.copy(mExportLocation, sizeof(mExportLocation) - 1);
+				mExportLocation[copied] = '\0';
+			}
 		}
+
+		ImGui::Spacing();
+		if (ImGui::BeginTabBar("##export_tabs"))
+		{
+			if (ImGui::BeginTabItem(ICON_MDI_TUNE "  Options"))
+			{
+				ImGui::Spacing();
+				ImGui::SeparatorText("Application");
+				ImGui::TextUnformatted("Executable name");
+				ImGui::SameLine(176.0f);
+				ImGui::SetNextItemWidth(-1.0f);
+				ImGui::InputText("##export_executable", mExportExecutableName, IM_ARRAYSIZE(mExportExecutableName));
+
+				ImGui::TextUnformatted("Build configuration");
+				ImGui::SameLine(176.0f);
+				ImGui::TextDisabled("Shipping");
+				ImGui::TextUnformatted("Architecture");
+				ImGui::SameLine(176.0f);
+				ImGui::TextDisabled("x86_64");
+				ImGui::TextUnformatted("Game module");
+				ImGui::SameLine(176.0f);
+				ImGui::TextDisabled("%s", Lion::kGameModuleFile);
+
+				ImGui::Spacing();
+				ImGui::SeparatorText("Package");
+				ImGui::Checkbox("Include runtime icons", &mExportIncludeIcons);
+				ImGui::Checkbox("Include engine and third-party licences", &mExportIncludeLicenses);
+				ImGui::TextDisabled("C++ sources, generated build files and editor-only data are excluded.");
+				ImGui::EndTabItem();
+			}
+
+			if (ImGui::BeginTabItem(ICON_MDI_FILE_TREE "  Resources"))
+			{
+				ImGui::Spacing();
+				ImGui::SeparatorText("Export mode");
+				ImGui::TextUnformatted("All project resources");
+				ImGui::TextDisabled("Everything under Assets is packaged except source and editor configuration files.");
+				ImGui::Spacing();
+				ImGui::SeparatorText("Excluded");
+				ImGui::BulletText("Assets/Scripts and C++ headers/sources");
+				ImGui::BulletText("Build folders and Visual Studio project files");
+				ImGui::BulletText("Lion export preset metadata");
+				ImGui::Spacing();
+				ImGui::TextDisabled("Resource filters will be added when the asset importer exposes stable dependency data.");
+				ImGui::EndTabItem();
+			}
+
+			if (ImGui::BeginTabItem(ICON_MDI_SHIELD_LOCK "  Security"))
+			{
+				ImGui::Spacing();
+				ImGui::Checkbox("Seal scenes and shaders", &mExportSealAssets);
+				ImGui::TextWrapped("Sealing obfuscates .lnscene and .glsl resources with Lion Vault before delivery. "
+					"It keeps casual edits out of a shipped package, but it is not encryption.");
+				ImGui::Spacing();
+				ImGui::TextDisabled("The game module and runtime binaries are copied unchanged.");
+				ImGui::EndTabItem();
+			}
+
+			if (ImGui::BeginTabItem(ICON_MDI_PUZZLE "  Features"))
+			{
+				ImGui::Spacing();
+				ImGui::SeparatorText("Feature list");
+				ImGui::TextDisabled("windows, x86_64, shipping, glfw-gamepad, dynamic-game-module");
+				ImGui::Spacing();
+				ImGui::TextWrapped("The preset creates a standalone folder ready to deliver to a Windows player. "
+					"The launcher owns no gameplay; it loads the packaged lion-game.dll and project resources.");
+				ImGui::EndTabItem();
+			}
+
+			ImGui::EndTabBar();
+		}
+
+		ImGui::EndTable();
 	}
 
-	ImGui::Spacing();
-	ImGui::BeginDisabled(mExportLocation[0] == '\0' || mExporting || mBuilding);
-
-	if (ImGui::Button("Export", ImVec2(96.0f, 0.0f)))
+	ImGui::EndChild();
+	ImGui::Separator();
+	const float32 buttonWidth = 112.0f;
+	ImGui::SetCursorPosX(ImGui::GetWindowWidth() - style.WindowPadding.x - buttonWidth * 2.0f - style.ItemSpacing.x);
+	if (ImGui::Button("Close", ImVec2(buttonWidth, 0.0f)) || ImGui::IsKeyPressed(ImGuiKey_Escape))
+		ImGui::CloseCurrentPopup();
+	ImGui::SameLine();
+	ImGui::BeginDisabled(mExportLocation[0] == '\0' || mExportExecutableName[0] == '\0' || mExporting || mBuilding);
+	if (ImGui::Button(ICON_MDI_PACKAGE_UP "  Export", ImVec2(buttonWidth, 0.0f)))
 	{
 		StartExport();
 		ImGui::CloseCurrentPopup();
 	}
-
 	ImGui::EndDisabled();
-	ImGui::SameLine();
-
-	if (ImGui::Button("Cancel", ImVec2(96.0f, 0.0f)) || ImGui::IsKeyPressed(ImGuiKey_Escape))
-		ImGui::CloseCurrentPopup();
 
 	ImGui::EndPopup();
 }
@@ -6557,12 +6772,17 @@ void EditorLayer::StartExport()
 		return;
 
 	const std::filesystem::path project = ActiveProjectDirectory();
-	const std::filesystem::path destination = mExportLocation;
+	ProjectExporter::Options options;
+	options.destination = mExportLocation;
+	options.executableName = mExportExecutableName;
+	options.sealAssets = mExportSealAssets;
+	options.includeLicenses = mExportIncludeLicenses;
+	options.includeIcons = mExportIncludeIcons;
 	Log::Console(LogLevel::Information, "[Editor] Exporting the game for Windows...");
 	PushToast("Exporting the Windows game", true);
 	mExporting = true;
-	mExport = std::async(std::launch::async, [project, destination]
-		{ return ProjectExporter::ExportWindows(project, destination); });
+	mExport = std::async(std::launch::async, [project, options]
+		{ return ProjectExporter::ExportWindows(project, options); });
 }
 
 void EditorLayer::PollExport()

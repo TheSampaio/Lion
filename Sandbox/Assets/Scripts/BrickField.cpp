@@ -25,7 +25,7 @@ void BrickField::OnUpdate()
 	if (mState == State::Playing)
 		CheckWinLose();
 
-	else if (Input::GetKeyTap(KeyCode::R))
+	else if (Input::GetActionTap("player_reset"))
 		Restart();
 }
 
@@ -51,13 +51,13 @@ void BrickField::EndRound(State state)
 	if (state == State::Won)
 	{
 		Window::SetBackgroundColor(0.0f, 0.25f, 0.0f);
-		Log::Console(LogLevel::Success, "[Game] You win! Press R to play again.");
+		Log::Console(LogLevel::Success, "[Game] You win! Press R or Select to play again.");
 	}
 	else
 	{
 		mBall->SetVisible(false);  // The ball has left the screen; hide it.
 		Window::SetBackgroundColor(0.25f, 0.0f, 0.0f);
-		Log::Console(LogLevel::Warning, "[Game] Game over! Press R to play again.");
+		Log::Console(LogLevel::Warning, "[Game] Game over! Press R or Select to play again.");
 	}
 }
 
