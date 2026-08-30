@@ -9,7 +9,7 @@
 class Editor : public Lion::Application
 {
 public:
-	Editor()
+	Editor() : Application(Lion::ApplicationKind::Editor)
 	{
 		PushLayer(new EditorLayer());
 	}

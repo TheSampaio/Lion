@@ -3,6 +3,7 @@
 
 #include <Lion/Core/Filesystem.h>
 #include <Lion/Core/Log.h>
+#include <Lion/Core/Vault.h>
 
 namespace Lion
 {
@@ -26,8 +27,20 @@ namespace Lion
 		stbi_set_flip_vertically_on_load(true);
 
 		const char8* filename = filePath.c_str();
+		std::ifstream file(ResolveResourcePath(filePath), std::ios::binary);
+
+		if (!file.is_open())
+		{
+			Log::Console(LogLevel::Warning, LION_FORMAT_TEXT("[Texture] Could not locate '{}'.", filename));
+			return;
+		}
+
+		std::stringstream buffer;
+		buffer << file.rdbuf();
+		const std::string content = Vault::Unseal(buffer.str());
 		int32 width = 0, height = 0;
-		byte* bytes = stbi_load(ResolveResourcePath(filePath).c_str(), &width, &height, &mChannels, 0);
+		byte* bytes = stbi_load_from_memory(reinterpret_cast<const stbi_uc*>(content.data()),
+			static_cast<int32>(content.size()), &width, &height, &mChannels, 0);
 
 		if (!bytes)
 		{
@@ -83,8 +96,10 @@ namespace Lion
 
 	OpenGLTexture::~OpenGLTexture()
 	{
-		glDeleteTextures(1, &mId);
+		if (mId == 0)
+			return;
 
+		glDeleteTextures(1, &mId);
 		sAllocationCount--;
 	}
 

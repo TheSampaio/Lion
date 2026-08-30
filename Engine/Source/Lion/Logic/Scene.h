@@ -44,6 +44,9 @@ namespace Lion
 		// Entities currently in the scene (used by serialization and editor panels).
 		const std::list<Reference<Entity>>& GetEntities() const { return mEntities; }
 
+		// Finds the first entity with this authored name, or null when the scene has none.
+		LION_API Reference<Entity> FindEntity(const std::string& name) const;
+
 		// Returns the first component of T attached to an entity in scene order, including inactive
 		// entities. Returns nullptr when the scene carries none.
 		template<typename T>

@@ -49,6 +49,13 @@ namespace Lion
         }
     }
 
+	Reference<Entity> Scene::FindEntity(const std::string& name) const
+	{
+		const auto found = std::find_if(mEntities.begin(), mEntities.end(),
+			[&](const Reference<Entity>& entity) { return entity->GetName() == name; });
+		return found == mEntities.end() ? nullptr : *found;
+	}
+
     void Scene::SetGravity(const glm::vec2& gravity)
     {
         mPhysicsWorld->SetGravity(gravity);

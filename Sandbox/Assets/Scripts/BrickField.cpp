@@ -13,15 +13,22 @@ void BrickField::OnAwake()
 	mBall = GetOwner().GetScene()->FindComponent<Ball>();
 	mPaddle = GetOwner().GetScene()->FindComponent<Paddle>();
 
-	if (!mBall || !mPaddle)
+	if (!mBall || !mPaddle || GetOwner().GetScene()->CountActiveComponents<Brick>() == 0)
 	{
-		Log::Console(LogLevel::Error, "[BrickField] Requires a Ball and Paddle in the same scene.");
+		Log::Console(LogLevel::Error, "[BrickField] Requires a Ball, Paddle and authored Bricks in the same scene.");
 		SetEnabled(false);
+		return;
 	}
+
+	Log::Console(LogLevel::Information,
+		LION_FORMAT_TEXT("[Game] Level {}/5: {} ({} bricks).", mLevel, mDifficulty,
+			GetOwner().GetScene()->CountActiveComponents<Brick>()));
 }
 
 void BrickField::OnUpdate()
 {
+	HandleDebugLevelKeys();
+
 	if (mState == State::Playing)
 		CheckWinLose();
 
@@ -31,13 +38,22 @@ void BrickField::OnUpdate()
 
 void BrickField::Reflect(Reflector& reflector)
 {
+	reflector.Field("Level", mLevel);
+	reflector.Field("Difficulty", mDifficulty);
+	reflector.FieldAsset("Previous Scene", mPreviousScene);
+	reflector.FieldAsset("Next Scene", mNextScene);
 	reflector.Field("Lose Height", mLoseHeight);
 }
 
 void BrickField::CheckWinLose()
 {
 	if (GetOwner().GetScene()->CountActiveComponents<Brick>() == 0)
-		EndRound(State::Won);
+	{
+		if (!mNextScene.empty())
+			SceneManager::LoadScene(mNextScene);
+		else
+			EndRound(State::Won);
+	}
 
 	else if (mBall->GetOwner().GetWorldPosition().y < mLoseHeight)
 		EndRound(State::Lost);
@@ -51,7 +67,7 @@ void BrickField::EndRound(State state)
 	if (state == State::Won)
 	{
 		Window::SetBackgroundColor(0.0f, 0.25f, 0.0f);
-		Log::Console(LogLevel::Success, "[Game] You win! Press R or Select to play again.");
+		Log::Console(LogLevel::Success, "[Game] All five levels complete! Press R or Select to play again.");
 	}
 	else
 	{
@@ -63,18 +79,20 @@ void BrickField::EndRound(State state)
 
 void BrickField::Restart()
 {
-	for (const auto& entity : GetOwner().GetScene()->GetEntities())
-		if (entity->HasComponent<Brick>())
-		{
-			entity->SetVisible(true);
-			entity->SetEnabled(true);
-		}
+	SceneManager::ReloadScene();
+}
 
-	mPaddle->Reset();
-	mBall->Reset();
+void BrickField::HandleDebugLevelKeys()
+{
+#ifndef LN_SHIPPING
+	if (!Application::IsEditor() || !Input::GetKeyPress(KeyCode::Shift))
+		return;
 
-	Window::SetBackgroundColor(0.05f, 0.05f, 0.05f);
-	mState = State::Playing;
+	if (Input::GetKeyTap(KeyCode::Period) && !mNextScene.empty())
+		SceneManager::LoadScene(mNextScene);
+	else if (Input::GetKeyTap(KeyCode::Comma) && !mPreviousScene.empty())
+		SceneManager::LoadScene(mPreviousScene);
+#endif
 }
 
 LION_REGISTER_COMPONENT(BrickField)

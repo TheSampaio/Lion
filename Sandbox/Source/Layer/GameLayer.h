@@ -8,6 +8,7 @@ public:
 	void OnCreate() override;
 	void OnUpdate() override;
 	void OnRender() override;
+	void OnDetach() override;
 
 protected:
 	void OnEvent(Lion::Event& event) override;
@@ -15,6 +16,4 @@ protected:
 
 private:
 	Lion::Reference<Lion::CameraOrthographic> mCamera;
-	Lion::Reference<Lion::Scene> mScene;
-	Lion::Camera2D* mSceneCamera = nullptr;
 };

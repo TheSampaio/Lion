@@ -7,6 +7,7 @@ namespace Lion
 {
 	Asset::~Asset()
 	{
+		sAudioClips.clear();
 		sTextures.clear();
 	}
 
@@ -33,5 +34,31 @@ namespace Lion
 		sTextures[name] = texture;
 
 		return texture;
+	}
+
+	Reference<AudioClip> Asset::LoadAudio(const std::string& name)
+	{
+		const auto found = sAudioClips.find(name);
+
+		if (found != sAudioClips.end())
+			return found->second;
+
+		Log::Console(LogLevel::Error, LION_FORMAT_TEXT("[Asset] Audio clip '{}' not found in cache.", name));
+		return nullptr;
+	}
+
+	Reference<AudioClip> Asset::LoadAudio(const std::string& name, const std::string& filePath)
+	{
+		const auto found = sAudioClips.find(name);
+
+		if (found != sAudioClips.end())
+			return found->second;
+
+		Reference<AudioClip> clip = AudioClip::Create(filePath);
+
+		if (clip)
+			sAudioClips[name] = clip;
+
+		return clip;
 	}
 }

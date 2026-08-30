@@ -4,6 +4,11 @@
 
 class Paddle;
 
+namespace Lion
+{
+	class AudioPlayer;
+}
+
 // The ball: rests on the paddle until launched, then travels at a constant speed and takes its
 // direction from wherever it lands on the paddle.
 class Ball : public Lion::Component
@@ -20,6 +25,7 @@ public:
 	// Freezes the ball in place, and shows or hides it (both used on game over).
 	void Stop();
 	void SetVisible(bool visible);
+	void SetSpeed(Lion::float32 speed);
 
 private:
 	enum class State
@@ -38,6 +44,9 @@ private:
 	Lion::RigidBody2D* mBody = nullptr;
 	Lion::SpriteRenderer* mRenderer = nullptr;
 	Lion::float32 mAttachOffsetY = 0.0f;
+	Lion::AudioPlayer* mImpactGeneral = nullptr;
+	Lion::AudioPlayer* mImpactPoint = nullptr;
 
 	void FollowPaddle();
+	void FindAudioPlayers();
 };

@@ -20,6 +20,7 @@ namespace Projects
 		// name. It is what the walk below recognises the root by.
 		constexpr const Lion::char8* kGameFolder = "Sandbox";
 		constexpr const Lion::char8* kDefaultScene = "Assets/Scenes/Main.lnscene";
+		constexpr const Lion::char8* kBuiltInDefaultScene = "Assets/Scenes/Level01.lnscene";
 
 		struct ProjectMarker
 		{
@@ -328,6 +329,17 @@ namespace Projects
 	{
 		if (!IsProjectFolder(project))
 			return {};
+
+		// The repository demo is a five-scene game. New projects still begin with conventional Main.lnscene,
+		// while the built-in always enters through the first level explicitly.
+		if (project.lexically_normal() == DefaultProjectDirectory().lexically_normal())
+		{
+			const std::filesystem::path builtIn = project / kBuiltInDefaultScene;
+			std::error_code error;
+
+			if (std::filesystem::is_regular_file(builtIn, error))
+				return builtIn;
+		}
 
 		const ProjectMarker marker = ReadMarker(project);
 

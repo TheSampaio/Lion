@@ -339,8 +339,35 @@ void ProjectManagerLayer::DrawToolbar()
 
 	ImGui::SetNextItemWidth(kSortWidth);
 
-	if (ImGui::Combo("##sort", &sort, kSortNames, 3))
-		mSort = static_cast<Sort>(sort);
+	const bool sortOpen = ImGui::BeginCombo("##sort", kSortNames[sort], ImGuiComboFlags_NoArrowButton);
+	const ImVec2 sortMin = ImGui::GetItemRectMin();
+	const ImVec2 sortMax = ImGui::GetItemRectMax();
+	const float32 triangle = 3.0f;
+	const ImVec2 triangleCenter(sortMax.x - 10.0f, (sortMin.y + sortMax.y) * 0.5f + 1.0f);
+	ImGui::GetForegroundDrawList()->AddTriangleFilled(
+		ImVec2(triangleCenter.x - triangle, triangleCenter.y - triangle * 0.5f),
+		ImVec2(triangleCenter.x + triangle, triangleCenter.y - triangle * 0.5f),
+		ImVec2(triangleCenter.x, triangleCenter.y + triangle * 0.5f),
+		ImGui::GetColorU32(ImGuiCol_Text));
+
+	if (sortOpen)
+	{
+		for (int32 option = 0; option < 3; ++option)
+		{
+			const bool selected = option == sort;
+
+			if (ImGui::Selectable(kSortNames[option], selected))
+			{
+				sort = option;
+				mSort = static_cast<Sort>(sort);
+			}
+
+			if (selected)
+				ImGui::SetItemDefaultFocus();
+		}
+
+		ImGui::EndCombo();
+	}
 
 	if (!mCreateError.empty() && !mOpenCreatePopup)
 	{
@@ -453,6 +480,17 @@ void ProjectManagerLayer::DrawProjectList()
 			}
 		}
 
+		const bool rowHovered = ImGui::IsItemHovered();
+
+		// The star is part of the project row even though it has its own click target. Paint the state over
+		// the complete width so moving across that lane never makes the row appear to lose hover.
+		if (isSelected || starHovered || rowHovered)
+		{
+			const ImGuiCol color = isSelected ? ImGuiCol_Header : ImGuiCol_HeaderHovered;
+			draw->AddRectFilled(rowMin, ImVec2(rowMin.x + rowWidth, rowMin.y + kRowHeight),
+				ImGui::GetColorU32(color), ImGui::GetStyle().FrameRounding);
+		}
+
 		DrawStar(draw, ImVec2(rowMin.x + kStarLane * 0.5f, rowMin.y + kRowHeight * 0.5f), 7.0f,
 			entry->favorite, entry->favorite ? accentColor : (starHovered ? textColor : dimColor));
 
@@ -512,7 +550,7 @@ void ProjectManagerLayer::DrawActionsPanel()
 
 	ImGui::BeginDisabled(!selected || selected->missing);
 
-	if (ImGui::Button("Open", button) && selected)
+	if (ImGui::Button(ICON_MDI_FOLDER_OPEN "  Open", button) && selected)
 		OpenInEditor(selected->path);
 
 	ImGui::EndDisabled();
@@ -520,7 +558,7 @@ void ProjectManagerLayer::DrawActionsPanel()
 	// The built-in keeps its name and its place on the list: it is the engine's, not the machine's.
 	ImGui::BeginDisabled(!selected || selected->missing || selected->builtIn);
 
-	if (ImGui::Button("Rename", button) && selected)
+	if (ImGui::Button(ICON_MDI_PENCIL "  Rename", button) && selected)
 	{
 		mOpenRenamePopup = true;
 		mRenameError.clear();
@@ -533,7 +571,7 @@ void ProjectManagerLayer::DrawActionsPanel()
 
 	ImGui::BeginDisabled(!selected || selected->missing);
 
-	if (ImGui::Button("Duplicate", button) && selected)
+	if (ImGui::Button(ICON_MDI_CONTENT_COPY "  Duplicate", button) && selected)
 	{
 		std::string error;
 		const std::filesystem::path copy = Projects::Duplicate(selected->path, error);
@@ -549,7 +587,7 @@ void ProjectManagerLayer::DrawActionsPanel()
 
 	ImGui::BeginDisabled(!selected || selected->builtIn);
 
-	if (ImGui::Button("Remove", button) && selected)
+	if (ImGui::Button(ICON_MDI_DELETE_OUTLINE "  Remove", button) && selected)
 		mOpenRemovePopup = true;
 
 	ImGui::EndDisabled();
@@ -559,7 +597,7 @@ void ProjectManagerLayer::DrawActionsPanel()
 
 	ImGui::BeginDisabled(!anyMissing);
 
-	if (ImGui::Button("Remove Missing", button))
+	if (ImGui::Button(ICON_MDI_DATABASE_REMOVE_OUTLINE "  Remove Missing", button))
 	{
 		Projects::RemoveMissing();
 		Refresh();
@@ -569,7 +607,7 @@ void ProjectManagerLayer::DrawActionsPanel()
 
 	// Donate keeps the door open at the bottom, the way Godot keeps it. It goes nowhere yet.
 	ImGui::SetCursorPosY(ImGui::GetWindowHeight() - ImGui::GetFrameHeight() - 8.0f);
-	ImGui::Button("Donate", button);
+	ImGui::Button(ICON_MDI_HEART "  Donate", button);
 }
 
 void ProjectManagerLayer::DrawPopups()

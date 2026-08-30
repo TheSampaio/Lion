@@ -1,4 +1,5 @@
 #include "Ball.h"
+#include "Brick.h"
 #include "Paddle.h"
 
 #include <Lion/Logic/ComponentRegistry.h>
@@ -22,6 +23,7 @@ void Ball::OnAwake()
 
 	const float32 ballRadius = mRenderer->GetSize().height * 0.5f;
 	mAttachOffsetY = mPaddle->GetHalfHeight() + ballRadius + mAttachGap;
+	FindAudioPlayers();
 
 	Reset();
 }
@@ -63,6 +65,14 @@ void Ball::OnCollision(Entity& other)
 	// No steering while the ball is resting on the paddle.
 	if (mState != State::Launched)
 		return;
+
+	if (!mImpactGeneral || !mImpactPoint)
+		FindAudioPlayers();
+
+	AudioPlayer* impact = other.HasComponent<Brick>() ? mImpactPoint : mImpactGeneral;
+
+	if (impact)
+		impact->Play();
 
 	// Steering only happens on the paddle; walls and bricks bounce through the physics solver.
 	Paddle* paddle = other.GetComponent<Paddle>();
@@ -106,6 +116,19 @@ void Ball::SetVisible(bool visible)
 	mRenderer->SetEnabled(visible);
 }
 
+void Ball::SetSpeed(float32 speed)
+{
+	mSpeed = std::max(speed, 1.0f);
+
+	if (mState != State::Launched)
+		return;
+
+	const glm::vec2 velocity = mBody->GetLinearVelocity();
+
+	if (glm::dot(velocity, velocity) > 0.0f)
+		mBody->SetLinearVelocity(glm::normalize(velocity) * mSpeed);
+}
+
 void Ball::FollowPaddle()
 {
 	// Sit just above the paddle and move with it while attached.
@@ -113,6 +136,15 @@ void Ball::FollowPaddle()
 
 	mBody->SetLinearVelocity(glm::vec2(0.0f, 0.0f));
 	mBody->SetPosition(glm::vec2(paddlePosition.x, paddlePosition.y + mAttachOffsetY));
+}
+
+void Ball::FindAudioPlayers()
+{
+	const Reference<Scene> scene = GetOwner().GetScene();
+	const Reference<Entity> general = scene ? scene->FindEntity("Impact General Audio") : nullptr;
+	const Reference<Entity> point = scene ? scene->FindEntity("Impact Point Audio") : nullptr;
+	mImpactGeneral = general ? general->GetComponent<AudioPlayer>() : nullptr;
+	mImpactPoint = point ? point->GetComponent<AudioPlayer>() : nullptr;
 }
 
 LION_REGISTER_COMPONENT(Ball)

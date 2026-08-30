@@ -27,9 +27,14 @@ private:
 	State mState = State::Playing;
 	Ball* mBall = nullptr;
 	Paddle* mPaddle = nullptr;
+	Lion::int32 mLevel = 1;
+	std::string mDifficulty = "Very Easy";
+	std::string mPreviousScene;
+	std::string mNextScene;
 	Lion::float32 mLoseHeight = -310.0f;
 
 	void CheckWinLose();
 	void EndRound(State state);
 	void Restart();
+	void HandleDebugLevelKeys();
 };

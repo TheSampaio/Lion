@@ -7,37 +7,41 @@ using namespace Lion;
 void GameLayer::OnCreate()
 {
 	mCamera = MakeReference<CameraOrthographic>();
-	mScene = MakeReference<Scene>();
 
-	const std::string scenePath = ResourceRootDirectory() + "Scenes/Main.lnscene";
-
-	if (!SceneSerializer::Deserialize(mScene, scenePath))
-	{
-		Log::Console(LogLevel::Fatal, LION_FORMAT_TEXT("[Game] Could not load the main scene: '{}'.", scenePath));
-		return;
-	}
-
-	mSceneCamera = mScene->FindComponent<Camera2D>();
+	if (!SceneManager::LoadScene("Scenes/Level01.lnscene"))
+		Log::Console(LogLevel::Fatal, "[Game] Could not load the first level.");
 }
 
 void GameLayer::OnUpdate()
 {
-	mScene->OnUpdate();
+	SceneManager::Update();
 }
 
 void GameLayer::OnRender()
 {
-	if (mSceneCamera && mSceneCamera->IsEnabled())
+	const Reference<Scene> scene = SceneManager::GetActiveScene();
+
+	if (!scene)
+		return;
+
+	Camera2D* sceneCamera = scene->FindComponent<Camera2D>();
+
+	if (sceneCamera && sceneCamera->IsEnabled())
 	{
-		const glm::vec2 position = mSceneCamera->GetViewPosition();
+		const glm::vec2 position = sceneCamera->GetViewPosition();
 		mCamera->SetPosition(glm::vec3(position.x, position.y, 0.0f));
 
-		mCamera->SetZoomLevel(mSceneCamera->GetZoomForViewportHeight(mCamera->GetViewportHeight()));
+		mCamera->SetZoomLevel(sceneCamera->GetZoomForViewportHeight(mCamera->GetViewportHeight()));
 	}
 
 	Renderer::RenderBegin(mCamera);
-	mScene->OnRender();
+	scene->OnRender();
 	Renderer::RenderEnd();
+}
+
+void GameLayer::OnDetach()
+{
+	SceneManager::Clear();
 }
 
 void GameLayer::OnEvent(Event& event)

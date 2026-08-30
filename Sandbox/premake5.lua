@@ -56,5 +56,7 @@ project "Game"
             -- The exclude list is named relatively because xcopy will not take a quoted path for it, so
             -- an absolute one would break on the first clone that lives under a folder with a space. A
             -- post-build runs in the project's folder, one level under the workspace.
+			'if exist "%{wks.location}Build\\Bin\\' .. output_dir:gsub("/", "\\") .. launcher_project .. '\\Scenes\\Main.lnscene" del /Q "%{wks.location}Build\\Bin\\' .. output_dir:gsub("/", "\\") .. launcher_project .. '\\Scenes\\Main.lnscene"',
+			'if exist "%{wks.location}Build\\Bin\\' .. output_dir:gsub("/", "\\") .. launcher_project .. '\\Shaders\\Lit.glsl" del /Q "%{wks.location}Build\\Bin\\' .. output_dir:gsub("/", "\\") .. launcher_project .. '\\Shaders\\Lit.glsl"',
             'xcopy /E /I /Y /Q /EXCLUDE:..\\Scripts\\AssetCopyExclude.txt "%{prj.location}Assets" "%{wks.location}/Build/Bin/' .. output_dir .. launcher_project .. '/"',
         }

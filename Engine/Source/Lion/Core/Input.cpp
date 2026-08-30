@@ -284,7 +284,9 @@ namespace Lion
 		if (!file.is_open())
 			return false;
 
-		file << root.dump(2);
+		// Input maps are authored engine assets just like scenes: save them wearing the same Vault seal.
+		// Loading accepts both sealed and plaintext content, so older projects migrate on their next save.
+		file << Vault::Seal(root.dump(2));
 		return file.good();
 	}
 }

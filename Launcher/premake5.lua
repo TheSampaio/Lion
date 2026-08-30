@@ -51,7 +51,7 @@ project "Launcher"
         dependson { editor_project }
 
         postbuildcommands {
-            '"%{wks.location}/Build/Bin/' .. output_dir .. editor_project .. '/Lion.exe" --seal "%{cfg.targetdir}" .glsl .lnscene',
+            '"%{wks.location}/Build/Bin/' .. output_dir .. editor_project .. '/Lion.exe" --seal-assets "%{wks.location}/Sandbox/Assets" "%{cfg.targetdir}"',
 
 			-- A distributed Shipping editor carries a clean Windows player template. Project export adds the
 			-- project's module and assets; keeping the runtime here prevents a packaged editor from depending

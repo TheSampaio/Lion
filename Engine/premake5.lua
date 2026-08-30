@@ -59,4 +59,5 @@ project "Lion"
     filter "system:windows"
         buildoptions { "/utf-8" }
         defines "LN_PLATFORM_WIN"
+        links "xaudio2"
         systemversion "latest"

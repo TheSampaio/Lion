@@ -30,6 +30,7 @@
 	#define WIN32_LEAN_AND_MEAN
 	#define NOMINMAX
 	#include <Windows.h>
+	#include <shellapi.h>
 #endif
 
 #include <imgui/imgui_internal.h> // DockBuilder API for the default layout.
@@ -56,7 +57,8 @@ namespace
 	std::filesystem::path ActiveProjectDirectory();
 	void SetActiveProjectDirectory(const std::filesystem::path& project);
 	void DrawIcon(const ImVec2& origin, const ImVec2& box, const char8* icon, ImU32 color, float32 pixels);
-	bool DrawSectionHeader(const char8* id, const char8* icon, const char8* name, ImGuiTreeNodeFlags flags);
+	bool DrawSectionHeader(const char8* id, const char8* icon, const char8* name, ImGuiTreeNodeFlags flags,
+		float32 iconOffset = 0.0f);
 }
 
 // Every panel's window name: the icon it wears on its tab, the name it goes by, and the id a saved layout
@@ -171,7 +173,14 @@ void EditorLayer::OnUpdate()
 	// before the world moved once — the cooldown that wasn't. A running game keeps real time.
 	if (mPlaying && (!mPaused || mStepFrame))
 	{
-		mScene->OnUpdate(mStepFrame ? (1.0f / 60.0f) : -1.0f);
+		SceneManager::Update(mStepFrame ? (1.0f / 60.0f) : -1.0f);
+
+		if (const Reference<Scene> active = SceneManager::GetActiveScene(); active && active != mScene)
+		{
+			SetSelection(nullptr);
+			mScene = active;
+		}
+
 		mStepFrame = false;
 	}
 }
@@ -190,6 +199,7 @@ void EditorLayer::StepOneFrame()
 void EditorLayer::OnDetach()
 {
 	SaveEditorSettings();
+	SceneManager::Clear();
 	// The module goes before the editor does, and for the same reason a reload drops it first: the
 	// registries hold factories that are code inside it, and the scene holds components whose vtables
 	// are. Left to the process to tear down, those are destroyed after the library has been unmapped —
@@ -255,6 +265,7 @@ void EditorLayer::StartPlay()
 	mPlaySnapshot = SceneSerializer::SerializeToString(mScene);
 	SceneSerializer::DeserializeFromString(mScene, mPlaySnapshot);
 	SelectEntityByIndex(selected);
+	SceneManager::SetActiveScene(mScene, mScenePath);
 
 	mPlaying = true;
 	mPaused = false;
@@ -278,6 +289,8 @@ void EditorLayer::StopPlay()
 	// Restore the scene to exactly the edited state captured when Play started.
 	const int selected = SelectedEntityIndex();
 
+	SceneManager::Clear();
+	Audio::StopAll();
 	SceneSerializer::DeserializeFromString(mScene, mPlaySnapshot);
 	SelectEntityByIndex(selected);
 
@@ -876,13 +889,14 @@ void EditorLayer::DrawToast()
 
 namespace
 {
-	bool DrawSectionHeader(const char8* id, const char8* icon, const char8* name, ImGuiTreeNodeFlags flags)
+	bool DrawSectionHeader(const char8* id, const char8* icon, const char8* name, ImGuiTreeNodeFlags flags,
+		float32 iconOffset)
 	{
 		ImGui::SetNextItemAllowOverlap();
 		const bool open = ImGui::CollapsingHeader(id, flags);
 		const ImVec2 headerMin = ImGui::GetItemRectMin();
 		const ImVec2 headerMax = ImGui::GetItemRectMax();
-		const float32 iconX = headerMin.x + ImGui::GetFontSize() + 12.0f;
+		const float32 iconX = headerMin.x + ImGui::GetFontSize() + 12.0f + iconOffset;
 		const float32 rowHeight = headerMax.y - headerMin.y;
 		const ImU32 textColor = ImGui::GetColorU32(ImGuiCol_Text);
 
@@ -936,7 +950,10 @@ void EditorLayer::DrawStatistics()
 		return true;
 	};
 
-	if (DrawSectionHeader("###statistics_frame", ICON_MDI_CLOCK, "Frame", ImGuiTreeNodeFlags_DefaultOpen)
+	constexpr float32 kStatisticsIconBreathingRoom = 2.0f;
+
+	if (DrawSectionHeader("###statistics_frame", ICON_MDI_CLOCK, "Frame", ImGuiTreeNodeFlags_DefaultOpen,
+		kStatisticsIconBreathingRoom)
 		&& beginTable("Frame"))
 	{
 		row("FPS", "%.1f", io.Framerate);
@@ -945,7 +962,8 @@ void EditorLayer::DrawStatistics()
 		ImGui::EndTable();
 	}
 
-	if (DrawSectionHeader("###statistics_renderer", ICON_MDI_CHART_BAR, "Renderer", ImGuiTreeNodeFlags_DefaultOpen)
+	if (DrawSectionHeader("###statistics_renderer", ICON_MDI_CHART_BAR, "Renderer", ImGuiTreeNodeFlags_DefaultOpen,
+		kStatisticsIconBreathingRoom)
 		&& beginTable("Renderer"))
 	{
 		// The batch's whole job is to turn many sprites into few draw calls, and none of that shows from
@@ -963,7 +981,8 @@ void EditorLayer::DrawStatistics()
 		ImGui::EndTable();
 	}
 
-	if (DrawSectionHeader("###statistics_scene", ICON_MDI_CUBE_OUTLINE, "Scene", ImGuiTreeNodeFlags_DefaultOpen)
+	if (DrawSectionHeader("###statistics_scene", ICON_MDI_CUBE_OUTLINE, "Scene", ImGuiTreeNodeFlags_DefaultOpen,
+		kStatisticsIconBreathingRoom)
 		&& beginTable("Scene"))
 	{
 		int32 components = 0;
@@ -985,7 +1004,8 @@ void EditorLayer::DrawStatistics()
 		ImGui::EndTable();
 	}
 
-	if (DrawSectionHeader("###statistics_viewport", ICON_MDI_MONITOR, "Viewport", ImGuiTreeNodeFlags_DefaultOpen)
+	if (DrawSectionHeader("###statistics_viewport", ICON_MDI_MONITOR, "Viewport", ImGuiTreeNodeFlags_DefaultOpen,
+		kStatisticsIconBreathingRoom)
 		&& beginTable("Viewport"))
 	{
 		row("Render target", "%.0f x %.0f", mViewportSize.x, mViewportSize.y);
@@ -1353,7 +1373,7 @@ namespace
 	// construction arguments (a collider sizes itself to the sprite). Everything else in the registry
 	// comes from the game module and is added generically, by name.
 	constexpr const char8* kBuiltInComponents[] = {
-		"SpriteRenderer", "Camera2D", "RigidBody2D", "BoxCollider2D", "CircleCollider2D" };
+		"SpriteRenderer", "Camera2D", "AudioPlayer", "RigidBody2D", "BoxCollider2D", "CircleCollider2D" };
 
 	bool IsBuiltInComponent(const std::string& name)
 	{
@@ -1942,10 +1962,10 @@ namespace
 	// What the engine ships into a project, and what a project cannot be edited into not having.
 	//
 	// The two folders are where an asset of a kind goes: deleting one is not editing a project, it is
-	// breaking it. Lit.glsl is the shader everything is drawn with. And Sprites/Geometries is sealed —
+	// breaking it. Lit.lnshader is the shader everything is drawn with. And Sprites/Geometries is sealed —
 	// the simple shapes the engine will put there to build with are the engine's, all the way down, so
 	// what is inside it is as protected as the folder around it.
-	constexpr const char8* kEngineAssets[] = { "Shaders", "Shaders/Lit.glsl", "Sprites", "Sprites/Geometries" };
+	constexpr const char8* kEngineAssets[] = { "Shaders", "Shaders/Lit.lnshader", "Sprites", "Sprites/Geometries" };
 	constexpr const char8* kSealedAssetFolders[] = { "Sprites/Geometries" };
 
 	bool IsEngineAsset(const std::string& relative)
@@ -1988,12 +2008,34 @@ namespace
 		}
 	}
 
+	// A copied asset stays beside its source and follows Explorer's familiar naming rule.
+	std::filesystem::path UnusedCopyPath(const std::filesystem::path& source,
+		const std::filesystem::path& destinationDirectory)
+	{
+		std::error_code error;
+		const bool directory = std::filesystem::is_directory(source, error);
+		const std::string stem = directory ? source.filename().string() : source.stem().string();
+		const std::string extension = !directory && source.has_extension()
+			? source.extension().string() : std::string();
+
+		for (int32 number = 1; ; ++number)
+		{
+			const std::string suffix = number == 1 ? " Copy" : " Copy (" + std::to_string(number) + ")";
+			const std::filesystem::path candidate = destinationDirectory / (stem + suffix + extension);
+
+			if (!std::filesystem::exists(candidate, error))
+				return candidate;
+		}
+	}
+
 	// Only asset-like files are listed; the resource root also holds the executable and its DLLs.
 	// A script is one of the game's files too, so it is listed like any other: the Content Browser is
 	// where a component is created, and hiding the result would be a strange way to end that flow.
 	bool IsAssetFile(const std::filesystem::path& path)
 	{
-		static const char8* extensions[] = { ".png", ".jpg", ".jpeg", ".bmp", ".glsl", ".lnscene", ".h", ".cpp" };
+		static const char8* extensions[] = {
+			".png", ".jpg", ".jpeg", ".bmp", ".wav", ".lnshader", ".lnscene", ".lninput", ".h", ".cpp"
+		};
 
 		std::string extension = path.extension().string();
 		std::transform(extension.begin(), extension.end(), extension.begin(),
@@ -2012,9 +2054,13 @@ namespace
 void EditorLayer::DrawProject()
 {
 	if (!mShowProject)
+	{
+		mProjectFocused = false;
 		return;
+	}
 
 	ImGui::Begin(kProjectWindow, &mShowProject);
+	mProjectFocused = ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows);
 
 	const std::filesystem::path root = ProjectPanelDirectory();
 
@@ -2125,7 +2171,11 @@ void EditorLayer::DrawProject()
 		}
 		else
 		{
-			DrawAssetEntry(entry.name, entry.path, false);
+			if (DrawAssetEntry(entry.name, entry.path, false) && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)
+				&& std::filesystem::path(entry.path).extension() == ".lnscene" && !mPlaying)
+			{
+				LoadScene((root / entry.path).string());
+			}
 
 			// Drag an asset onto a field that accepts it (e.g. the Sprite Renderer's texture).
 			if (ImGui::BeginDragDropSource())
@@ -2143,8 +2193,15 @@ void EditorLayer::DrawProject()
 	if (ImGui::BeginPopupContextWindow("ContentBrowserContext",
 		ImGuiPopupFlags_MouseButtonRight | ImGuiPopupFlags_NoOpenOverItems))
 	{
-		if (ImGui::MenuItem("New Folder"))
+		if (ImGui::MenuItem(ICON_MDI_FOLDER_PLUS "  New Folder", ShortcutText(ShortcutAction::NewFolder).c_str()))
 			CreateAssetFolder();
+
+		if (ImGui::MenuItem(ICON_MDI_CONTENT_PASTE "  Paste", ShortcutText(ShortcutAction::PasteEntity).c_str(),
+			false, !mAssetClipboard.empty()))
+			PasteAsset();
+
+		if (ImGui::MenuItem(ICON_MDI_FOLDER_OPEN_OUTLINE "  Open in File Explorer"))
+			OpenAssetInFileExplorer(mProjectPath);
 
 		// The component lands where you are standing: the popup opens with this folder already in it.
 		if (ImGui::MenuItem("New Component..."))
@@ -2159,7 +2216,10 @@ void EditorLayer::DrawProject()
 	}
 
 	if (navigate)
+	{
 		mProjectPath = navigateTarget;
+		mSelectedAsset.clear();
+	}
 
 	ImGui::End();
 }
@@ -2177,8 +2237,14 @@ namespace
 		if (extension == ".h" || extension == ".cpp" || extension == ".cs")
 			return ICON_MDI_CODE_TAGS;
 
-		if (extension == ".glsl")
+		if (extension == ".lnshader")
 			return ICON_MDI_PALETTE;
+
+		if (extension == ".wav")
+			return ICON_MDI_FILE_MUSIC;
+
+		if (extension == ".lninput")
+			return ICON_MDI_GAMEPAD;
 
 		if (extension == ".lnscene")
 			return ICON_MDI_SHAPE;
@@ -2229,7 +2295,11 @@ bool EditorLayer::DrawAssetEntry(const std::string& name, const std::string& ass
 	ImGui::PushStyleColor(ImGuiCol_HeaderActive, accent);
 
 	const std::string label = std::string(folder ? ICON_MDI_FOLDER : AssetIcon(name)) + "  " + name;
-	const bool activated = ImGui::Selectable(label.c_str(), false, ImGuiSelectableFlags_AllowDoubleClick);
+	const bool activated = ImGui::Selectable(label.c_str(), mSelectedAsset == assetPath,
+		ImGuiSelectableFlags_AllowDoubleClick);
+
+	if (activated)
+		mSelectedAsset = assetPath;
 
 	ImGui::PopStyleColor(2);
 
@@ -2242,6 +2312,11 @@ bool EditorLayer::DrawAssetEntry(const std::string& name, const std::string& ass
 
 	if (ImGui::BeginPopupContextItem())
 	{
+		mSelectedAsset = assetPath;
+
+		if (ImGui::MenuItem(ICON_MDI_FOLDER_OPEN_OUTLINE "  Open in File Explorer"))
+			OpenAssetInFileExplorer(assetPath);
+
 		if (ImGui::MenuItem("Copy path"))
 			ImGui::SetClipboardText(assetPath.c_str());
 
@@ -2252,16 +2327,19 @@ bool EditorLayer::DrawAssetEntry(const std::string& name, const std::string& ass
 		// is looking for teaches them nothing.
 		ImGui::BeginDisabled(engineOwned);
 
-		if (ImGui::MenuItem("Rename"))
-		{
-			mRenamingAsset = assetPath;
-			mAssetRenameFocus = true;
+		if (ImGui::MenuItem(ICON_MDI_PENCIL "  Rename", ShortcutText(ShortcutAction::RenameEntity).c_str()))
+			BeginRenameAsset(assetPath);
 
-			const size_t copied = name.copy(mAssetRenameBuffer, sizeof(mAssetRenameBuffer) - 1);
-			mAssetRenameBuffer[copied] = '\0';
-		}
+		if (ImGui::MenuItem(ICON_MDI_CONTENT_COPY "  Copy", ShortcutText(ShortcutAction::CopyEntity).c_str()))
+			CopyAsset(false);
 
-		if (ImGui::MenuItem("Delete"))
+		if (ImGui::MenuItem(ICON_MDI_CONTENT_CUT "  Cut", ShortcutText(ShortcutAction::CutSelection).c_str()))
+			CopyAsset(true);
+
+		if (ImGui::MenuItem(ICON_MDI_CONTENT_DUPLICATE "  Duplicate", ShortcutText(ShortcutAction::DuplicateEntity).c_str()))
+			DuplicateAsset();
+
+		if (ImGui::MenuItem(ICON_MDI_DELETE_OUTLINE "  Delete"))
 			mAssetToDelete = assetPath;
 
 		ImGui::EndDisabled();
@@ -2329,6 +2407,122 @@ void EditorLayer::CreateAssetFolder()
 
 	const size_t copied = name.copy(mAssetRenameBuffer, sizeof(mAssetRenameBuffer) - 1);
 	mAssetRenameBuffer[copied] = '\0';
+	mSelectedAsset = mRenamingAsset;
+}
+
+void EditorLayer::BeginRenameAsset(const std::string& assetPath)
+{
+	if (assetPath.empty() || IsEngineAsset(assetPath))
+		return;
+
+	mRenamingAsset = assetPath;
+	mSelectedAsset = assetPath;
+	mAssetRenameFocus = true;
+
+	const std::string name = std::filesystem::path(assetPath).filename().string();
+	const size_t copied = name.copy(mAssetRenameBuffer, sizeof(mAssetRenameBuffer) - 1);
+	mAssetRenameBuffer[copied] = '\0';
+}
+
+void EditorLayer::CopyAsset(bool cut)
+{
+	if (mSelectedAsset.empty() || (cut && IsEngineAsset(mSelectedAsset)))
+		return;
+
+	mAssetClipboard = mSelectedAsset;
+	mAssetClipboardCut = cut;
+}
+
+void EditorLayer::PasteAsset()
+{
+	if (mAssetClipboard.empty())
+		return;
+
+	const std::filesystem::path root = ProjectPanelDirectory();
+	const std::filesystem::path source = root / mAssetClipboard;
+	const std::filesystem::path destinationDirectory = root / mProjectPath;
+	std::error_code error;
+
+	if (!std::filesystem::exists(source, error) || !std::filesystem::is_directory(destinationDirectory, error))
+	{
+		mAssetClipboard.clear();
+		mAssetClipboardCut = false;
+		return;
+	}
+
+	std::filesystem::path destination = destinationDirectory / source.filename();
+
+	if (mAssetClipboardCut && source.parent_path() == destinationDirectory)
+		return;
+
+	if (std::filesystem::exists(destination, error))
+		destination = UnusedCopyPath(source, destinationDirectory);
+
+	if (mAssetClipboardCut)
+	{
+		std::filesystem::rename(source, destination, error);
+	}
+	else if (std::filesystem::is_directory(source, error))
+	{
+		std::filesystem::copy(source, destination, std::filesystem::copy_options::recursive, error);
+	}
+	else
+	{
+		std::filesystem::copy_file(source, destination, error);
+	}
+
+	if (error)
+	{
+		Log::Console(LogLevel::Error,
+			LION_FORMAT_TEXT("[Editor] Could not paste '{}': {}.", mAssetClipboard, error.message()));
+		return;
+	}
+
+	mSelectedAsset = destination.lexically_relative(root).generic_string();
+	mProjectDirty = true;
+
+	if (mAssetClipboardCut)
+	{
+		mAssetClipboard.clear();
+		mAssetClipboardCut = false;
+	}
+}
+
+void EditorLayer::DuplicateAsset()
+{
+	if (mSelectedAsset.empty() || IsEngineAsset(mSelectedAsset))
+		return;
+
+	const std::string savedClipboard = mAssetClipboard;
+	const bool savedCut = mAssetClipboardCut;
+	const std::string savedPath = mProjectPath;
+
+	mAssetClipboard = mSelectedAsset;
+	mAssetClipboardCut = false;
+	mProjectPath = std::filesystem::path(mSelectedAsset).parent_path().generic_string();
+	PasteAsset();
+	mProjectPath = savedPath;
+	mAssetClipboard = savedClipboard;
+	mAssetClipboardCut = savedCut;
+}
+
+void EditorLayer::OpenAssetInFileExplorer(const std::string& assetPath) const
+{
+#ifdef LN_PLATFORM_WIN
+	const std::filesystem::path absolute = std::filesystem::absolute(ProjectPanelDirectory() / assetPath);
+	std::error_code error;
+
+	if (std::filesystem::is_directory(absolute, error))
+	{
+		ShellExecuteW(nullptr, L"open", absolute.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+		return;
+	}
+
+	const std::wstring arguments = L"/select,\"" + absolute.wstring() + L"\"";
+	ShellExecuteW(nullptr, L"open", L"explorer.exe", arguments.c_str(), nullptr, SW_SHOWNORMAL);
+#else
+	(void)assetPath;
+#endif
 }
 
 void EditorLayer::RenameAsset(const std::string& assetPath, const std::string& name)
@@ -2356,6 +2550,8 @@ void EditorLayer::RenameAsset(const std::string& assetPath, const std::string& n
 
 	if (error)
 		Log::Console(LogLevel::Error, LION_FORMAT_TEXT("[Editor] Could not rename '{}': {}.", assetPath, error.message()));
+	else
+		mSelectedAsset = to.lexically_relative(root).generic_string();
 }
 
 void EditorLayer::DrawDeleteAssetPopup()
@@ -2398,6 +2594,15 @@ void EditorLayer::DrawDeleteAssetPopup()
 			Log::Console(LogLevel::Error, LION_FORMAT_TEXT("[Editor] Could not delete '{}': {}.", mAssetToDelete, error.message()));
 		else
 			Log::Console(LogLevel::Information, LION_FORMAT_TEXT("[Editor] Deleted '{}'.", mAssetToDelete));
+
+		if (mSelectedAsset == mAssetToDelete)
+			mSelectedAsset.clear();
+
+		if (mAssetClipboard == mAssetToDelete)
+		{
+			mAssetClipboard.clear();
+			mAssetClipboardCut = false;
+		}
 
 		mAssetToDelete.clear();
 		ImGui::CloseCurrentPopup();
@@ -2513,12 +2718,14 @@ void EditorLayer::DrawShortcutsTab()
 			{ ShortcutAction::GizmoScale,      "Tools",     "Scale tool" },
 			{ ShortcutAction::FocusSelection,  "Viewport",  "Frame the selection" },
 			{ ShortcutAction::ToggleColliders, "Viewport",  "Toggle collider hitboxes" },
-			{ ShortcutAction::Deselect,        "Hierarchy", "Clear the selection" },
-			{ ShortcutAction::RenameEntity,    "Hierarchy", "Rename selected entity" },
-			{ ShortcutAction::DeleteEntity,    "Hierarchy", "Delete selected entity" },
-			{ ShortcutAction::CopyEntity,      "Hierarchy", "Copy selected entity" },
-			{ ShortcutAction::PasteEntity,     "Hierarchy", "Paste entity from clipboard" },
-			{ ShortcutAction::DuplicateEntity, "Hierarchy", "Duplicate selected entity" },
+			{ ShortcutAction::Deselect,        "Editing", "Clear the selection" },
+			{ ShortcutAction::RenameEntity,    "Editing", "Rename selected item" },
+			{ ShortcutAction::DeleteEntity,    "Editing", "Delete selected item" },
+			{ ShortcutAction::CopyEntity,      "Editing", "Copy selected item" },
+			{ ShortcutAction::CutSelection,    "Editing", "Cut selected item" },
+			{ ShortcutAction::PasteEntity,     "Editing", "Paste clipboard item" },
+			{ ShortcutAction::DuplicateEntity, "Editing", "Duplicate selected item" },
+			{ ShortcutAction::NewFolder,       "Editing", "Create a folder" },
 			{ ShortcutAction::ToggleHierarchy,  "Panels",   "Show/hide Scene Hierarchy" },
 			{ ShortcutAction::ToggleProperties, "Panels",   "Show/hide Properties" },
 			{ ShortcutAction::ToggleProject,    "Panels",   "Show/hide Project" },
@@ -2804,7 +3011,7 @@ void EditorLayer::DrawProjectGeneralSettings()
 	ImGui::EndDisabled();
 
 	if (builtIn)
-		ImGui::TextDisabled("The built-in Sandbox always starts from Assets/Scenes/Main.lnscene.");
+		ImGui::TextDisabled("The built-in Sandbox always starts from Assets/Scenes/Level01.lnscene.");
 	else if (!mProjectSettingsError.empty())
 		ImGui::TextColored(LogLevelColor(LogLevel::Error), "%s", mProjectSettingsError.c_str());
 }
@@ -3357,6 +3564,8 @@ void EditorLayer::ResetShortcutsToDefault()
 	// F frames the selection, where every 3D and 2D editor has put it.
 	set(ShortcutAction::FocusSelection, ImGuiKey_F);
 	set(ShortcutAction::OpenProjectSettings, ImGuiKey_F10);
+	set(ShortcutAction::CutSelection, ImGuiKey_X, true);
+	set(ShortcutAction::NewFolder, ImGuiKey_N, true, true);
 }
 
 void EditorLayer::SetSelection(const Reference<Entity>& entity)
@@ -3498,6 +3707,18 @@ void EditorLayer::CopyEntity()
 {
 	if (mSelectedEntity)
 		mEntityClipboard = SceneSerializer::SerializeEntityToString(mSelectedEntity);
+}
+
+void EditorLayer::CutEntity()
+{
+	if (!mSelectedEntity)
+		return;
+
+	CopyEntity();
+	RecordSnapshot();
+	mScene->Remove(mSelectedEntity);
+	mScene->FlushRemovals();
+	SetSelection(nullptr);
 }
 
 void EditorLayer::PasteEntity()
@@ -3686,15 +3907,38 @@ void EditorLayer::HandleShortcuts()
 	if (IsShortcutPressed(ShortcutAction::SaveScene)) SaveScene();
 	if (IsShortcutPressed(ShortcutAction::SaveSceneAs)) SaveSceneAs();
 	if (IsShortcutPressed(ShortcutAction::FocusSelection)) FocusViewportOnSelection();
-	if (IsShortcutPressed(ShortcutAction::NewProject)) mOpenProjectManagerPopup = true;
+	if (IsShortcutPressed(ShortcutAction::NewProject) && !mProjectFocused && !mHierarchyFocused)
+		mOpenProjectManagerPopup = true;
 	if (IsShortcutPressed(ShortcutAction::OpenProject)) BrowseForProject();
 
 	if (IsShortcutPressed(ShortcutAction::Undo)) Undo();
 	if (IsShortcutPressed(ShortcutAction::Redo)) Redo();
 
+	// File and hierarchy operations share the conventional shortcuts. The focused panel supplies the
+	// subject, exactly as Explorer and a scene editor do; this keeps one customizable binding per intent.
+	if (mProjectFocused)
+	{
+		if (IsShortcutPressed(ShortcutAction::CopyEntity)) CopyAsset(false);
+		if (IsShortcutPressed(ShortcutAction::CutSelection)) CopyAsset(true);
+		if (IsShortcutPressed(ShortcutAction::PasteEntity)) PasteAsset();
+		if (IsShortcutPressed(ShortcutAction::DuplicateEntity)) DuplicateAsset();
+		if (IsShortcutPressed(ShortcutAction::NewFolder)) CreateAssetFolder();
+
+		if (!mSelectedAsset.empty() && IsShortcutPressed(ShortcutAction::RenameEntity))
+			BeginRenameAsset(mSelectedAsset);
+
+		if (!mSelectedAsset.empty() && !IsEngineAsset(mSelectedAsset)
+			&& IsShortcutPressed(ShortcutAction::DeleteEntity))
+			mAssetToDelete = mSelectedAsset;
+
+		return;
+	}
+
 	if (IsShortcutPressed(ShortcutAction::CopyEntity)) CopyEntity();
+	if (IsShortcutPressed(ShortcutAction::CutSelection)) CutEntity();
 	if (IsShortcutPressed(ShortcutAction::PasteEntity)) PasteEntity();
 	if (IsShortcutPressed(ShortcutAction::DuplicateEntity)) DuplicateEntity();
+	if (mHierarchyFocused && IsShortcutPressed(ShortcutAction::NewFolder)) CreateFolder();
 
 	if (mSelectedEntity && IsShortcutPressed(ShortcutAction::RenameEntity))
 	{
@@ -4289,9 +4533,13 @@ void EditorLayer::DrawColliderOverlays(const ImVec2& imageMin, const ImVec2& ima
 void EditorLayer::DrawHierarchy()
 {
 	if (!mShowHierarchy)
+	{
+		mHierarchyFocused = false;
 		return;
+	}
 
 	ImGui::Begin(kHierarchyWindow, &mShowHierarchy);
+	mHierarchyFocused = ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows);
 
 	const ImGuiStyle& style = ImGui::GetStyle();
 
@@ -4316,6 +4564,7 @@ void EditorLayer::DrawHierarchy()
 		mEntityLookup.emplace(entity.get(), entity);
 
 	mEntityToDelete = nullptr;
+	mDeleteOnlyTarget = false;
 	mReparentChild = nullptr;
 	mReparentTarget = nullptr;
 	mReparentRequested = false;
@@ -4496,7 +4745,7 @@ void EditorLayer::DrawHierarchy()
 		RecordSnapshot();
 
 		// Deleting one of several deletes all of them, for the same reason dragging one drags all of them.
-		const std::vector<Reference<Entity>> doomed = IsSelected(mEntityToDelete.get())
+		const std::vector<Reference<Entity>> doomed = !mDeleteOnlyTarget && IsSelected(mEntityToDelete.get())
 			? mSelection
 			: std::vector<Reference<Entity>>{ mEntityToDelete };
 
@@ -4511,6 +4760,7 @@ void EditorLayer::DrawHierarchy()
 		SetSelection(nullptr);
 		mScene->FlushRemovals();
 		mEntityToDelete = nullptr;
+		mDeleteOnlyTarget = false;
 	}
 
 	ImGui::End();
@@ -4523,7 +4773,7 @@ void EditorLayer::DrawEntityMenuItems(const Reference<Entity>& target, const Vec
 	// between them, and no reason for a second menu.
 	if (target)
 	{
-		if (ImGui::MenuItem("Rename", "F2"))
+		if (ImGui::MenuItem("Rename", ShortcutText(ShortcutAction::RenameEntity).c_str()))
 		{
 			mRenamingEntity = target;
 			mRenameFocus = true;
@@ -4539,7 +4789,7 @@ void EditorLayer::DrawEntityMenuItems(const Reference<Entity>& target, const Vec
 		CreateEntity(target.get(), nullptr);
 
 	// A folder is a place in the Hierarchy, not a thing in the scene, so the viewport does not offer one.
-	if (!inViewport && ImGui::MenuItem("Create Folder"))
+	if (!inViewport && ImGui::MenuItem("Create Folder", ShortcutText(ShortcutAction::NewFolder).c_str()))
 		CreateFolder();
 
 	// Copy, paste and duplicate act on the Hierarchy's selection; over the scene they have no subject the
@@ -4550,11 +4800,18 @@ void EditorLayer::DrawEntityMenuItems(const Reference<Entity>& target, const Vec
 
 		if (target)
 		{
-			if (ImGui::MenuItem("Copy", "Ctrl+C"))      CopyEntity();
-			if (ImGui::MenuItem("Duplicate", "Ctrl+D")) DuplicateEntity();
+			if (ImGui::MenuItem("Copy", ShortcutText(ShortcutAction::CopyEntity).c_str())) CopyEntity();
+			if (ImGui::MenuItem("Cut", ShortcutText(ShortcutAction::CutSelection).c_str()))
+			{
+				mEntityClipboard = SceneSerializer::SerializeEntityToString(target);
+				mEntityToDelete = target;
+				mDeleteOnlyTarget = true;
+			}
+			if (ImGui::MenuItem("Duplicate", ShortcutText(ShortcutAction::DuplicateEntity).c_str())) DuplicateEntity();
 		}
 
-		if (ImGui::MenuItem("Paste", "Ctrl+V", false, !mEntityClipboard.empty()))
+		if (ImGui::MenuItem("Paste", ShortcutText(ShortcutAction::PasteEntity).c_str(), false,
+			!mEntityClipboard.empty()))
 			PasteEntity();
 	}
 
@@ -5226,6 +5483,20 @@ void EditorLayer::InspectorReflector::Field(const char8* name, float32& value)
 {
 	mDrew = true;
 
+	if (mTypeName == "AudioPlayer" && std::string(name) == "Volume")
+	{
+		if (mEditor.DrawFloatProperty(name, value, 0.01f, 0.0f, 1.0f, 1.0f))
+			mEditor.ApplyReflectedField(mTypeName, name, value);
+		return;
+	}
+
+	if (mTypeName == "AudioPlayer" && std::string(name) == "Pitch")
+	{
+		if (mEditor.DrawFloatProperty(name, value, 0.01f, 0.25f, 4.0f, 1.0f))
+			mEditor.ApplyReflectedField(mTypeName, name, value);
+		return;
+	}
+
 	// No range and no default: the component said it was a number, not what a sensible one would be.
 	if (mEditor.DrawFloatProperty(name, value, 0.1f, 0.0f, 0.0f, std::nullopt))
 		mEditor.ApplyReflectedField(mTypeName, name, value);
@@ -5279,6 +5550,27 @@ void EditorLayer::InspectorReflector::Field(const char8* name, bool& value)
 void EditorLayer::InspectorReflector::Field(const char8* name, std::string& value)
 {
 	mDrew = true;
+
+	if (mTypeName == "AudioPlayer" && std::string(name) == "Bus")
+	{
+		static const char8* buses[] = { "Master", "SFX", "Music" };
+		int32 selected = value == "Master" ? 0 : (value == "Music" ? 2 : 1);
+
+		ImGui::PushID(name);
+		PropertyLabel(name);
+
+		if (ImGui::Combo("##value", &selected, buses, IM_ARRAYSIZE(buses)))
+		{
+			mEditor.RecordSnapshot();
+			value = buses[selected];
+			mEditor.ApplyReflectedField(mTypeName, name, value);
+		}
+
+		SameLineRowEnd();
+		ResetToDefaultButton("##reset", false);
+		ImGui::PopID();
+		return;
+	}
 
 	char8 buffer[256];
 	const size_t length = value.copy(buffer, sizeof(buffer) - 1);
@@ -5662,6 +5954,14 @@ void EditorLayer::DrawProperties()
 				}
 			}
 		}
+		else if (AudioPlayer* player = dynamic_cast<AudioPlayer*>(component))
+		{
+			if (DrawComponentHeader(ICON_MDI_VOLUME_HIGH, "Audio Player", i, remove, dragFrom, dragTo))
+			{
+				InspectorReflector reflector(*this, player->GetTypeName());
+				player->Reflect(reflector);
+			}
+		}
 		else if (RigidBody2D* body = dynamic_cast<RigidBody2D*>(component))
 		{
 			if (DrawComponentHeader(ICON_MDI_WEIGHT, "Rigid Body 2D", i, remove, dragFrom, dragTo))
@@ -5819,6 +6119,14 @@ void EditorLayer::DrawProperties()
 					entity->AddComponent<Camera2D>();
 
 			FocusViewportOnSelection();
+		}
+
+		if (lacksBuiltIn.operator()<AudioPlayer>() && ImGui::MenuItem("Audio Player"))
+		{
+			RecordSnapshot();
+			for (const auto& entity : mSelection)
+				if (!entity->IsFolder() && !entity->HasComponent<AudioPlayer>())
+					entity->AddComponent<AudioPlayer>();
 		}
 
 		if (lacksBuiltIn.operator()<RigidBody2D>() && ImGui::MenuItem("Rigid Body 2D"))
@@ -6738,18 +7046,18 @@ void EditorLayer::DrawExportPopup()
 		ImGui::Spacing();
 
 		ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(ImGuiCol_TabSelected));
-		ImGui::Button(ICON_MDI_MICROSOFT_WINDOWS "  Windows (Shipping)\n     Runnable",
+		ImGui::Button(ICON_MDI_MICROSOFT_WINDOWS "  Windows\n     Shipping",
 			ImVec2(-1.0f, ImGui::GetFrameHeightWithSpacing() * 2.0f));
 		ImGui::PopStyleColor();
 
 		ImGui::Spacing();
-		ImGui::TextDisabled("One runnable preset is available.");
+		ImGui::TextDisabled("One Shipping preset is available.");
 		ImGui::TextDisabled("More platforms can be added later\nthrough dedicated export templates.");
 
 		ImGui::TableSetColumnIndex(1);
-		ImGui::TextUnformatted(ICON_MDI_PACKAGE_VARIANT_CLOSED "  Windows (Shipping)");
+		ImGui::TextUnformatted(ICON_MDI_PACKAGE_VARIANT_CLOSED "  Windows");
 		ImGui::SameLine();
-		ImGui::TextColored(LogLevelColor(LogLevel::Success), "Runnable");
+		ImGui::TextColored(LogLevelColor(LogLevel::Success), "Shipping");
 
 		ImGui::Separator();
 		ImGui::TextUnformatted("Export path");
@@ -6819,9 +7127,9 @@ void EditorLayer::DrawExportPopup()
 			if (ImGui::BeginTabItem(ICON_MDI_SHIELD_LOCK "  Security"))
 			{
 				ImGui::Spacing();
-				ImGui::Checkbox("Seal scenes and shaders", &mExportSealAssets);
-				ImGui::TextWrapped("Sealing obfuscates .lnscene and .glsl resources with Lion Vault before delivery. "
-					"It keeps casual edits out of a shipped package, but it is not encryption.");
+				ImGui::Checkbox("Seal all game assets", &mExportSealAssets);
+				ImGui::TextWrapped("Sealing obfuscates every packaged resource under Assets with Lion Vault before delivery, "
+					"including .lnscene, .lnshader, .lninput, images and audio. It discourages casual edits, but it is not encryption.");
 				ImGui::Spacing();
 				ImGui::TextDisabled("The game module and runtime binaries are copied unchanged.");
 				ImGui::EndTabItem();
@@ -6831,7 +7139,7 @@ void EditorLayer::DrawExportPopup()
 			{
 				ImGui::Spacing();
 				ImGui::SeparatorText("Feature list");
-				ImGui::TextDisabled("windows, x86_64, shipping, glfw-gamepad, dynamic-game-module");
+				ImGui::TextDisabled("windows, x86_64, shipping, standard-gamepad-input, dynamic-game-module");
 				ImGui::Spacing();
 				ImGui::TextWrapped("The preset creates a standalone folder ready to deliver to a Windows player. "
 					"The launcher owns no gameplay; it loads the packaged lion-game.dll and project resources.");

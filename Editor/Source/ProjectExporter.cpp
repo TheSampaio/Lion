@@ -3,10 +3,10 @@
 
 #include "ProjectBuild.h"
 #include "Projects.h"
+#include "Sealer.h"
 
 #include <Lion/Core/Filesystem.h>
 #include <Lion/Core/GameModule.h>
-#include <Lion/Core/Vault.h>
 
 #include <filesystem>
 #include <fstream>
@@ -99,43 +99,6 @@ namespace ProjectExporter
 			return false;
 		}
 
-		bool SealAssets(const std::filesystem::path& directory, std::string& error)
-		{
-			std::error_code code;
-
-			for (std::filesystem::recursive_directory_iterator it(directory, code), end; it != end; it.increment(code))
-			{
-				if (code)
-					break;
-
-				if (!it->is_regular_file(code))
-					continue;
-
-				const std::filesystem::path extension = it->path().extension();
-
-				if (extension != ".glsl" && extension != ".lnscene")
-					continue;
-
-				std::ifstream source(it->path(), std::ios::binary);
-				std::stringstream buffer;
-				buffer << source.rdbuf();
-				std::ofstream target(it->path(), std::ios::binary | std::ios::trunc);
-
-				if (!source.good() || !target.is_open())
-				{
-					error = "Could not seal '" + it->path().generic_string() + "'.";
-					return false;
-				}
-
-				target << Lion::Vault::Seal(Lion::Vault::Unseal(buffer.str()));
-			}
-
-			if (!code)
-				return true;
-
-			error = "Could not seal the exported assets: " + code.message();
-			return false;
-		}
 	}
 
 	Result ExportWindows(const std::filesystem::path& project, const Options& options)
@@ -246,7 +209,7 @@ namespace ProjectExporter
 			|| (options.includeIcons && !CopyDirectory(runtime / "Icons", staging / "Icons", copyError))
 			|| (options.includeLicenses && !CopyDirectory(runtime / "Licenses", staging / "Licenses", copyError))
 			|| !CopyAssets(projectDirectory / "Assets", staging, copyError)
-			|| (options.sealAssets && !SealAssets(staging, copyError)))
+			|| (options.sealAssets && !Sealer::SealAssets(projectDirectory / "Assets", staging, copyError)))
 			return fail(copyError);
 
 		std::filesystem::rename(staging, output, code);

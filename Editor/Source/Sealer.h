@@ -1,6 +1,8 @@
 #pragma once
 
+#include <filesystem>
 #include <optional>
+#include <string>
 
 #include <Lion/Type/Primitive.h>
 
@@ -17,6 +19,11 @@
 class Sealer
 {
 public:
+	// Seals every file that the exporter copied from a project's Assets directory, preserving its
+	// relative layout in the packaged directory. Source code and editor-only export metadata are skipped.
+	static bool SealAssets(const std::filesystem::path& sourceAssets,
+		const std::filesystem::path& packagedDirectory, std::string& error, Lion::int32* sealedCount = nullptr);
+
 	// The exit code the editor should end on, or nothing at all when it was started to be an editor.
 	static std::optional<Lion::int32> RunFromCommandLine();
 };

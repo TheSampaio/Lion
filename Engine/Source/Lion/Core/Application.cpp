@@ -1,6 +1,7 @@
 #include "Engine.h"
 #include "Application.h"
 
+#include <Lion/Audio/Audio.h>
 #include <Lion/Core/Asset.h>
 #include <Lion/Core/Clock.h>
 #include <Lion/Core/Input.h>
@@ -19,6 +20,8 @@
 
 namespace Lion
 {
+	ApplicationKind Application::sKind = ApplicationKind::Game;
+
 	template<typename T>
 	static T TryInitialize(T result, const char8* name)
 	{
@@ -71,9 +74,10 @@ namespace Lion
 		}
 	}
 
-	Application::Application()
+	Application::Application(ApplicationKind kind)
 		: mStack(nullptr), mMinimized(false)
 	{
+		sKind = kind;
 		// Created in every configuration: what the log actually emits is decided at runtime, by the
 		// verbosity, since the editor needs it whatever build it was compiled in.
 		Log::New();
@@ -83,9 +87,15 @@ namespace Lion
 
 		Window::New();
 		Input::New();
+		Audio::New();
 		Graphics::New();
 		Renderer::New();
 		Clock::New();
+	}
+
+	bool Application::IsEditor()
+	{
+		return sKind == ApplicationKind::Editor;
 	}
 
 	Application::~Application()
@@ -97,6 +107,7 @@ namespace Lion
 		mStack.reset();
 		mAsset.reset();
 
+		Audio::Delete();
 		Renderer::Delete();
 		Graphics::Delete();
 		Input::Delete();
@@ -139,6 +150,7 @@ namespace Lion
 		{
 			Window::PollEvents();
 			Input::Update();
+			Audio::Update();
 			Frame();
 
 		} while (!Window::Close());

@@ -88,16 +88,17 @@ Apply these to every change:
   `Scripts/PackSdk.bat`; only the built-in Sandbox builds through `Lion.sln`.
 - `%{wks.location}` becomes `$(SolutionDir)`. Building a generated `.vcxproj` directly therefore breaks
   paths that depend on the solution. Build through the solution.
-- The Sandbox is scene-authored. `Sandbox/Assets/Scenes/Main.lnscene` owns the complete Brickout level;
-  `GameLayer` loads it and gameplay components provide reusable behavior rather than a second code-only
-  level description.
+- The Sandbox is scene-authored. `Sandbox/Assets/Scenes/Level01.lnscene` through `Level05.lnscene` own
+  the five Brickout levels; `GameLayer` enters through Level01 and `SceneManager` performs transitions.
+  Gameplay components provide reusable behavior rather than a second code-only level description.
 
 ## Centralized engine rules
 
 - Sealing lives only in `Lion/Core/Vault.h`: XOR with `0x07D2`, URL-safe base64, wrapped at 76 characters.
-  Loading calls `Vault::Unseal`, which returns unsealed content unchanged. Scenes and project markers are
-  sealed when saved; Shipping seals `.glsl` and `.lnscene` through `Lion.exe --seal`. Sealing is
-  obfuscation, not encryption, because the key ships with the player.
+  Loading calls `Vault::Unseal`, which returns unsealed content unchanged. Scenes, input maps and project
+  markers are sealed when saved; Shipping seals every packaged game asset, including `.lnshader`, `.lnscene`,
+  `.lninput`, images, and audio. Sealing is obfuscation, not encryption, because the key ships with the
+  player.
 - Module filenames live in `Lion/Core/GameModule.h`.
 - Shortcut handling lives in the shared shortcut path.
 

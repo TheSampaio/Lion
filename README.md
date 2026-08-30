@@ -22,7 +22,7 @@
     <h2>🚀 Preview</h2>
     <p>Coming soon — screenshots, demos, and GIFs will be added here.</p>
     <img src=".github/image/lion-engine-showcase-transparent.png" alt="Lion Engine Showcase">
-    <p>The bundled <strong>Brickout</strong> sandbox is a playable, physics-driven demo authored in <code>Assets/Scenes/Main.lnscene</code>. Move with <kbd>A</kbd> / <kbd>D</kbd> or the arrow keys, launch with <kbd>Space</kbd> / <kbd>Enter</kbd>, and press <kbd>R</kbd> after winning or losing to reset the round.</p>
+    <p>The bundled <strong>Brickout</strong> sandbox is a playable, physics-driven demo authored as five independent scenes, <code>Assets/Scenes/Level01.lnscene</code> through <code>Level05.lnscene</code>. They progress from Very Easy to Very Hard, with collision audio played by scene-authored Audio Player components. Move with <kbd>A</kbd> / <kbd>D</kbd> or the arrow keys, launch with <kbd>Space</kbd> / <kbd>Enter</kbd>, and press <kbd>R</kbd> after winning or losing to reset the round. While playing inside the editor, <kbd>&lt;</kbd> and <kbd>&gt;</kbd> move between levels for debugging; those controls are excluded from Shipping.</p>
   </div>
   <div id="features">
     <h2>✨ Features</h2>
@@ -34,7 +34,8 @@
       <li><strong>2D Physics</strong> — <a href="https://github.com/erincatto/box2d">Box2D</a> behind a <code>PhysicsWorld</code> with a fixed time step, transform synchronization and contact events routed to the components that care.</li>
       <li><strong>Backend-agnostic renderer</strong> — every OpenGL call lives behind a small RHI (<code>RendererAPI</code>, <code>GraphicsContext</code>, <code>Shader</code>, <code>Buffer</code>, <code>VertexArray</code>, <code>Texture</code>), so a Vulkan backend can be added without touching high-level code.</li>
       <li><strong>Batched sprite rendering</strong> — sprites are batched into a single dynamic buffer with per-frame texture slotting and depth sorting, issued in one draw call.</li>
-      <li><strong>Asset sealing</strong> — <code>Vault</code> is the one place the format lives (XOR, then URL-safe base64 in 76-character lines). Scenes and project markers are sealed by the editor that saves them; a shipped game’s shaders are sealed by the build. Loading never has to know which kind it has — plain content comes back unchanged. It is obfuscation, not encryption.</li>
+      <li><strong>Audio</strong> — immutable WAV clips are cached as assets and played by scene-authored <code>AudioPlayer</code> components. Independent XAudio2 voices support volume, pitch, loop, play-on-awake and scene-reload persistence, routed through Master, SFX and Music buses.</li>
+      <li><strong>Asset sealing</strong> — <code>Vault</code> is the one place the format lives (XOR, then URL-safe base64 in 76-character lines). Scenes, input maps and project markers are sealed by the editor that saves them; every asset in a Shipping package is sealed by the exporter. Loading never has to know which kind it has — plain content comes back unchanged. It is obfuscation, not encryption.</li>
       <li><strong>Layer stack, events, input, logging and a resource cache</strong> for building games on top of the engine.</li>
     </ul>
     <h3>Editor (<em>Lion’s Mane</em>)</h3>
@@ -42,7 +43,7 @@
       <li><strong>Scene editing</strong> — a viewport with <a href="https://github.com/CedricGuillemet/ImGuizmo">ImGuizmo</a> tools, multi-selection, drag-and-drop parenting, undo/redo, and play / pause / step / stop against the live scene.</li>
       <li><strong>Inspector</strong> — every component drawn from its own reflection, with per-field revert, a uniform-scale padlock, and required components pulled in automatically (<code>LION_REQUIRES</code>).</li>
       <li><strong>Component source workflow</strong> — scaffold a component from the editor’s language picker, compile it, and hot-reload it without restarting. C++ is the current backend; source generation is isolated behind a language boundary so C# can be added without changing scenes, reflection, the Inspector, or component registration.</li>
-      <li><strong>Content Browser, Console and Statistics</strong> — create, rename and delete project assets; a console that collapses repeats and renders through a clipper; frame, renderer and scene counters.</li>
+      <li><strong>Content Browser, Console and Statistics</strong> — create, rename, copy, cut, paste and duplicate project assets; open a scene by double-clicking it or reveal any asset in Explorer; a console that collapses repeats and renders through a clipper; frame, renderer and scene counters.</li>
       <li><strong>Its own window</strong> — a caption the editor draws itself, and <code>.lnproject</code> files registered with Windows on first run, so Explorer shows a project with the engine’s icon and a double-click opens it here — scenes open inside the editor.</li>
     </ul>
   </div>
@@ -61,6 +62,7 @@
 ├── Engine                  # The engine (lion-core.dll)
 │   ├── Include/Lion        # Public umbrella headers: Lion.h, Launcher.h
 │   └── Source/Lion
+│       ├── Audio           # AudioClip assets and the runtime playback service
 │       ├── Base            # Platform, standard and external includes
 │       ├── Core            # Application, Window, Layer, Log, Clock, Input,
 │       │                   #   Asset, Vault, GameModule, DynamicLibrary, Build
@@ -78,15 +80,16 @@
 │       ├── ComponentScripts # Language-specific component source generation
 │       ├── EditorGui       # Dear ImGui lifecycle, theme and fonts
 │       ├── ModuleSymbols   # Debug symbols for the module's private copy
-│       └── Sealer          # "Lion.exe --seal": the build sealing a shipped game's assets
+│       └── Sealer          # "Lion.exe --seal-assets": Shipping asset packaging
 │
 ├── Launcher                # The standalone player (lion-launcher.exe)
 │
 ├── Sandbox                 # The game module (lion-game.dll)
 │   ├── Assets
-│   │   ├── Scenes          # Main.lnscene: the complete authored Brickout level
+│   │   ├── Scenes          # Level01.lnscene ... Level05.lnscene: authored Brickout levels
 │   │   ├── Scripts         # The game's components: Ball, Paddle, Brick, BrickField...
-│   │   ├── Shaders
+│   │   ├── Shaders         # Lion shader assets (.lnshader)
+│   │   ├── Sounds          # WAV audio clips
 │   │   └── Sprites
 │   └── GameModule.cpp      # The module's entry points
 │
@@ -94,7 +97,7 @@
 ├── Vendor                  # Every dependency, as a submodule
 │
 ├── .gitmodules
-├── CLAUDE.md
+├── AGENTS.md
 ├── LICENCE
 ├── README.md
 └── premake5.lua

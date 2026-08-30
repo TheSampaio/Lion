@@ -43,6 +43,7 @@ private:
 		NewProject, OpenProject,
 		FocusSelection,
 		OpenProjectSettings,
+		CutSelection, NewFolder,
 		Count
 	};
 
@@ -240,6 +241,11 @@ private:
 	char mAssetRenameBuffer[128] = {};
 	bool mAssetRenameFocus = false;
 	std::string mAssetToDelete;                // Relative path awaiting the confirmation modal.
+	std::string mSelectedAsset;                // Relative path selected in the Content Browser.
+	std::string mAssetClipboard;               // Relative source path copied or cut in the Content Browser.
+	bool mAssetClipboardCut = false;
+	bool mProjectFocused = false;               // Routes shared editing shortcuts to the Content Browser.
+	bool mHierarchyFocused = false;             // Routes folder creation to the Scene Hierarchy.
 
 	// The project's named input actions. They live under Assets/Config so the same resource-relative file
 	// is copied into a standalone build and loaded by the engine before the first game layer is created.
@@ -274,6 +280,7 @@ private:
 	// Hierarchy tree state, applied after the tree is drawn (never mutate it mid-iteration).
 	std::unordered_map<Lion::Entity*, Lion::Reference<Lion::Entity>> mEntityLookup;
 	Lion::Reference<Lion::Entity> mEntityToDelete;
+	bool mDeleteOnlyTarget = false;   // Cut removes the copied row, while Delete removes the selection.
 	Lion::Entity* mReparentChild = nullptr;
 	Lion::Entity* mReparentTarget = nullptr;   // Null target with mReparentChild set means "to root".
 	bool mReparentRequested = false;
@@ -364,6 +371,11 @@ private:
 	bool DrawAssetEntry(const std::string& name, const std::string& assetPath, bool folder);
 
 	void CreateAssetFolder();
+	void BeginRenameAsset(const std::string& assetPath);
+	void CopyAsset(bool cut);
+	void PasteAsset();
+	void DuplicateAsset();
+	void OpenAssetInFileExplorer(const std::string& assetPath) const;
 
 	// Reads the browsed folder into mProjectEntries, directories first.
 	void ScanProjectDirectory(const std::filesystem::path& directory);
@@ -564,6 +576,7 @@ private:
 	// Entity clipboard: copy the selection, paste a new entity from the clipboard, or do both at
 	// once (duplicate). The new entity is appended to the scene and becomes the selection.
 	void CopyEntity();
+	void CutEntity();
 	void PasteEntity();
 	void DuplicateEntity();
 

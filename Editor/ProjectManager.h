@@ -10,7 +10,7 @@
 class ProjectManager : public Lion::Application
 {
 public:
-	ProjectManager()
+	ProjectManager() : Application(Lion::ApplicationKind::Editor)
 	{
 		PushLayer(new ProjectManagerLayer());
 	}

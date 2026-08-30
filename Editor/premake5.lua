@@ -79,7 +79,9 @@ project "Mane"
             -- Shared resources (shaders + sprites) flattened next to the executable, minus the scripts:
             -- the editor reads those from the project, and they are compiled into the module anyway.
             -- The exclude list is named relatively — see the same copy in Sandbox/premake5.lua.
-            'xcopy /E /I /Y /Q /EXCLUDE:..\\Scripts\\AssetCopyExclude.txt "%{wks.location}/Sandbox/Assets" "%{cfg.targetdir}"',
+			'if exist "$(TargetDir)Scenes\\Main.lnscene" del /Q "$(TargetDir)Scenes\\Main.lnscene"',
+			'if exist "$(TargetDir)Shaders\\Lit.glsl" del /Q "$(TargetDir)Shaders\\Lit.glsl"',
+			'xcopy /E /I /Y /Q /EXCLUDE:..\\Scripts\\AssetCopyExclude.txt "%{wks.location}/Sandbox/Assets" "%{cfg.targetdir}"',
             -- The SDK a distributed editor compiles game modules against: engine headers, vendored headers
             -- with their licences, and the engine's import library — assembled by one script so the rule of
             -- what an SDK is lives once (see Scripts/PackSdk.bat).

@@ -1,88 +1,32 @@
-{
-  "actions": [
-    {
-      "bindings": [
-        {
-          "code": 65,
-          "device": "keyboard",
-          "gamepad": -1,
-          "scale": 1.0
-        },
-        {
-          "code": 263,
-          "device": "keyboard",
-          "gamepad": -1,
-          "scale": 1.0
-        },
-        {
-          "code": 0,
-          "device": "gamepad_axis",
-          "gamepad": -1,
-          "scale": -1.0
-        }
-      ],
-      "deadzone": 0.20000000298023224,
-      "name": "player_left"
-    },
-    {
-      "bindings": [
-        {
-          "code": 68,
-          "device": "keyboard",
-          "gamepad": -1,
-          "scale": 1.0
-        },
-        {
-          "code": 262,
-          "device": "keyboard",
-          "gamepad": -1,
-          "scale": 1.0
-        },
-        {
-          "code": 0,
-          "device": "gamepad_axis",
-          "gamepad": -1,
-          "scale": 1.0
-        }
-      ],
-      "deadzone": 0.20000000298023224,
-      "name": "player_right"
-    },
-    {
-      "bindings": [
-        {
-          "code": 32,
-          "device": "keyboard",
-          "gamepad": -1,
-          "scale": 1.0
-        },
-        {
-          "code": 7,
-          "device": "gamepad_button",
-          "gamepad": -1,
-          "scale": 1.0
-        }
-      ],
-      "deadzone": 0.20000000298023224,
-      "name": "player_launch"
-    },
-    {
-      "bindings": [
-        {
-          "code": 82,
-          "device": "keyboard",
-          "gamepad": -1,
-          "scale": 1.0
-        },
-        {
-          "code": 6,
-          "device": "gamepad_button",
-          "gamepad": -1,
-          "scale": 1.0
-        }
-      ],
-      "deadzone": 0.20000000298023224,
-      "name": "player_reset"
-    }
-  ]
-}
+fN8N8ifwZrFzu2i8dPA98lzfDfIn8iepCtgn8ifyJ_IlsG68Y7tptXTwPfJc3w3yJ_In8ifyJ6kK
+2CfyJ_In8ifyJ_IlsWi2YvA98jHnK98N8ifyJ_In8ifyJ_Bjt3G7ZLcl6CfwbLd-sGizdbYl_grY
+J_In8ifyJ_In8iW1Zr9ioma2Jegn_zb-Ctgn8ifyJ_In8ifyJaFks2u3Jegn4yniCtgn8ifyJ_In
+8nr-Ctgn8ifyJ_In8nzfDfIn8ifyJ_In8ifwZL1jtyXoJ-Ax4SvfDfIn8ifyJ_In8ifwY7dxu2S3
+Jegn8Gy3frBos3W2Jf4K2CfyJ_In8ifyJ_IltWa_YqJmtiXoJ_82_grYJ_In8ifyJ_In8iWhZLNr
+tyXoJ-Mp4grYJ_In8ifyJ_J6_grYJ_In8ifyJ_J83w3yJ_In8ifyJ_In8GS9Y7cl6CfiK98N8ify
+J_In8ifyJ_Bjt3G7ZLcl6CfwYLNqt3ezY41mqm6hJf4K2CfyJ_In8ifyJ_IltWa_YqJmtiXoJ_82
+_grYJ_In8ifyJ_In8iWhZLNrtyXoJ_82_DffDfIn8ifyJ_InrwrYJ_In8ifyWv4K2CfyJ_In8iW2
+YrNjqGi8YvA98jf8NeI34jfiN-I16z_iNeE14DP-Ctgn8ifyJ_IlvGa_YvA98iWia7N-t3WNa7dh
+piXfDfIn8ievK98N8ifyJ6kK2CfyJ_In8iWwbrxju2m1dPA98lzfDfIn8ifyJ_InqQrYJ_In8ify
+J_In8iWxaLZi8D3yMeor3w3yJ_In8ifyJ_In8GO3cbtktyXoJ_Bst36waLN1tiX-Ctgn8ifyJ_In
+8ifyJbVmv2KiZrYl6Cf_Nv4K2CfyJ_In8ifyJ_IloWSza7cl6CfjKeIK2CfyJ_In8ifyev4K2Cfy
+J_In8ifyfN8N8ifyJ_In8ifyJ_BkvWO3Jegn4DHgK98N8ifyJ_In8ifyJ_Bjt3G7ZLcl6CfwbLd-
+sGizdbYl_grYJ_In8ifyJ_In8iW1Zr9ioma2Jegn_zb-Ctgn8ifyJ_In8ifyJaFks2u3Jegn4yni
+Ctgn8ifyJ_In8nr-Ctgn8ifyJ_In8nzfDfIn8ifyJ_In8ifwZL1jtyXoJ-Ir3w3yJ_In8ifyJ_In
+8GO3cbtktyXoJ_Bgs2q3d7NjjWaqbqEl_grYJ_In8ifyJ_In8iW1Zr9ioma2Jegn_zb-Ctgn8ify
+J_In8ifyJaFks2u3Jegn4yniCtgn8ifyJ_In8nrfDfIn8ifyJ48r3w3yJ_In8ifwY7dmtn29abcl
+6CfiKeA34jfiN-I34D7qN-A04DXmK98N8ifyJ_In8Gmzarcl6Cfwd75mq2KgWKButW-mJd8N8ify
+J68r3w3yJ_InqQrYJ_In8ifyJbBuvGO7abV08D3yXN8N8ifyJ_In8iepCtgn8ifyJ_In8ifyJbFo
+tmLwPfI04CvfDfIn8ifyJ_In8ifwY7dxu2S3Jegn8Gy3frBos3W2Jf4K2CfyJ_In8ifyJ_IltWa_
+YqJmtiXoJ_82_grYJ_In8ifyJ_In8iWhZLNrtyXoJ-Mp4grYJ_In8ifyJ_J6_grYJ_In8ifyJ_J8
+3w3yJ_In8ifyJ_In8GS9Y7cl6CflK98N8ifyJ_In8ifyJ_Bjt3G7ZLcl6CfwYLNqt3ezY41lp3Om
+aLwl_grYJ_In8ifyJ_In8iW1Zr9ioma2Jegn_zb-Ctgn8ifyJ_In8ifyJaFks2u3Jegn4yniCtgn
+8ifyJ_In8nrfDfIn8ifyJ48r3w3yJ_In8ifwY7dmtn29abcl6CfiKeA34jfiN-I34D7qN-A04DXm
+K98N8ifyJ_In8Gmzarcl6Cfwd75mq2KgWL5mp2mxb_AK2CfyJ_J6_grYJ_In8nzfDfIn8ifyJ_Bl
+u2m2brxgoSXoJ4kK2CfyJ_In8ifyfN8N8ifyJ_In8ifyJ_BkvWO3Jegn6jX-Ctgn8ifyJ_In8ify
+JbZipG6xYvA98iW5YqtlvWagY_Ar3w3yJ_In8ifyJ_In8GCzard3s2PwPfIq4yvfDfIn8ifyJ_In
+8ifwdLFmvmLwPfI2_DffDfIn8ifyJ_InryvfDfIn8ifyJ_InqQrYJ_In8ifyJ_In8iWxaLZi8D3y
+Mf4K2CfyJ_In8ifyJ_IltmKkbrFi8D3yJbVmv2KiZrZYsHKmc71p8CvfDfIn8ifyJ_In8ifwYLNq
+t3ezY_A98irjK98N8ifyJ_In8ifyJ_B0sWa-YvA98jb8N98N8ifyJ_In8ievCtgn8ifyJ_Ja_grY
+J_In8ifyJbZis2OoaLxi8D3yN_w14jfiN-I34jXrP-I14TXgM_4K2CfyJ_In8iW8Zr9i8D3yJaJr
+s363dY11t3S3c_AK2CfyJ_J63w3yJ48K2Ho
