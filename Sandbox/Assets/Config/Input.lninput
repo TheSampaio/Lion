@@ -1,56 +1,88 @@
 {
   "actions": [
     {
-      "name": "player_up",
-      "deadzone": 0.2,
       "bindings": [
-        { "device": "keyboard", "code": 87, "scale": 1.0, "gamepad": -1 },
-        { "device": "keyboard", "code": 265, "scale": 1.0, "gamepad": -1 },
-        { "device": "gamepad_axis", "code": 1, "scale": -1.0, "gamepad": -1 }
-      ]
+        {
+          "code": 65,
+          "device": "keyboard",
+          "gamepad": -1,
+          "scale": 1.0
+        },
+        {
+          "code": 263,
+          "device": "keyboard",
+          "gamepad": -1,
+          "scale": 1.0
+        },
+        {
+          "code": 0,
+          "device": "gamepad_axis",
+          "gamepad": -1,
+          "scale": -1.0
+        }
+      ],
+      "deadzone": 0.20000000298023224,
+      "name": "player_left"
     },
     {
-      "name": "player_down",
-      "deadzone": 0.2,
       "bindings": [
-        { "device": "keyboard", "code": 83, "scale": 1.0, "gamepad": -1 },
-        { "device": "keyboard", "code": 264, "scale": 1.0, "gamepad": -1 },
-        { "device": "gamepad_axis", "code": 1, "scale": 1.0, "gamepad": -1 }
-      ]
+        {
+          "code": 68,
+          "device": "keyboard",
+          "gamepad": -1,
+          "scale": 1.0
+        },
+        {
+          "code": 262,
+          "device": "keyboard",
+          "gamepad": -1,
+          "scale": 1.0
+        },
+        {
+          "code": 0,
+          "device": "gamepad_axis",
+          "gamepad": -1,
+          "scale": 1.0
+        }
+      ],
+      "deadzone": 0.20000000298023224,
+      "name": "player_right"
     },
     {
-      "name": "player_left",
-      "deadzone": 0.2,
       "bindings": [
-        { "device": "keyboard", "code": 65, "scale": 1.0, "gamepad": -1 },
-        { "device": "keyboard", "code": 263, "scale": 1.0, "gamepad": -1 },
-        { "device": "gamepad_axis", "code": 0, "scale": -1.0, "gamepad": -1 }
-      ]
+        {
+          "code": 32,
+          "device": "keyboard",
+          "gamepad": -1,
+          "scale": 1.0
+        },
+        {
+          "code": 7,
+          "device": "gamepad_button",
+          "gamepad": -1,
+          "scale": 1.0
+        }
+      ],
+      "deadzone": 0.20000000298023224,
+      "name": "player_launch"
     },
     {
-      "name": "player_right",
-      "deadzone": 0.2,
       "bindings": [
-        { "device": "keyboard", "code": 68, "scale": 1.0, "gamepad": -1 },
-        { "device": "keyboard", "code": 262, "scale": 1.0, "gamepad": -1 },
-        { "device": "gamepad_axis", "code": 0, "scale": 1.0, "gamepad": -1 }
-      ]
-    },
-    {
-      "name": "player_launch",
-      "deadzone": 0.2,
-      "bindings": [
-        { "device": "keyboard", "code": 32, "scale": 1.0, "gamepad": -1 },
-        { "device": "gamepad_button", "code": 7, "scale": 1.0, "gamepad": -1 }
-      ]
-    },
-    {
-      "name": "player_reset",
-      "deadzone": 0.2,
-      "bindings": [
-        { "device": "keyboard", "code": 82, "scale": 1.0, "gamepad": -1 },
-        { "device": "gamepad_button", "code": 6, "scale": 1.0, "gamepad": -1 }
-      ]
+        {
+          "code": 82,
+          "device": "keyboard",
+          "gamepad": -1,
+          "scale": 1.0
+        },
+        {
+          "code": 6,
+          "device": "gamepad_button",
+          "gamepad": -1,
+          "scale": 1.0
+        }
+      ],
+      "deadzone": 0.20000000298023224,
+      "name": "player_reset"
     }
   ]
 }
