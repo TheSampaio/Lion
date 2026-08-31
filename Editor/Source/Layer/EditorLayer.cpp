@@ -19,6 +19,7 @@
 #include <filesystem>
 #include <fstream>
 #include <sstream>
+#include <unordered_set>
 
 #include <Lion/Core/Filesystem.h>
 #include <Lion/Logic/ComponentRegistry.h>
@@ -49,12 +50,14 @@ static constexpr float32 kIconTitle = 24.0f;
 // What a file dialog offers when a scene is opened or saved. A scene is JSON inside and a .lnscene outside:
 // what it is made of is the engine's business, and what it is is the project's.
 static const char8* kSceneFilter = "Lion Scene (*.lnscene)\0*.lnscene\0";
+static const char8* kAssemblyFilter = "Lion Assembly (*.lnassembly)\0*.lnassembly\0";
 
 namespace
 {
 	// Defined with the rest of the project machinery further down the file; the boot needs it before that
 	// point is reached.
 	std::filesystem::path ActiveProjectDirectory();
+	std::filesystem::path GameAssetsDirectory();
 	void SetActiveProjectDirectory(const std::filesystem::path& project);
 	void DrawIcon(const ImVec2& origin, const ImVec2& box, const char8* icon, ImU32 color, float32 pixels);
 	bool DrawSectionHeader(const char8* id, const char8* icon, const char8* name, ImGuiTreeNodeFlags flags);
@@ -163,6 +166,7 @@ void EditorLayer::OnUpdate()
 {
 	PollGameBuild();
 	PollExport();
+	PollAssemblyChanges();
 
 	// Advance the scene simulation (physics + entity scripts) while playing and not paused — or for
 	// exactly one frame when a step was requested, which is what makes a paused run inspectable.
@@ -250,6 +254,9 @@ void EditorLayer::SelectEntityByIndex(int index)
 
 void EditorLayer::StartPlay()
 {
+	if (mEditingAssembly)
+		return;
+
 	if (mPlaying)
 	{
 		mPaused = false;  // Play acts as "resume" while paused.
@@ -262,7 +269,7 @@ void EditorLayer::StartPlay()
 	const int selected = SelectedEntityIndex();
 
 	mPlaySnapshot = SceneSerializer::SerializeToString(mScene);
-	SceneSerializer::DeserializeFromString(mScene, mPlaySnapshot);
+	SceneSerializer::DeserializeFromString(mScene, mPlaySnapshot, GameAssetsDirectory().string());
 	SelectEntityByIndex(selected);
 	SceneManager::SetActiveScene(mScene, mScenePath);
 
@@ -290,7 +297,7 @@ void EditorLayer::StopPlay()
 
 	SceneManager::Clear();
 	Audio::StopAll();
-	SceneSerializer::DeserializeFromString(mScene, mPlaySnapshot);
+	SceneSerializer::DeserializeFromString(mScene, mPlaySnapshot, GameAssetsDirectory().string());
 	SelectEntityByIndex(selected);
 
 	mPlaying = false;
@@ -633,6 +640,13 @@ void EditorLayer::DrawUI()
 	DrawNewComponentPopup();
 	DrawDeleteAssetPopup();
 	DrawProjectManagerPopup();
+
+	if (!mPendingAssemblyPath.empty())
+	{
+		const std::string path = std::move(mPendingAssemblyPath);
+		mPendingAssemblyPath.clear();
+		LoadAssembly(path);
+	}
 
 	// Drawn over everything, because that is what they are: the dim that says the game is running, the
 	// size a panel reports while it is being dragged, and the toast that says the module is building.
@@ -2067,7 +2081,8 @@ namespace
 	bool IsAssetFile(const std::filesystem::path& path)
 	{
 		static const char8* extensions[] = {
-			".png", ".jpg", ".jpeg", ".bmp", ".wav", ".lnshader", ".lnscene", ".lninput", ".h", ".cpp"
+			".png", ".jpg", ".jpeg", ".bmp", ".wav", ".lnshader", ".lnscene", ".lnassembly",
+			".lninput", ".h", ".cpp"
 		};
 
 		std::string extension = path.extension().string();
@@ -2204,10 +2219,15 @@ void EditorLayer::DrawProject()
 		}
 		else
 		{
-			if (DrawAssetEntry(entry.name, entry.path, false) && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)
-				&& std::filesystem::path(entry.path).extension() == ".lnscene" && !mPlaying)
+			if (DrawAssetEntry(entry.name, entry.path, false)
+				&& ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left) && !mPlaying)
 			{
-				LoadScene((root / entry.path).string());
+				const std::filesystem::path extension = std::filesystem::path(entry.path).extension();
+
+				if (extension == ".lnscene")
+					LoadScene((root / entry.path).string());
+				else if (extension == ".lnassembly")
+					LoadAssembly((root / entry.path).string());
 			}
 
 			// Drag an asset onto a field that accepts it (e.g. the Sprite Renderer's texture).
@@ -2282,6 +2302,9 @@ namespace
 		if (extension == ".lnscene")
 			return ICON_MDI_SHAPE;
 
+		if (extension == ".lnassembly")
+			return ICON_MDI_PACKAGE_VARIANT_CLOSED;
+
 		return ICON_MDI_FILE_DOCUMENT_OUTLINE;
 	}
 }
@@ -2349,6 +2372,19 @@ bool EditorLayer::DrawAssetEntry(const std::string& name, const std::string& ass
 	if (ImGui::BeginPopupContextItem())
 	{
 		mSelectedAsset = assetPath;
+		const bool assembly = std::filesystem::path(assetPath).extension() == ".lnassembly";
+
+		if (assembly)
+		{
+			if (ImGui::MenuItem(ICON_MDI_PACKAGE_VARIANT_CLOSED "  Open Assembly", nullptr, false, !mPlaying))
+				LoadAssembly((ProjectPanelDirectory() / assetPath).string());
+
+			if (ImGui::MenuItem(ICON_MDI_PACKAGE_UP "  Instantiate", nullptr, false,
+				!mPlaying && !mEditingAssembly))
+				InstantiateAssembly(assetPath);
+
+			ImGui::Separator();
+		}
 
 		if (ImGui::MenuItem(ICON_MDI_FOLDER_OPEN_OUTLINE "  Open in File Explorer"))
 			OpenAssetInFileExplorer(assetPath);
@@ -3034,7 +3070,7 @@ void EditorLayer::DrawProjectGeneralSettings()
 	ImGui::TextDisabled("%s", scene.empty() ? "None" : scene.lexically_relative(project).generic_string().c_str());
 
 	const bool builtIn = project.lexically_normal() == Projects::DefaultProjectDirectory().lexically_normal();
-	ImGui::BeginDisabled(mScenePath.empty() || builtIn);
+	ImGui::BeginDisabled(mScenePath.empty() || mEditingAssembly || builtIn);
 
 	if (ImGui::Button("Use Current Scene"))
 	{
@@ -3486,7 +3522,7 @@ void EditorLayer::RestoreState(const EditState& state)
 
 	// The scene is rebuilt from scratch, so any selected-entity pointer becomes stale.
 	SetSelection(nullptr);
-	SceneSerializer::DeserializeFromString(mScene, state.data);
+	SceneSerializer::DeserializeFromString(mScene, state.data, GameAssetsDirectory().string());
 }
 
 void EditorLayer::Undo()
@@ -3688,12 +3724,14 @@ void EditorLayer::RenameSelection(const std::string& name, const Reference<Entit
 	// Windows' answer to several things wanting one name is a number after it.
 	if (mSelection.size() <= 1 || !IsSelected(renamed.get()))
 	{
-		renamed->SetName(name);
+		if (!renamed->IsAssemblyInstance())
+			renamed->SetName(name);
 		return;
 	}
 
 	for (const auto& entity : mSelection)
-		entity->SetName(NumberedName(mScene, name));
+		if (!entity->IsAssemblyInstance())
+			entity->SetName(NumberedName(mScene, name));
 }
 
 bool EditorLayer::IsSelected(const Entity* entity) const
@@ -3764,9 +3802,12 @@ void EditorLayer::PasteEntity()
 
 	RecordSnapshot();
 
-	if (Reference<Entity> pasted = SceneSerializer::DeserializeEntityFromString(mScene, mEntityClipboard))
+	if (Reference<Entity> pasted = SceneSerializer::DeserializeEntityFromString(
+		mScene, mEntityClipboard, GameAssetsDirectory().string()))
 	{
-		pasted->SetName(NumberedName(mScene, pasted->GetName()));
+		if (!pasted->IsAssemblyInstance())
+			pasted->SetName(NumberedName(mScene, pasted->GetName()));
+
 		SetSelection(pasted);
 	}
 }
@@ -3787,9 +3828,12 @@ void EditorLayer::DuplicateEntity()
 	{
 		const std::string data = SceneSerializer::SerializeEntityToString(original);
 
-		if (Reference<Entity> copy = SceneSerializer::DeserializeEntityFromString(mScene, data))
+		if (Reference<Entity> copy = SceneSerializer::DeserializeEntityFromString(
+			mScene, data, GameAssetsDirectory().string()))
 		{
-			copy->SetName(NumberedName(mScene, original->GetName()));
+			if (!copy->IsAssemblyInstance())
+				copy->SetName(NumberedName(mScene, original->GetName()));
+
 			mSelection.push_back(copy);
 		}
 	}
@@ -3971,18 +4015,23 @@ void EditorLayer::HandleShortcuts()
 	}
 
 	if (IsShortcutPressed(ShortcutAction::CopyEntity)) CopyEntity();
-	if (IsShortcutPressed(ShortcutAction::CutSelection)) CutEntity();
-	if (IsShortcutPressed(ShortcutAction::PasteEntity)) PasteEntity();
-	if (IsShortcutPressed(ShortcutAction::DuplicateEntity)) DuplicateEntity();
-	if (mHierarchyFocused && IsShortcutPressed(ShortcutAction::NewFolder)) CreateFolder();
 
-	if (mSelectedEntity && IsShortcutPressed(ShortcutAction::RenameEntity))
+	if (!mEditingAssembly)
+	{
+		if (IsShortcutPressed(ShortcutAction::CutSelection)) CutEntity();
+		if (IsShortcutPressed(ShortcutAction::PasteEntity)) PasteEntity();
+		if (IsShortcutPressed(ShortcutAction::DuplicateEntity)) DuplicateEntity();
+		if (mHierarchyFocused && IsShortcutPressed(ShortcutAction::NewFolder)) CreateFolder();
+	}
+
+	if (mSelectedEntity && !mSelectedEntity->IsAssemblyInstance()
+		&& IsShortcutPressed(ShortcutAction::RenameEntity))
 	{
 		mRenamingEntity = mSelectedEntity;
 		mRenameFocus = true;
 	}
 
-	if (mSelectedEntity && IsShortcutPressed(ShortcutAction::DeleteEntity))
+	if (mSelectedEntity && !mEditingAssembly && IsShortcutPressed(ShortcutAction::DeleteEntity))
 	{
 		RecordSnapshot();
 
@@ -4013,6 +4062,25 @@ void EditorLayer::DrawViewport()
 	const ImVec2 imageMin = ImGui::GetItemRectMin();
 	const ImVec2 imageSize = ImGui::GetItemRectSize();
 	const bool imageHovered = ImGui::IsItemHovered();
+
+	// An Assembly dragged from the Content Browser becomes a linked instance at the world point under the
+	// cursor. The definition remains in its asset; only this placement belongs to the open scene.
+	if (!mPlaying && !mEditingAssembly && ImGui::BeginDragDropTarget())
+	{
+		if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("LN_ASSET_PATH"))
+		{
+			const std::string assetPath = static_cast<const char8*>(payload->Data);
+
+			if (std::filesystem::path(assetPath).extension() == ".lnassembly")
+			{
+				const glm::vec2 world = ViewportToWorld(ImGui::GetMousePos(), imageMin, imageSize);
+				const Vector position(world.x, world.y, 0.0f);
+				InstantiateAssembly(assetPath, nullptr, &position);
+			}
+		}
+
+		ImGui::EndDragDropTarget();
+	}
 
 	// Kept for the dim: it darkens everything the game is not.
 	mViewportImageMin = imageMin;
@@ -4282,7 +4350,8 @@ void EditorLayer::DrawViewportToolbar(const ImVec2& imageMin, const ImVec2& imag
 		ImVec2(imageMin.x + (imageSize.x - playDockWidth) * 0.5f, imageMin.y + kDockMargin), 4);
 
 	// Play doubles as "resume" while paused, so it stays enabled in that state.
-	if (ToolbarButton("##play", ICON_MDI_PLAY, false, !(mPlaying && !mPaused), "Run the scene simulation (F5)"))
+	if (ToolbarButton("##play", ICON_MDI_PLAY, false, !mEditingAssembly && !(mPlaying && !mPaused),
+		mEditingAssembly ? "Assemblies are edited, not played" : "Run the scene simulation (F5)"))
 		StartPlay();
 
 	// Step advances a halted simulation one frame at a time, so it only means anything while playing.
@@ -4581,8 +4650,10 @@ void EditorLayer::DrawHierarchy()
 
 	// Add, then what you are looking for, then what you are looking in. The icon is part of the label: it is
 	// a character, so the button lays it out beside the word the way it lays out the word itself.
+	ImGui::BeginDisabled(mEditingAssembly);
 	if (ImGui::Button(ICON_MDI_PLUS "  Add"))
 		CreateEntity();
+	ImGui::EndDisabled();
 
 	if (ImGui::IsItemHovered())
 		ImGui::SetTooltip("Create an entity");
@@ -4809,15 +4880,18 @@ void EditorLayer::DrawEntityMenuItems(const Reference<Entity>& target, const Vec
 	// between them, and no reason for a second menu.
 	if (target)
 	{
+		ImGui::BeginDisabled(target->IsAssemblyInstance());
 		if (ImGui::MenuItem("Rename", ShortcutText(ShortcutAction::RenameEntity).c_str()))
 		{
 			mRenamingEntity = target;
 			mRenameFocus = true;
 		}
+		ImGui::EndDisabled();
 
 		ImGui::Separator();
 	}
 
+	ImGui::BeginDisabled(mEditingAssembly);
 	if (ImGui::MenuItem("Create Entity"))
 		CreateEntity(nullptr, position);
 
@@ -4827,12 +4901,14 @@ void EditorLayer::DrawEntityMenuItems(const Reference<Entity>& target, const Vec
 	// A folder is a place in the Hierarchy, not a thing in the scene, so the viewport does not offer one.
 	if (!inViewport && ImGui::MenuItem("Create Folder", ShortcutText(ShortcutAction::NewFolder).c_str()))
 		CreateFolder();
+	ImGui::EndDisabled();
 
 	// Copy, paste and duplicate act on the Hierarchy's selection; over the scene they have no subject the
 	// mouse is pointing at, so the viewport leaves them to the Hierarchy (and to their shortcuts).
 	if (!inViewport)
 	{
 		ImGui::Separator();
+		ImGui::BeginDisabled(mEditingAssembly);
 
 		if (target)
 		{
@@ -4849,10 +4925,25 @@ void EditorLayer::DrawEntityMenuItems(const Reference<Entity>& target, const Vec
 		if (ImGui::MenuItem("Paste", ShortcutText(ShortcutAction::PasteEntity).c_str(), false,
 			!mEntityClipboard.empty()))
 			PasteEntity();
+
+		ImGui::EndDisabled();
 	}
 
 	if (!target)
 		return;
+
+	ImGui::Separator();
+
+	if (target->IsAssemblyInstance())
+	{
+		if (ImGui::MenuItem(ICON_MDI_PACKAGE_VARIANT_CLOSED "  Open Assembly"))
+			mPendingAssemblyPath = (GameAssetsDirectory() / target->GetAssemblyPath()).string();
+	}
+	else if (!target->IsFolder() && !mEditingAssembly)
+	{
+		if (ImGui::MenuItem(ICON_MDI_PACKAGE_VARIANT_CLOSED "  Create Assembly..."))
+			CreateAssemblyFromEntity(target);
+	}
 
 	ImGui::Separator();
 
@@ -4863,8 +4954,10 @@ void EditorLayer::DrawEntityMenuItems(const Reference<Entity>& target, const Vec
 		mReparentRequested = true;
 	}
 
+	ImGui::BeginDisabled(mEditingAssembly);
 	if (ImGui::MenuItem("Delete", "Del"))
 		mEntityToDelete = target;
+	ImGui::EndDisabled();
 }
 
 void EditorLayer::DrawEntityNode(const Reference<Entity>& entity)
@@ -4943,7 +5036,8 @@ void EditorLayer::DrawEntityNode(const Reference<Entity>& entity)
 	ImGui::PushStyleColor(ImGuiCol_HeaderActive, accent);
 
 	const bool expanded = folder && ImGui::TreeNodeGetOpen(ImGui::GetID("##node"));
-	const char8* icon = folder ? (expanded ? ICON_MDI_FOLDER_OPEN : ICON_MDI_FOLDER) : ICON_MDI_CUBE_OUTLINE;
+	const char8* icon = folder ? (expanded ? ICON_MDI_FOLDER_OPEN : ICON_MDI_FOLDER)
+		: (entity->IsAssemblyInstance() ? ICON_MDI_PACKAGE_VARIANT_CLOSED : ICON_MDI_CUBE_OUTLINE);
 
 	// The row icon is drawn by hand, so the label reserves room for it with spaces and the glyph is painted
 	// into that gap after the node is laid out — inline in the label it could only be the small merged size.
@@ -4991,7 +5085,8 @@ void EditorLayer::DrawEntityNode(const Reference<Entity>& entity)
 		SetSelection(entity);
 	}
 
-	if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
+	if (!entity->IsAssemblyInstance() && ImGui::IsItemHovered()
+		&& ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
 	{
 		mRenamingEntity = entity;
 		mRenameFocus = true;
@@ -5055,6 +5150,16 @@ void EditorLayer::DrawEntityNode(const Reference<Entity>& entity)
 				mReparentRequested = true;
 			}
 		}
+		else if (!mPlaying && !mEditingAssembly)
+		{
+			if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("LN_ASSET_PATH"))
+			{
+				const std::string assetPath = static_cast<const char8*>(payload->Data);
+
+				if (std::filesystem::path(assetPath).extension() == ".lnassembly")
+					InstantiateAssembly(assetPath, entity.get());
+			}
+		}
 
 		ImGui::EndDragDropTarget();
 	}
@@ -5075,6 +5180,7 @@ void EditorLayer::DrawEntityNode(const Reference<Entity>& entity)
 	ImGui::SetCursorPosX(ImGui::GetCursorPosX() + ImMax((ImGui::GetContentRegionAvail().x - RowEndSlot()) * 0.5f, 0.0f));
 	AlignRowEndGlyph();   // The row is a frame tall now; the eye is a glyph, and sits in the middle of it.
 
+	ImGui::BeginDisabled(entity->IsAssemblyInstance());
 	if (!folder && EyeButton("##visible", entity->IsVisible()))
 	{
 		RecordSnapshot();
@@ -5084,10 +5190,12 @@ void EditorLayer::DrawEntityNode(const Reference<Entity>& entity)
 		// clicking one of their eyes is the same rule as dragging or deleting them.
 		if (IsSelected(entity.get()))
 			for (const auto& selected : mSelection)
-				selected->SetVisible(visible);
+				if (!selected->IsAssemblyInstance())
+					selected->SetVisible(visible);
 		else
 			entity->SetVisible(visible);
 	}
+	ImGui::EndDisabled();
 
 	if (open)
 	{
@@ -5480,9 +5588,14 @@ void EditorLayer::ApplyReflectorToSelection(const std::string& typeName, Reflect
 		return;
 
 	for (const auto& entity : mSelection)
+	{
+		if (entity->IsAssemblyInstance())
+			continue;
+
 		for (const auto& component : entity->GetComponents())
 			if (component->GetTypeName() == typeName)
 				component->Reflect(setter);
+	}
 }
 
 void EditorLayer::ApplyReflectedField(const std::string& typeName, const char8* field, float32 value)
@@ -5716,7 +5829,10 @@ void EditorLayer::DrawProperties()
 
 	// The same icon the Hierarchy draws, so the two panels agree about what they are pointing at — but larger
 	// here, because this is the one entity the whole panel is about, not one row among many.
-	DrawInlineIcon(mSelectedEntity->IsFolder() ? ICON_MDI_FOLDER : ICON_MDI_CUBE_OUTLINE,
+	const bool assemblyInstance = mSelectedEntity->IsAssemblyInstance();
+	const char8* entityIcon = mSelectedEntity->IsFolder() ? ICON_MDI_FOLDER
+		: (assemblyInstance ? ICON_MDI_PACKAGE_VARIANT_CLOSED : ICON_MDI_CUBE_OUTLINE);
+	DrawInlineIcon(entityIcon,
 		kIconTitle, ImGui::GetColorU32(ImGuiCol_Text));
 	ImGui::SameLine();
 
@@ -5724,12 +5840,14 @@ void EditorLayer::DrawProperties()
 	// flag the game reads. Hiding is a different thing entirely, and lives on the eye in the Hierarchy.
 	bool enabled = mSelectedEntity->IsEnabled();
 
+	ImGui::BeginDisabled(assemblyInstance);
 	if (ImGui::Checkbox("##enabled", &enabled))
 	{
 		RecordSnapshot();
 
 		for (const auto& entity : mSelection)
-			entity->SetEnabled(enabled);
+			if (!entity->IsAssemblyInstance())
+				entity->SetEnabled(enabled);
 	}
 
 	if (ImGui::IsItemHovered())
@@ -5748,8 +5866,26 @@ void EditorLayer::DrawProperties()
 		mSelectedEntity->SetName(nameBuffer);
 	if (ImGui::IsItemActivated()) BeginEdit();
 	if (ImGui::IsItemDeactivatedAfterEdit()) CommitEdit();
+	ImGui::EndDisabled();
 
 	ImGui::Separator();
+
+	if (assemblyInstance)
+	{
+		ImGui::TextColored(EditorGui::GetAccent(), ICON_MDI_PACKAGE_VARIANT_CLOSED "  Assembly");
+		SameLineRowEnd();
+
+		if (IconButton("##editAssembly", ICON_MDI_PENCIL, RowEndSlot(), "Edit the original Assembly"))
+		{
+			mPendingAssemblyPath = (GameAssetsDirectory() / mSelectedEntity->GetAssemblyPath()).string();
+		}
+
+		ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyle().Colors[ImGuiCol_TextDisabled]);
+		ImGui::TextWrapped("%s", mSelectedEntity->GetAssemblyPath().c_str());
+		ImGui::TextWrapped("Transform is this instance's scene placement. Edit the Assembly to change its definition.");
+		ImGui::PopStyleColor();
+		ImGui::Separator();
+	}
 
 	// The fields scroll; the summary below them does not. It is the same bargain the Hierarchy strikes: what
 	// you are looking at is stated in one place, at the bottom, and it stays there however long the list is.
@@ -5794,6 +5930,7 @@ void EditorLayer::DrawProperties()
 	// Draw components in their stored order so a newly added one always appears at the end; headers
 	// can be dragged onto each other to reorder. Removal/reorder are deferred to after the loop so
 	// the component list is never mutated mid-iteration.
+	ImGui::BeginDisabled(assemblyInstance);
 	Component* componentToRemove = nullptr;
 	int dragFrom = -1, dragTo = -1;
 
@@ -6129,7 +6266,7 @@ void EditorLayer::DrawProperties()
 		const auto selectionLacks = [&](const auto& has)
 		{
 			for (const auto& entity : mSelection)
-				if (!entity->IsFolder() && !has(entity))
+				if (!entity->IsFolder() && !entity->IsAssemblyInstance() && !has(entity))
 					return true;
 			return false;
 		};
@@ -6143,7 +6280,8 @@ void EditorLayer::DrawProperties()
 		{
 			RecordSnapshot();
 			for (const auto& entity : mSelection)
-				if (!entity->IsFolder() && !entity->HasComponent<SpriteRenderer>())
+				if (!entity->IsFolder() && !entity->IsAssemblyInstance()
+					&& !entity->HasComponent<SpriteRenderer>())
 					entity->AddComponent<SpriteRenderer>();
 		}
 
@@ -6151,7 +6289,8 @@ void EditorLayer::DrawProperties()
 		{
 			RecordSnapshot();
 			for (const auto& entity : mSelection)
-				if (!entity->IsFolder() && !entity->HasComponent<Camera2D>())
+				if (!entity->IsFolder() && !entity->IsAssemblyInstance()
+					&& !entity->HasComponent<Camera2D>())
 					entity->AddComponent<Camera2D>();
 
 			FocusViewportOnSelection();
@@ -6161,7 +6300,8 @@ void EditorLayer::DrawProperties()
 		{
 			RecordSnapshot();
 			for (const auto& entity : mSelection)
-				if (!entity->IsFolder() && !entity->HasComponent<AudioPlayer>())
+				if (!entity->IsFolder() && !entity->IsAssemblyInstance()
+					&& !entity->HasComponent<AudioPlayer>())
 					entity->AddComponent<AudioPlayer>();
 		}
 
@@ -6169,7 +6309,8 @@ void EditorLayer::DrawProperties()
 		{
 			RecordSnapshot();
 			for (const auto& entity : mSelection)
-				if (!entity->IsFolder() && !entity->HasComponent<RigidBody2D>())
+				if (!entity->IsFolder() && !entity->IsAssemblyInstance()
+					&& !entity->HasComponent<RigidBody2D>())
 					entity->AddComponent<RigidBody2D>();
 		}
 
@@ -6181,7 +6322,8 @@ void EditorLayer::DrawProperties()
 			RecordSnapshot();
 			for (const auto& entity : mSelection)
 			{
-				if (entity->IsFolder() || entity->HasComponent<BoxCollider2D>())
+				if (entity->IsFolder() || entity->IsAssemblyInstance()
+					|| entity->HasComponent<BoxCollider2D>())
 					continue;
 
 				const SpriteRenderer* sprite = entity->GetComponent<SpriteRenderer>();
@@ -6195,7 +6337,8 @@ void EditorLayer::DrawProperties()
 			RecordSnapshot();
 			for (const auto& entity : mSelection)
 			{
-				if (entity->IsFolder() || entity->HasComponent<CircleCollider2D>())
+				if (entity->IsFolder() || entity->IsAssemblyInstance()
+					|| entity->HasComponent<CircleCollider2D>())
 					continue;
 
 				const SpriteRenderer* sprite = entity->GetComponent<SpriteRenderer>();
@@ -6227,7 +6370,8 @@ void EditorLayer::DrawProperties()
 			{
 				RecordSnapshot();
 				for (const auto& entity : mSelection)
-					if (!entity->IsFolder() && !entity->HasComponentByName(name))
+					if (!entity->IsFolder() && !entity->IsAssemblyInstance()
+						&& !entity->HasComponentByName(name))
 						entity->AddComponentByName(name);
 			}
 		}
@@ -6240,6 +6384,7 @@ void EditorLayer::DrawProperties()
 
 		ImGui::EndPopup();
 	}
+	ImGui::EndDisabled();
 
 	EndPropertiesPanel();
 }
@@ -6403,9 +6548,12 @@ void EditorLayer::DrawTitleBar()
 
 	// --- Bottom row: the scene open in the project, picking up where the menus left off. It used to be named
 	// in the Hierarchy, which is a panel that shows a scene, not the thing that has one open.
-	const std::string sceneName = mScenePath.empty()
+	std::string sceneName = mScenePath.empty()
 		? std::string("Untitled")
 		: std::filesystem::path(mScenePath).stem().generic_string();
+
+	if (mEditingAssembly)
+		sceneName = std::string(ICON_MDI_PACKAGE_VARIANT_CLOSED) + "  " + sceneName;
 
 	ImGui::SetCursorPos(ImVec2(menusEnd - barMin.x + kSceneGap, row + (row - ImGui::GetTextLineHeight()) * 0.5f));
 	ImGui::TextDisabled("|");
@@ -6521,6 +6669,8 @@ void EditorLayer::NewScene()
 	mScene->Clear();
 	SetSelection(nullptr);
 	mScenePath.clear();
+	mEditingAssembly = false;
+	ResetAssemblyTracking();
 }
 
 void EditorLayer::OpenScene()
@@ -6543,12 +6693,56 @@ bool EditorLayer::LoadScene(const std::string& path)
 	}
 
 	mScenePath = path;
+	mEditingAssembly = false;
+	ResetAssemblyTracking();
 	RememberRecentScene(path);
+	return true;
+}
+
+bool EditorLayer::LoadAssembly(const std::string& path)
+{
+	if (mPlaying)
+		return false;
+
+	Reference<Entity> definition = AssemblySerializer::Deserialize(path, GameAssetsDirectory().string());
+
+	if (!definition)
+	{
+		Log::Console(LogLevel::Error, LION_FORMAT_TEXT("[Editor] Could not open Assembly '{}'.", path));
+		return false;
+	}
+
+	mScene->Clear();
+	SetSelection(nullptr);
+	mScene->Add(definition);
+	SetSelection(definition);
+	mScenePath = path;
+	mEditingAssembly = true;
+	mUndoStack.clear();
+	mRedoStack.clear();
+	ResetAssemblyTracking();
+	Log::Console(LogLevel::Information,
+		LION_FORMAT_TEXT("[Editor] Editing Assembly '{}'.", std::filesystem::path(path).stem().string()));
 	return true;
 }
 
 void EditorLayer::SaveScene()
 {
+	if (mEditingAssembly)
+	{
+		if (mScenePath.empty())
+		{
+			SaveAssemblyAs();
+			return;
+		}
+
+		if (!mScene->GetEntities().empty()
+			&& AssemblySerializer::Serialize(mScene->GetEntities().front(), mScenePath))
+			mProjectDirty = true;
+
+		return;
+	}
+
 	// A scene that has never been anywhere has to be told where to go, so this is Save As until it is not.
 	if (mScenePath.empty())
 	{
@@ -6562,6 +6756,12 @@ void EditorLayer::SaveScene()
 
 void EditorLayer::SaveSceneAs()
 {
+	if (mEditingAssembly)
+	{
+		SaveAssemblyAs();
+		return;
+	}
+
 	const std::string path = FileDialog::Save(kSceneFilter, "lnscene", GameAssetsDirectory().string());
 
 	if (path.empty())
@@ -6593,10 +6793,16 @@ float32 EditorLayer::DrawMenuBar(const ImVec2& barMin, const ImVec2& barMax)
 
 			ImGui::Separator();
 
-			if (ImGui::MenuItem(ICON_MDI_CONTENT_SAVE_OUTLINE "  Save Scene", ShortcutText(ShortcutAction::SaveScene).c_str()))
+			const char8* saveLabel = mEditingAssembly
+				? ICON_MDI_CONTENT_SAVE_OUTLINE "  Save Assembly"
+				: ICON_MDI_CONTENT_SAVE_OUTLINE "  Save Scene";
+			if (ImGui::MenuItem(saveLabel, ShortcutText(ShortcutAction::SaveScene).c_str()))
 				SaveScene();
 
-			if (ImGui::MenuItem(ICON_MDI_CONTENT_SAVE_ALL_OUTLINE "  Save Scene As...", ShortcutText(ShortcutAction::SaveSceneAs).c_str()))
+			const char8* saveAsLabel = mEditingAssembly
+				? ICON_MDI_CONTENT_SAVE_ALL_OUTLINE "  Save Assembly As..."
+				: ICON_MDI_CONTENT_SAVE_ALL_OUTLINE "  Save Scene As...";
+			if (ImGui::MenuItem(saveAsLabel, ShortcutText(ShortcutAction::SaveSceneAs).c_str()))
 				SaveSceneAs();
 
 			ImGui::Separator();
@@ -7165,7 +7371,7 @@ void EditorLayer::DrawExportPopup()
 				ImGui::Spacing();
 				ImGui::Checkbox("Seal all game assets", &mExportSealAssets);
 				ImGui::TextWrapped("Sealing obfuscates every packaged resource under Assets with Lion Vault before delivery, "
-					"including .lnscene, .lnshader, .lninput, images and audio. It discourages casual edits, but it is not encryption.");
+					"including .lnscene, .lnassembly, .lnshader, .lninput, images and audio. It discourages casual edits, but it is not encryption.");
 				ImGui::Spacing();
 				ImGui::TextDisabled("The game module and runtime binaries are copied unchanged.");
 				ImGui::EndTabItem();
@@ -7259,6 +7465,178 @@ void EditorLayer::PollExport()
 		Log::Console(LogLevel::Error, "[Editor] Export failed: " + result.message);
 		PushToast("Export failed", false);
 	}
+}
+
+void EditorLayer::SaveAssemblyAs()
+{
+	if (mScene->GetEntities().empty())
+		return;
+
+	const std::filesystem::path assets = GameAssetsDirectory();
+	const std::string path = FileDialog::Save(kAssemblyFilter, "lnassembly", assets.string());
+
+	if (path.empty())
+		return;
+
+	const std::filesystem::path absolute = std::filesystem::absolute(path).lexically_normal();
+	const std::string relative = absolute.lexically_relative(std::filesystem::absolute(assets).lexically_normal()).generic_string();
+
+	if (relative.empty() || relative.rfind("..", 0) == 0)
+	{
+		Log::Console(LogLevel::Error, "[Editor] Assemblies must be saved inside the project's Assets folder.");
+		PushToast("Save the Assembly inside Assets", false);
+		return;
+	}
+
+	if (AssemblySerializer::Serialize(mScene->GetEntities().front(), absolute.string()))
+	{
+		mScenePath = absolute.string();
+		mEditingAssembly = true;
+		mProjectDirty = true;
+	}
+}
+
+void EditorLayer::CreateAssemblyFromEntity(const Reference<Entity>& entity)
+{
+	if (!entity || entity->IsFolder() || entity->IsAssemblyInstance() || mEditingAssembly)
+		return;
+
+	if (!entity->GetChildren().empty())
+	{
+		Log::Console(LogLevel::Warning,
+			"[Editor] This Assembly version supports one entity; unparent its children before creating it.");
+		PushToast("Unparent child entities before creating an Assembly", false);
+		return;
+	}
+
+	const std::filesystem::path assets = GameAssetsDirectory();
+	const std::filesystem::path directory = assets / "Assemblies";
+	std::error_code error;
+	std::filesystem::create_directories(directory, error);
+
+	const std::string path = FileDialog::Save(kAssemblyFilter, "lnassembly", directory.string());
+
+	if (path.empty())
+		return;
+
+	const std::filesystem::path absolute = std::filesystem::absolute(path).lexically_normal();
+	const std::string relative = absolute.lexically_relative(std::filesystem::absolute(assets).lexically_normal()).generic_string();
+
+	if (relative.empty() || relative.rfind("..", 0) == 0)
+	{
+		Log::Console(LogLevel::Error, "[Editor] Assemblies must be saved inside the project's Assets folder.");
+		PushToast("Save the Assembly inside Assets", false);
+		return;
+	}
+
+	if (!AssemblySerializer::Serialize(entity, absolute.string()))
+		return;
+
+	RecordSnapshot();
+	entity->SetAssemblyPath(relative);
+	mProjectDirty = true;
+	ResetAssemblyTracking();
+	PushToast("Created Assembly " + absolute.stem().string(), false);
+}
+
+Reference<Entity> EditorLayer::InstantiateAssembly(const std::string& assetPath, Entity* parent,
+	const Vector* position)
+{
+	if (assetPath.empty() || mPlaying || mEditingAssembly)
+		return nullptr;
+
+	Reference<Entity> instance = AssemblySerializer::Deserialize(assetPath, GameAssetsDirectory().string());
+
+	if (!instance)
+		return nullptr;
+
+	RecordSnapshot();
+	instance->SetAssemblyPath(std::filesystem::path(assetPath).generic_string());
+
+	if (parent)
+		instance->SetParent(parent, false);
+
+	if (position)
+		instance->SetWorldPosition(Vector2(*position));
+
+	mScene->Add(instance);
+
+	SetSelection(instance);
+	ResetAssemblyTracking();
+	return instance;
+}
+
+void EditorLayer::ResetAssemblyTracking()
+{
+	mAssemblyStamps.clear();
+	const std::filesystem::path assets = GameAssetsDirectory();
+
+	for (const auto& entity : mScene->GetEntities())
+	{
+		if (!entity->IsAssemblyInstance())
+			continue;
+
+		std::error_code error;
+		const auto stamp = std::filesystem::last_write_time(assets / entity->GetAssemblyPath(), error);
+		mAssemblyStamps[entity->GetAssemblyPath()] = error
+			? std::filesystem::file_time_type::min() : stamp;
+	}
+}
+
+void EditorLayer::PollAssemblyChanges()
+{
+	if (mPlaying || mEditingAssembly || ImGui::GetTime() - mAssemblyPollTime < 0.5)
+		return;
+
+	mAssemblyPollTime = ImGui::GetTime();
+	const std::filesystem::path assets = GameAssetsDirectory();
+	std::unordered_set<std::string> active;
+
+	for (const auto& entity : mScene->GetEntities())
+		if (entity->IsAssemblyInstance())
+			active.insert(entity->GetAssemblyPath());
+
+	for (const std::string& path : active)
+	{
+		std::error_code error;
+		const auto stamp = std::filesystem::last_write_time(assets / path, error);
+		const auto current = error ? std::filesystem::file_time_type::min() : stamp;
+		const auto known = mAssemblyStamps.find(path);
+
+		if (known == mAssemblyStamps.end())
+		{
+			mAssemblyStamps.emplace(path, current);
+			continue;
+		}
+
+		if (current == known->second)
+			continue;
+
+		known->second = current;
+
+		if (error)
+		{
+			Log::Console(LogLevel::Warning, LION_FORMAT_TEXT("[Assembly] Source removed: '{}'.", path));
+			continue;
+		}
+
+		int32 refreshed = 0;
+
+		for (const auto& entity : mScene->GetEntities())
+			if (entity->GetAssemblyPath() == path
+				&& AssemblySerializer::Refresh(entity, assets.string()))
+				refreshed++;
+
+		if (refreshed > 0)
+		{
+			Log::Console(LogLevel::Success,
+				LION_FORMAT_TEXT("[Assembly] Refreshed {} instance(s) from '{}'.", refreshed, path));
+			PushToast("Updated " + std::filesystem::path(path).stem().string() + " Assembly", false);
+		}
+	}
+
+	for (auto it = mAssemblyStamps.begin(); it != mAssemblyStamps.end(); )
+		it = active.count(it->first) ? std::next(it) : mAssemblyStamps.erase(it);
 }
 
 void EditorLayer::CompileGameModule()
@@ -7437,7 +7815,7 @@ void EditorLayer::ReloadGameModule()
 
 	// Restore the scene either way: without the module its components are simply skipped, which beats
 	// throwing the scene away because a rebuild was broken.
-	SceneSerializer::DeserializeFromString(mScene, scene);
+	SceneSerializer::DeserializeFromString(mScene, scene, GameAssetsDirectory().string());
 	SelectEntityByIndex(selected);
 
 	if (loaded)
@@ -7710,6 +8088,8 @@ void EditorLayer::OpenProject(const std::filesystem::path& folder)
 	mScene->Clear();
 	SetSelection(nullptr);
 	mScenePath.clear();
+	mEditingAssembly = false;
+	ResetAssemblyTracking();
 	mUndoStack.clear();
 	mRedoStack.clear();
 	mPendingScenePath = Projects::DefaultScene(folder).string();

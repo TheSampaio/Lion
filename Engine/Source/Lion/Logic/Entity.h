@@ -7,6 +7,7 @@ namespace Lion
 {
 	class PhysicsWorld;
 	class Scene;
+	class SceneSerializer;
 
 	// The engine's game object: a name, a Transform, and the components attached to it.
 	//
@@ -50,6 +51,12 @@ namespace Lion
 
 		// Returns the scene that currently owns this entity (null while detached).
 		LION_API Reference<Scene> GetScene() const { return mScene; }
+
+		// A non-empty resource-relative path means this entity is an instance of an Assembly. The Assembly
+		// owns its authored definition; the scene owns only this instance's placement transform.
+		LION_API bool IsAssemblyInstance() const { return !mAssemblyPath.empty(); }
+		LION_API const std::string& GetAssemblyPath() const { return mAssemblyPath; }
+		LION_API void SetAssemblyPath(const std::string& path) { mAssemblyPath = path; }
 
 		// Returns the entity's Transform, always present and never null. Its position/rotation/scale
 		// are LOCAL to the parent; use the world accessors below for the composed transform.
@@ -136,6 +143,7 @@ namespace Lion
 
 		friend Scene;
 		friend PhysicsWorld;
+		friend SceneSerializer;
 
 	private:
 		const int32 mId;
@@ -143,6 +151,7 @@ namespace Lion
 		bool mEnabled = true;
 		bool mVisible = true;
 		std::string mName = "Entity";
+		std::string mAssemblyPath;
 		Reference<Transform> mTransform;
 		Reference<Scene> mScene;
 

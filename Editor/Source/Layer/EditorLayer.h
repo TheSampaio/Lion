@@ -176,6 +176,8 @@ private:
 	Lion::Reference<Lion::Entity> mRenamingEntity;  // Entity whose name is being edited inline (F2 / context menu).
 	char mHierarchyFilter[64] = {};                 // The Hierarchy's search box: a name, or part of one.
 	std::string mScenePath;                         // The scene on disk, empty until it has been saved once.
+	bool mEditingAssembly = false;                  // The current document is one reusable entity definition.
+	std::string mPendingAssemblyPath;               // Opened after panels finish drawing; hierarchy iteration stays valid.
 	std::string mPendingScenePath;                  // Loaded after the selected project's module is ready.
 	glm::vec2 mViewportSize{ 0.0f, 0.0f };
 	Lion::Vector mViewportMenuPosition;   // Where the mouse was when the viewport's context menu opened.
@@ -276,6 +278,8 @@ private:
 	std::filesystem::file_time_type mProjectStamp;         // Its modification time when it was read.
 	double mProjectPollTime = 0.0;                         // When the timestamp was last checked.
 	bool mProjectDirty = true;                             // The editor changed something; read it again.
+	std::unordered_map<std::string, std::filesystem::file_time_type> mAssemblyStamps;
+	double mAssemblyPollTime = 0.0;
 
 	// Hierarchy tree state, applied after the tree is drawn (never mutate it mid-iteration).
 	std::unordered_map<Lion::Entity*, Lion::Reference<Lion::Entity>> mEntityLookup;
@@ -434,6 +438,13 @@ private:
 	// in the File menu. LoadScene is the one door a scene comes in through — the Open dialog, a recent
 	// entry and the command line all land here, so all of them are remembered.
 	bool LoadScene(const std::string& path);
+	bool LoadAssembly(const std::string& path);
+	void SaveAssemblyAs();
+	void CreateAssemblyFromEntity(const Lion::Reference<Lion::Entity>& entity);
+	Lion::Reference<Lion::Entity> InstantiateAssembly(const std::string& assetPath,
+		Lion::Entity* parent = nullptr, const Lion::Vector* position = nullptr);
+	void ResetAssemblyTracking();
+	void PollAssemblyChanges();
 	void LoadRecentScenes();
 	void SaveRecentScenes() const;
 	void RememberRecentScene(const std::string& path);
@@ -536,8 +547,13 @@ private:
 	void ApplyToSelection(Apply apply)
 	{
 		for (const auto& entity : mSelection)
+		{
+			if (entity->IsAssemblyInstance())
+				continue;
+
 			if (T* component = entity->GetComponent<T>())
 				apply(component);
+		}
 	}
 
 	// The same idea for a component the editor was never compiled against: it cannot call a setter it does

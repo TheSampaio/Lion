@@ -1,9 +1,11 @@
 #include "Engine.h"
 #include "SceneSerializer.h"
 
+#include <filesystem>
 #include <nlohmann/json.hpp>
 
 #include <Lion/Core/Log.h>
+#include <Lion/Logic/AssemblySerializer.h>
 #include <Lion/Logic/Component.h>
 #include <Lion/Logic/Entity.h>
 #include <Lion/Core/Vault.h>
@@ -66,10 +68,30 @@ namespace Lion
 		return value.get<float32>();
 	}
 
-	// Serializes one entity (name, transform and its ordered components) into a JSON node.
-	static Json EntityToJson(const Reference<Entity>& entity)
+	static void WriteTransform(Json& node, const Reference<Entity>& entity)
+	{
+		const Reference<Transform> transform = entity->GetTransform();
+		const Vector2 position = transform->GetPosition();
+		const Vector2 scale = transform->GetScale();
+
+		node["transform"]["position"] = { position.x, position.y };
+		node["transform"]["rotation"] = transform->GetRotation();
+		node["transform"]["scale"]    = { scale.x, scale.y };
+	}
+
+	// Serializes one entity (name, transform and its ordered components) into a JSON node. Scene entries
+	// for Assembly instances stay compact: the definition lives in the asset and the scene owns placement.
+	static Json EntityToJson(const Reference<Entity>& entity, bool linkedReference)
 	{
 		Json node;
+
+		if (linkedReference && entity->IsAssemblyInstance())
+		{
+			node["assembly"] = entity->GetAssemblyPath();
+			WriteTransform(node, entity);
+			return node;
+		}
+
 		node["name"] = entity->GetName();
 
 		if (entity->IsFolder())
@@ -83,13 +105,7 @@ namespace Lion
 		if (!entity->IsVisible())
 			node["visible"] = false;
 
-		const Reference<Transform> transform = entity->GetTransform();
-		const Vector2 position = transform->GetPosition();
-		const Vector2 scale = transform->GetScale();
-
-		node["transform"]["position"] = { position.x, position.y };
-		node["transform"]["rotation"] = transform->GetRotation();
-		node["transform"]["scale"]    = { scale.x, scale.y };
+		WriteTransform(node, entity);
 
 		// Components are written as an ordered array so the editor's display/drag order round-trips.
 		// Each one names its registered type and serializes its own fields, so user-defined components
@@ -117,7 +133,7 @@ namespace Lion
 	}
 
 	// Rebuilds one entity from a JSON node (does not add it to a scene).
-	static Reference<Entity> EntityFromJson(const Json& node);
+	static Reference<Entity> EntityFromJson(const Json& node, const std::string& resourceRoot);
 
 	std::string SceneSerializer::SerializeToString(const Reference<Scene>& scene)
 	{
@@ -136,7 +152,7 @@ namespace Lion
 
 		for (const auto& entity : scene->GetEntities())
 		{
-			Json node = EntityToJson(entity);
+			Json node = EntityToJson(entity, true);
 
 			const auto parent = indices.find(entity->GetParent());
 			node["parent"] = (parent != indices.end()) ? parent->second : -1;
@@ -149,7 +165,12 @@ namespace Lion
 
 	std::string SceneSerializer::SerializeEntityToString(const Reference<Entity>& entity)
 	{
-		return entity ? EntityToJson(entity).dump(2) : std::string();
+		return entity ? EntityToJson(entity, true).dump(2) : std::string();
+	}
+
+	std::string SceneSerializer::SerializeEntityDefinitionToString(const Reference<Entity>& entity)
+	{
+		return entity ? EntityToJson(entity, false).dump(2) : std::string();
 	}
 
 	bool SceneSerializer::Serialize(const Reference<Scene>& scene, const std::string& filePath)
@@ -171,6 +192,12 @@ namespace Lion
 	}
 
 	bool SceneSerializer::DeserializeFromString(const Reference<Scene>& scene, const std::string& text)
+	{
+		return DeserializeFromString(scene, text, {});
+	}
+
+	bool SceneSerializer::DeserializeFromString(const Reference<Scene>& scene, const std::string& text,
+		const std::string& resourceRoot)
 	{
 		Json root;
 
@@ -198,7 +225,7 @@ namespace Lion
 		entities.reserve(root["entities"].size());
 
 		for (const auto& node : root["entities"])
-			entities.push_back(EntityFromJson(node));
+			entities.push_back(EntityFromJson(node, resourceRoot));
 
 		size_t index = 0;
 		for (const auto& node : root["entities"])
@@ -217,15 +244,18 @@ namespace Lion
 		return true;
 	}
 
-	static Reference<Entity> EntityFromJson(const Json& node)
+	static void PopulateEntityFromJson(const Reference<Entity>& entity, const Json& node, bool preserveTransform)
 	{
-		auto entity = MakeReference<Entity>();
+		while (!entity->GetComponents().empty())
+			entity->RemoveComponent(entity->GetComponents().back().get());
+
 		entity->SetName(node.value("name", std::string("Entity")));
 		entity->SetFolder(node.value("folder", false));
 		entity->SetEnabled(node.value("enabled", true));
 		entity->SetVisible(node.value("visible", true));
+		entity->SetAssemblyPath({});
 
-		if (node.contains("transform"))
+		if (!preserveTransform && node.contains("transform"))
 		{
 			const Json& transform = node["transform"];
 			const Reference<Transform> target = entity->GetTransform();
@@ -288,10 +318,48 @@ namespace Lion
 			}
 		}
 
+	}
+
+	static Reference<Entity> EntityFromJson(const Json& node, const std::string& resourceRoot)
+	{
+		if (node.contains("assembly"))
+		{
+			const std::string path = node.value("assembly", std::string());
+			Reference<Entity> instance = AssemblySerializer::Deserialize(path, resourceRoot);
+
+			if (!instance)
+			{
+				instance = MakeReference<Entity>();
+				instance->SetName(std::filesystem::path(path).stem().string() + " (Missing Assembly)");
+			}
+
+			instance->SetAssemblyPath(path);
+
+			if (node.contains("transform"))
+			{
+				const Json& transform = node["transform"];
+				const Reference<Transform> target = instance->GetTransform();
+
+				if (transform.contains("position")) target->SetPosition(Vector2FromJson(transform["position"]));
+				if (transform.contains("rotation")) target->SetRotation(RotationFromJson(transform["rotation"]));
+				if (transform.contains("scale"))    target->SetScale(Vector2FromJson(transform["scale"]));
+			}
+
+			return instance;
+		}
+
+		Reference<Entity> entity = MakeReference<Entity>();
+		PopulateEntityFromJson(entity, node, false);
 		return entity;
 	}
 
 	Reference<Entity> SceneSerializer::DeserializeEntityFromString(const Reference<Scene>& scene, const std::string& text)
+	{
+		return DeserializeEntityFromString(scene, text, {});
+	}
+
+	Reference<Entity> SceneSerializer::DeserializeEntityFromString(const Reference<Scene>& scene,
+		const std::string& text, const std::string& resourceRoot)
 	{
 		Json node;
 
@@ -305,9 +373,56 @@ namespace Lion
 			return nullptr;
 		}
 
-		Reference<Entity> entity = EntityFromJson(node);
+		Reference<Entity> entity = EntityFromJson(node, resourceRoot);
 		scene->Add(entity);
 		return entity;
+	}
+
+	Reference<Entity> SceneSerializer::DeserializeEntityDefinitionFromString(const std::string& text)
+	{
+		Json node;
+
+		try
+		{
+			node = Json::parse(text);
+		}
+		catch (const std::exception& exception)
+		{
+			Log::Console(LogLevel::Error,
+				LION_FORMAT_TEXT("[SceneSerializer] Invalid Assembly entity JSON: {}", exception.what()));
+			return nullptr;
+		}
+
+		Reference<Entity> entity = MakeReference<Entity>();
+		PopulateEntityFromJson(entity, node, false);
+		return entity;
+	}
+
+	bool SceneSerializer::DeserializeEntityDefinitionInto(const Reference<Entity>& entity,
+		const std::string& text, bool preserveTransform)
+	{
+		if (!entity)
+			return false;
+
+		Json node;
+
+		try
+		{
+			node = Json::parse(text);
+		}
+		catch (const std::exception& exception)
+		{
+			Log::Console(LogLevel::Error,
+				LION_FORMAT_TEXT("[SceneSerializer] Invalid Assembly entity JSON: {}", exception.what()));
+			return false;
+		}
+
+		PopulateEntityFromJson(entity, node, preserveTransform);
+
+		if (entity->mScene)
+			entity->Awake();
+
+		return true;
 	}
 
 	bool SceneSerializer::Deserialize(const Reference<Scene>& scene, const std::string& filePath)
@@ -325,7 +440,26 @@ namespace Lion
 
 		// A scene a project keeps is plain JSON; a scene a game ships is sealed. This does not have to know
 		// which it opened — the content says so itself, and unsealing something plain gives it back.
-		if (!DeserializeFromString(scene, Vault::Unseal(buffer.str())))
+		std::string resourceRoot;
+		std::filesystem::path ancestor = std::filesystem::absolute(filePath).parent_path();
+
+		while (!ancestor.empty())
+		{
+			if (ancestor.filename() == "Assets")
+			{
+				resourceRoot = ancestor.generic_string();
+				break;
+			}
+
+			const std::filesystem::path parent = ancestor.parent_path();
+
+			if (parent == ancestor)
+				break;
+
+			ancestor = parent;
+		}
+
+		if (!DeserializeFromString(scene, Vault::Unseal(buffer.str()), resourceRoot))
 			return false;
 
 		Log::Console(LogLevel::Success, LION_FORMAT_TEXT("[SceneSerializer] Loaded scene: '{}'.", filePath));

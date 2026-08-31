@@ -97,10 +97,15 @@ Apply these to every change:
 - Sealing lives only in `Lion/Core/Vault.h`: XOR with `0x07D2`, URL-safe base64, wrapped at 76 characters.
   Loading calls `Vault::Unseal`, which returns unsealed content unchanged. Scenes, input maps and project
   markers are sealed when saved; Shipping seals every packaged game asset, including `.lnshader`, `.lnscene`,
-  `.lninput`, images, and audio. Sealing is obfuscation, not encryption, because the key ships with the
-  player.
+  `.lnassembly`, `.lninput`, images, and audio. Sealing is obfuscation, not encryption, because the key
+  ships with the player.
 - Module filenames live in `Lion/Core/GameModule.h`.
 - Shortcut handling lives in the shared shortcut path.
+- An Assembly is one reusable entity definition stored as a sealed `.lnassembly` asset. A scene stores
+  only its resource-relative Assembly path and the instance's root Transform placement; name, enabled
+  state, visibility, components, and reflected fields always come from the Assembly. Linked instances
+  expose no overrides or variants and refresh from the source asset in Lion's Mane. Keep Assembly loading
+  in `AssemblySerializer` and its entity JSON representation in `SceneSerializer`.
 
 ## Editor, assets, and UI
 

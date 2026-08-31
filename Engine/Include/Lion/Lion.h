@@ -28,6 +28,7 @@
 #include <Lion/Core/Window.h>
 
 // Logic
+#include <Lion/Logic/AssemblySerializer.h>
 #include <Lion/Logic/Component.h>
 #include <Lion/Logic/Entity.h>
 #include <Lion/Logic/Reflector.h>
