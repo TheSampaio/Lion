@@ -178,6 +178,7 @@ private:
 	std::string mScenePath;                         // The scene on disk, empty until it has been saved once.
 	bool mEditingAssembly = false;                  // The current document is one reusable entity definition.
 	std::string mPendingAssemblyPath;               // Opened after panels finish drawing; hierarchy iteration stays valid.
+	bool mPendingAssemblyReturn = false;             // Restored after panels finish drawing for the same reason.
 	std::string mPendingScenePath;                  // Loaded after the selected project's module is ready.
 	glm::vec2 mViewportSize{ 0.0f, 0.0f };
 	Lion::Vector mViewportMenuPosition;   // Where the mouse was when the viewport's context menu opened.
@@ -220,9 +221,25 @@ private:
 		std::string data;   // Scene JSON, or the ini text SaveIniSettingsToMemory produced.
 	};
 
+	// Prefab-style isolation keeps the scene alive while its Assembly is edited. Returning restores the
+	// exact unsaved scene, selection, viewport and edit history that were in hand before entering it.
+	struct AssemblyNavigationState
+	{
+		std::string scenePath;
+		std::string sceneData;
+		Lion::int32 selectedEntity = -1;
+		glm::vec2 viewCenter{ 0.0f, 0.0f };
+		Lion::float32 viewZoom = 1.0f;
+		std::vector<EditState> undoStack;
+		std::vector<EditState> redoStack;
+		std::string pendingSnapshot;
+		bool hasPending = false;
+	};
+
 	std::vector<EditState> mUndoStack;
 	std::vector<EditState> mRedoStack;
 	std::string mPendingSnapshot;
+	std::optional<AssemblyNavigationState> mAssemblyNavigation;
 
 	// A panel resize is one undoable step, and it is bracketed by the mouse: the layout is snapshotted when
 	// the button goes down, and pushed onto the history when it comes up if a resize happened between.
@@ -439,6 +456,7 @@ private:
 	// entry and the command line all land here, so all of them are remembered.
 	bool LoadScene(const std::string& path);
 	bool LoadAssembly(const std::string& path);
+	bool ReturnFromAssembly();
 	void SaveAssemblyAs();
 	void CreateAssemblyFromEntity(const Lion::Reference<Lion::Entity>& entity);
 	Lion::Reference<Lion::Entity> InstantiateAssembly(const std::string& assetPath,

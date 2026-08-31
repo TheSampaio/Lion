@@ -106,6 +106,12 @@ Apply these to every change:
   state, visibility, components, and reflected fields always come from the Assembly. Linked instances
   expose no overrides or variants and refresh from the source asset in Lion's Mane. Keep Assembly loading
   in `AssemblySerializer` and its entity JSON representation in `SceneSerializer`.
+- Assembly identity uses the editor's cool blue Assembly colour for its package icon and text in asset and
+  entity lists. A linked Hierarchy row leads with the standard 16 px right chevron and package icon; double
+  click opens the source definition. Assembly isolation replaces Hierarchy Add with the standard 16 px left
+  chevron and returns to the exact unsaved scene, selection, viewport, and undo history that opened it.
+- The built-in Brickout Paddle is defined once in `Assets/Assemblies/Paddle.lnassembly`; Level01 through
+  Level05 store linked instances rather than authored copies.
 
 ## Editor, assets, and UI
 

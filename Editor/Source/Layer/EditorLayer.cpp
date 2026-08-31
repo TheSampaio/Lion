@@ -47,6 +47,10 @@ static const char8* kEditorName = "Lion's Mane";
 static constexpr float32 kIconSize = 16.0f;
 static constexpr float32 kIconTitle = 24.0f;
 
+// One cool accent identifies Assembly assets, definitions and linked instances everywhere they appear.
+// Orange remains selection and editor action; blue answers what the object is, as in established prefab UIs.
+static const ImVec4 kAssemblyColor(0.35f, 0.72f, 0.92f, 1.0f);
+
 // What a file dialog offers when a scene is opened or saved. A scene is JSON inside and a .lnscene outside:
 // what it is made of is the engine's business, and what it is is the project's.
 static const char8* kSceneFilter = "Lion Scene (*.lnscene)\0*.lnscene\0";
@@ -646,6 +650,12 @@ void EditorLayer::DrawUI()
 		const std::string path = std::move(mPendingAssemblyPath);
 		mPendingAssemblyPath.clear();
 		LoadAssembly(path);
+	}
+
+	if (mPendingAssemblyReturn)
+	{
+		mPendingAssemblyReturn = false;
+		ReturnFromAssembly();
 	}
 
 	// Drawn over everything, because that is what they are: the dim that says the game is running, the
@@ -2246,6 +2256,15 @@ void EditorLayer::DrawProject()
 	if (ImGui::BeginPopupContextWindow("ContentBrowserContext",
 		ImGuiPopupFlags_MouseButtonRight | ImGuiPopupFlags_NoOpenOverItems))
 	{
+		const bool canCreateAssembly = mSelectedEntity && !mSelectedEntity->IsFolder()
+			&& !mSelectedEntity->IsAssemblyInstance() && !mPlaying && !mEditingAssembly;
+
+		if (ImGui::MenuItem(ICON_MDI_PACKAGE_VARIANT_CLOSED "  Create Assembly from Selected...",
+			nullptr, false, canCreateAssembly))
+			CreateAssemblyFromEntity(mSelectedEntity);
+
+		ImGui::Separator();
+
 		if (ImGui::MenuItem(ICON_MDI_FOLDER_PLUS "  New Folder", ShortcutText(ShortcutAction::NewFolder).c_str()))
 			CreateAssetFolder();
 
@@ -2312,6 +2331,7 @@ namespace
 bool EditorLayer::DrawAssetEntry(const std::string& name, const std::string& assetPath, bool folder)
 {
 	const bool engineOwned = IsEngineAsset(assetPath);
+	const bool assemblyAsset = !folder && std::filesystem::path(assetPath).extension() == ".lnassembly";
 
 	// Renaming happens where the name is, so the row becomes the field.
 	if (mRenamingAsset == assetPath)
@@ -2343,6 +2363,8 @@ bool EditorLayer::DrawAssetEntry(const std::string& name, const std::string& ass
 
 	if (dimmed)
 		ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyle().Colors[ImGuiCol_TextDisabled]);
+	else if (assemblyAsset)
+		ImGui::PushStyleColor(ImGuiCol_Text, kAssemblyColor);
 
 	// Hovered and clicked in the engine's orange, the same as the Hierarchy and the console: one selection
 	// colour across the editor.
@@ -2362,7 +2384,7 @@ bool EditorLayer::DrawAssetEntry(const std::string& name, const std::string& ass
 
 	ImGui::PopStyleColor(3);
 
-	if (dimmed)
+	if (dimmed || assemblyAsset)
 		ImGui::PopStyleColor();
 
 	if (ImGui::IsItemHovered())
@@ -2372,9 +2394,8 @@ bool EditorLayer::DrawAssetEntry(const std::string& name, const std::string& ass
 	if (ImGui::BeginPopupContextItem())
 	{
 		mSelectedAsset = assetPath;
-		const bool assembly = std::filesystem::path(assetPath).extension() == ".lnassembly";
 
-		if (assembly)
+		if (assemblyAsset)
 		{
 			if (ImGui::MenuItem(ICON_MDI_PACKAGE_VARIANT_CLOSED "  Open Assembly", nullptr, false, !mPlaying))
 				LoadAssembly((ProjectPanelDirectory() / assetPath).string());
@@ -2386,13 +2407,20 @@ bool EditorLayer::DrawAssetEntry(const std::string& name, const std::string& ass
 			ImGui::Separator();
 		}
 
+		const bool canCreateAssembly = mSelectedEntity && !mSelectedEntity->IsFolder()
+			&& !mSelectedEntity->IsAssemblyInstance() && !mPlaying && !mEditingAssembly;
+
+		if (ImGui::MenuItem(ICON_MDI_PACKAGE_VARIANT_CLOSED "  Create Assembly from Selected...",
+			nullptr, false, canCreateAssembly))
+			CreateAssemblyFromEntity(mSelectedEntity);
+
+		ImGui::Separator();
+
 		if (ImGui::MenuItem(ICON_MDI_FOLDER_OPEN_OUTLINE "  Open in File Explorer"))
 			OpenAssetInFileExplorer(assetPath);
 
 		if (ImGui::MenuItem("Copy path"))
 			ImGui::SetClipboardText(assetPath.c_str());
-
-		ImGui::Separator();
 
 		// What the engine ships is listed, browsed and used like anything else — it just cannot be taken
 		// away. The items are shown rather than hidden, because a menu that is missing the entry someone
@@ -4648,15 +4676,26 @@ void EditorLayer::DrawHierarchy()
 
 	const ImGuiStyle& style = ImGui::GetStyle();
 
-	// Add, then what you are looking for, then what you are looking in. The icon is part of the label: it is
-	// a character, so the button lays it out beside the word the way it lays out the word itself.
-	ImGui::BeginDisabled(mEditingAssembly);
-	if (ImGui::Button(ICON_MDI_PLUS "  Add"))
-		CreateEntity();
-	ImGui::EndDisabled();
+	// Assembly isolation replaces Add with a compact way back to the exact scene that led here. It occupies
+	// the same toolbar slot, so entering a definition does not make the search field jump vertically.
+	if (mEditingAssembly)
+	{
+		std::string tooltip = "Return to the previous scene";
 
-	if (ImGui::IsItemHovered())
-		ImGui::SetTooltip("Create an entity");
+		if (mAssemblyNavigation && !mAssemblyNavigation->scenePath.empty())
+			tooltip += " (" + std::filesystem::path(mAssemblyNavigation->scenePath).stem().string() + ")";
+
+		if (IconButton("##returnFromAssembly", ICON_MDI_CHEVRON_LEFT, ImGui::GetFrameHeight(), tooltip.c_str()))
+			mPendingAssemblyReturn = true;
+	}
+	else
+	{
+		if (ImGui::Button(ICON_MDI_PLUS "  Add"))
+			CreateEntity();
+
+		if (ImGui::IsItemHovered())
+			ImGui::SetTooltip("Create an entity");
+	}
 
 	ImGui::SameLine();
 	ImGui::SetNextItemWidth(-1.0f);
@@ -4930,7 +4969,17 @@ void EditorLayer::DrawEntityMenuItems(const Reference<Entity>& target, const Vec
 	}
 
 	if (!target)
+	{
+		const bool canCreateAssembly = mSelectedEntity && !mSelectedEntity->IsFolder()
+			&& !mSelectedEntity->IsAssemblyInstance() && !mPlaying && !mEditingAssembly;
+
+		ImGui::Separator();
+		if (ImGui::MenuItem(ICON_MDI_PACKAGE_VARIANT_CLOSED "  Create Assembly from Selected...",
+			nullptr, false, canCreateAssembly))
+			CreateAssemblyFromEntity(mSelectedEntity);
+
 		return;
+	}
 
 	ImGui::Separator();
 
@@ -5024,9 +5073,14 @@ void EditorLayer::DrawEntityNode(const Reference<Entity>& entity)
 	//
 	// A hidden or disabled entity is dimmed — the eye says why, and the name says so at a glance.
 	const bool dimmed = !folder && (!entity->IsVisible() || !entity->IsEnabled());
+	const bool linkedAssembly = entity->IsAssemblyInstance();
+	const bool assemblyDefinition = mEditingAssembly && !folder;
+	const bool assemblyVisual = linkedAssembly || assemblyDefinition;
 
 	if (dimmed)
 		ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyle().Colors[ImGuiCol_TextDisabled]);
+	else if (assemblyVisual)
+		ImGui::PushStyleColor(ImGuiCol_Text, kAssemblyColor);
 
 	// A selected row wears the engine's orange — the same colour as its outline in the viewport and the
 	// frame around a running game. The selection is one thing; it looks like one thing wherever it shows.
@@ -5037,12 +5091,13 @@ void EditorLayer::DrawEntityNode(const Reference<Entity>& entity)
 
 	const bool expanded = folder && ImGui::TreeNodeGetOpen(ImGui::GetID("##node"));
 	const char8* icon = folder ? (expanded ? ICON_MDI_FOLDER_OPEN : ICON_MDI_FOLDER)
-		: (entity->IsAssemblyInstance() ? ICON_MDI_PACKAGE_VARIANT_CLOSED : ICON_MDI_CUBE_OUTLINE);
+		: (assemblyVisual ? ICON_MDI_PACKAGE_VARIANT_CLOSED : ICON_MDI_CUBE_OUTLINE);
 
 	// The row icon is drawn by hand, so the label reserves room for it with spaces and the glyph is painted
 	// into that gap after the node is laid out — inline in the label it could only be the small merged size.
 	const float32 spaceWidth = ImMax(ImGui::CalcTextSize(" ").x, 1.0f);
-	const int32 spaces = static_cast<int32>(ImCeil((kIconSize + 6.0f) / spaceWidth));
+	const float32 reservedWidth = linkedAssembly ? kIconSize * 2.0f + 10.0f : kIconSize + 6.0f;
+	const int32 spaces = static_cast<int32>(ImCeil(reservedWidth / spaceWidth));
 	const std::string label = std::string(spaces, ' ') + (name.empty() ? "(unnamed)" : name);
 
 	const ImVec2 rowStart = ImGui::GetCursorScreenPos();
@@ -5053,11 +5108,23 @@ void EditorLayer::DrawEntityNode(const Reference<Entity>& entity)
 	// Paint the icon into the space reserved for it: after the expand arrow, centred down the row.
 	const float32 iconX = rowStart.x + ImGui::GetTreeNodeToLabelSpacing();
 	const ImU32 iconColor = ImGui::GetColorU32(dimmed ? ImGuiCol_TextDisabled : ImGuiCol_Text);
-	DrawIcon(ImVec2(iconX, ImGui::GetItemRectMin().y), ImVec2(kIconSize, ImGui::GetItemRectSize().y), icon, iconColor, kIconSize);
+
+	if (linkedAssembly)
+	{
+		DrawIcon(ImVec2(iconX, ImGui::GetItemRectMin().y), ImVec2(kIconSize, ImGui::GetItemRectSize().y),
+			ICON_MDI_CHEVRON_RIGHT, iconColor, kIconSize);
+		DrawIcon(ImVec2(iconX + kIconSize + 4.0f, ImGui::GetItemRectMin().y),
+			ImVec2(kIconSize, ImGui::GetItemRectSize().y), icon, iconColor, kIconSize);
+	}
+	else
+	{
+		DrawIcon(ImVec2(iconX, ImGui::GetItemRectMin().y), ImVec2(kIconSize, ImGui::GetItemRectSize().y),
+			icon, iconColor, kIconSize);
+	}
 
 	ImGui::PopStyleColor(3);
 
-	if (dimmed)
+	if (dimmed || assemblyVisual)
 		ImGui::PopStyleColor();
 
 	// Clicking the label (not the expand arrow) selects. Ctrl adds one, Shift takes everything between.
@@ -5085,11 +5152,15 @@ void EditorLayer::DrawEntityNode(const Reference<Entity>& entity)
 		SetSelection(entity);
 	}
 
-	if (!entity->IsAssemblyInstance() && ImGui::IsItemHovered()
-		&& ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
+	if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
 	{
-		mRenamingEntity = entity;
-		mRenameFocus = true;
+		if (linkedAssembly)
+			mPendingAssemblyPath = (GameAssetsDirectory() / entity->GetAssemblyPath()).string();
+		else
+		{
+			mRenamingEntity = entity;
+			mRenameFocus = true;
+		}
 	}
 
 	// Drag a node onto another to reparent it (the child keeps its world transform).
@@ -5830,10 +5901,11 @@ void EditorLayer::DrawProperties()
 	// The same icon the Hierarchy draws, so the two panels agree about what they are pointing at — but larger
 	// here, because this is the one entity the whole panel is about, not one row among many.
 	const bool assemblyInstance = mSelectedEntity->IsAssemblyInstance();
+	const bool assemblyEntity = assemblyInstance || (mEditingAssembly && !mSelectedEntity->IsFolder());
 	const char8* entityIcon = mSelectedEntity->IsFolder() ? ICON_MDI_FOLDER
-		: (assemblyInstance ? ICON_MDI_PACKAGE_VARIANT_CLOSED : ICON_MDI_CUBE_OUTLINE);
+		: (assemblyEntity ? ICON_MDI_PACKAGE_VARIANT_CLOSED : ICON_MDI_CUBE_OUTLINE);
 	DrawInlineIcon(entityIcon,
-		kIconTitle, ImGui::GetColorU32(ImGuiCol_Text));
+		kIconTitle, ImGui::GetColorU32(assemblyEntity ? kAssemblyColor : ImGui::GetStyle().Colors[ImGuiCol_Text]));
 	ImGui::SameLine();
 
 	// Whether the entity is switched on at all — the checkbox Unity puts before the name, and the same
@@ -5872,7 +5944,7 @@ void EditorLayer::DrawProperties()
 
 	if (assemblyInstance)
 	{
-		ImGui::TextColored(EditorGui::GetAccent(), ICON_MDI_PACKAGE_VARIANT_CLOSED "  Assembly");
+		ImGui::TextColored(kAssemblyColor, ICON_MDI_PACKAGE_VARIANT_CLOSED "  Assembly");
 		SameLineRowEnd();
 
 		if (IconButton("##editAssembly", ICON_MDI_PENCIL, RowEndSlot(), "Edit the original Assembly"))
@@ -6670,6 +6742,8 @@ void EditorLayer::NewScene()
 	SetSelection(nullptr);
 	mScenePath.clear();
 	mEditingAssembly = false;
+	mAssemblyNavigation.reset();
+	mPendingAssemblyReturn = false;
 	ResetAssemblyTracking();
 }
 
@@ -6694,6 +6768,8 @@ bool EditorLayer::LoadScene(const std::string& path)
 
 	mScenePath = path;
 	mEditingAssembly = false;
+	mAssemblyNavigation.reset();
+	mPendingAssemblyReturn = false;
 	ResetAssemblyTracking();
 	RememberRecentScene(path);
 	return true;
@@ -6712,6 +6788,42 @@ bool EditorLayer::LoadAssembly(const std::string& path)
 		return false;
 	}
 
+	// The scene is not saved merely to visit a reusable definition. Keep its live, possibly unsaved state
+	// and its editor context in memory, exactly as prefab isolation does in mature editors.
+	if (!mEditingAssembly && !mAssemblyNavigation)
+	{
+		AssemblyNavigationState navigation;
+		navigation.scenePath = mScenePath;
+		navigation.sceneData = SceneSerializer::SerializeToString(mScene);
+		navigation.viewCenter = mViewCenter;
+		navigation.viewZoom = mViewZoom;
+		navigation.undoStack = std::move(mUndoStack);
+		navigation.redoStack = std::move(mRedoStack);
+		navigation.pendingSnapshot = std::move(mPendingSnapshot);
+		navigation.hasPending = mHasPending;
+
+		const auto& entities = mScene->GetEntities();
+		int32 selectedIndex = 0;
+		for (const auto& entity : entities)
+		{
+			if (entity == mSelectedEntity)
+			{
+				navigation.selectedEntity = selectedIndex;
+				break;
+			}
+
+			++selectedIndex;
+		}
+
+		mAssemblyNavigation = std::move(navigation);
+	}
+	else if (mEditingAssembly && !mScenePath.empty() && !mScene->GetEntities().empty())
+	{
+		// Opening another Assembly from isolation commits the current definition before switching documents.
+		if (!AssemblySerializer::Serialize(mScene->GetEntities().front(), mScenePath))
+			return false;
+	}
+
 	mScene->Clear();
 	SetSelection(nullptr);
 	mScene->Add(definition);
@@ -6720,9 +6832,60 @@ bool EditorLayer::LoadAssembly(const std::string& path)
 	mEditingAssembly = true;
 	mUndoStack.clear();
 	mRedoStack.clear();
+	mPendingSnapshot.clear();
+	mHasPending = false;
 	ResetAssemblyTracking();
 	Log::Console(LogLevel::Information,
 		LION_FORMAT_TEXT("[Editor] Editing Assembly '{}'.", std::filesystem::path(path).stem().string()));
+	return true;
+}
+
+bool EditorLayer::ReturnFromAssembly()
+{
+	if (!mEditingAssembly || !mAssemblyNavigation)
+		return false;
+
+	// Leaving isolation is an apply operation: the definition is saved first, and restored instances read
+	// that same source immediately. A failed write keeps the user in the Assembly rather than losing edits.
+	if (mScene->GetEntities().empty()
+		|| !AssemblySerializer::Serialize(mScene->GetEntities().front(), mScenePath))
+	{
+		Log::Console(LogLevel::Error,
+			LION_FORMAT_TEXT("[Editor] Could not save Assembly '{}' before returning.", mScenePath));
+		return false;
+	}
+
+	AssemblyNavigationState navigation = std::move(*mAssemblyNavigation);
+
+	SetSelection(nullptr);
+	if (!SceneSerializer::DeserializeFromString(mScene, navigation.sceneData, GameAssetsDirectory().string()))
+	{
+		Log::Console(LogLevel::Error, "[Editor] Could not restore the scene that opened this Assembly.");
+		return false;
+	}
+
+	mAssemblyNavigation.reset();
+	mScenePath = std::move(navigation.scenePath);
+	mEditingAssembly = false;
+	mViewCenter = navigation.viewCenter;
+	mViewZoom = navigation.viewZoom;
+	mUndoStack = std::move(navigation.undoStack);
+	mRedoStack = std::move(navigation.redoStack);
+	mPendingSnapshot = std::move(navigation.pendingSnapshot);
+	mHasPending = navigation.hasPending;
+
+	const auto& entities = mScene->GetEntities();
+	if (navigation.selectedEntity >= 0
+		&& navigation.selectedEntity < static_cast<int32>(entities.size()))
+	{
+		auto selected = entities.begin();
+		std::advance(selected, navigation.selectedEntity);
+		SetSelection(*selected);
+	}
+
+	ResetAssemblyTracking();
+	mProjectDirty = true;
+	Log::Console(LogLevel::Information, "[Editor] Returned from Assembly isolation.");
 	return true;
 }
 
@@ -8089,6 +8252,8 @@ void EditorLayer::OpenProject(const std::filesystem::path& folder)
 	SetSelection(nullptr);
 	mScenePath.clear();
 	mEditingAssembly = false;
+	mAssemblyNavigation.reset();
+	mPendingAssemblyReturn = false;
 	ResetAssemblyTracking();
 	mUndoStack.clear();
 	mRedoStack.clear();
