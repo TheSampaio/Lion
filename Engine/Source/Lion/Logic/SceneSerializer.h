@@ -37,5 +37,13 @@ namespace Lion
 		static LION_API Reference<Entity> DeserializeEntityDefinitionFromString(const std::string& text);
 		static LION_API bool DeserializeEntityDefinitionInto(const Reference<Entity>& entity,
 			const std::string& text, bool preserveTransform);
+
+		// Assembly definitions own one root and its complete descendant hierarchy. The root remains the
+		// instance identity while every child is rebuilt from the same source definition.
+		static LION_API std::string SerializeEntityTreeDefinitionToString(const Reference<Entity>& root);
+		static LION_API std::vector<Reference<Entity>> DeserializeEntityTreeDefinitionFromString(
+			const std::string& text);
+		static LION_API bool DeserializeEntityTreeDefinitionInto(const Reference<Scene>& scene,
+			const Reference<Entity>& root, const std::string& text, bool preserveRootTransform);
 	};
 }

@@ -132,8 +132,17 @@ namespace Lion
 		return node;
 	}
 
-	// Rebuilds one entity from a JSON node (does not add it to a scene).
-	static Reference<Entity> EntityFromJson(const Json& node, const std::string& resourceRoot);
+	// Rebuilds one regular entity or expands one linked Assembly root into its complete hierarchy.
+	static std::vector<Reference<Entity>> EntityTreeFromJson(const Json& node, const std::string& resourceRoot);
+
+	static bool IsAssemblyDescendant(const Entity* entity)
+	{
+		for (const Entity* parent = entity ? entity->GetParent() : nullptr; parent; parent = parent->GetParent())
+			if (parent->IsAssemblyInstance())
+				return true;
+
+		return false;
+	}
 
 	std::string SceneSerializer::SerializeToString(const Reference<Scene>& scene)
 	{
@@ -148,10 +157,16 @@ namespace Lion
 		int32 index = 0;
 
 		for (const auto& entity : scene->GetEntities())
-			indices.emplace(entity.get(), index++);
+			if (!IsAssemblyDescendant(entity.get()))
+				indices.emplace(entity.get(), index++);
 
 		for (const auto& entity : scene->GetEntities())
 		{
+			// A linked root represents the complete Assembly. Its authored descendants live in the asset and
+			// must not be duplicated into the containing scene as accidental overrides.
+			if (IsAssemblyDescendant(entity.get()))
+				continue;
+
 			Json node = EntityToJson(entity, true);
 
 			const auto parent = indices.find(entity->GetParent());
@@ -171,6 +186,52 @@ namespace Lion
 	std::string SceneSerializer::SerializeEntityDefinitionToString(const Reference<Entity>& entity)
 	{
 		return entity ? EntityToJson(entity, false).dump(2) : std::string();
+	}
+
+	std::string SceneSerializer::SerializeEntityTreeDefinitionToString(const Reference<Entity>& rootEntity)
+	{
+		if (!rootEntity)
+			return {};
+
+		std::vector<Reference<Entity>> entities;
+		const Reference<Scene> scene = rootEntity->GetScene();
+
+		const auto collect = [&](const auto& self, const Reference<Entity>& entity) -> void
+		{
+			entities.push_back(entity);
+
+			if (!scene)
+				return;
+
+			for (Entity* child : entity->GetChildren())
+			{
+				const auto found = std::find_if(scene->GetEntities().begin(), scene->GetEntities().end(),
+					[child](const Reference<Entity>& candidate) { return candidate.get() == child; });
+
+				if (found != scene->GetEntities().end())
+					self(self, *found);
+			}
+		};
+
+		collect(collect, rootEntity);
+
+		Json definition;
+		definition["root"] = 0;
+		definition["entities"] = Json::array();
+
+		std::unordered_map<const Entity*, int32> indices;
+		for (int32 index = 0; index < static_cast<int32>(entities.size()); ++index)
+			indices.emplace(entities[index].get(), index);
+
+		for (const auto& entity : entities)
+		{
+			Json node = EntityToJson(entity, false);
+			const auto parent = indices.find(entity->GetParent());
+			node["parent"] = parent != indices.end() ? parent->second : -1;
+			definition["entities"].push_back(std::move(node));
+		}
+
+		return definition.dump(2);
 	}
 
 	bool SceneSerializer::Serialize(const Reference<Scene>& scene, const std::string& filePath)
@@ -221,19 +282,28 @@ namespace Lion
 
 		// Build every entity first, then link parents, and only then add them to the scene: Awake
 		// creates physics bodies from the world transform, which needs the hierarchy in place.
+		std::vector<Reference<Entity>> roots;
 		std::vector<Reference<Entity>> entities;
-		entities.reserve(root["entities"].size());
+		roots.reserve(root["entities"].size());
 
 		for (const auto& node : root["entities"])
-			entities.push_back(EntityFromJson(node, resourceRoot));
+		{
+			std::vector<Reference<Entity>> tree = EntityTreeFromJson(node, resourceRoot);
+
+			if (tree.empty())
+				tree.push_back(MakeReference<Entity>());
+
+			roots.push_back(tree.front());
+			entities.insert(entities.end(), tree.begin(), tree.end());
+		}
 
 		size_t index = 0;
 		for (const auto& node : root["entities"])
 		{
 			const int32 parent = node.value("parent", -1);
 
-			if (parent >= 0 && parent < static_cast<int32>(entities.size()) && parent != static_cast<int32>(index))
-				entities[index]->SetParent(entities[parent].get(), false);  // Transforms are already local.
+			if (parent >= 0 && parent < static_cast<int32>(roots.size()) && parent != static_cast<int32>(index))
+				roots[index]->SetParent(roots[parent].get(), false);  // Transforms are already local.
 
 			index++;
 		}
@@ -320,19 +390,20 @@ namespace Lion
 
 	}
 
-	static Reference<Entity> EntityFromJson(const Json& node, const std::string& resourceRoot)
+	static std::vector<Reference<Entity>> EntityTreeFromJson(const Json& node, const std::string& resourceRoot)
 	{
 		if (node.contains("assembly"))
 		{
 			const std::string path = node.value("assembly", std::string());
-			Reference<Entity> instance = AssemblySerializer::Deserialize(path, resourceRoot);
+			std::vector<Reference<Entity>> tree = AssemblySerializer::DeserializeTree(path, resourceRoot);
 
-			if (!instance)
+			if (tree.empty())
 			{
-				instance = MakeReference<Entity>();
-				instance->SetName(std::filesystem::path(path).stem().string() + " (Missing Assembly)");
+				tree.push_back(MakeReference<Entity>());
+				tree.front()->SetName(std::filesystem::path(path).stem().string() + " (Missing Assembly)");
 			}
 
+			Reference<Entity> instance = tree.front();
 			instance->SetAssemblyPath(path);
 
 			if (node.contains("transform"))
@@ -345,12 +416,12 @@ namespace Lion
 				if (transform.contains("scale"))    target->SetScale(Vector2FromJson(transform["scale"]));
 			}
 
-			return instance;
+			return tree;
 		}
 
 		Reference<Entity> entity = MakeReference<Entity>();
 		PopulateEntityFromJson(entity, node, false);
-		return entity;
+		return { entity };
 	}
 
 	Reference<Entity> SceneSerializer::DeserializeEntityFromString(const Reference<Scene>& scene, const std::string& text)
@@ -373,9 +444,12 @@ namespace Lion
 			return nullptr;
 		}
 
-		Reference<Entity> entity = EntityFromJson(node, resourceRoot);
-		scene->Add(entity);
-		return entity;
+		std::vector<Reference<Entity>> entities = EntityTreeFromJson(node, resourceRoot);
+
+		for (const auto& entity : entities)
+			scene->Add(entity);
+
+		return entities.empty() ? nullptr : entities.front();
 	}
 
 	Reference<Entity> SceneSerializer::DeserializeEntityDefinitionFromString(const std::string& text)
@@ -421,6 +495,98 @@ namespace Lion
 
 		if (entity->mScene)
 			entity->Awake();
+
+		return true;
+	}
+
+	std::vector<Reference<Entity>> SceneSerializer::DeserializeEntityTreeDefinitionFromString(
+		const std::string& text)
+	{
+		Json definition;
+
+		try
+		{
+			definition = Json::parse(text);
+		}
+		catch (const std::exception& exception)
+		{
+			Log::Console(LogLevel::Error,
+				LION_FORMAT_TEXT("[SceneSerializer] Invalid Assembly hierarchy JSON: {}", exception.what()));
+			return {};
+		}
+
+		// Definitions written before Assemblies gained children were a single entity node. Reading that
+		// shape as a one-element hierarchy keeps existing projects forward-compatible.
+		if (!definition.contains("entities"))
+		{
+			Reference<Entity> entity = MakeReference<Entity>();
+			PopulateEntityFromJson(entity, definition, false);
+			return { entity };
+		}
+
+		const Json& nodes = definition["entities"];
+
+		if (!nodes.is_array() || nodes.empty())
+			return {};
+
+		std::vector<Reference<Entity>> entities;
+		entities.reserve(nodes.size());
+
+		for (const auto& node : nodes)
+		{
+			Reference<Entity> entity = MakeReference<Entity>();
+			PopulateEntityFromJson(entity, node, false);
+			entities.push_back(std::move(entity));
+		}
+
+		for (size_t index = 0; index < nodes.size(); ++index)
+		{
+			const int32 parent = nodes[index].value("parent", -1);
+
+			if (parent >= 0 && parent < static_cast<int32>(entities.size())
+				&& parent != static_cast<int32>(index))
+				entities[index]->SetParent(entities[parent].get(), false);
+		}
+
+		return entities;
+	}
+
+	bool SceneSerializer::DeserializeEntityTreeDefinitionInto(const Reference<Scene>& scene,
+		const Reference<Entity>& rootEntity, const std::string& text, bool preserveRootTransform)
+	{
+		if (!scene || !rootEntity)
+			return false;
+
+		std::vector<Reference<Entity>> definition = DeserializeEntityTreeDefinitionFromString(text);
+
+		if (definition.empty())
+			return false;
+
+		// Linked instances have no overrides. Replacing the authored subtree is therefore exact: children
+		// removed from the source disappear, new ones appear, and reordered/reparented ones follow it.
+		const std::vector<Entity*> oldChildren = rootEntity->GetChildren();
+		for (Entity* child : oldChildren)
+			scene->Remove(child);
+		scene->FlushRemovals();
+
+		const std::string rootNode = SerializeEntityDefinitionToString(definition.front());
+		if (!DeserializeEntityDefinitionInto(rootEntity, rootNode, preserveRootTransform))
+			return false;
+
+		std::unordered_map<const Entity*, Entity*> replacements;
+		replacements.emplace(definition.front().get(), rootEntity.get());
+
+		for (size_t index = 1; index < definition.size(); ++index)
+		{
+			Entity* parent = definition[index]->GetParent();
+			const auto replacement = replacements.find(parent);
+
+			if (replacement != replacements.end())
+				definition[index]->SetParent(replacement->second, false);
+
+			replacements.emplace(definition[index].get(), definition[index].get());
+			scene->Add(definition[index]);
+		}
 
 		return true;
 	}

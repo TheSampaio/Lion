@@ -47,10 +47,6 @@ static const char8* kEditorName = "Lion's Mane";
 static constexpr float32 kIconSize = 16.0f;
 static constexpr float32 kIconTitle = 24.0f;
 
-// One cool accent identifies Assembly assets, definitions and linked instances everywhere they appear.
-// Orange remains selection and editor action; blue answers what the object is, as in established prefab UIs.
-static const ImVec4 kAssemblyColor(0.35f, 0.72f, 0.92f, 1.0f);
-
 // What a file dialog offers when a scene is opened or saved. A scene is JSON inside and a .lnscene outside:
 // what it is made of is the engine's business, and what it is is the project's.
 static const char8* kSceneFilter = "Lion Scene (*.lnscene)\0*.lnscene\0";
@@ -667,6 +663,8 @@ void EditorLayer::DrawUI()
 	// Commit any in-progress continuous edit (gizmo/slider drag) once the mouse is released.
 	if (mHasPending && ImGui::IsMouseReleased(ImGuiMouseButton_Left))
 		CommitEdit();
+
+	SyncEditedAssembly();
 
 	// A panel resize is one undo step, bracketed by the mouse. The layout is snapshotted the instant the
 	// button goes down — before any drag has moved a separator — so what lands on the history is the layout
@@ -1956,6 +1954,23 @@ namespace
 		return clicked;
 	}
 
+	// Hierarchy navigation is a row-end glyph rather than a framed toolbar button. It owns a complete
+	// 20 px hit target while the chevron itself stays on the shared 16 px icon metric.
+	bool HierarchyNavigationButton(const char8* id, const char8* icon, const char8* tooltip)
+	{
+		const float32 size = RowEndSlot();
+		const ImVec2 origin = ImGui::GetCursorScreenPos();
+		const bool clicked = ImGui::InvisibleButton(id, ImVec2(size, size));
+		const bool hovered = ImGui::IsItemHovered();
+
+		if (hovered && tooltip)
+			ImGui::SetTooltip("%s", tooltip);
+
+		DrawIcon(origin, size, icon,
+			ImGui::GetColorU32(hovered ? ImGuiCol_Text : ImGuiCol_TextDisabled), kIconSize);
+		return clicked;
+	}
+
 	// The revert arrow, as Unreal draws it: a curved arrow at the end of a row, shown only while the field
 	// is not what it ships as. Clicking it puts the default back. The slot is held even when nothing is in
 	// it — see RowEndSlot — so the fields do not shift as one of them is edited.
@@ -2257,7 +2272,7 @@ void EditorLayer::DrawProject()
 		ImGuiPopupFlags_MouseButtonRight | ImGuiPopupFlags_NoOpenOverItems))
 	{
 		const bool canCreateAssembly = mSelectedEntity && !mSelectedEntity->IsFolder()
-			&& !mSelectedEntity->IsAssemblyInstance() && !mPlaying && !mEditingAssembly;
+			&& !IsLinkedAssemblyEntity(mSelectedEntity.get()) && !mPlaying && !mEditingAssembly;
 
 		if (ImGui::MenuItem(ICON_MDI_PACKAGE_VARIANT_CLOSED "  Create Assembly from Selected...",
 			nullptr, false, canCreateAssembly))
@@ -2363,8 +2378,8 @@ bool EditorLayer::DrawAssetEntry(const std::string& name, const std::string& ass
 
 	if (dimmed)
 		ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyle().Colors[ImGuiCol_TextDisabled]);
-	else if (assemblyAsset)
-		ImGui::PushStyleColor(ImGuiCol_Text, kAssemblyColor);
+	else if (assemblyAsset && mSelectedAsset != assetPath)
+		ImGui::PushStyleColor(ImGuiCol_Text, EditorGui::GetAccent());
 
 	// Hovered and clicked in the engine's orange, the same as the Hierarchy and the console: one selection
 	// colour across the editor.
@@ -2384,7 +2399,7 @@ bool EditorLayer::DrawAssetEntry(const std::string& name, const std::string& ass
 
 	ImGui::PopStyleColor(3);
 
-	if (dimmed || assemblyAsset)
+	if (dimmed || (assemblyAsset && !selected))
 		ImGui::PopStyleColor();
 
 	if (ImGui::IsItemHovered())
@@ -2408,7 +2423,7 @@ bool EditorLayer::DrawAssetEntry(const std::string& name, const std::string& ass
 		}
 
 		const bool canCreateAssembly = mSelectedEntity && !mSelectedEntity->IsFolder()
-			&& !mSelectedEntity->IsAssemblyInstance() && !mPlaying && !mEditingAssembly;
+			&& !IsLinkedAssemblyEntity(mSelectedEntity.get()) && !mPlaying && !mEditingAssembly;
 
 		if (ImGui::MenuItem(ICON_MDI_PACKAGE_VARIANT_CLOSED "  Create Assembly from Selected...",
 			nullptr, false, canCreateAssembly))
@@ -3501,6 +3516,9 @@ void EditorLayer::RecordSnapshot()
 		mUndoStack.erase(mUndoStack.begin());
 
 	mRedoStack.clear();
+
+	if (mEditingAssembly)
+		mAssemblyDirty = true;
 }
 
 void EditorLayer::BeginEdit()
@@ -3530,6 +3548,9 @@ void EditorLayer::CommitEdit()
 		mUndoStack.erase(mUndoStack.begin());
 
 	mRedoStack.clear();
+
+	if (mEditingAssembly)
+		mAssemblyDirty = true;
 }
 
 EditorLayer::EditState EditorLayer::CaptureCurrent(EditKind kind) const
@@ -3551,6 +3572,9 @@ void EditorLayer::RestoreState(const EditState& state)
 	// The scene is rebuilt from scratch, so any selected-entity pointer becomes stale.
 	SetSelection(nullptr);
 	SceneSerializer::DeserializeFromString(mScene, state.data, GameAssetsDirectory().string());
+
+	if (mEditingAssembly)
+		mAssemblyDirty = true;
 }
 
 void EditorLayer::Undo()
@@ -3752,13 +3776,13 @@ void EditorLayer::RenameSelection(const std::string& name, const Reference<Entit
 	// Windows' answer to several things wanting one name is a number after it.
 	if (mSelection.size() <= 1 || !IsSelected(renamed.get()))
 	{
-		if (!renamed->IsAssemblyInstance())
+		if (!IsLinkedAssemblyEntity(renamed.get()))
 			renamed->SetName(name);
 		return;
 	}
 
 	for (const auto& entity : mSelection)
-		if (!entity->IsAssemblyInstance())
+		if (!IsLinkedAssemblyEntity(entity.get()))
 			entity->SetName(NumberedName(mScene, name));
 }
 
@@ -3774,6 +3798,9 @@ bool EditorLayer::IsSelected(const Entity* entity) const
 Reference<Entity> EditorLayer::CreateEntity(Entity* parent, const Vector* position)
 {
 	RecordSnapshot();
+
+	if (mEditingAssembly && !parent && !mScene->GetEntities().empty())
+		parent = mScene->GetEntities().front().get();
 
 	auto entity = MakeReference<Entity>();
 	mScene->Add(entity);
@@ -3800,6 +3827,10 @@ void EditorLayer::CreateFolder()
 	folder->SetName("Folder");
 	mScene->Add(folder);
 
+	if (mEditingAssembly && !mScene->GetEntities().empty()
+		&& mScene->GetEntities().front() != folder)
+		folder->SetParent(mScene->GetEntities().front().get());
+
 	SetSelection(folder);
 	mRenamingEntity = folder;   // Let the user name it right away.
 	mRenameFocus = true;
@@ -3814,6 +3845,11 @@ void EditorLayer::CopyEntity()
 void EditorLayer::CutEntity()
 {
 	if (!mSelectedEntity)
+		return;
+
+	const Entity* assemblyRoot = LinkedAssemblyRoot(mSelectedEntity.get());
+	if ((assemblyRoot && assemblyRoot != mSelectedEntity.get())
+		|| (mEditingAssembly && mSelectedEntity->GetParent() == nullptr))
 		return;
 
 	CopyEntity();
@@ -3833,7 +3869,17 @@ void EditorLayer::PasteEntity()
 	if (Reference<Entity> pasted = SceneSerializer::DeserializeEntityFromString(
 		mScene, mEntityClipboard, GameAssetsDirectory().string()))
 	{
-		if (!pasted->IsAssemblyInstance())
+		if (mEditingAssembly && IsLinkedAssemblyEntity(pasted.get()))
+		{
+			mScene->Remove(pasted);
+			mScene->FlushRemovals();
+			return;
+		}
+
+		if (mEditingAssembly && !mScene->GetEntities().empty())
+			pasted->SetParent(mScene->GetEntities().front().get());
+
+		if (!IsLinkedAssemblyEntity(pasted.get()))
 			pasted->SetName(NumberedName(mScene, pasted->GetName()));
 
 		SetSelection(pasted);
@@ -3854,12 +3900,20 @@ void EditorLayer::DuplicateEntity()
 
 	for (const auto& original : originals)
 	{
+		const Entity* assemblyRoot = LinkedAssemblyRoot(original.get());
+		if ((assemblyRoot && assemblyRoot != original.get())
+			|| (mEditingAssembly && original->GetParent() == nullptr))
+			continue;
+
 		const std::string data = SceneSerializer::SerializeEntityToString(original);
 
 		if (Reference<Entity> copy = SceneSerializer::DeserializeEntityFromString(
 			mScene, data, GameAssetsDirectory().string()))
 		{
-			if (!copy->IsAssemblyInstance())
+			if (mEditingAssembly && !mScene->GetEntities().empty())
+				copy->SetParent(mScene->GetEntities().front().get());
+
+			if (!IsLinkedAssemblyEntity(copy.get()))
 				copy->SetName(NumberedName(mScene, original->GetName()));
 
 			mSelection.push_back(copy);
@@ -4044,28 +4098,31 @@ void EditorLayer::HandleShortcuts()
 
 	if (IsShortcutPressed(ShortcutAction::CopyEntity)) CopyEntity();
 
-	if (!mEditingAssembly)
-	{
-		if (IsShortcutPressed(ShortcutAction::CutSelection)) CutEntity();
-		if (IsShortcutPressed(ShortcutAction::PasteEntity)) PasteEntity();
-		if (IsShortcutPressed(ShortcutAction::DuplicateEntity)) DuplicateEntity();
-		if (mHierarchyFocused && IsShortcutPressed(ShortcutAction::NewFolder)) CreateFolder();
-	}
+	if (IsShortcutPressed(ShortcutAction::CutSelection)) CutEntity();
+	if (IsShortcutPressed(ShortcutAction::PasteEntity)) PasteEntity();
+	if (IsShortcutPressed(ShortcutAction::DuplicateEntity)) DuplicateEntity();
+	if (mHierarchyFocused && IsShortcutPressed(ShortcutAction::NewFolder)) CreateFolder();
 
-	if (mSelectedEntity && !mSelectedEntity->IsAssemblyInstance()
+	if (mSelectedEntity && !IsLinkedAssemblyEntity(mSelectedEntity.get())
 		&& IsShortcutPressed(ShortcutAction::RenameEntity))
 	{
 		mRenamingEntity = mSelectedEntity;
 		mRenameFocus = true;
 	}
 
-	if (mSelectedEntity && !mEditingAssembly && IsShortcutPressed(ShortcutAction::DeleteEntity))
+	if (mSelectedEntity && IsShortcutPressed(ShortcutAction::DeleteEntity))
 	{
 		RecordSnapshot();
 
 		// Del deletes what is selected, all of it — the same rule the context menu follows.
 		for (const auto& entity : mSelection)
-			mScene->Remove(entity);
+		{
+			const Entity* assemblyRoot = LinkedAssemblyRoot(entity.get());
+			const bool editingRoot = mEditingAssembly && entity->GetParent() == nullptr;
+
+			if (!editingRoot && (!assemblyRoot || assemblyRoot == entity.get()))
+				mScene->Remove(entity);
+		}
 
 		mScene->FlushRemovals();
 		SetSelection(nullptr);
@@ -4118,7 +4175,9 @@ void EditorLayer::DrawViewport()
 
 	// The gizmo is an editing tool; hide it while the simulation is running, for folders (no
 	// meaningful transform), and for the Select tool, which only picks entities.
-	if (mSelectedEntity && !mPlaying && mTool != Tool::Select && !mSelectedEntity->IsFolder())
+	const Entity* gizmoAssemblyRoot = LinkedAssemblyRoot(mSelectedEntity.get());
+	if (mSelectedEntity && !mPlaying && mTool != Tool::Select && !mSelectedEntity->IsFolder()
+		&& (!gizmoAssemblyRoot || gizmoAssemblyRoot == mSelectedEntity.get()))
 	{
 		ImGuizmo::SetOrthographic(true);
 		ImGuizmo::SetDrawlist();
@@ -4168,7 +4227,8 @@ void EditorLayer::DrawViewport()
 
 			for (const auto& entity : mSelection)
 			{
-				if (!entity || entity->IsFolder())
+				const Entity* assemblyRoot = LinkedAssemblyRoot(entity.get());
+				if (!entity || entity->IsFolder() || (assemblyRoot && assemblyRoot != entity.get()))
 					continue;
 
 				const Vector2 entityPosition = entity->GetWorldPosition();
@@ -4676,26 +4736,13 @@ void EditorLayer::DrawHierarchy()
 
 	const ImGuiStyle& style = ImGui::GetStyle();
 
-	// Assembly isolation replaces Add with a compact way back to the exact scene that led here. It occupies
-	// the same toolbar slot, so entering a definition does not make the search field jump vertically.
-	if (mEditingAssembly)
-	{
-		std::string tooltip = "Return to the previous scene";
+	// Isolation is still a normal authoring scene: Add and every creation path remain available. Returning
+	// belongs to the definition root row below, where it cannot displace a primary authoring command.
+	if (ImGui::Button(ICON_MDI_PLUS "  Add"))
+		CreateEntity();
 
-		if (mAssemblyNavigation && !mAssemblyNavigation->scenePath.empty())
-			tooltip += " (" + std::filesystem::path(mAssemblyNavigation->scenePath).stem().string() + ")";
-
-		if (IconButton("##returnFromAssembly", ICON_MDI_CHEVRON_LEFT, ImGui::GetFrameHeight(), tooltip.c_str()))
-			mPendingAssemblyReturn = true;
-	}
-	else
-	{
-		if (ImGui::Button(ICON_MDI_PLUS "  Add"))
-			CreateEntity();
-
-		if (ImGui::IsItemHovered())
-			ImGui::SetTooltip("Create an entity");
-	}
+	if (ImGui::IsItemHovered())
+		ImGui::SetTooltip("Create an entity");
 
 	ImGui::SameLine();
 	ImGui::SetNextItemWidth(-1.0f);
@@ -4734,8 +4781,8 @@ void EditorLayer::DrawHierarchy()
 
 	const int32 count = static_cast<int32>(mScene->GetEntities().size());
 
-	// Two columns: what a thing is called, and whether it is drawn. The eye is a property of the entity
-	// and not of the editor, so the game can reach for it too.
+	// Name and visibility keep their established columns. Assembly navigation gets a small, headerless
+	// third column after Visibility; in isolation that same column moves before Name for the root's return.
 	//
 	// No banding and no rules: a striped list is a table pretending it has more to say than one column of
 	// names, and the lines around it only fence off what was already fenced by the panel it is in.
@@ -4754,14 +4801,29 @@ void EditorLayer::DrawHierarchy()
 	ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(style.CellPadding.x, 0.0f));
 	ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(style.FramePadding.x, kRowPadding));
 
-	if (ImGui::BeginTable("Entities", 2, ImGuiTableFlags_NoPadOuterX))
+	if (ImGui::BeginTable("Entities", 3, ImGuiTableFlags_NoPadOuterX))
 	{
 		// Wide enough for its own header: a column called Visibility that reads "Visi..." is a column that
 		// gave its name away to save a dozen pixels.
 		const float32 visibilityWidth = ImMax(ImGui::CalcTextSize("Visibility").x, RowEndSlot()) + style.CellPadding.x * 2.0f;
 
-		ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_WidthStretch);
-		ImGui::TableSetupColumn("Visibility", ImGuiTableColumnFlags_WidthFixed, visibilityWidth);
+		const float32 navigationWidth = RowEndSlot() + style.CellPadding.x * 2.0f;
+		const int32 navigationColumn = mEditingAssembly ? 0 : 2;
+		const int32 nameColumn = mEditingAssembly ? 1 : 0;
+		const int32 visibilityColumn = mEditingAssembly ? 2 : 1;
+
+		if (mEditingAssembly)
+		{
+			ImGui::TableSetupColumn("##AssemblyNavigation", ImGuiTableColumnFlags_WidthFixed, navigationWidth);
+			ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_WidthStretch);
+			ImGui::TableSetupColumn("Visibility", ImGuiTableColumnFlags_WidthFixed, visibilityWidth);
+		}
+		else
+		{
+			ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_WidthStretch);
+			ImGui::TableSetupColumn("Visibility", ImGuiTableColumnFlags_WidthFixed, visibilityWidth);
+			ImGui::TableSetupColumn("##AssemblyNavigation", ImGuiTableColumnFlags_WidthFixed, navigationWidth);
+		}
 
 		// The header row is drawn by hand for two reasons. A tree node starts its label past the arrow, so
 		// a header written at the column's edge sits to the left of every name under it. And the rows carry
@@ -4772,15 +4834,18 @@ void EditorLayer::DrawHierarchy()
 
 		ImGui::TableNextRow(ImGuiTableRowFlags_Headers, headerHeight);
 
-		ImGui::TableSetColumnIndex(0);
+		ImGui::TableSetColumnIndex(nameColumn);
 		ImGui::SetCursorPos(ImVec2(
 			ImGui::GetCursorPosX() + ImGui::GetTreeNodeToLabelSpacing(),
 			ImGui::GetCursorPosY() + headerText));
 		ImGui::TableHeader("Name");
 
-		ImGui::TableSetColumnIndex(1);
+		ImGui::TableSetColumnIndex(visibilityColumn);
 		ImGui::SetCursorPosY(ImGui::GetCursorPosY() + headerText);
 		ImGui::TableHeader("Visibility");
+
+		// Keep the column physically present without giving the navigation glyph a misleading heading.
+		ImGui::TableSetColumnIndex(navigationColumn);
 
 		for (const auto& entity : mScene->GetEntities())
 			if (entity->GetParent() == nullptr)
@@ -4819,29 +4884,42 @@ void EditorLayer::DrawHierarchy()
 	// Deferred hierarchy edits (never mutate the tree while iterating it above).
 	if (mReparentRequested && mReparentChild)
 	{
-		RecordSnapshot();
+		const bool protectedChild = IsLinkedAssemblyEntity(mReparentChild)
+			|| (mEditingAssembly && mReparentChild->GetParent() == nullptr);
+		const bool protectedTarget = IsLinkedAssemblyEntity(mReparentTarget);
 
 		// A drag carries the whole selection when the thing dragged is part of it, which is the only
 		// reading of "drag them onto a folder" that does not mean doing it one at a time.
 		const Reference<Entity> dragged = mEntityLookup.count(mReparentChild) ? mEntityLookup[mReparentChild] : nullptr;
 		const bool dragSelection = dragged && IsSelected(mReparentChild);
 
-		if (dragSelection)
+		if (!protectedChild && !protectedTarget)
 		{
-			for (const auto& entity : mSelection)
-				if (entity.get() != mReparentTarget && !(mReparentTarget && mReparentTarget->IsDescendantOf(entity.get())))
-					entity->SetParent(mReparentTarget);
-		}
-		else
-		{
-			mReparentChild->SetParent(mReparentTarget);
+			RecordSnapshot();
+
+			if (dragSelection)
+			{
+				for (const auto& entity : mSelection)
+					if (!IsLinkedAssemblyEntity(entity.get())
+						&& !(mEditingAssembly && entity->GetParent() == nullptr)
+						&& entity.get() != mReparentTarget
+						&& !(mReparentTarget && mReparentTarget->IsDescendantOf(entity.get())))
+						entity->SetParent(mReparentTarget);
+			}
+			else
+			{
+				mReparentChild->SetParent(mReparentTarget);
+			}
 		}
 	}
 
 	if (mReorderRequested && mReorderMoved && mReorderBefore && mReorderMoved != mReorderBefore)
 	{
 		// Dropping a row onto its own descendant would ask the hierarchy to contain itself.
-		if (!mReorderBefore->IsDescendantOf(mReorderMoved))
+		if (!IsLinkedAssemblyEntity(mReorderMoved) && !IsLinkedAssemblyEntity(mReorderBefore)
+			&& !(mEditingAssembly && mReorderMoved->GetParent() == nullptr)
+			&& !(mEditingAssembly && mReorderParent == nullptr)
+			&& !mReorderBefore->IsDescendantOf(mReorderMoved))
 		{
 			RecordSnapshot();
 
@@ -4897,6 +4975,12 @@ void EditorLayer::DrawHierarchy()
 
 		for (const auto& entity : doomed)
 		{
+			const Entity* assemblyRoot = LinkedAssemblyRoot(entity.get());
+			const bool editingRoot = mEditingAssembly && entity->GetParent() == nullptr;
+
+			if (editingRoot || (assemblyRoot && assemblyRoot != entity.get()))
+				continue;
+
 			if (mRenamingEntity == entity)
 				mRenamingEntity = nullptr;
 
@@ -4919,7 +5003,7 @@ void EditorLayer::DrawEntityMenuItems(const Reference<Entity>& target, const Vec
 	// between them, and no reason for a second menu.
 	if (target)
 	{
-		ImGui::BeginDisabled(target->IsAssemblyInstance());
+		ImGui::BeginDisabled(IsLinkedAssemblyEntity(target.get()));
 		if (ImGui::MenuItem("Rename", ShortcutText(ShortcutAction::RenameEntity).c_str()))
 		{
 			mRenamingEntity = target;
@@ -4930,28 +5014,34 @@ void EditorLayer::DrawEntityMenuItems(const Reference<Entity>& target, const Vec
 		ImGui::Separator();
 	}
 
-	ImGui::BeginDisabled(mEditingAssembly);
 	if (ImGui::MenuItem("Create Entity"))
 		CreateEntity(nullptr, position);
 
-	if (target && ImGui::MenuItem("Create Entity as Child"))
-		CreateEntity(target.get(), nullptr);
+	if (target)
+	{
+		ImGui::BeginDisabled(IsLinkedAssemblyEntity(target.get()));
+		if (ImGui::MenuItem("Create Entity as Child"))
+			CreateEntity(target.get(), nullptr);
+		ImGui::EndDisabled();
+	}
 
 	// A folder is a place in the Hierarchy, not a thing in the scene, so the viewport does not offer one.
 	if (!inViewport && ImGui::MenuItem("Create Folder", ShortcutText(ShortcutAction::NewFolder).c_str()))
 		CreateFolder();
-	ImGui::EndDisabled();
 
 	// Copy, paste and duplicate act on the Hierarchy's selection; over the scene they have no subject the
 	// mouse is pointing at, so the viewport leaves them to the Hierarchy (and to their shortcuts).
 	if (!inViewport)
 	{
 		ImGui::Separator();
-		ImGui::BeginDisabled(mEditingAssembly);
-
 		if (target)
 		{
 			if (ImGui::MenuItem("Copy", ShortcutText(ShortcutAction::CopyEntity).c_str())) CopyEntity();
+
+			const Entity* assemblyRoot = LinkedAssemblyRoot(target.get());
+			const bool protectedEntity = (assemblyRoot && assemblyRoot != target.get())
+				|| (mEditingAssembly && target->GetParent() == nullptr);
+			ImGui::BeginDisabled(protectedEntity);
 			if (ImGui::MenuItem("Cut", ShortcutText(ShortcutAction::CutSelection).c_str()))
 			{
 				mEntityClipboard = SceneSerializer::SerializeEntityToString(target);
@@ -4959,19 +5049,19 @@ void EditorLayer::DrawEntityMenuItems(const Reference<Entity>& target, const Vec
 				mDeleteOnlyTarget = true;
 			}
 			if (ImGui::MenuItem("Duplicate", ShortcutText(ShortcutAction::DuplicateEntity).c_str())) DuplicateEntity();
+			ImGui::EndDisabled();
 		}
 
 		if (ImGui::MenuItem("Paste", ShortcutText(ShortcutAction::PasteEntity).c_str(), false,
 			!mEntityClipboard.empty()))
 			PasteEntity();
 
-		ImGui::EndDisabled();
 	}
 
 	if (!target)
 	{
 		const bool canCreateAssembly = mSelectedEntity && !mSelectedEntity->IsFolder()
-			&& !mSelectedEntity->IsAssemblyInstance() && !mPlaying && !mEditingAssembly;
+			&& !IsLinkedAssemblyEntity(mSelectedEntity.get()) && !mPlaying && !mEditingAssembly;
 
 		ImGui::Separator();
 		if (ImGui::MenuItem(ICON_MDI_PACKAGE_VARIANT_CLOSED "  Create Assembly from Selected...",
@@ -4983,10 +5073,10 @@ void EditorLayer::DrawEntityMenuItems(const Reference<Entity>& target, const Vec
 
 	ImGui::Separator();
 
-	if (target->IsAssemblyInstance())
+	if (const Entity* assemblyRoot = LinkedAssemblyRoot(target.get()))
 	{
 		if (ImGui::MenuItem(ICON_MDI_PACKAGE_VARIANT_CLOSED "  Open Assembly"))
-			mPendingAssemblyPath = (GameAssetsDirectory() / target->GetAssemblyPath()).string();
+			mPendingAssemblyPath = (GameAssetsDirectory() / assemblyRoot->GetAssemblyPath()).string();
 	}
 	else if (!target->IsFolder() && !mEditingAssembly)
 	{
@@ -4996,14 +5086,19 @@ void EditorLayer::DrawEntityMenuItems(const Reference<Entity>& target, const Vec
 
 	ImGui::Separator();
 
-	if (ImGui::MenuItem("Unparent", nullptr, false, target->GetParent() != nullptr))
+	const bool canUnparent = target->GetParent() != nullptr && !IsLinkedAssemblyEntity(target.get())
+		&& !mEditingAssembly;
+	if (ImGui::MenuItem("Unparent", nullptr, false, canUnparent))
 	{
 		mReparentChild = target.get();
 		mReparentTarget = nullptr;
 		mReparentRequested = true;
 	}
 
-	ImGui::BeginDisabled(mEditingAssembly);
+	const Entity* assemblyRoot = LinkedAssemblyRoot(target.get());
+	const bool protectedEntity = (assemblyRoot && assemblyRoot != target.get())
+		|| (mEditingAssembly && target->GetParent() == nullptr);
+	ImGui::BeginDisabled(protectedEntity);
 	if (ImGui::MenuItem("Delete", "Del"))
 		mEntityToDelete = target;
 	ImGui::EndDisabled();
@@ -5018,7 +5113,10 @@ void EditorLayer::DrawEntityNode(const Reference<Entity>& entity)
 
 	ImGui::PushID(entity->GetId());
 	ImGui::TableNextRow();
-	ImGui::TableSetColumnIndex(0);
+	const int32 navigationColumn = mEditingAssembly ? 0 : 2;
+	const int32 nameColumn = mEditingAssembly ? 1 : 0;
+	const int32 visibilityColumn = mEditingAssembly ? 2 : 1;
+	ImGui::TableSetColumnIndex(nameColumn);
 
 	if (entity == mRenamingEntity)
 	{
@@ -5065,6 +5163,11 @@ void EditorLayer::DrawEntityNode(const Reference<Entity>& entity)
 	if (mHierarchyFilter[0] != '\0')
 		ImGui::SetNextItemOpen(true, ImGuiCond_Always);
 
+	// A newly created child begins inline rename immediately. Open every ancestor on the way to it so the
+	// field is visible even when the parent had been collapsed before Add was pressed.
+	if (mRenamingEntity && mRenamingEntity->IsDescendantOf(entity.get()))
+		ImGui::SetNextItemOpen(true, ImGuiCond_Always);
+
 	const std::string& name = entity->GetName();
 	const bool folder = entity->IsFolder();
 
@@ -5073,14 +5176,17 @@ void EditorLayer::DrawEntityNode(const Reference<Entity>& entity)
 	//
 	// A hidden or disabled entity is dimmed — the eye says why, and the name says so at a glance.
 	const bool dimmed = !folder && (!entity->IsVisible() || !entity->IsEnabled());
-	const bool linkedAssembly = entity->IsAssemblyInstance();
-	const bool assemblyDefinition = mEditingAssembly && !folder;
+	const Entity* linkedRoot = LinkedAssemblyRoot(entity.get());
+	const bool linkedAssembly = linkedRoot != nullptr;
+	const bool linkedRootRow = linkedRoot == entity.get();
+	const bool definitionRoot = mEditingAssembly && entity->GetParent() == nullptr;
+	const bool assemblyDefinition = mEditingAssembly;
 	const bool assemblyVisual = linkedAssembly || assemblyDefinition;
 
 	if (dimmed)
 		ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyle().Colors[ImGuiCol_TextDisabled]);
-	else if (assemblyVisual)
-		ImGui::PushStyleColor(ImGuiCol_Text, kAssemblyColor);
+	else if (assemblyVisual && !IsSelected(entity.get()))
+		ImGui::PushStyleColor(ImGuiCol_Text, EditorGui::GetAccent());
 
 	// A selected row wears the engine's orange — the same colour as its outline in the viewport and the
 	// frame around a running game. The selection is one thing; it looks like one thing wherever it shows.
@@ -5090,13 +5196,14 @@ void EditorLayer::DrawEntityNode(const Reference<Entity>& entity)
 	ImGui::PushStyleColor(ImGuiCol_HeaderActive, accent);
 
 	const bool expanded = folder && ImGui::TreeNodeGetOpen(ImGui::GetID("##node"));
+	const bool assemblyRootRow = linkedRootRow || definitionRoot;
 	const char8* icon = folder ? (expanded ? ICON_MDI_FOLDER_OPEN : ICON_MDI_FOLDER)
-		: (assemblyVisual ? ICON_MDI_PACKAGE_VARIANT_CLOSED : ICON_MDI_CUBE_OUTLINE);
+		: (assemblyRootRow ? ICON_MDI_PACKAGE_VARIANT_CLOSED : ICON_MDI_CUBE_OUTLINE);
 
 	// The row icon is drawn by hand, so the label reserves room for it with spaces and the glyph is painted
 	// into that gap after the node is laid out — inline in the label it could only be the small merged size.
 	const float32 spaceWidth = ImMax(ImGui::CalcTextSize(" ").x, 1.0f);
-	const float32 reservedWidth = linkedAssembly ? kIconSize * 2.0f + 10.0f : kIconSize + 6.0f;
+	const float32 reservedWidth = kIconSize + 6.0f;
 	const int32 spaces = static_cast<int32>(ImCeil(reservedWidth / spaceWidth));
 	const std::string label = std::string(spaces, ' ') + (name.empty() ? "(unnamed)" : name);
 
@@ -5109,22 +5216,12 @@ void EditorLayer::DrawEntityNode(const Reference<Entity>& entity)
 	const float32 iconX = rowStart.x + ImGui::GetTreeNodeToLabelSpacing();
 	const ImU32 iconColor = ImGui::GetColorU32(dimmed ? ImGuiCol_TextDisabled : ImGuiCol_Text);
 
-	if (linkedAssembly)
-	{
-		DrawIcon(ImVec2(iconX, ImGui::GetItemRectMin().y), ImVec2(kIconSize, ImGui::GetItemRectSize().y),
-			ICON_MDI_CHEVRON_RIGHT, iconColor, kIconSize);
-		DrawIcon(ImVec2(iconX + kIconSize + 4.0f, ImGui::GetItemRectMin().y),
-			ImVec2(kIconSize, ImGui::GetItemRectSize().y), icon, iconColor, kIconSize);
-	}
-	else
-	{
-		DrawIcon(ImVec2(iconX, ImGui::GetItemRectMin().y), ImVec2(kIconSize, ImGui::GetItemRectSize().y),
-			icon, iconColor, kIconSize);
-	}
+	DrawIcon(ImVec2(iconX, ImGui::GetItemRectMin().y), ImVec2(kIconSize, ImGui::GetItemRectSize().y),
+		icon, iconColor, kIconSize);
 
 	ImGui::PopStyleColor(3);
 
-	if (dimmed || assemblyVisual)
+	if (dimmed || (assemblyVisual && !IsSelected(entity.get())))
 		ImGui::PopStyleColor();
 
 	// Clicking the label (not the expand arrow) selects. Ctrl adds one, Shift takes everything between.
@@ -5155,7 +5252,7 @@ void EditorLayer::DrawEntityNode(const Reference<Entity>& entity)
 	if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
 	{
 		if (linkedAssembly)
-			mPendingAssemblyPath = (GameAssetsDirectory() / entity->GetAssemblyPath()).string();
+			mPendingAssemblyPath = (GameAssetsDirectory() / linkedRoot->GetAssemblyPath()).string();
 		else
 		{
 			mRenamingEntity = entity;
@@ -5164,7 +5261,8 @@ void EditorLayer::DrawEntityNode(const Reference<Entity>& entity)
 	}
 
 	// Drag a node onto another to reparent it (the child keeps its world transform).
-	if (ImGui::BeginDragDropSource())
+	const bool protectedHierarchy = linkedAssembly || (mEditingAssembly && definitionRoot);
+	if (!protectedHierarchy && ImGui::BeginDragDropSource())
 	{
 		Entity* dragged = entity.get();
 		ImGui::SetDragDropPayload("LN_ENTITY", &dragged, sizeof(Entity*));
@@ -5180,7 +5278,7 @@ void EditorLayer::DrawEntityNode(const Reference<Entity>& entity)
 	// A row is three drop zones down its height, the way Unity's hierarchy is: the top and bottom
 	// quarters put the dragged entity *between* rows, and the half in the middle drops it *onto* this one
 	// to reparent. One row, both gestures, told apart by where in it the pointer is.
-	if (ImGui::BeginDragDropTarget())
+	if (!linkedAssembly && ImGui::BeginDragDropTarget())
 	{
 		const ImVec2 rowMin = ImGui::GetItemRectMin();
 		const ImVec2 rowMax = ImGui::GetItemRectMax();
@@ -5188,8 +5286,9 @@ void EditorLayer::DrawEntityNode(const Reference<Entity>& entity)
 		const float32 offset = ImClamp((ImGui::GetMousePos().y - rowMin.y) / height, 0.0f, 1.0f);
 
 		constexpr float32 kEdge = 0.25f;
-		const bool above = offset < kEdge;
-		const bool below = offset > 1.0f - kEdge;
+		const bool rootBoundary = mEditingAssembly && definitionRoot;
+		const bool above = !rootBoundary && offset < kEdge;
+		const bool below = !rootBoundary && offset > 1.0f - kEdge;
 
 		// The line shows where it would land, drawn over the row rather than in it: the answer to "where
 		// does letting go put this?" should not need to be guessed.
@@ -5247,11 +5346,11 @@ void EditorLayer::DrawEntityNode(const Reference<Entity>& entity)
 	}
 
 	// The Visibility column. A folder has nothing to draw, so it has no eye.
-	ImGui::TableSetColumnIndex(1);
+	ImGui::TableSetColumnIndex(visibilityColumn);
 	ImGui::SetCursorPosX(ImGui::GetCursorPosX() + ImMax((ImGui::GetContentRegionAvail().x - RowEndSlot()) * 0.5f, 0.0f));
 	AlignRowEndGlyph();   // The row is a frame tall now; the eye is a glyph, and sits in the middle of it.
 
-	ImGui::BeginDisabled(entity->IsAssemblyInstance());
+	ImGui::BeginDisabled(linkedAssembly);
 	if (!folder && EyeButton("##visible", entity->IsVisible()))
 	{
 		RecordSnapshot();
@@ -5261,12 +5360,35 @@ void EditorLayer::DrawEntityNode(const Reference<Entity>& entity)
 		// clicking one of their eyes is the same rule as dragging or deleting them.
 		if (IsSelected(entity.get()))
 			for (const auto& selected : mSelection)
-				if (!selected->IsAssemblyInstance())
+				if (!IsLinkedAssemblyEntity(selected.get()))
 					selected->SetVisible(visible);
 		else
 			entity->SetVisible(visible);
 	}
 	ImGui::EndDisabled();
+
+	// Navigation owns its own compact, headerless column. Linked roots go into their source definition;
+	// the definition root returns to the exact scene/editor state that opened isolation.
+	ImGui::TableSetColumnIndex(navigationColumn);
+	ImGui::SetCursorPosX(ImGui::GetCursorPosX()
+		+ ImMax((ImGui::GetContentRegionAvail().x - RowEndSlot()) * 0.5f, 0.0f));
+	AlignRowEndGlyph();
+
+	if (linkedRootRow)
+	{
+		if (HierarchyNavigationButton("##openAssembly", ICON_MDI_CHEVRON_RIGHT, "Open Assembly"))
+			mPendingAssemblyPath = (GameAssetsDirectory() / linkedRoot->GetAssemblyPath()).string();
+	}
+	else if (definitionRoot)
+	{
+		std::string tooltip = "Return to the previous scene";
+
+		if (mAssemblyNavigation && !mAssemblyNavigation->scenePath.empty())
+			tooltip += " (" + std::filesystem::path(mAssemblyNavigation->scenePath).stem().string() + ")";
+
+		if (HierarchyNavigationButton("##returnFromAssembly", ICON_MDI_CHEVRON_LEFT, tooltip.c_str()))
+			mPendingAssemblyReturn = true;
+	}
 
 	if (open)
 	{
@@ -5660,7 +5782,7 @@ void EditorLayer::ApplyReflectorToSelection(const std::string& typeName, Reflect
 
 	for (const auto& entity : mSelection)
 	{
-		if (entity->IsAssemblyInstance())
+		if (IsLinkedAssemblyEntity(entity.get()))
 			continue;
 
 		for (const auto& component : entity->GetComponents())
@@ -5900,12 +6022,15 @@ void EditorLayer::DrawProperties()
 
 	// The same icon the Hierarchy draws, so the two panels agree about what they are pointing at — but larger
 	// here, because this is the one entity the whole panel is about, not one row among many.
-	const bool assemblyInstance = mSelectedEntity->IsAssemblyInstance();
-	const bool assemblyEntity = assemblyInstance || (mEditingAssembly && !mSelectedEntity->IsFolder());
+	const Entity* linkedRoot = LinkedAssemblyRoot(mSelectedEntity.get());
+	const bool assemblyInstance = linkedRoot != nullptr;
+	const bool assemblyRoot = linkedRoot == mSelectedEntity.get()
+		|| (mEditingAssembly && mSelectedEntity->GetParent() == nullptr);
+	const bool assemblyEntity = assemblyInstance || mEditingAssembly;
 	const char8* entityIcon = mSelectedEntity->IsFolder() ? ICON_MDI_FOLDER
-		: (assemblyEntity ? ICON_MDI_PACKAGE_VARIANT_CLOSED : ICON_MDI_CUBE_OUTLINE);
+		: (assemblyRoot ? ICON_MDI_PACKAGE_VARIANT_CLOSED : ICON_MDI_CUBE_OUTLINE);
 	DrawInlineIcon(entityIcon,
-		kIconTitle, ImGui::GetColorU32(assemblyEntity ? kAssemblyColor : ImGui::GetStyle().Colors[ImGuiCol_Text]));
+		kIconTitle, ImGui::GetColorU32(assemblyEntity ? EditorGui::GetAccent() : ImGui::GetStyle().Colors[ImGuiCol_Text]));
 	ImGui::SameLine();
 
 	// Whether the entity is switched on at all — the checkbox Unity puts before the name, and the same
@@ -5918,7 +6043,7 @@ void EditorLayer::DrawProperties()
 		RecordSnapshot();
 
 		for (const auto& entity : mSelection)
-			if (!entity->IsAssemblyInstance())
+			if (!IsLinkedAssemblyEntity(entity.get()))
 				entity->SetEnabled(enabled);
 	}
 
@@ -5944,17 +6069,20 @@ void EditorLayer::DrawProperties()
 
 	if (assemblyInstance)
 	{
-		ImGui::TextColored(kAssemblyColor, ICON_MDI_PACKAGE_VARIANT_CLOSED "  Assembly");
+		ImGui::TextColored(EditorGui::GetAccent(), ICON_MDI_PACKAGE_VARIANT_CLOSED "  Assembly");
 		SameLineRowEnd();
 
 		if (IconButton("##editAssembly", ICON_MDI_PENCIL, RowEndSlot(), "Edit the original Assembly"))
 		{
-			mPendingAssemblyPath = (GameAssetsDirectory() / mSelectedEntity->GetAssemblyPath()).string();
+			mPendingAssemblyPath = (GameAssetsDirectory() / linkedRoot->GetAssemblyPath()).string();
 		}
 
 		ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyle().Colors[ImGuiCol_TextDisabled]);
-		ImGui::TextWrapped("%s", mSelectedEntity->GetAssemblyPath().c_str());
-		ImGui::TextWrapped("Transform is this instance's scene placement. Edit the Assembly to change its definition.");
+		ImGui::TextWrapped("%s", linkedRoot->GetAssemblyPath().c_str());
+		if (linkedRoot == mSelectedEntity.get())
+			ImGui::TextWrapped("Transform is this instance's scene placement. Edit the Assembly to change its definition.");
+		else
+			ImGui::TextWrapped("This entity is authored by the linked Assembly. Edit the Assembly to change it.");
 		ImGui::PopStyleColor();
 		ImGui::Separator();
 	}
@@ -5973,6 +6101,13 @@ void EditorLayer::DrawProperties()
 
 	bool transformRemove = false;
 	int transformDrag = -1;
+	const bool linkedChild = linkedRoot && linkedRoot != mSelectedEntity.get();
+	const auto canEditTransform = [this](const Reference<Entity>& entity)
+	{
+		const Entity* root = LinkedAssemblyRoot(entity.get());
+		return !root || root == entity.get();
+	};
+	ImGui::BeginDisabled(linkedChild);
 	if (DrawComponentHeader(ICON_MDI_AXIS_ARROW, "Transform", -1, transformRemove, transformDrag, transformDrag))
 	{
 		// Every entity has a Transform, so a transform edit is the one edit the whole selection always
@@ -5983,21 +6118,25 @@ void EditorLayer::DrawProperties()
 		float32 positionValues[2] = { position.x, position.y };
 		if (DrawTransformVector("Position", positionValues, 2, 1.0f, 0.0f, ""))
 			for (const auto& entity : mSelection)
-				entity->GetTransform()->SetPosition(Vector2(positionValues[0], positionValues[1]));
+				if (canEditTransform(entity))
+					entity->GetTransform()->SetPosition(Vector2(positionValues[0], positionValues[1]));
 
 		// A rotation on a plane is one angle, not a vector whose X and Y meant nothing — one field, in
 		// degrees, turning about Z, so it wears the Z tag (axis base 2).
 		float32 rotationValue[1] = { transform->GetRotation() };
 		if (DrawTransformVector("Rotation", rotationValue, 1, 0.5f, 0.0f, "", nullptr, 2))
 			for (const auto& entity : mSelection)
-				entity->GetTransform()->SetRotation(rotationValue[0]);
+				if (canEditTransform(entity))
+					entity->GetTransform()->SetRotation(rotationValue[0]);
 
 		Vector2 scale = transform->GetScale();
 		float32 scaleValues[2] = { scale.x, scale.y };
 		if (DrawTransformVector("Scale", scaleValues, 2, 0.01f, 1.0f, "", &mScaleUniform))
 			for (const auto& entity : mSelection)
-				entity->GetTransform()->SetScale(Vector2(scaleValues[0], scaleValues[1]));
+				if (canEditTransform(entity))
+					entity->GetTransform()->SetScale(Vector2(scaleValues[0], scaleValues[1]));
 	}
+	ImGui::EndDisabled();
 
 	// Draw components in their stored order so a newly added one always appears at the end; headers
 	// can be dragged onto each other to reorder. Removal/reorder are deferred to after the loop so
@@ -6338,7 +6477,7 @@ void EditorLayer::DrawProperties()
 		const auto selectionLacks = [&](const auto& has)
 		{
 			for (const auto& entity : mSelection)
-				if (!entity->IsFolder() && !entity->IsAssemblyInstance() && !has(entity))
+				if (!entity->IsFolder() && !IsLinkedAssemblyEntity(entity.get()) && !has(entity))
 					return true;
 			return false;
 		};
@@ -6352,7 +6491,7 @@ void EditorLayer::DrawProperties()
 		{
 			RecordSnapshot();
 			for (const auto& entity : mSelection)
-				if (!entity->IsFolder() && !entity->IsAssemblyInstance()
+				if (!entity->IsFolder() && !IsLinkedAssemblyEntity(entity.get())
 					&& !entity->HasComponent<SpriteRenderer>())
 					entity->AddComponent<SpriteRenderer>();
 		}
@@ -6361,7 +6500,7 @@ void EditorLayer::DrawProperties()
 		{
 			RecordSnapshot();
 			for (const auto& entity : mSelection)
-				if (!entity->IsFolder() && !entity->IsAssemblyInstance()
+				if (!entity->IsFolder() && !IsLinkedAssemblyEntity(entity.get())
 					&& !entity->HasComponent<Camera2D>())
 					entity->AddComponent<Camera2D>();
 
@@ -6372,7 +6511,7 @@ void EditorLayer::DrawProperties()
 		{
 			RecordSnapshot();
 			for (const auto& entity : mSelection)
-				if (!entity->IsFolder() && !entity->IsAssemblyInstance()
+				if (!entity->IsFolder() && !IsLinkedAssemblyEntity(entity.get())
 					&& !entity->HasComponent<AudioPlayer>())
 					entity->AddComponent<AudioPlayer>();
 		}
@@ -6381,7 +6520,7 @@ void EditorLayer::DrawProperties()
 		{
 			RecordSnapshot();
 			for (const auto& entity : mSelection)
-				if (!entity->IsFolder() && !entity->IsAssemblyInstance()
+				if (!entity->IsFolder() && !IsLinkedAssemblyEntity(entity.get())
 					&& !entity->HasComponent<RigidBody2D>())
 					entity->AddComponent<RigidBody2D>();
 		}
@@ -6394,7 +6533,7 @@ void EditorLayer::DrawProperties()
 			RecordSnapshot();
 			for (const auto& entity : mSelection)
 			{
-				if (entity->IsFolder() || entity->IsAssemblyInstance()
+				if (entity->IsFolder() || IsLinkedAssemblyEntity(entity.get())
 					|| entity->HasComponent<BoxCollider2D>())
 					continue;
 
@@ -6409,7 +6548,7 @@ void EditorLayer::DrawProperties()
 			RecordSnapshot();
 			for (const auto& entity : mSelection)
 			{
-				if (entity->IsFolder() || entity->IsAssemblyInstance()
+				if (entity->IsFolder() || IsLinkedAssemblyEntity(entity.get())
 					|| entity->HasComponent<CircleCollider2D>())
 					continue;
 
@@ -6442,7 +6581,7 @@ void EditorLayer::DrawProperties()
 			{
 				RecordSnapshot();
 				for (const auto& entity : mSelection)
-					if (!entity->IsFolder() && !entity->IsAssemblyInstance()
+					if (!entity->IsFolder() && !IsLinkedAssemblyEntity(entity.get())
 						&& !entity->HasComponentByName(name))
 						entity->AddComponentByName(name);
 			}
@@ -6742,6 +6881,7 @@ void EditorLayer::NewScene()
 	SetSelection(nullptr);
 	mScenePath.clear();
 	mEditingAssembly = false;
+	mAssemblyDirty = false;
 	mAssemblyNavigation.reset();
 	mPendingAssemblyReturn = false;
 	ResetAssemblyTracking();
@@ -6768,6 +6908,7 @@ bool EditorLayer::LoadScene(const std::string& path)
 
 	mScenePath = path;
 	mEditingAssembly = false;
+	mAssemblyDirty = false;
 	mAssemblyNavigation.reset();
 	mPendingAssemblyReturn = false;
 	ResetAssemblyTracking();
@@ -6780,9 +6921,10 @@ bool EditorLayer::LoadAssembly(const std::string& path)
 	if (mPlaying)
 		return false;
 
-	Reference<Entity> definition = AssemblySerializer::Deserialize(path, GameAssetsDirectory().string());
+	std::vector<Reference<Entity>> definition =
+		AssemblySerializer::DeserializeTree(path, GameAssetsDirectory().string());
 
-	if (!definition)
+	if (definition.empty())
 	{
 		Log::Console(LogLevel::Error, LION_FORMAT_TEXT("[Editor] Could not open Assembly '{}'.", path));
 		return false;
@@ -6826,10 +6968,14 @@ bool EditorLayer::LoadAssembly(const std::string& path)
 
 	mScene->Clear();
 	SetSelection(nullptr);
-	mScene->Add(definition);
-	SetSelection(definition);
+
+	for (const auto& entity : definition)
+		mScene->Add(entity);
+
+	SetSelection(definition.front());
 	mScenePath = path;
 	mEditingAssembly = true;
+	mAssemblyDirty = false;
 	mUndoStack.clear();
 	mRedoStack.clear();
 	mPendingSnapshot.clear();
@@ -6867,6 +7013,7 @@ bool EditorLayer::ReturnFromAssembly()
 	mAssemblyNavigation.reset();
 	mScenePath = std::move(navigation.scenePath);
 	mEditingAssembly = false;
+	mAssemblyDirty = false;
 	mViewCenter = navigation.viewCenter;
 	mViewZoom = navigation.viewZoom;
 	mUndoStack = std::move(navigation.undoStack);
@@ -6889,6 +7036,18 @@ bool EditorLayer::ReturnFromAssembly()
 	return true;
 }
 
+void EditorLayer::SyncEditedAssembly()
+{
+	if (!mEditingAssembly || !mAssemblyDirty || mScenePath.empty() || mScene->GetEntities().empty())
+		return;
+
+	if (AssemblySerializer::Serialize(mScene->GetEntities().front(), mScenePath))
+	{
+		mAssemblyDirty = false;
+		mProjectDirty = true;
+	}
+}
+
 void EditorLayer::SaveScene()
 {
 	if (mEditingAssembly)
@@ -6901,7 +7060,10 @@ void EditorLayer::SaveScene()
 
 		if (!mScene->GetEntities().empty()
 			&& AssemblySerializer::Serialize(mScene->GetEntities().front(), mScenePath))
+		{
+			mAssemblyDirty = false;
 			mProjectDirty = true;
+		}
 
 		return;
 	}
@@ -7655,22 +7817,15 @@ void EditorLayer::SaveAssemblyAs()
 	{
 		mScenePath = absolute.string();
 		mEditingAssembly = true;
+		mAssemblyDirty = false;
 		mProjectDirty = true;
 	}
 }
 
 void EditorLayer::CreateAssemblyFromEntity(const Reference<Entity>& entity)
 {
-	if (!entity || entity->IsFolder() || entity->IsAssemblyInstance() || mEditingAssembly)
+	if (!entity || entity->IsFolder() || IsLinkedAssemblyEntity(entity.get()) || mEditingAssembly)
 		return;
-
-	if (!entity->GetChildren().empty())
-	{
-		Log::Console(LogLevel::Warning,
-			"[Editor] This Assembly version supports one entity; unparent its children before creating it.");
-		PushToast("Unparent child entities before creating an Assembly", false);
-		return;
-	}
 
 	const std::filesystem::path assets = GameAssetsDirectory();
 	const std::filesystem::path directory = assets / "Assemblies";
@@ -7708,12 +7863,14 @@ Reference<Entity> EditorLayer::InstantiateAssembly(const std::string& assetPath,
 	if (assetPath.empty() || mPlaying || mEditingAssembly)
 		return nullptr;
 
-	Reference<Entity> instance = AssemblySerializer::Deserialize(assetPath, GameAssetsDirectory().string());
+	std::vector<Reference<Entity>> tree =
+		AssemblySerializer::DeserializeTree(assetPath, GameAssetsDirectory().string());
 
-	if (!instance)
+	if (tree.empty())
 		return nullptr;
 
 	RecordSnapshot();
+	Reference<Entity> instance = tree.front();
 	instance->SetAssemblyPath(std::filesystem::path(assetPath).generic_string());
 
 	if (parent)
@@ -7722,11 +7879,35 @@ Reference<Entity> EditorLayer::InstantiateAssembly(const std::string& assetPath,
 	if (position)
 		instance->SetWorldPosition(Vector2(*position));
 
-	mScene->Add(instance);
+	for (const auto& entity : tree)
+		mScene->Add(entity);
 
 	SetSelection(instance);
 	ResetAssemblyTracking();
 	return instance;
+}
+
+Entity* EditorLayer::LinkedAssemblyRoot(Entity* entity) const
+{
+	for (Entity* current = entity; current; current = current->GetParent())
+		if (current->IsAssemblyInstance())
+			return current;
+
+	return nullptr;
+}
+
+const Entity* EditorLayer::LinkedAssemblyRoot(const Entity* entity) const
+{
+	for (const Entity* current = entity; current; current = current->GetParent())
+		if (current->IsAssemblyInstance())
+			return current;
+
+	return nullptr;
+}
+
+bool EditorLayer::IsLinkedAssemblyEntity(const Entity* entity) const
+{
+	return LinkedAssemblyRoot(entity) != nullptr;
 }
 
 void EditorLayer::ResetAssemblyTracking()
@@ -7784,11 +7965,28 @@ void EditorLayer::PollAssemblyChanges()
 		}
 
 		int32 refreshed = 0;
+		std::vector<Reference<Entity>> instances;
 
 		for (const auto& entity : mScene->GetEntities())
-			if (entity->GetAssemblyPath() == path
-				&& AssemblySerializer::Refresh(entity, assets.string()))
+			if (entity->GetAssemblyPath() == path)
+				instances.push_back(entity);
+
+		for (const auto& instance : instances)
+		{
+			const bool selectionTouchesInstance = std::any_of(mSelection.begin(), mSelection.end(),
+				[&](const Reference<Entity>& selected)
+				{
+					return LinkedAssemblyRoot(selected.get()) == instance.get();
+				});
+
+			// Refresh replaces every descendant reference. Keep no stale multi-selection entry alive after
+			// that replacement; the stable linked root remains the closest truthful selection.
+			if (selectionTouchesInstance)
+				SetSelection(instance);
+
+			if (AssemblySerializer::Refresh(instance, assets.string()))
 				refreshed++;
+		}
 
 		if (refreshed > 0)
 		{
@@ -8252,6 +8450,7 @@ void EditorLayer::OpenProject(const std::filesystem::path& folder)
 	SetSelection(nullptr);
 	mScenePath.clear();
 	mEditingAssembly = false;
+	mAssemblyDirty = false;
 	mAssemblyNavigation.reset();
 	mPendingAssemblyReturn = false;
 	ResetAssemblyTracking();

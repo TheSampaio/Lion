@@ -17,6 +17,11 @@ namespace Lion
 		static LION_API Reference<Entity> Deserialize(const std::string& filePath,
 			const std::string& resourceRoot = {});
 
+		// Loads the root and every authored descendant as one detached hierarchy. The returned references
+		// keep the complete definition alive until a Scene takes ownership of it.
+		static LION_API std::vector<Reference<Entity>> DeserializeTree(const std::string& filePath,
+			const std::string& resourceRoot = {});
+
 		// Creates a linked instance in scene. assemblyPath is kept exactly as the resource-relative identity
 		// written into scene files; resourceRoot only resolves it for this run.
 		static LION_API Reference<Entity> Instantiate(const Reference<Scene>& scene,

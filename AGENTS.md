@@ -101,15 +101,19 @@ Apply these to every change:
   ships with the player.
 - Module filenames live in `Lion/Core/GameModule.h`.
 - Shortcut handling lives in the shared shortcut path.
-- An Assembly is one reusable entity definition stored as a sealed `.lnassembly` asset. A scene stores
-  only its resource-relative Assembly path and the instance's root Transform placement; name, enabled
-  state, visibility, components, and reflected fields always come from the Assembly. Linked instances
-  expose no overrides or variants and refresh from the source asset in Lion's Mane. Keep Assembly loading
-  in `AssemblySerializer` and its entity JSON representation in `SceneSerializer`.
-- Assembly identity uses the editor's cool blue Assembly colour for its package icon and text in asset and
-  entity lists. A linked Hierarchy row leads with the standard 16 px right chevron and package icon; double
-  click opens the source definition. Assembly isolation replaces Hierarchy Add with the standard 16 px left
-  chevron and returns to the exact unsaved scene, selection, viewport, and undo history that opened it.
+- An Assembly is one reusable rooted entity hierarchy stored as a sealed `.lnassembly` asset. A containing
+  scene stores only its resource-relative Assembly path and the instance root's Transform placement; the
+  authored root and every descendant, including names, hierarchy, enabled/visible state, components, and
+  reflected fields, always come from the Assembly. Linked instances expose no overrides or variants.
+  Assembly isolation saves authored changes as they are committed, and Lion's Mane refreshes every open
+  instance from that source. Keep Assembly loading in `AssemblySerializer` and its entity JSON representation
+  in `SceneSerializer`.
+- Assembly identity uses `EditorGui::GetAccent()` orange for its package/cube/folder icon and text in asset,
+  Hierarchy, and Properties views. In a containing scene the linked root's standard 16 px right chevron owns
+  a small headerless column after Visibility; double-clicking a linked Assembly entity opens the source.
+  In isolation, the root alone gets the matching left chevron in a small headerless column before Name. The
+  normal Add command and scene-authoring context menus remain available, and the left chevron returns to the
+  exact unsaved scene, selection, viewport, and undo history that opened the definition.
 - The built-in Brickout Paddle is defined once in `Assets/Assemblies/Paddle.lnassembly`; Level01 through
   Level05 store linked instances rather than authored copies.
 

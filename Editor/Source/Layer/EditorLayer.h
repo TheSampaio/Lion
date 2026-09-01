@@ -177,6 +177,7 @@ private:
 	char mHierarchyFilter[64] = {};                 // The Hierarchy's search box: a name, or part of one.
 	std::string mScenePath;                         // The scene on disk, empty until it has been saved once.
 	bool mEditingAssembly = false;                  // The current document is one reusable entity definition.
+	bool mAssemblyDirty = false;                    // Authored hierarchy changed and must propagate to linked instances.
 	std::string mPendingAssemblyPath;               // Opened after panels finish drawing; hierarchy iteration stays valid.
 	bool mPendingAssemblyReturn = false;             // Restored after panels finish drawing for the same reason.
 	std::string mPendingScenePath;                  // Loaded after the selected project's module is ready.
@@ -457,12 +458,16 @@ private:
 	bool LoadScene(const std::string& path);
 	bool LoadAssembly(const std::string& path);
 	bool ReturnFromAssembly();
+	void SyncEditedAssembly();
 	void SaveAssemblyAs();
 	void CreateAssemblyFromEntity(const Lion::Reference<Lion::Entity>& entity);
 	Lion::Reference<Lion::Entity> InstantiateAssembly(const std::string& assetPath,
 		Lion::Entity* parent = nullptr, const Lion::Vector* position = nullptr);
 	void ResetAssemblyTracking();
 	void PollAssemblyChanges();
+	Lion::Entity* LinkedAssemblyRoot(Lion::Entity* entity) const;
+	const Lion::Entity* LinkedAssemblyRoot(const Lion::Entity* entity) const;
+	bool IsLinkedAssemblyEntity(const Lion::Entity* entity) const;
 	void LoadRecentScenes();
 	void SaveRecentScenes() const;
 	void RememberRecentScene(const std::string& path);
@@ -566,7 +571,7 @@ private:
 	{
 		for (const auto& entity : mSelection)
 		{
-			if (entity->IsAssemblyInstance())
+			if (IsLinkedAssemblyEntity(entity.get()))
 				continue;
 
 			if (T* component = entity->GetComponent<T>())

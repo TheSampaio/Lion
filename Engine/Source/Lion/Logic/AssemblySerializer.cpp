@@ -61,7 +61,7 @@ namespace Lion
 			return false;
 		}
 
-		file << Vault::Seal(SceneSerializer::SerializeEntityDefinitionToString(entity));
+		file << Vault::Seal(SceneSerializer::SerializeEntityTreeDefinitionToString(entity));
 
 		if (!file.good())
 		{
@@ -75,17 +75,34 @@ namespace Lion
 
 	Reference<Entity> AssemblySerializer::Deserialize(const std::string& filePath, const std::string& resourceRoot)
 	{
+		std::vector<Reference<Entity>> tree = DeserializeTree(filePath, resourceRoot);
+
+		if (tree.empty())
+			return nullptr;
+
+		// This compatibility entry point predates hierarchical Assemblies. Keep returning a safe detached
+		// root for old callers; hierarchy-aware code owns the complete vector through DeserializeTree.
+		for (size_t index = 1; index < tree.size(); ++index)
+			tree[index]->SetParent(nullptr, false);
+
+		return tree.front();
+	}
+
+	std::vector<Reference<Entity>> AssemblySerializer::DeserializeTree(const std::string& filePath,
+		const std::string& resourceRoot)
+	{
 		std::string definition;
 
 		if (!ReadDefinition(filePath, resourceRoot, definition))
-			return nullptr;
+			return {};
 
-		Reference<Entity> entity = SceneSerializer::DeserializeEntityDefinitionFromString(definition);
+		std::vector<Reference<Entity>> entities =
+			SceneSerializer::DeserializeEntityTreeDefinitionFromString(definition);
 
-		if (!entity)
+		if (entities.empty())
 			Log::Console(LogLevel::Error, LION_FORMAT_TEXT("[Assembly] Invalid definition '{}'.", filePath));
 
-		return entity;
+		return entities;
 	}
 
 	Reference<Entity> AssemblySerializer::Instantiate(const Reference<Scene>& scene,
@@ -94,13 +111,17 @@ namespace Lion
 		if (!scene || assemblyPath.empty())
 			return nullptr;
 
-		Reference<Entity> instance = Deserialize(assemblyPath, resourceRoot);
+		std::vector<Reference<Entity>> tree = DeserializeTree(assemblyPath, resourceRoot);
 
-		if (!instance)
+		if (tree.empty())
 			return nullptr;
 
+		Reference<Entity> instance = tree.front();
 		instance->SetAssemblyPath(std::filesystem::path(assemblyPath).generic_string());
-		scene->Add(instance);
+
+		for (const auto& entity : tree)
+			scene->Add(entity);
+
 		return instance;
 	}
 
@@ -113,7 +134,8 @@ namespace Lion
 		std::string definition;
 
 		if (!ReadDefinition(assemblyPath, resourceRoot, definition)
-			|| !SceneSerializer::DeserializeEntityDefinitionInto(instance, definition, true))
+			|| !SceneSerializer::DeserializeEntityTreeDefinitionInto(
+				instance->GetScene(), instance, definition, true))
 			return false;
 
 		instance->SetAssemblyPath(assemblyPath);
