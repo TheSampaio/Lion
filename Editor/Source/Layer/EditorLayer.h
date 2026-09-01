@@ -3,6 +3,8 @@
 #include <filesystem>
 #include <future>
 #include <optional>
+#include <unordered_map>
+#include <unordered_set>
 
 #include <Lion/Lion.h>
 #include <Lion/Core/DynamicLibrary.h>
@@ -177,9 +179,10 @@ private:
 	char mHierarchyFilter[64] = {};                 // The Hierarchy's search box: a name, or part of one.
 	std::string mScenePath;                         // The scene on disk, empty until it has been saved once.
 	bool mEditingAssembly = false;                  // The current document is one reusable entity definition.
-	bool mAssemblyDirty = false;                    // Authored hierarchy changed and must propagate to linked instances.
+	bool mAssemblyDirty = false;                    // Authored hierarchy differs from the last explicit save.
 	std::string mPendingAssemblyPath;               // Opened after panels finish drawing; hierarchy iteration stays valid.
 	bool mPendingAssemblyReturn = false;             // Restored after panels finish drawing for the same reason.
+	bool mOpenUnsavedAssemblyPopup = false;          // Returning never discards or applies authored changes silently.
 	std::string mPendingScenePath;                  // Loaded after the selected project's module is ready.
 	glm::vec2 mViewportSize{ 0.0f, 0.0f };
 	Lion::Vector mViewportMenuPosition;   // Where the mouse was when the viewport's context menu opened.
@@ -234,6 +237,7 @@ private:
 		std::vector<EditState> undoStack;
 		std::vector<EditState> redoStack;
 		std::string pendingSnapshot;
+		std::unordered_set<std::string> hierarchyExpanded;
 		bool hasPending = false;
 	};
 
@@ -301,6 +305,9 @@ private:
 
 	// Hierarchy tree state, applied after the tree is drawn (never mutate it mid-iteration).
 	std::unordered_map<Lion::Entity*, Lion::Reference<Lion::Entity>> mEntityLookup;
+	std::unordered_map<Lion::Entity*, std::string> mHierarchyEntityKeys;
+	std::unordered_set<std::string> mHierarchyExpanded;
+	std::unordered_map<std::string, std::unordered_set<std::string>> mAssemblyHierarchyExpanded;
 	Lion::Reference<Lion::Entity> mEntityToDelete;
 	bool mDeleteOnlyTarget = false;   // Cut removes the copied row, while Delete removes the selection.
 	Lion::Entity* mReparentChild = nullptr;
@@ -458,8 +465,9 @@ private:
 	bool LoadScene(const std::string& path);
 	bool LoadAssembly(const std::string& path);
 	bool ReturnFromAssembly();
-	void SyncEditedAssembly();
+	bool SaveAssembly();
 	void SaveAssemblyAs();
+	void DrawUnsavedAssemblyPopup();
 	void CreateAssemblyFromEntity(const Lion::Reference<Lion::Entity>& entity);
 	Lion::Reference<Lion::Entity> InstantiateAssembly(const std::string& assetPath,
 		Lion::Entity* parent = nullptr, const Lion::Vector* position = nullptr);

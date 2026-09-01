@@ -105,9 +105,10 @@ Apply these to every change:
   scene stores only its resource-relative Assembly path and the instance root's Transform placement; the
   authored root and every descendant, including names, hierarchy, enabled/visible state, components, and
   reflected fields, always come from the Assembly. Linked instances expose no overrides or variants.
-  Assembly isolation saves authored changes as they are committed, and Lion's Mane refreshes every open
-  instance from that source. Keep Assembly loading in `AssemblySerializer` and its entity JSON representation
-  in `SceneSerializer`.
+  Assembly isolation is an explicitly saved document: edits make it dirty, `Ctrl+S` writes the source, and
+  only that successful save may refresh linked instances. Returning with dirty changes offers Save, Discard
+  and Cancel rather than applying or losing work silently. Keep Assembly loading in `AssemblySerializer` and
+  its entity JSON representation in `SceneSerializer`.
 - Assembly identity uses `EditorGui::GetAccent()` orange for its package/cube/folder icon and text in asset,
   Hierarchy, and Properties views. In a containing scene the linked root's standard 16 px right chevron owns
   a small headerless column after Visibility; double-clicking a linked Assembly entity opens the source.
@@ -121,8 +122,9 @@ Apply these to every change:
 
 - Scene and serialized asset paths are resource-relative and use forward slashes. Never save a
   machine-specific absolute asset path.
-- Both editor and launcher anchor assets, modules, and editor state to the executable, not the working
-  directory.
+- Packaged tools and players anchor engine-owned data and fallback resources to the executable, not the
+  working directory. Lion's Mane gives resource loaders the active project's `Assets/` directory as their
+  authored override, so Play-mode scene transitions never read a stale build copy.
 - Keep UI harmonious across panels, tabs, and modals. Reuse established spacing, alignment, breathing
   room, control order, colors, typography, and interaction patterns before adding a new visual rule.
 - Editor icons come from Material Design Icons. `EditorGui::LoadIconFont` loads the font twice: merged at
@@ -158,6 +160,9 @@ Apply these to every change:
 - Full-width action buttons keep icons in a fixed left lane and centre the label in the complete button.
   Preserve typography, frame height, disabled alpha, hit target, and keyboard behavior from ImGui rather
   than simulating a button with unrelated draw calls.
+- Scene Hierarchy expansion is document state, not entity-pointer state. Entering Assembly isolation and
+  returning restores exactly which branches were open; structural sibling paths keep that state stable when
+  the saved Assembly adds or removes descendants during reconstruction.
 - When a prototype needs reusable behavior, decide whether it is a general engine API or game-specific
   client behavior. Ask the user when that boundary is genuinely unclear.
 

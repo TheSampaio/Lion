@@ -106,6 +106,7 @@ void EditorLayer::OnCreate()
 	EditorGui::Init();
 	InitShortcuts();
 	LoadEditorSettings();
+	SetResourceOverrideDirectory(GameAssetsDirectory().string());
 
 	LoadGameModule();
 
@@ -654,6 +655,8 @@ void EditorLayer::DrawUI()
 		ReturnFromAssembly();
 	}
 
+	DrawUnsavedAssemblyPopup();
+
 	// Drawn over everything, because that is what they are: the dim that says the game is running, the
 	// size a panel reports while it is being dragged, and the toast that says the module is building.
 	DrawPlayModeDim();
@@ -663,8 +666,6 @@ void EditorLayer::DrawUI()
 	// Commit any in-progress continuous edit (gizmo/slider drag) once the mouse is released.
 	if (mHasPending && ImGui::IsMouseReleased(ImGuiMouseButton_Left))
 		CommitEdit();
-
-	SyncEditedAssembly();
 
 	// A panel resize is one undo step, bracketed by the mouse. The layout is snapshotted the instant the
 	// button goes down — before any drag has moved a separator — so what lands on the history is the layout
@@ -1475,6 +1476,7 @@ namespace
 	void SetActiveProjectDirectory(const std::filesystem::path& project)
 	{
 		ActiveProjectStorage() = project;
+		SetResourceOverrideDirectory(project.empty() ? std::string() : (project / "Assets").string());
 	}
 
 	// The game's assets, in the active project. Empty when no project is around.
@@ -4753,8 +4755,25 @@ void EditorLayer::DrawHierarchy()
 
 	// Children are stored as raw pointers; this maps them back to the scene's owning references.
 	mEntityLookup.clear();
+	mHierarchyEntityKeys.clear();
 	for (const auto& entity : mScene->GetEntities())
 		mEntityLookup.emplace(entity.get(), entity);
+
+	// A structural address survives scene reconstruction and does not shift when an Assembly gains a new
+	// descendant: each segment is a sibling position, rather than a flat scene-list index or transient id.
+	const auto indexHierarchy = [&](const auto& self, Entity* entity, const std::string& key) -> void
+	{
+		mHierarchyEntityKeys.emplace(entity, key);
+
+		int32 childIndex = 0;
+		for (Entity* child : entity->GetChildren())
+			self(self, child, key + "/" + std::to_string(childIndex++));
+	};
+
+	int32 rootIndex = 0;
+	for (const auto& entity : mScene->GetEntities())
+		if (entity->GetParent() == nullptr)
+			indexHierarchy(indexHierarchy, entity.get(), std::to_string(rootIndex++));
 
 	mEntityToDelete = nullptr;
 	mDeleteOnlyTarget = false;
@@ -5112,6 +5131,8 @@ void EditorLayer::DrawEntityNode(const Reference<Entity>& entity)
 		return;
 
 	ImGui::PushID(entity->GetId());
+	const auto hierarchyKey = mHierarchyEntityKeys.find(entity.get());
+	const std::string entityKey = hierarchyKey == mHierarchyEntityKeys.end() ? std::string() : hierarchyKey->second;
 	ImGui::TableNextRow();
 	const int32 navigationColumn = mEditingAssembly ? 0 : 2;
 	const int32 nameColumn = mEditingAssembly ? 1 : 0;
@@ -5159,14 +5180,17 @@ void EditorLayer::DrawEntityNode(const Reference<Entity>& entity)
 	if (IsSelected(entity.get()))
 		flags |= ImGuiTreeNodeFlags_Selected;
 
-	// A search that hid the branch would hide the match inside it, so a filtered tree opens itself.
-	if (mHierarchyFilter[0] != '\0')
-		ImGui::SetNextItemOpen(true, ImGuiCond_Always);
+	const bool filtering = mHierarchyFilter[0] != '\0';
+	const bool revealingRename = mRenamingEntity && mRenamingEntity->IsDescendantOf(entity.get());
 
-	// A newly created child begins inline rename immediately. Open every ancestor on the way to it so the
-	// field is visible even when the parent had been collapsed before Add was pressed.
-	if (mRenamingEntity && mRenamingEntity->IsDescendantOf(entity.get()))
-		ImGui::SetNextItemOpen(true, ImGuiCond_Always);
+	// Tree openness belongs to the document rather than to transient entity pointers. Rebuilt scenes get
+	// new ids, so keeping this state explicitly is what makes entering and leaving Assembly isolation return
+	// every folder to exactly the state it had. Filtering opens branches temporarily without rewriting it.
+	if (!entity->GetChildren().empty())
+	{
+		const bool rememberedOpen = !entityKey.empty() && mHierarchyExpanded.count(entityKey) != 0;
+		ImGui::SetNextItemOpen(filtering || revealingRename || rememberedOpen, ImGuiCond_Always);
+	}
 
 	const std::string& name = entity->GetName();
 	const bool folder = entity->IsFolder();
@@ -5211,6 +5235,14 @@ void EditorLayer::DrawEntityNode(const Reference<Entity>& entity)
 
 	ImGui::SetNextItemAllowOverlap();   // The eye sits in the row the node spans, and gets its own clicks.
 	const bool open = ImGui::TreeNodeEx("##node", flags, "%s", label.c_str());
+
+	if (!entity->GetChildren().empty() && !filtering && !entityKey.empty())
+	{
+		if (open)
+			mHierarchyExpanded.insert(entityKey);
+		else
+			mHierarchyExpanded.erase(entityKey);
+	}
 
 	// Paint the icon into the space reserved for it: after the expand arrow, centred down the row.
 	const float32 iconX = rowStart.x + ImGui::GetTreeNodeToLabelSpacing();
@@ -6764,7 +6796,12 @@ void EditorLayer::DrawTitleBar()
 		: std::filesystem::path(mScenePath).stem().generic_string();
 
 	if (mEditingAssembly)
+	{
 		sceneName = std::string(ICON_MDI_PACKAGE_VARIANT_CLOSED) + "  " + sceneName;
+
+		if (mAssemblyDirty)
+			sceneName += " *";
+	}
 
 	ImGui::SetCursorPos(ImVec2(menusEnd - barMin.x + kSceneGap, row + (row - ImGui::GetTextLineHeight()) * 0.5f));
 	ImGui::TextDisabled("|");
@@ -6772,7 +6809,12 @@ void EditorLayer::DrawTitleBar()
 	ImGui::TextDisabled("%s", sceneName.c_str());
 
 	if (!mScenePath.empty() && ImGui::IsItemHovered())
-		ImGui::SetTooltip("%s", mScenePath.c_str());
+	{
+		if (mAssemblyDirty)
+			ImGui::SetTooltip("%s\nUnsaved Assembly changes", mScenePath.c_str());
+		else
+			ImGui::SetTooltip("%s", mScenePath.c_str());
+	}
 
 	// What is left of the bar is what the window is dragged by; what the editor drew in it is not. A drag
 	// that began on a menu would open nothing and move everything.
@@ -6876,12 +6918,25 @@ void EditorLayer::DrawWindowButtons(const ImVec2& barMin, float32 barWidth, floa
 
 void EditorLayer::NewScene()
 {
+	if (mEditingAssembly)
+	{
+		if (mAssemblyDirty)
+		{
+			mOpenUnsavedAssemblyPopup = true;
+			return;
+		}
+
+		if (!ReturnFromAssembly())
+			return;
+	}
+
 	RecordSnapshot();
 	mScene->Clear();
 	SetSelection(nullptr);
 	mScenePath.clear();
 	mEditingAssembly = false;
 	mAssemblyDirty = false;
+	mHierarchyExpanded.clear();
 	mAssemblyNavigation.reset();
 	mPendingAssemblyReturn = false;
 	ResetAssemblyTracking();
@@ -6897,6 +6952,18 @@ void EditorLayer::OpenScene()
 
 bool EditorLayer::LoadScene(const std::string& path)
 {
+	if (mEditingAssembly)
+	{
+		if (mAssemblyDirty)
+		{
+			mOpenUnsavedAssemblyPopup = true;
+			return false;
+		}
+
+		if (!ReturnFromAssembly())
+			return false;
+	}
+
 	RecordSnapshot();
 	SetSelection(nullptr);
 
@@ -6909,6 +6976,7 @@ bool EditorLayer::LoadScene(const std::string& path)
 	mScenePath = path;
 	mEditingAssembly = false;
 	mAssemblyDirty = false;
+	mHierarchyExpanded.clear();
 	mAssemblyNavigation.reset();
 	mPendingAssemblyReturn = false;
 	ResetAssemblyTracking();
@@ -6942,6 +7010,7 @@ bool EditorLayer::LoadAssembly(const std::string& path)
 		navigation.undoStack = std::move(mUndoStack);
 		navigation.redoStack = std::move(mRedoStack);
 		navigation.pendingSnapshot = std::move(mPendingSnapshot);
+		navigation.hierarchyExpanded = mHierarchyExpanded;
 		navigation.hasPending = mHasPending;
 
 		const auto& entities = mScene->GetEntities();
@@ -6961,9 +7030,17 @@ bool EditorLayer::LoadAssembly(const std::string& path)
 	}
 	else if (mEditingAssembly && !mScenePath.empty() && !mScene->GetEntities().empty())
 	{
-		// Opening another Assembly from isolation commits the current definition before switching documents.
-		if (!AssemblySerializer::Serialize(mScene->GetEntities().front(), mScenePath))
+		// A document switch is not a save command. Keep dirty authored data in hand until the user explicitly
+		// saves or returns and chooses what to do with it.
+		if (mAssemblyDirty)
+		{
+			mOpenUnsavedAssemblyPopup = true;
 			return false;
+		}
+
+		const std::string currentDocument =
+			std::filesystem::absolute(mScenePath).lexically_normal().generic_string();
+		mAssemblyHierarchyExpanded[currentDocument] = mHierarchyExpanded;
 	}
 
 	mScene->Clear();
@@ -6976,6 +7053,10 @@ bool EditorLayer::LoadAssembly(const std::string& path)
 	mScenePath = path;
 	mEditingAssembly = true;
 	mAssemblyDirty = false;
+	const std::string document = std::filesystem::absolute(path).lexically_normal().generic_string();
+	const auto expanded = mAssemblyHierarchyExpanded.find(document);
+	mHierarchyExpanded = expanded == mAssemblyHierarchyExpanded.end()
+		? std::unordered_set<std::string>() : expanded->second;
 	mUndoStack.clear();
 	mRedoStack.clear();
 	mPendingSnapshot.clear();
@@ -6991,15 +7072,17 @@ bool EditorLayer::ReturnFromAssembly()
 	if (!mEditingAssembly || !mAssemblyNavigation)
 		return false;
 
-	// Leaving isolation is an apply operation: the definition is saved first, and restored instances read
-	// that same source immediately. A failed write keeps the user in the Assembly rather than losing edits.
-	if (mScene->GetEntities().empty()
-		|| !AssemblySerializer::Serialize(mScene->GetEntities().front(), mScenePath))
+	// Returning is navigation, not an implicit apply. Unsaved work remains isolated until the user chooses
+	// Save or Discard; only an explicit save changes the source every linked instance reads.
+	if (mAssemblyDirty)
 	{
-		Log::Console(LogLevel::Error,
-			LION_FORMAT_TEXT("[Editor] Could not save Assembly '{}' before returning.", mScenePath));
+		mOpenUnsavedAssemblyPopup = true;
 		return false;
 	}
+
+	const std::string assemblyDocument =
+		std::filesystem::absolute(mScenePath).lexically_normal().generic_string();
+	mAssemblyHierarchyExpanded[assemblyDocument] = mHierarchyExpanded;
 
 	AssemblyNavigationState navigation = std::move(*mAssemblyNavigation);
 
@@ -7020,6 +7103,7 @@ bool EditorLayer::ReturnFromAssembly()
 	mRedoStack = std::move(navigation.redoStack);
 	mPendingSnapshot = std::move(navigation.pendingSnapshot);
 	mHasPending = navigation.hasPending;
+	mHierarchyExpanded = std::move(navigation.hierarchyExpanded);
 
 	const auto& entities = mScene->GetEntities();
 	if (navigation.selectedEntity >= 0
@@ -7036,16 +7120,20 @@ bool EditorLayer::ReturnFromAssembly()
 	return true;
 }
 
-void EditorLayer::SyncEditedAssembly()
+bool EditorLayer::SaveAssembly()
 {
-	if (!mEditingAssembly || !mAssemblyDirty || mScenePath.empty() || mScene->GetEntities().empty())
-		return;
+	if (!mEditingAssembly || mScenePath.empty() || mScene->GetEntities().empty())
+		return false;
 
 	if (AssemblySerializer::Serialize(mScene->GetEntities().front(), mScenePath))
 	{
 		mAssemblyDirty = false;
 		mProjectDirty = true;
+		PushToast("Saved " + std::filesystem::path(mScenePath).stem().string() + " Assembly", false);
+		return true;
 	}
+
+	return false;
 }
 
 void EditorLayer::SaveScene()
@@ -7058,13 +7146,7 @@ void EditorLayer::SaveScene()
 			return;
 		}
 
-		if (!mScene->GetEntities().empty()
-			&& AssemblySerializer::Serialize(mScene->GetEntities().front(), mScenePath))
-		{
-			mAssemblyDirty = false;
-			mProjectDirty = true;
-		}
-
+		SaveAssembly();
 		return;
 	}
 
@@ -7822,6 +7904,49 @@ void EditorLayer::SaveAssemblyAs()
 	}
 }
 
+void EditorLayer::DrawUnsavedAssemblyPopup()
+{
+	if (mOpenUnsavedAssemblyPopup)
+	{
+		mOpenUnsavedAssemblyPopup = false;
+		ImGui::OpenPopup("Unsaved Assembly");
+	}
+
+	if (!ImGui::BeginPopupModal("Unsaved Assembly", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+		return;
+
+	const std::string name = mScenePath.empty()
+		? std::string("this Assembly")
+		: std::filesystem::path(mScenePath).stem().string();
+
+	ImGui::Text("Save changes to %s before returning?", name.c_str());
+	ImGui::TextDisabled("Linked instances change only after the Assembly is saved.");
+	ImGui::Spacing();
+
+	if (ImGui::Button("Save and Return", ImVec2(136.0f, 0.0f)))
+	{
+		if (SaveAssembly())
+		{
+			ImGui::CloseCurrentPopup();
+			ReturnFromAssembly();
+		}
+	}
+
+	ImGui::SameLine();
+	if (ImGui::Button("Discard", ImVec2(96.0f, 0.0f)))
+	{
+		mAssemblyDirty = false;
+		ImGui::CloseCurrentPopup();
+		ReturnFromAssembly();
+	}
+
+	ImGui::SameLine();
+	if (ImGui::Button("Cancel", ImVec2(96.0f, 0.0f)) || ImGui::IsKeyPressed(ImGuiKey_Escape))
+		ImGui::CloseCurrentPopup();
+
+	ImGui::EndPopup();
+}
+
 void EditorLayer::CreateAssemblyFromEntity(const Reference<Entity>& entity)
 {
 	if (!entity || entity->IsFolder() || IsLinkedAssemblyEntity(entity.get()) || mEditingAssembly)
@@ -8423,6 +8548,12 @@ void EditorLayer::BrowseForProject()
 
 void EditorLayer::OpenProject(const std::filesystem::path& folder)
 {
+	if (mEditingAssembly && mAssemblyDirty)
+	{
+		mOpenUnsavedAssemblyPopup = true;
+		return;
+	}
+
 	if (!IsProjectFolder(folder))
 	{
 		Log::Console(LogLevel::Error, LION_FORMAT_TEXT("[Editor] '{}' is not a Lion project (no Assets folder).", folder.generic_string()));
@@ -8451,6 +8582,8 @@ void EditorLayer::OpenProject(const std::filesystem::path& folder)
 	mScenePath.clear();
 	mEditingAssembly = false;
 	mAssemblyDirty = false;
+	mHierarchyExpanded.clear();
+	mAssemblyHierarchyExpanded.clear();
 	mAssemblyNavigation.reset();
 	mPendingAssemblyReturn = false;
 	ResetAssemblyTracking();
