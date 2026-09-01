@@ -131,6 +131,7 @@ namespace Lion
 			return false;
 
 		const std::string assemblyPath = instance->GetAssemblyPath();
+		const bool visible = instance->IsVisible();
 		std::string definition;
 
 		if (!ReadDefinition(assemblyPath, resourceRoot, definition)
@@ -139,6 +140,7 @@ namespace Lion
 			return false;
 
 		instance->SetAssemblyPath(assemblyPath);
+		instance->SetVisible(visible);
 		return true;
 	}
 }

@@ -45,15 +45,17 @@ namespace Lion
 
 		// Whether the entity is drawn. This is *only* about being seen: a hidden entity still updates,
 		// still collides, still runs its components — it is invisible, not switched off. Both the editor's
-		// eye and the game's own code set this, which is the point of it being on the entity.
+		// eye and the game's own code set this. Visibility is inherited, so hiding a hierarchy root also
+		// hides everything under it.
 		LION_API bool IsVisible() const { return mVisible; }
 		LION_API void SetVisible(bool value) { mVisible = value; }
+		LION_API bool IsVisibleInHierarchy() const;
 
 		// Returns the scene that currently owns this entity (null while detached).
 		LION_API Reference<Scene> GetScene() const { return mScene; }
 
 		// A non-empty resource-relative path means this entity is an instance of an Assembly. The Assembly
-		// owns its authored definition; the scene owns only this instance's placement transform.
+		// owns its authored definition; the scene owns this instance's placement and visibility.
 		LION_API bool IsAssemblyInstance() const { return !mAssemblyPath.empty(); }
 		LION_API const std::string& GetAssemblyPath() const { return mAssemblyPath; }
 		LION_API void SetAssemblyPath(const std::string& path) { mAssemblyPath = path; }

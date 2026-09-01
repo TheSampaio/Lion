@@ -112,6 +112,7 @@ void EditorLayer::OnCreate()
 
 	mCamera = MakeReference<CameraOrthographic>();
 	mScene = MakeReference<Scene>();
+	mSavedSceneSnapshot = SceneSerializer::SerializeToString(mScene);
 
 	FramebufferSpecification spec;
 	spec.width = Window::kDefaultViewportWidth;
@@ -633,7 +634,7 @@ void EditorLayer::DrawUI()
 	DrawStatistics();
 	DrawConsole();
 	DrawProject();
-	DrawEditorSettings();
+	DrawWindowSettings();
 	DrawProjectSettings();
 	DrawExportPopup();
 	DrawLayoutPopups();
@@ -913,6 +914,7 @@ namespace
 {
 	bool DrawSectionHeader(const char8* id, const char8* icon, const char8* name, ImGuiTreeNodeFlags flags)
 	{
+		flags |= ImGuiTreeNodeFlags_SpanAvailWidth | ImGuiTreeNodeFlags_AllowOverlap;
 		ImGui::SetNextItemAllowOverlap();
 		const bool open = ImGui::CollapsingHeader(id, flags);
 		const ImVec2 headerMin = ImGui::GetItemRectMin();
@@ -2273,32 +2275,40 @@ void EditorLayer::DrawProject()
 	if (ImGui::BeginPopupContextWindow("ContentBrowserContext",
 		ImGuiPopupFlags_MouseButtonRight | ImGuiPopupFlags_NoOpenOverItems))
 	{
-		const bool canCreateAssembly = mSelectedEntity && !mSelectedEntity->IsFolder()
-			&& !IsLinkedAssemblyEntity(mSelectedEntity.get()) && !mPlaying && !mEditingAssembly;
-
-		if (ImGui::MenuItem(ICON_MDI_PACKAGE_VARIANT_CLOSED "  Create Assembly from Selected...",
-			nullptr, false, canCreateAssembly))
-			CreateAssemblyFromEntity(mSelectedEntity);
-
-		ImGui::Separator();
+		if (ImGui::MenuItem(ICON_MDI_PACKAGE_VARIANT_CLOSED "  Create Assembly",
+			nullptr, false, !mPlaying && !mEditingAssembly))
+			CreateAssembly(mSelectedEntity);
 
 		if (ImGui::MenuItem(ICON_MDI_FOLDER_PLUS "  New Folder", ShortcutText(ShortcutAction::NewFolder).c_str()))
 			CreateAssetFolder();
 
-		if (ImGui::MenuItem(ICON_MDI_CONTENT_PASTE "  Paste", ShortcutText(ShortcutAction::PasteEntity).c_str(),
-			false, !mAssetClipboard.empty()))
-			PasteAsset();
-
-		if (ImGui::MenuItem(ICON_MDI_FOLDER_OPEN_OUTLINE "  Open in File Explorer"))
-			OpenAssetInFileExplorer(mProjectPath);
-
 		// The component lands where you are standing: the popup opens with this folder already in it.
-		if (ImGui::MenuItem("New Component..."))
+		if (ImGui::MenuItem(ICON_MDI_CODE_TAGS "  New Component..."))
 		{
 			const std::string folder = mProjectPath.empty() ? std::string("Scripts") : mProjectPath;
 			const size_t copied = folder.copy(mNewComponentFolder, sizeof(mNewComponentFolder) - 1);
 			mNewComponentFolder[copied] = '\0';
 			mOpenNewComponentPopup = true;
+		}
+
+		ImGui::Separator();
+
+		if (ImGui::MenuItem(ICON_MDI_CONTENT_PASTE "  Paste", ShortcutText(ShortcutAction::PasteEntity).c_str(),
+			false, !mAssetClipboard.empty()))
+			PasteAsset();
+
+		ImGui::Separator();
+
+		if (ImGui::MenuItem(ICON_MDI_FOLDER_OPEN_OUTLINE "  Open in File Explorer"))
+			OpenAssetInFileExplorer(mProjectPath);
+
+		ImGui::Separator();
+
+		if (ImGui::MenuItem(ICON_MDI_FILE_EYE_OUTLINE "  Show File Extensions", nullptr,
+			mShowAssetExtensions))
+		{
+			mShowAssetExtensions = !mShowAssetExtensions;
+			SaveEditorSettings();
 		}
 
 		ImGui::EndPopup();
@@ -2392,7 +2402,10 @@ bool EditorLayer::DrawAssetEntry(const std::string& name, const std::string& ass
 		selected ? accent : ImVec4(accent.x, accent.y, accent.z, 0.30f));
 	ImGui::PushStyleColor(ImGuiCol_HeaderActive, accent);
 
-	const std::string label = std::string(folder ? ICON_MDI_FOLDER : AssetIcon(name)) + "  " + name;
+	const std::string displayName = !folder && !mShowAssetExtensions
+		? std::filesystem::path(name).stem().generic_string()
+		: name;
+	const std::string label = std::string(folder ? ICON_MDI_FOLDER : AssetIcon(name)) + "  " + displayName;
 	const bool activated = ImGui::Selectable(label.c_str(), selected,
 		ImGuiSelectableFlags_AllowDoubleClick);
 
@@ -2424,20 +2437,19 @@ bool EditorLayer::DrawAssetEntry(const std::string& name, const std::string& ass
 			ImGui::Separator();
 		}
 
-		const bool canCreateAssembly = mSelectedEntity && !mSelectedEntity->IsFolder()
-			&& !IsLinkedAssemblyEntity(mSelectedEntity.get()) && !mPlaying && !mEditingAssembly;
-
-		if (ImGui::MenuItem(ICON_MDI_PACKAGE_VARIANT_CLOSED "  Create Assembly from Selected...",
-			nullptr, false, canCreateAssembly))
-			CreateAssemblyFromEntity(mSelectedEntity);
+		if (ImGui::MenuItem(ICON_MDI_PACKAGE_VARIANT_CLOSED "  Create Assembly",
+			nullptr, false, !mPlaying && !mEditingAssembly))
+			CreateAssembly(mSelectedEntity);
 
 		ImGui::Separator();
 
 		if (ImGui::MenuItem(ICON_MDI_FOLDER_OPEN_OUTLINE "  Open in File Explorer"))
 			OpenAssetInFileExplorer(assetPath);
 
-		if (ImGui::MenuItem("Copy path"))
+		if (ImGui::MenuItem(ICON_MDI_CONTENT_COPY "  Copy Path"))
 			ImGui::SetClipboardText(assetPath.c_str());
+
+		ImGui::Separator();
 
 		// What the engine ships is listed, browsed and used like anything else — it just cannot be taken
 		// away. The items are shown rather than hidden, because a menu that is missing the entry someone
@@ -2456,10 +2468,21 @@ bool EditorLayer::DrawAssetEntry(const std::string& name, const std::string& ass
 		if (ImGui::MenuItem(ICON_MDI_CONTENT_DUPLICATE "  Duplicate", ShortcutText(ShortcutAction::DuplicateEntity).c_str()))
 			DuplicateAsset();
 
+		ImGui::Separator();
+
 		if (ImGui::MenuItem(ICON_MDI_DELETE_OUTLINE "  Delete"))
 			mAssetToDelete = assetPath;
 
 		ImGui::EndDisabled();
+
+		ImGui::Separator();
+
+		if (ImGui::MenuItem(ICON_MDI_FILE_EYE_OUTLINE "  Show File Extensions", nullptr,
+			mShowAssetExtensions))
+		{
+			mShowAssetExtensions = !mShowAssetExtensions;
+			SaveEditorSettings();
+		}
 
 		if (engineOwned)
 			ImGui::TextDisabled("Shipped with the engine.");
@@ -2736,19 +2759,19 @@ void EditorLayer::DrawDeleteAssetPopup()
 	ImGui::EndPopup();
 }
 
-void EditorLayer::DrawEditorSettings()
+void EditorLayer::DrawWindowSettings()
 {
-	if (mOpenEditorSettingsPopup)
+	if (mOpenWindowSettingsPopup)
 	{
-		mOpenEditorSettingsPopup = false;
-		ImGui::OpenPopup("Editor Settings");
+		mOpenWindowSettingsPopup = false;
+		ImGui::OpenPopup("Window Settings");
 	}
 
 	const ImVec2 center = ImGui::GetMainViewport()->GetCenter();
 	ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
 	ImGui::SetNextWindowSize(ImVec2(860.0f, 620.0f), ImGuiCond_Appearing);
 
-	if (!ImGui::BeginPopupModal("Editor Settings", nullptr, ImGuiWindowFlags_NoResize))
+	if (!ImGui::BeginPopupModal("Window Settings", nullptr, ImGuiWindowFlags_NoResize))
 		return;
 
 	const float32 footerHeight = ImGui::GetFrameHeightWithSpacing() + ImGui::GetStyle().ItemSpacing.y;
@@ -2758,7 +2781,7 @@ void EditorLayer::DrawEditorSettings()
 	{
 		if (ImGui::BeginTabItem("General"))
 		{
-			DrawEditorGeneralSettings();
+			DrawWindowGeneralSettings();
 			ImGui::EndTabItem();
 		}
 
@@ -2782,7 +2805,7 @@ void EditorLayer::DrawEditorSettings()
 	ImGui::EndPopup();
 }
 
-void EditorLayer::DrawEditorGeneralSettings()
+void EditorLayer::DrawWindowGeneralSettings()
 {
 	ImGui::SeparatorText("Viewport");
 
@@ -2790,6 +2813,12 @@ void EditorLayer::DrawEditorGeneralSettings()
 		SaveEditorSettings();
 
 	ImGui::TextDisabled("Collider outlines are an editor visualization and are never exported.");
+
+	ImGui::Spacing();
+	ImGui::SeparatorText("Content Browser");
+
+	if (ImGui::Checkbox("Show file extensions", &mShowAssetExtensions))
+		SaveEditorSettings();
 
 	ImGui::Spacing();
 	ImGui::SeparatorText("Workspace");
@@ -2813,7 +2842,7 @@ void EditorLayer::DrawShortcutsTab()
 		// The rebindable actions, grouped by category (order defines the display order).
 		struct Row { ShortcutAction action; const char8* category; const char8* name; };
 		static const Row rows[] = {
-			{ ShortcutAction::OpenEditorSettings,  "General",   "Open Editor Settings" },
+			{ ShortcutAction::OpenWindowSettings,  "General",   "Open Window Settings" },
 			{ ShortcutAction::Undo,                "General",   "Undo" },
 			{ ShortcutAction::Redo,                "General",   "Redo" },
 			{ ShortcutAction::NewProject,      "Project",   "New project..." },
@@ -3521,6 +3550,8 @@ void EditorLayer::RecordSnapshot()
 
 	if (mEditingAssembly)
 		mAssemblyDirty = true;
+	else
+		mSceneDirty = true;
 }
 
 void EditorLayer::BeginEdit()
@@ -3553,6 +3584,8 @@ void EditorLayer::CommitEdit()
 
 	if (mEditingAssembly)
 		mAssemblyDirty = true;
+	else
+		mSceneDirty = true;
 }
 
 EditorLayer::EditState EditorLayer::CaptureCurrent(EditKind kind) const
@@ -3577,6 +3610,8 @@ void EditorLayer::RestoreState(const EditState& state)
 
 	if (mEditingAssembly)
 		mAssemblyDirty = true;
+	else
+		mSceneDirty = SceneSerializer::SerializeToString(mScene) != mSavedSceneSnapshot;
 }
 
 void EditorLayer::Undo()
@@ -3625,8 +3660,12 @@ void EditorLayer::LoadEditorSettings()
 	int value = 0;
 
 	while (file >> name >> value)
+	{
 		if (name == "show_colliders")
 			mShowColliders = value != 0;
+		else if (name == "show_asset_extensions")
+			mShowAssetExtensions = value != 0;
+	}
 }
 
 void EditorLayer::SaveEditorSettings() const
@@ -3636,7 +3675,10 @@ void EditorLayer::SaveEditorSettings() const
 	std::ofstream file(EditorSettingsFile(), std::ios::trunc);
 
 	if (file.is_open())
+	{
 		file << "show_colliders " << (mShowColliders ? 1 : 0) << '\n';
+		file << "show_asset_extensions " << (mShowAssetExtensions ? 1 : 0) << '\n';
+	}
 }
 
 void EditorLayer::ResetShortcutsToDefault()
@@ -3650,7 +3692,7 @@ void EditorLayer::ResetShortcutsToDefault()
 	set(ShortcutAction::Redo, ImGuiKey_Y, true);
 	set(ShortcutAction::Play, ImGuiKey_F5);
 	set(ShortcutAction::Stop, ImGuiKey_F8);
-	set(ShortcutAction::OpenEditorSettings, ImGuiKey_F11);
+	set(ShortcutAction::OpenWindowSettings, ImGuiKey_F11);
 	set(ShortcutAction::GizmoMove, ImGuiKey_W);
 	set(ShortcutAction::GizmoRotate, ImGuiKey_E);
 	set(ShortcutAction::GizmoScale, ImGuiKey_R);
@@ -3946,7 +3988,7 @@ void EditorLayer::LoadShortcuts()
 			mBinds[index] = { static_cast<ImGuiKey>(key), ctrl != 0, shift != 0, alt != 0 };
 	}
 
-	Keybind& editor = mBinds[static_cast<int>(ShortcutAction::OpenEditorSettings)];
+	Keybind& editor = mBinds[static_cast<int>(ShortcutAction::OpenWindowSettings)];
 	Keybind& project = mBinds[static_cast<int>(ShortcutAction::OpenProjectSettings)];
 
 	// Migrate the former built-in pair without replacing shortcuts the user deliberately rebound.
@@ -4016,7 +4058,7 @@ std::string EditorLayer::KeybindToString(const Keybind& bind) const
 
 void EditorLayer::HandleShortcuts()
 {
-	// Don't trigger actions while the user is capturing a new key in Editor Settings.
+	// Don't trigger actions while the user is capturing a new key in Window Settings.
 	if (mRebindingIndex >= 0)
 		return;
 
@@ -4032,7 +4074,7 @@ void EditorLayer::HandleShortcuts()
 	if (IsShortcutPressed(ShortcutAction::Play)) StartPlay();
 	if (IsShortcutPressed(ShortcutAction::Pause)) TogglePause();
 	if (IsShortcutPressed(ShortcutAction::Stop)) StopPlay();
-	if (IsShortcutPressed(ShortcutAction::OpenEditorSettings)) mOpenEditorSettingsPopup = true;
+	if (IsShortcutPressed(ShortcutAction::OpenWindowSettings)) mOpenWindowSettingsPopup = true;
 	if (IsShortcutPressed(ShortcutAction::OpenProjectSettings)) mOpenProjectSettingsPopup = true;
 	if (IsShortcutPressed(ShortcutAction::ToggleColliders)) mShowColliders = !mShowColliders;
 	if (IsShortcutPressed(ShortcutAction::StepFrame)) StepOneFrame();
@@ -4472,13 +4514,13 @@ void EditorLayer::DrawViewportToolbar(const ImVec2& imageMin, const ImVec2& imag
 		// Shading modes are placeholders until the renderer supports them.
 		bool unavailable = false;
 		ImGui::BeginDisabled();
-		ImGui::MenuItem("Lit", nullptr, &unavailable);
-		ImGui::MenuItem("Unlit", nullptr, &unavailable);
-		ImGui::MenuItem("Wireframe", nullptr, &unavailable);
+		ImGui::MenuItem(ICON_MDI_LIGHTBULB_ON_OUTLINE "  Lit", nullptr, &unavailable);
+		ImGui::MenuItem(ICON_MDI_LIGHTBULB_OUTLINE "  Unlit", nullptr, &unavailable);
+		ImGui::MenuItem(ICON_MDI_GRID "  Wireframe", nullptr, &unavailable);
 		ImGui::EndDisabled();
 
 		ImGui::Separator();
-		ImGui::MenuItem("Colliders", "F4", &mShowColliders);
+		ImGui::MenuItem(ICON_MDI_VECTOR_SQUARE "  Colliders", "F4", &mShowColliders);
 
 		ImGui::EndPopup();
 	}
@@ -5023,7 +5065,7 @@ void EditorLayer::DrawEntityMenuItems(const Reference<Entity>& target, const Vec
 	if (target)
 	{
 		ImGui::BeginDisabled(IsLinkedAssemblyEntity(target.get()));
-		if (ImGui::MenuItem("Rename", ShortcutText(ShortcutAction::RenameEntity).c_str()))
+		if (ImGui::MenuItem(ICON_MDI_PENCIL "  Rename", ShortcutText(ShortcutAction::RenameEntity).c_str()))
 		{
 			mRenamingEntity = target;
 			mRenameFocus = true;
@@ -5033,19 +5075,20 @@ void EditorLayer::DrawEntityMenuItems(const Reference<Entity>& target, const Vec
 		ImGui::Separator();
 	}
 
-	if (ImGui::MenuItem("Create Entity"))
+	if (ImGui::MenuItem(ICON_MDI_CUBE_OUTLINE "  Create Entity"))
 		CreateEntity(nullptr, position);
 
 	if (target)
 	{
 		ImGui::BeginDisabled(IsLinkedAssemblyEntity(target.get()));
-		if (ImGui::MenuItem("Create Entity as Child"))
+		if (ImGui::MenuItem(ICON_MDI_FILE_TREE "  Create Entity as Child"))
 			CreateEntity(target.get(), nullptr);
 		ImGui::EndDisabled();
 	}
 
 	// A folder is a place in the Hierarchy, not a thing in the scene, so the viewport does not offer one.
-	if (!inViewport && ImGui::MenuItem("Create Folder", ShortcutText(ShortcutAction::NewFolder).c_str()))
+	if (!inViewport && ImGui::MenuItem(ICON_MDI_FOLDER_PLUS "  Create Folder",
+		ShortcutText(ShortcutAction::NewFolder).c_str()))
 		CreateFolder();
 
 	// Copy, paste and duplicate act on the Hierarchy's selection; over the scene they have no subject the
@@ -5055,23 +5098,27 @@ void EditorLayer::DrawEntityMenuItems(const Reference<Entity>& target, const Vec
 		ImGui::Separator();
 		if (target)
 		{
-			if (ImGui::MenuItem("Copy", ShortcutText(ShortcutAction::CopyEntity).c_str())) CopyEntity();
+			if (ImGui::MenuItem(ICON_MDI_CONTENT_COPY "  Copy",
+				ShortcutText(ShortcutAction::CopyEntity).c_str())) CopyEntity();
 
 			const Entity* assemblyRoot = LinkedAssemblyRoot(target.get());
 			const bool protectedEntity = (assemblyRoot && assemblyRoot != target.get())
 				|| (mEditingAssembly && target->GetParent() == nullptr);
 			ImGui::BeginDisabled(protectedEntity);
-			if (ImGui::MenuItem("Cut", ShortcutText(ShortcutAction::CutSelection).c_str()))
+			if (ImGui::MenuItem(ICON_MDI_CONTENT_CUT "  Cut",
+				ShortcutText(ShortcutAction::CutSelection).c_str()))
 			{
 				mEntityClipboard = SceneSerializer::SerializeEntityToString(target);
 				mEntityToDelete = target;
 				mDeleteOnlyTarget = true;
 			}
-			if (ImGui::MenuItem("Duplicate", ShortcutText(ShortcutAction::DuplicateEntity).c_str())) DuplicateEntity();
+			if (ImGui::MenuItem(ICON_MDI_CONTENT_DUPLICATE "  Duplicate",
+				ShortcutText(ShortcutAction::DuplicateEntity).c_str())) DuplicateEntity();
 			ImGui::EndDisabled();
 		}
 
-		if (ImGui::MenuItem("Paste", ShortcutText(ShortcutAction::PasteEntity).c_str(), false,
+		if (ImGui::MenuItem(ICON_MDI_CONTENT_PASTE "  Paste",
+			ShortcutText(ShortcutAction::PasteEntity).c_str(), false,
 			!mEntityClipboard.empty()))
 			PasteEntity();
 
@@ -5079,13 +5126,10 @@ void EditorLayer::DrawEntityMenuItems(const Reference<Entity>& target, const Vec
 
 	if (!target)
 	{
-		const bool canCreateAssembly = mSelectedEntity && !mSelectedEntity->IsFolder()
-			&& !IsLinkedAssemblyEntity(mSelectedEntity.get()) && !mPlaying && !mEditingAssembly;
-
 		ImGui::Separator();
-		if (ImGui::MenuItem(ICON_MDI_PACKAGE_VARIANT_CLOSED "  Create Assembly from Selected...",
-			nullptr, false, canCreateAssembly))
-			CreateAssemblyFromEntity(mSelectedEntity);
+		if (ImGui::MenuItem(ICON_MDI_PACKAGE_VARIANT_CLOSED "  Create Assembly",
+			nullptr, false, !mPlaying && !mEditingAssembly))
+			CreateAssembly(mSelectedEntity);
 
 		return;
 	}
@@ -5099,15 +5143,15 @@ void EditorLayer::DrawEntityMenuItems(const Reference<Entity>& target, const Vec
 	}
 	else if (!target->IsFolder() && !mEditingAssembly)
 	{
-		if (ImGui::MenuItem(ICON_MDI_PACKAGE_VARIANT_CLOSED "  Create Assembly..."))
-			CreateAssemblyFromEntity(target);
+		if (ImGui::MenuItem(ICON_MDI_PACKAGE_VARIANT_CLOSED "  Create Assembly"))
+			CreateAssembly(target);
 	}
 
 	ImGui::Separator();
 
 	const bool canUnparent = target->GetParent() != nullptr && !IsLinkedAssemblyEntity(target.get())
 		&& !mEditingAssembly;
-	if (ImGui::MenuItem("Unparent", nullptr, false, canUnparent))
+	if (ImGui::MenuItem(ICON_MDI_LINK_VARIANT_OFF "  Unparent", nullptr, false, canUnparent))
 	{
 		mReparentChild = target.get();
 		mReparentTarget = nullptr;
@@ -5118,7 +5162,7 @@ void EditorLayer::DrawEntityMenuItems(const Reference<Entity>& target, const Vec
 	const bool protectedEntity = (assemblyRoot && assemblyRoot != target.get())
 		|| (mEditingAssembly && target->GetParent() == nullptr);
 	ImGui::BeginDisabled(protectedEntity);
-	if (ImGui::MenuItem("Delete", "Del"))
+	if (ImGui::MenuItem(ICON_MDI_DELETE_OUTLINE "  Delete", "Del"))
 		mEntityToDelete = target;
 	ImGui::EndDisabled();
 }
@@ -5199,7 +5243,7 @@ void EditorLayer::DrawEntityNode(const Reference<Entity>& entity)
 	// scene object looks like an object. The yellow that used to say it was a thing you had to learn.
 	//
 	// A hidden or disabled entity is dimmed — the eye says why, and the name says so at a glance.
-	const bool dimmed = !folder && (!entity->IsVisible() || !entity->IsEnabled());
+	const bool dimmed = !folder && (!entity->IsVisibleInHierarchy() || !entity->IsEnabled());
 	const Entity* linkedRoot = LinkedAssemblyRoot(entity.get());
 	const bool linkedAssembly = linkedRoot != nullptr;
 	const bool linkedRootRow = linkedRoot == entity.get();
@@ -5382,7 +5426,9 @@ void EditorLayer::DrawEntityNode(const Reference<Entity>& entity)
 	ImGui::SetCursorPosX(ImGui::GetCursorPosX() + ImMax((ImGui::GetContentRegionAvail().x - RowEndSlot()) * 0.5f, 0.0f));
 	AlignRowEndGlyph();   // The row is a frame tall now; the eye is a glyph, and sits in the middle of it.
 
-	ImGui::BeginDisabled(linkedAssembly);
+	// A linked root owns the scene-level visibility of its complete instance. Descendant eyes remain
+	// authored by the Assembly definition and therefore stay read-only here.
+	ImGui::BeginDisabled(linkedAssembly && !linkedRootRow);
 	if (!folder && EyeButton("##visible", entity->IsVisible()))
 	{
 		RecordSnapshot();
@@ -5392,8 +5438,12 @@ void EditorLayer::DrawEntityNode(const Reference<Entity>& entity)
 		// clicking one of their eyes is the same rule as dragging or deleting them.
 		if (IsSelected(entity.get()))
 			for (const auto& selected : mSelection)
-				if (!IsLinkedAssemblyEntity(selected.get()))
+			{
+				const Entity* selectedAssemblyRoot = LinkedAssemblyRoot(selected.get());
+
+				if (!selectedAssemblyRoot || selectedAssemblyRoot == selected.get())
 					selected->SetVisible(visible);
+			}
 		else
 			entity->SetVisible(visible);
 	}
@@ -5447,8 +5497,7 @@ bool EditorLayer::DrawComponentHeader(const char8* icon, const char8* name, int 
 
 	// Components and the other editor sections share this header primitive, so the arrow, icon and label
 	// keep one rhythm everywhere instead of acquiring panel-specific offsets.
-	const bool open = DrawSectionHeader("###header", icon, name,
-		ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_SpanAvailWidth | ImGuiTreeNodeFlags_AllowOverlap);
+	const bool open = DrawSectionHeader("###header", icon, name, ImGuiTreeNodeFlags_DefaultOpen);
 
 	// Exact header bounds, so the remove button sits flush against its right edge.
 	const ImVec2 headerMin = ImGui::GetItemRectMin();
@@ -6802,18 +6851,26 @@ void EditorLayer::DrawTitleBar()
 		if (mAssemblyDirty)
 			sceneName += " *";
 	}
+	else if (mSceneDirty)
+	{
+		sceneName += " *";
+	}
 
 	ImGui::SetCursorPos(ImVec2(menusEnd - barMin.x + kSceneGap, row + (row - ImGui::GetTextLineHeight()) * 0.5f));
 	ImGui::TextDisabled("|");
 	ImGui::SameLine(0.0f, 8.0f);
 	ImGui::TextDisabled("%s", sceneName.c_str());
 
-	if (!mScenePath.empty() && ImGui::IsItemHovered())
+	if (ImGui::IsItemHovered())
 	{
 		if (mAssemblyDirty)
-			ImGui::SetTooltip("%s\nUnsaved Assembly changes", mScenePath.c_str());
+			ImGui::SetTooltip("%s\nUnsaved Assembly changes",
+				mScenePath.empty() ? "Untitled" : mScenePath.c_str());
+		else if (mSceneDirty)
+			ImGui::SetTooltip("%s\nUnsaved scene changes",
+				mScenePath.empty() ? "Untitled" : mScenePath.c_str());
 		else
-			ImGui::SetTooltip("%s", mScenePath.c_str());
+			ImGui::SetTooltip("%s", mScenePath.empty() ? "Untitled" : mScenePath.c_str());
 	}
 
 	// What is left of the bar is what the window is dragged by; what the editor drew in it is not. A drag
@@ -6934,6 +6991,8 @@ void EditorLayer::NewScene()
 	mScene->Clear();
 	SetSelection(nullptr);
 	mScenePath.clear();
+	mSavedSceneSnapshot = SceneSerializer::SerializeToString(mScene);
+	mSceneDirty = false;
 	mEditingAssembly = false;
 	mAssemblyDirty = false;
 	mHierarchyExpanded.clear();
@@ -6974,6 +7033,8 @@ bool EditorLayer::LoadScene(const std::string& path)
 	}
 
 	mScenePath = path;
+	mSavedSceneSnapshot = SceneSerializer::SerializeToString(mScene);
+	mSceneDirty = false;
 	mEditingAssembly = false;
 	mAssemblyDirty = false;
 	mHierarchyExpanded.clear();
@@ -7005,6 +7066,8 @@ bool EditorLayer::LoadAssembly(const std::string& path)
 		AssemblyNavigationState navigation;
 		navigation.scenePath = mScenePath;
 		navigation.sceneData = SceneSerializer::SerializeToString(mScene);
+		navigation.savedSceneSnapshot = mSavedSceneSnapshot;
+		navigation.sceneDirty = mSceneDirty;
 		navigation.viewCenter = mViewCenter;
 		navigation.viewZoom = mViewZoom;
 		navigation.undoStack = std::move(mUndoStack);
@@ -7095,6 +7158,8 @@ bool EditorLayer::ReturnFromAssembly()
 
 	mAssemblyNavigation.reset();
 	mScenePath = std::move(navigation.scenePath);
+	mSavedSceneSnapshot = std::move(navigation.savedSceneSnapshot);
+	mSceneDirty = navigation.sceneDirty;
 	mEditingAssembly = false;
 	mAssemblyDirty = false;
 	mViewCenter = navigation.viewCenter;
@@ -7158,7 +7223,12 @@ void EditorLayer::SaveScene()
 	}
 
 	if (SceneSerializer::Serialize(mScene, mScenePath))
+	{
+		mSavedSceneSnapshot = SceneSerializer::SerializeToString(mScene);
+		mSceneDirty = false;
 		Projects::RememberDefaultScene(ActiveProjectDirectory(), mScenePath);
+		PushToast("Saved " + std::filesystem::path(mScenePath).stem().string() + " Scene", false);
+	}
 }
 
 void EditorLayer::SaveSceneAs()
@@ -7177,8 +7247,11 @@ void EditorLayer::SaveSceneAs()
 	if (SceneSerializer::Serialize(mScene, path))
 	{
 		mScenePath = path;
+		mSavedSceneSnapshot = SceneSerializer::SerializeToString(mScene);
+		mSceneDirty = false;
 		RememberRecentScene(path);
 		Projects::RememberDefaultScene(ActiveProjectDirectory(), path);
+		PushToast("Saved " + std::filesystem::path(path).stem().string() + " Scene", false);
 	}
 }
 
@@ -7353,9 +7426,9 @@ float32 EditorLayer::DrawMenuBar(const ImVec2& barMin, const ImVec2& barMax)
 
 		if (ImGui::BeginMenu("Window"))
 		{
-			if (ImGui::MenuItem(ICON_MDI_TUNE "  Settings...",
-				ShortcutText(ShortcutAction::OpenEditorSettings).c_str()))
-				mOpenEditorSettingsPopup = true;
+			if (ImGui::MenuItem(ICON_MDI_TUNE "  Window Settings...",
+				ShortcutText(ShortcutAction::OpenWindowSettings).c_str()))
+				mOpenWindowSettingsPopup = true;
 
 			ImGui::Separator();
 			DrawLayoutMenu();
@@ -7947,10 +8020,15 @@ void EditorLayer::DrawUnsavedAssemblyPopup()
 	ImGui::EndPopup();
 }
 
-void EditorLayer::CreateAssemblyFromEntity(const Reference<Entity>& entity)
+void EditorLayer::CreateAssembly(const Reference<Entity>& entity)
 {
-	if (!entity || entity->IsFolder() || IsLinkedAssemblyEntity(entity.get()) || mEditingAssembly)
+	if (mPlaying || mEditingAssembly)
 		return;
+
+	Reference<Entity> definition = entity;
+
+	if (definition && (definition->IsFolder() || IsLinkedAssemblyEntity(definition.get())))
+		definition = nullptr;
 
 	const std::filesystem::path assets = GameAssetsDirectory();
 	const std::filesystem::path directory = assets / "Assemblies";
@@ -7972,13 +8050,23 @@ void EditorLayer::CreateAssemblyFromEntity(const Reference<Entity>& entity)
 		return;
 	}
 
-	if (!AssemblySerializer::Serialize(entity, absolute.string()))
+	if (!definition)
+	{
+		definition = MakeReference<Entity>();
+		definition->SetName(absolute.stem().string());
+	}
+
+	if (!AssemblySerializer::Serialize(definition, absolute.string()))
 		return;
 
-	RecordSnapshot();
-	entity->SetAssemblyPath(relative);
+	if (entity == definition)
+	{
+		RecordSnapshot();
+		entity->SetAssemblyPath(relative);
+		ResetAssemblyTracking();
+	}
+
 	mProjectDirty = true;
-	ResetAssemblyTracking();
 	PushToast("Created Assembly " + absolute.stem().string(), false);
 }
 
@@ -8580,6 +8668,8 @@ void EditorLayer::OpenProject(const std::filesystem::path& folder)
 	mScene->Clear();
 	SetSelection(nullptr);
 	mScenePath.clear();
+	mSavedSceneSnapshot = SceneSerializer::SerializeToString(mScene);
+	mSceneDirty = false;
 	mEditingAssembly = false;
 	mAssemblyDirty = false;
 	mHierarchyExpanded.clear();

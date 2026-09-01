@@ -32,7 +32,7 @@ private:
 	// New actions are appended so indices already saved in shortcuts.cfg stay valid.
 	enum class ShortcutAction
 	{
-		Undo, Redo, Play, Stop, OpenEditorSettings,
+		Undo, Redo, Play, Stop, OpenWindowSettings,
 		GizmoMove, GizmoRotate, GizmoScale, RenameEntity, DeleteEntity,
 		Pause, ToggleColliders,
 		CopyEntity, PasteEntity, DuplicateEntity,
@@ -66,7 +66,7 @@ private:
 	Keybind mBinds[static_cast<int>(ShortcutAction::Count)];
 	int mRebindingIndex = -1;  // Index of the action currently capturing a new key (-1 = none).
 
-	bool mOpenEditorSettingsPopup = false;
+	bool mOpenWindowSettingsPopup = false;
 	bool mOpenProjectSettingsPopup = false;
 	bool mLayoutInitialized = false;
 	bool mFocusViewport = false;   // Set at boot, consumed a frame later: focus cannot be claimed while the panels are still appearing.
@@ -178,6 +178,8 @@ private:
 	Lion::Reference<Lion::Entity> mRenamingEntity;  // Entity whose name is being edited inline (F2 / context menu).
 	char mHierarchyFilter[64] = {};                 // The Hierarchy's search box: a name, or part of one.
 	std::string mScenePath;                         // The scene on disk, empty until it has been saved once.
+	bool mSceneDirty = false;                       // The open scene differs from its last successful save/load.
+	std::string mSavedSceneSnapshot;                // Lets undo/redo recognize the last saved state exactly.
 	bool mEditingAssembly = false;                  // The current document is one reusable entity definition.
 	bool mAssemblyDirty = false;                    // Authored hierarchy differs from the last explicit save.
 	std::string mPendingAssemblyPath;               // Opened after panels finish drawing; hierarchy iteration stays valid.
@@ -231,6 +233,7 @@ private:
 	{
 		std::string scenePath;
 		std::string sceneData;
+		std::string savedSceneSnapshot;
 		Lion::int32 selectedEntity = -1;
 		glm::vec2 viewCenter{ 0.0f, 0.0f };
 		Lion::float32 viewZoom = 1.0f;
@@ -239,6 +242,7 @@ private:
 		std::string pendingSnapshot;
 		std::unordered_set<std::string> hierarchyExpanded;
 		bool hasPending = false;
+		bool sceneDirty = false;
 	};
 
 	std::vector<EditState> mUndoStack;
@@ -268,6 +272,7 @@ private:
 	std::string mSelectedAsset;                // Relative path selected in the Content Browser.
 	std::string mAssetClipboard;               // Relative source path copied or cut in the Content Browser.
 	bool mAssetClipboardCut = false;
+	bool mShowAssetExtensions = false;         // Content Browser defaults to concise, extension-free labels.
 	bool mProjectFocused = false;               // Routes shared editing shortcuts to the Content Browser.
 	bool mHierarchyFocused = false;             // Routes folder creation to the Scene Hierarchy.
 
@@ -410,8 +415,8 @@ private:
 	void ScanProjectDirectory(const std::filesystem::path& directory);
 	void RenameAsset(const std::string& assetPath, const std::string& name);
 	void DrawDeleteAssetPopup();   // Deleting a file is not an undo step, so it is a question first.
-	void DrawEditorSettings();
-	void DrawEditorGeneralSettings();
+	void DrawWindowSettings();
+	void DrawWindowGeneralSettings();
 	void DrawShortcutsTab();
 	void DrawProjectSettings();
 	void DrawProjectGeneralSettings();
@@ -468,7 +473,7 @@ private:
 	bool SaveAssembly();
 	void SaveAssemblyAs();
 	void DrawUnsavedAssemblyPopup();
-	void CreateAssemblyFromEntity(const Lion::Reference<Lion::Entity>& entity);
+	void CreateAssembly(const Lion::Reference<Lion::Entity>& entity = nullptr);
 	Lion::Reference<Lion::Entity> InstantiateAssembly(const std::string& assetPath,
 		Lion::Entity* parent = nullptr, const Lion::Vector* position = nullptr);
 	void ResetAssemblyTracking();

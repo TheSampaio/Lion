@@ -272,6 +272,15 @@ namespace Lion
 		return true;
 	}
 
+	bool Entity::IsVisibleInHierarchy() const
+	{
+		for (const Entity* entity = this; entity != nullptr; entity = entity->mParent)
+			if (!entity->mVisible)
+				return false;
+
+		return true;
+	}
+
 	void Entity::SetEnabled(bool value)
 	{
 		if (mEnabled == value)
@@ -336,7 +345,7 @@ namespace Lion
 	{
 		// Hidden is not the same as off: an invisible entity still updates and still collides. It is only
 		// here, at the one call that puts something on screen, that the two part ways.
-		if (!IsActive() || !mVisible)
+		if (!IsActive() || !IsVisibleInHierarchy())
 			return;
 
 		for (const auto& component : mComponents)

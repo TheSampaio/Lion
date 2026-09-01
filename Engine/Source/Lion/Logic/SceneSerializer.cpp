@@ -80,7 +80,8 @@ namespace Lion
 	}
 
 	// Serializes one entity (name, transform and its ordered components) into a JSON node. Scene entries
-	// for Assembly instances stay compact: the definition lives in the asset and the scene owns placement.
+	// for Assembly instances stay compact: the definition lives in the asset while the scene owns placement
+	// and the instance-level visibility controlled by the Hierarchy eye.
 	static Json EntityToJson(const Reference<Entity>& entity, bool linkedReference)
 	{
 		Json node;
@@ -88,6 +89,7 @@ namespace Lion
 		if (linkedReference && entity->IsAssemblyInstance())
 		{
 			node["assembly"] = entity->GetAssemblyPath();
+			node["visible"] = entity->IsVisible();
 			WriteTransform(node, entity);
 			return node;
 		}
@@ -405,6 +407,7 @@ namespace Lion
 
 			Reference<Entity> instance = tree.front();
 			instance->SetAssemblyPath(path);
+			instance->SetVisible(node.value("visible", instance->IsVisible()));
 
 			if (node.contains("transform"))
 			{
