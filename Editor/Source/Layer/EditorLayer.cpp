@@ -1965,7 +1965,7 @@ namespace
 
 	// Hierarchy navigation is a row-end glyph rather than a framed toolbar button. It owns a complete
 	// 20 px hit target while the chevron itself stays on the shared 16 px icon metric.
-	bool HierarchyNavigationButton(const char8* id, const char8* icon, const char8* tooltip)
+	bool HierarchyNavigationButton(const char8* id, const char8* icon, const char8* tooltip, bool selected)
 	{
 		const float32 size = RowEndSlot();
 		const ImVec2 origin = ImGui::GetCursorScreenPos();
@@ -1975,8 +1975,11 @@ namespace
 		if (hovered && tooltip)
 			ImGui::SetTooltip("%s", tooltip);
 
-		DrawIcon(origin, size, icon,
-			ImGui::GetColorU32(hovered ? ImGuiCol_Text : ImGuiCol_TextDisabled), kIconSize);
+		const ImU32 color = selected
+			? ImGui::GetColorU32(ImGuiCol_Text)
+			: ImGui::GetColorU32(EditorGui::GetAccent());
+
+		DrawIcon(origin, size, icon, color, kIconSize);
 		return clicked;
 	}
 
@@ -5492,7 +5495,8 @@ void EditorLayer::DrawEntityNode(const Reference<Entity>& entity)
 
 	if (linkedRootRow)
 	{
-		if (HierarchyNavigationButton("##openAssembly", ICON_MDI_CHEVRON_RIGHT, "Open Assembly"))
+		if (HierarchyNavigationButton("##openAssembly", ICON_MDI_CHEVRON_RIGHT, "Open Assembly",
+			IsSelected(entity.get())))
 			mPendingAssemblyPath = (GameAssetsDirectory() / linkedRoot->GetAssemblyPath()).string();
 	}
 	else if (definitionRoot)
@@ -5502,7 +5506,8 @@ void EditorLayer::DrawEntityNode(const Reference<Entity>& entity)
 		if (mAssemblyNavigation && !mAssemblyNavigation->scenePath.empty())
 			tooltip += " (" + std::filesystem::path(mAssemblyNavigation->scenePath).stem().string() + ")";
 
-		if (HierarchyNavigationButton("##returnFromAssembly", ICON_MDI_CHEVRON_LEFT, tooltip.c_str()))
+		if (HierarchyNavigationButton("##returnFromAssembly", ICON_MDI_CHEVRON_LEFT, tooltip.c_str(),
+			IsSelected(entity.get())))
 			mPendingAssemblyReturn = true;
 	}
 
