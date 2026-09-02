@@ -79,6 +79,38 @@ namespace Lion
 		node["transform"]["scale"]    = { scale.x, scale.y };
 	}
 
+	static void WriteAssemblyPlacement(Json& node, const Reference<Entity>& entity)
+	{
+		const Reference<Transform> transform = entity->GetTransform();
+		const Transform& source = entity->GetAssemblySourceTransform();
+		const Vector2 position = transform->GetPosition() - source.GetPosition();
+		const Vector2 scale = transform->GetScale();
+		const Vector2 sourceScale = source.GetScale();
+		constexpr float32 kMinimumScale = 0.0001f;
+
+		node["placement"]["position"] = { position.x, position.y };
+		node["placement"]["rotation"] = transform->GetRotation() - source.GetRotation();
+		node["placement"]["scale"] = {
+			std::fabs(sourceScale.x) > kMinimumScale ? scale.x / sourceScale.x : 1.0f,
+			std::fabs(sourceScale.y) > kMinimumScale ? scale.y / sourceScale.y : 1.0f
+		};
+	}
+
+	static void ApplyAssemblyPlacement(const Reference<Entity>& entity, const Json& placement)
+	{
+		const Transform& source = entity->GetAssemblySourceTransform();
+		const Reference<Transform> target = entity->GetTransform();
+
+		if (placement.contains("position"))
+			target->SetPosition(source.GetPosition() + Vector2FromJson(placement["position"]));
+
+		if (placement.contains("rotation"))
+			target->SetRotation(source.GetRotation() + RotationFromJson(placement["rotation"]));
+
+		if (placement.contains("scale"))
+			target->SetScale(source.GetScale() * Vector2FromJson(placement["scale"]));
+	}
+
 	// Serializes one entity (name, transform and its ordered components) into a JSON node. Scene entries
 	// for Assembly instances stay compact: the definition lives in the asset while the scene owns placement
 	// and the instance-level visibility controlled by the Hierarchy eye.
@@ -90,7 +122,7 @@ namespace Lion
 		{
 			node["assembly"] = entity->GetAssemblyPath();
 			node["visible"] = entity->IsVisible();
-			WriteTransform(node, entity);
+			WriteAssemblyPlacement(node, entity);
 			return node;
 		}
 
@@ -409,8 +441,14 @@ namespace Lion
 			instance->SetAssemblyPath(path);
 			instance->SetVisible(node.value("visible", instance->IsVisible()));
 
-			if (node.contains("transform"))
+			if (node.contains("placement"))
 			{
+				ApplyAssemblyPlacement(instance, node["placement"]);
+			}
+			else if (node.contains("transform"))
+			{
+				// Scene files written before relative Assembly placement stored the final local Transform.
+				// Read that shape exactly once; the next save migrates it to a placement delta.
 				const Json& transform = node["transform"];
 				const Reference<Transform> target = instance->GetTransform();
 

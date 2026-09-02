@@ -46,11 +46,13 @@ private:
 		FocusSelection,
 		OpenProjectSettings,
 		CutSelection, NewFolder,
+		ViewLit, ViewUnlit, ViewWireframe,
 		Count
 	};
 
 	// Viewport tools, mirroring the Q/W/E/R row in the top-left corner.
 	enum class Tool { Select, Move, Rotate, Scale };
+	enum class ViewportMode { Lit, Unlit, Wireframe };
 
 	// A dock-layout change requested from the menu, deferred to the top of the next frame.
 	enum class LayoutRequest { None, Reset, Load };
@@ -156,6 +158,7 @@ private:
 	// Panning and zooming move these; a running game frames itself through its own Camera2D instead.
 	glm::vec2 mViewCenter{ 0.0f, 0.0f };
 	Lion::float32 mViewZoom = 1.0f;
+	ViewportMode mViewportMode = ViewportMode::Lit;
 
 	// Navigating the viewport, Godot-style: drag with the middle button (or space held) to pan, wheel to
 	// zoom about the cursor, F to frame the selection.

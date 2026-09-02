@@ -132,14 +132,40 @@ namespace Lion
 
 		const std::string assemblyPath = instance->GetAssemblyPath();
 		const bool visible = instance->IsVisible();
+		const Transform& source = instance->mAssemblySourceTransform;
+		const Reference<Transform> transform = instance->GetTransform();
+		const Vector2 positionOffset = transform->GetPosition() - source.GetPosition();
+		const float32 rotationOffset = transform->GetRotation() - source.GetRotation();
+		const Vector2 currentScale = transform->GetScale();
+		const Vector2 sourceScale = source.GetScale();
+		constexpr float32 kMinimumScale = 0.0001f;
+		const Vector2 scaleFactor(
+			std::fabs(sourceScale.x) > kMinimumScale ? currentScale.x / sourceScale.x : 1.0f,
+			std::fabs(sourceScale.y) > kMinimumScale ? currentScale.y / sourceScale.y : 1.0f);
 		std::string definition;
 
-		if (!ReadDefinition(assemblyPath, resourceRoot, definition)
-			|| !SceneSerializer::DeserializeEntityTreeDefinitionInto(
-				instance->GetScene(), instance, definition, true))
+		if (!ReadDefinition(assemblyPath, resourceRoot, definition))
 			return false;
 
-		instance->SetAssemblyPath(assemblyPath);
+		const std::vector<Reference<Entity>> sourceTree =
+			SceneSerializer::DeserializeEntityTreeDefinitionFromString(definition);
+
+		if (sourceTree.empty())
+			return false;
+
+		const Transform refreshedSource = *sourceTree.front()->GetTransform();
+		transform->SetPosition(refreshedSource.GetPosition() + positionOffset);
+		transform->SetRotation(refreshedSource.GetRotation() + rotationOffset);
+		transform->SetScale(refreshedSource.GetScale() * scaleFactor);
+
+		// Keep the final root Transform in place while components Awake so physics bodies are created at the
+		// instance placement, not briefly at the raw authored Transform.
+		if (!SceneSerializer::DeserializeEntityTreeDefinitionInto(
+			instance->GetScene(), instance, definition, true))
+			return false;
+
+		instance->mAssemblyPath = assemblyPath;
+		instance->mAssemblySourceTransform = refreshedSource;
 		instance->SetVisible(visible);
 		return true;
 	}

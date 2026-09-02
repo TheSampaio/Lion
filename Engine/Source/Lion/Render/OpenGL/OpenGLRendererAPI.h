@@ -12,6 +12,7 @@ namespace Lion
 		void SetViewport(int32 x, int32 y, uint32 width, uint32 height) override;
 		void SetClearColor(float32 red, float32 green, float32 blue, float32 alpha) override;
 		void Clear() override;
+		void SetWireframe(bool enabled) override;
 		void DrawIndexed(uint32 indexCount) override;
 	};
 }

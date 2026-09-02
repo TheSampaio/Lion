@@ -27,7 +27,8 @@ namespace Lion
 		static LION_API Reference<Entity> Instantiate(const Reference<Scene>& scene,
 			const std::string& assemblyPath, const std::string& resourceRoot = {});
 
-		// Reapplies the original definition to a live instance while preserving its scene placement.
+		// Reapplies the original definition to a live instance. Root Transform changes propagate while the
+		// instance's scene placement remains as a relative offset from the authored Transform.
 		static LION_API bool Refresh(const Reference<Entity>& instance,
 			const std::string& resourceRoot = {});
 	};

@@ -28,6 +28,9 @@ namespace Lion
 		// Clears the framebuffer.
 		static void Clear();
 
+		// Chooses filled triangles or their rasterized edges for subsequent draws.
+		static LION_API void SetWireframe(bool enabled);
+
 		// Issues an indexed draw for the currently bound geometry.
 		static void DrawIndexed(uint32 indexCount);
 

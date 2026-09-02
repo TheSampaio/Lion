@@ -24,6 +24,7 @@
 #include <Lion/Core/Filesystem.h>
 #include <Lion/Logic/ComponentRegistry.h>
 #include <Lion/Logic/Reflector.h>
+#include <Lion/Render/RenderCommand.h>
 
 // For running the compile without a console flashing up (see RunCommand). windowsx.h defines IsMaximized
 // and friends as macros, so it stays out; this is Windows.h alone.
@@ -557,9 +558,11 @@ void EditorLayer::RenderScene()
 	Renderer::Clear(0.12f, 0.12f, 0.15f, 1.0f);
 	mFramebuffer->ClearEntityId(-1);  // Empty pixels map to "no entity".
 
+	RenderCommand::SetWireframe(mViewportMode == ViewportMode::Wireframe);
 	Renderer::RenderBegin(mCamera);
 	mScene->OnRender();
 	Renderer::RenderEnd();
+	RenderCommand::SetWireframe(false);
 
 	mFramebuffer->Unbind();
 }
@@ -1942,7 +1945,7 @@ namespace
 
 	// The eye in the Hierarchy's Visibility column. Open, the entity is drawn; struck through, it is not
 	// — and that is all it is: a hidden entity still updates and still collides.
-	bool EyeButton(const char8* id, bool visible)
+	bool EyeButton(const char8* id, bool visible, bool assembly, bool selected)
 	{
 		const float32 size = RowEndSlot();
 		const ImVec2 origin = ImGui::GetCursorScreenPos();
@@ -1952,7 +1955,9 @@ namespace
 		if (hovered)
 			ImGui::SetTooltip(visible ? "Hide" : "Show");
 
-		const ImU32 color = ImGui::GetColorU32((visible || hovered) ? ImGuiCol_Text : ImGuiCol_TextDisabled);
+		const ImU32 color = assembly && !selected
+			? ImGui::GetColorU32(EditorGui::GetAccent())
+			: ImGui::GetColorU32((visible || hovered) ? ImGuiCol_Text : ImGuiCol_TextDisabled);
 
 		DrawIcon(origin, size, visible ? ICON_MDI_EYE : ICON_MDI_EYE_OFF, color, kIconSize);
 		return clicked;
@@ -2863,6 +2868,9 @@ void EditorLayer::DrawShortcutsTab()
 			{ ShortcutAction::GizmoRotate,     "Tools",     "Rotate tool" },
 			{ ShortcutAction::GizmoScale,      "Tools",     "Scale tool" },
 			{ ShortcutAction::FocusSelection,  "Viewport",  "Frame the selection" },
+			{ ShortcutAction::ViewLit,         "Viewport",  "Lit shading" },
+			{ ShortcutAction::ViewUnlit,       "Viewport",  "Unlit shading" },
+			{ ShortcutAction::ViewWireframe,   "Viewport",  "Wireframe shading" },
 			{ ShortcutAction::ToggleColliders, "Viewport",  "Toggle collider hitboxes" },
 			{ ShortcutAction::Deselect,        "Editing", "Clear the selection" },
 			{ ShortcutAction::RenameEntity,    "Editing", "Rename selected item" },
@@ -3696,7 +3704,7 @@ void EditorLayer::ResetShortcutsToDefault()
 	set(ShortcutAction::GizmoMove, ImGuiKey_W);
 	set(ShortcutAction::GizmoRotate, ImGuiKey_E);
 	set(ShortcutAction::GizmoScale, ImGuiKey_R);
-	set(ShortcutAction::RenameEntity, ImGuiKey_F2);
+	set(ShortcutAction::RenameEntity, ImGuiKey_None);
 	set(ShortcutAction::DeleteEntity, ImGuiKey_Delete);
 	set(ShortcutAction::Pause, ImGuiKey_F7);
 	set(ShortcutAction::ToggleColliders, ImGuiKey_F4);
@@ -3734,6 +3742,9 @@ void EditorLayer::ResetShortcutsToDefault()
 	set(ShortcutAction::OpenProjectSettings, ImGuiKey_F10);
 	set(ShortcutAction::CutSelection, ImGuiKey_X, true);
 	set(ShortcutAction::NewFolder, ImGuiKey_N, true, true);
+	set(ShortcutAction::ViewLit, ImGuiKey_F1);
+	set(ShortcutAction::ViewUnlit, ImGuiKey_F2);
+	set(ShortcutAction::ViewWireframe, ImGuiKey_F3);
 }
 
 void EditorLayer::SetSelection(const Reference<Entity>& entity)
@@ -3981,15 +3992,22 @@ void EditorLayer::LoadShortcuts()
 		return;
 
 	int index = 0, key = 0, ctrl = 0, shift = 0, alt = 0;
+	bool loadedViewportModes = false;
 
 	while (file >> index >> key >> ctrl >> shift >> alt)
 	{
 		if (index >= 0 && index < static_cast<int>(ShortcutAction::Count))
+		{
 			mBinds[index] = { static_cast<ImGuiKey>(key), ctrl != 0, shift != 0, alt != 0 };
+			loadedViewportModes |= index == static_cast<int>(ShortcutAction::ViewLit)
+				|| index == static_cast<int>(ShortcutAction::ViewUnlit)
+				|| index == static_cast<int>(ShortcutAction::ViewWireframe);
+		}
 	}
 
 	Keybind& editor = mBinds[static_cast<int>(ShortcutAction::OpenWindowSettings)];
 	Keybind& project = mBinds[static_cast<int>(ShortcutAction::OpenProjectSettings)];
+	Keybind& rename = mBinds[static_cast<int>(ShortcutAction::RenameEntity)];
 
 	// Migrate the former built-in pair without replacing shortcuts the user deliberately rebound.
 	if (editor.key == ImGuiKey_F10 && !editor.ctrl && !editor.shift && !editor.alt
@@ -3997,6 +4015,14 @@ void EditorLayer::LoadShortcuts()
 	{
 		editor.key = ImGuiKey_F11;
 		project.key = ImGuiKey_F10;
+		SaveShortcuts();
+	}
+
+	// F2 became the explicit Unlit view key. Retire only the former built-in rename binding; a custom
+	// rename shortcut remains untouched.
+	if (!loadedViewportModes && rename.key == ImGuiKey_F2 && !rename.ctrl && !rename.shift && !rename.alt)
+	{
+		rename = {};
 		SaveShortcuts();
 	}
 }
@@ -4077,6 +4103,9 @@ void EditorLayer::HandleShortcuts()
 	if (IsShortcutPressed(ShortcutAction::OpenWindowSettings)) mOpenWindowSettingsPopup = true;
 	if (IsShortcutPressed(ShortcutAction::OpenProjectSettings)) mOpenProjectSettingsPopup = true;
 	if (IsShortcutPressed(ShortcutAction::ToggleColliders)) mShowColliders = !mShowColliders;
+	if (IsShortcutPressed(ShortcutAction::ViewLit)) mViewportMode = ViewportMode::Lit;
+	if (IsShortcutPressed(ShortcutAction::ViewUnlit)) mViewportMode = ViewportMode::Unlit;
+	if (IsShortcutPressed(ShortcutAction::ViewWireframe)) mViewportMode = ViewportMode::Wireframe;
 	if (IsShortcutPressed(ShortcutAction::StepFrame)) StepOneFrame();
 	if (IsShortcutPressed(ShortcutAction::CompileModule)) CompileGameModule();
 	if (IsShortcutPressed(ShortcutAction::ReloadModule)) ReloadGameModule();
@@ -4511,16 +4540,21 @@ void EditorLayer::DrawViewportToolbar(const ImVec2& imageMin, const ImVec2& imag
 
 	if (ImGui::BeginPopup("ViewportSettings"))
 	{
-		// Shading modes are placeholders until the renderer supports them.
-		bool unavailable = false;
-		ImGui::BeginDisabled();
-		ImGui::MenuItem(ICON_MDI_LIGHTBULB_ON_OUTLINE "  Lit", nullptr, &unavailable);
-		ImGui::MenuItem(ICON_MDI_LIGHTBULB_OUTLINE "  Unlit", nullptr, &unavailable);
-		ImGui::MenuItem(ICON_MDI_GRID "  Wireframe", nullptr, &unavailable);
-		ImGui::EndDisabled();
+		if (ImGui::MenuItem(ICON_MDI_LIGHTBULB_ON_OUTLINE "  Lit", ShortcutText(ShortcutAction::ViewLit).c_str(),
+			mViewportMode == ViewportMode::Lit))
+			mViewportMode = ViewportMode::Lit;
+
+		if (ImGui::MenuItem(ICON_MDI_LIGHTBULB_OUTLINE "  Unlit", ShortcutText(ShortcutAction::ViewUnlit).c_str(),
+			mViewportMode == ViewportMode::Unlit))
+			mViewportMode = ViewportMode::Unlit;
+
+		if (ImGui::MenuItem(ICON_MDI_GRID "  Wireframe", ShortcutText(ShortcutAction::ViewWireframe).c_str(),
+			mViewportMode == ViewportMode::Wireframe))
+			mViewportMode = ViewportMode::Wireframe;
 
 		ImGui::Separator();
-		ImGui::MenuItem(ICON_MDI_VECTOR_SQUARE "  Colliders", "F4", &mShowColliders);
+		ImGui::MenuItem(ICON_MDI_VECTOR_SQUARE "  Colliders",
+			ShortcutText(ShortcutAction::ToggleColliders).c_str(), &mShowColliders);
 
 		ImGui::EndPopup();
 	}
@@ -5429,7 +5463,7 @@ void EditorLayer::DrawEntityNode(const Reference<Entity>& entity)
 	// A linked root owns the scene-level visibility of its complete instance. Descendant eyes remain
 	// authored by the Assembly definition and therefore stay read-only here.
 	ImGui::BeginDisabled(linkedAssembly && !linkedRootRow);
-	if (!folder && EyeButton("##visible", entity->IsVisible()))
+	if (!folder && EyeButton("##visible", entity->IsVisible(), assemblyVisual, IsSelected(entity.get())))
 	{
 		RecordSnapshot();
 		const bool visible = !entity->IsVisible();
