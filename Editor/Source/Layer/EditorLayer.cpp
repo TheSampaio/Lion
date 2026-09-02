@@ -5,6 +5,7 @@
 #include "../Expression.h"
 #include "../ComponentScripts.h"
 #include "../ProjectBuild.h"
+#include "../ProjectExporter.h"
 #include "../Projects.h"
 
 #include <IconsMaterialDesignIcons.h>
@@ -18,10 +19,12 @@
 #include <filesystem>
 #include <fstream>
 #include <sstream>
+#include <unordered_set>
 
 #include <Lion/Core/Filesystem.h>
 #include <Lion/Logic/ComponentRegistry.h>
 #include <Lion/Logic/Reflector.h>
+#include <Lion/Render/RenderCommand.h>
 
 // For running the compile without a console flashing up (see RunCommand). windowsx.h defines IsMaximized
 // and friends as macros, so it stays out; this is Windows.h alone.
@@ -29,6 +32,7 @@
 	#define WIN32_LEAN_AND_MEAN
 	#define NOMINMAX
 	#include <Windows.h>
+	#include <shellapi.h>
 #endif
 
 #include <imgui/imgui_internal.h> // DockBuilder API for the default layout.
@@ -47,13 +51,17 @@ static constexpr float32 kIconTitle = 24.0f;
 // What a file dialog offers when a scene is opened or saved. A scene is JSON inside and a .lnscene outside:
 // what it is made of is the engine's business, and what it is is the project's.
 static const char8* kSceneFilter = "Lion Scene (*.lnscene)\0*.lnscene\0";
+static const char8* kAssemblyFilter = "Lion Assembly (*.lnassembly)\0*.lnassembly\0";
 
 namespace
 {
 	// Defined with the rest of the project machinery further down the file; the boot needs it before that
 	// point is reached.
 	std::filesystem::path ActiveProjectDirectory();
+	std::filesystem::path GameAssetsDirectory();
 	void SetActiveProjectDirectory(const std::filesystem::path& project);
+	void DrawIcon(const ImVec2& origin, const ImVec2& box, const char8* icon, ImU32 color, float32 pixels);
+	bool DrawSectionHeader(const char8* id, const char8* icon, const char8* name, ImGuiTreeNodeFlags flags);
 }
 
 // Every panel's window name: the icon it wears on its tab, the name it goes by, and the id a saved layout
@@ -66,7 +74,6 @@ static const char8* kPropertiesWindow = ICON_MDI_TUNE "  Properties###Properties
 static const char8* kProjectWindow    = ICON_MDI_FOLDER_MULTIPLE "  Content Browser###ContentBrowser";
 static const char8* kConsoleWindow    = ICON_MDI_CONSOLE "  Console###Console";
 static const char8* kStatisticsWindow = ICON_MDI_CHART_BAR "  Statistics###Statistics";
-static const char8* kShortcutsWindow  = ICON_MDI_KEYBOARD "  Shortcuts###Shortcuts";
 
 // Ordered by how much they are reached for: what you pick, what you edit on it, where its assets come
 // from, what the engine has to say, and how it is doing. Alt+N follows this, so the numbers you use
@@ -99,11 +106,14 @@ void EditorLayer::OnCreate()
 {
 	EditorGui::Init();
 	InitShortcuts();
+	LoadEditorSettings();
+	SetResourceOverrideDirectory(GameAssetsDirectory().string());
 
 	LoadGameModule();
 
 	mCamera = MakeReference<CameraOrthographic>();
 	mScene = MakeReference<Scene>();
+	mSavedSceneSnapshot = SceneSerializer::SerializeToString(mScene);
 
 	FramebufferSpecification spec;
 	spec.width = Window::kDefaultViewportWidth;
@@ -151,12 +161,15 @@ void EditorLayer::OnCreate()
 		return;
 	}
 
+	LoadProjectInputMap();
 	LoadProjectDefaultScene(Projects::DefaultProjectDirectory());
 }
 
 void EditorLayer::OnUpdate()
 {
 	PollGameBuild();
+	PollExport();
+	PollAssemblyChanges();
 
 	// Advance the scene simulation (physics + entity scripts) while playing and not paused — or for
 	// exactly one frame when a step was requested, which is what makes a paused run inspectable.
@@ -166,7 +179,14 @@ void EditorLayer::OnUpdate()
 	// before the world moved once — the cooldown that wasn't. A running game keeps real time.
 	if (mPlaying && (!mPaused || mStepFrame))
 	{
-		mScene->OnUpdate(mStepFrame ? (1.0f / 60.0f) : -1.0f);
+		SceneManager::Update(mStepFrame ? (1.0f / 60.0f) : -1.0f);
+
+		if (const Reference<Scene> active = SceneManager::GetActiveScene(); active && active != mScene)
+		{
+			SetSelection(nullptr);
+			mScene = active;
+		}
+
 		mStepFrame = false;
 	}
 }
@@ -184,6 +204,8 @@ void EditorLayer::StepOneFrame()
 
 void EditorLayer::OnDetach()
 {
+	SaveEditorSettings();
+	SceneManager::Clear();
 	// The module goes before the editor does, and for the same reason a reload drops it first: the
 	// registries hold factories that are code inside it, and the scene holds components whose vtables
 	// are. Left to the process to tear down, those are destroyed after the library has been unmapped —
@@ -235,6 +257,9 @@ void EditorLayer::SelectEntityByIndex(int index)
 
 void EditorLayer::StartPlay()
 {
+	if (mEditingAssembly)
+		return;
+
 	if (mPlaying)
 	{
 		mPaused = false;  // Play acts as "resume" while paused.
@@ -247,8 +272,9 @@ void EditorLayer::StartPlay()
 	const int selected = SelectedEntityIndex();
 
 	mPlaySnapshot = SceneSerializer::SerializeToString(mScene);
-	SceneSerializer::DeserializeFromString(mScene, mPlaySnapshot);
+	SceneSerializer::DeserializeFromString(mScene, mPlaySnapshot, GameAssetsDirectory().string());
 	SelectEntityByIndex(selected);
+	SceneManager::SetActiveScene(mScene, mScenePath);
 
 	mPlaying = true;
 	mPaused = false;
@@ -272,7 +298,9 @@ void EditorLayer::StopPlay()
 	// Restore the scene to exactly the edited state captured when Play started.
 	const int selected = SelectedEntityIndex();
 
-	SceneSerializer::DeserializeFromString(mScene, mPlaySnapshot);
+	SceneManager::Clear();
+	Audio::StopAll();
+	SceneSerializer::DeserializeFromString(mScene, mPlaySnapshot, GameAssetsDirectory().string());
 	SelectEntityByIndex(selected);
 
 	mPlaying = false;
@@ -530,9 +558,11 @@ void EditorLayer::RenderScene()
 	Renderer::Clear(0.12f, 0.12f, 0.15f, 1.0f);
 	mFramebuffer->ClearEntityId(-1);  // Empty pixels map to "no entity".
 
+	RenderCommand::SetWireframe(mViewportMode == ViewportMode::Wireframe);
 	Renderer::RenderBegin(mCamera);
 	mScene->OnRender();
 	Renderer::RenderEnd();
+	RenderCommand::SetWireframe(false);
 
 	mFramebuffer->Unbind();
 }
@@ -607,12 +637,29 @@ void EditorLayer::DrawUI()
 	DrawStatistics();
 	DrawConsole();
 	DrawProject();
-	DrawShortcuts();
+	DrawWindowSettings();
+	DrawProjectSettings();
+	DrawExportPopup();
 	DrawLayoutPopups();
 
 	DrawNewComponentPopup();
 	DrawDeleteAssetPopup();
 	DrawProjectManagerPopup();
+
+	if (!mPendingAssemblyPath.empty())
+	{
+		const std::string path = std::move(mPendingAssemblyPath);
+		mPendingAssemblyPath.clear();
+		LoadAssembly(path);
+	}
+
+	if (mPendingAssemblyReturn)
+	{
+		mPendingAssemblyReturn = false;
+		ReturnFromAssembly();
+	}
+
+	DrawUnsavedAssemblyPopup();
 
 	// Drawn over everything, because that is what they are: the dim that says the game is running, the
 	// size a panel reports while it is being dragged, and the toast that says the module is building.
@@ -674,8 +721,6 @@ void EditorLayer::DrawPlayModeDim()
 	for (const Panel& panel : kPanels)
 		veil(panel.window);
 
-	if (mShowShortcuts)
-		veil(kShortcutsWindow);
 }
 
 void EditorLayer::DrawPanelSizeOverlay()
@@ -868,6 +913,68 @@ void EditorLayer::DrawToast()
 	}
 }
 
+namespace
+{
+	bool DrawSectionHeader(const char8* id, const char8* icon, const char8* name, ImGuiTreeNodeFlags flags)
+	{
+		flags |= ImGuiTreeNodeFlags_SpanAvailWidth | ImGuiTreeNodeFlags_AllowOverlap;
+		ImGui::SetNextItemAllowOverlap();
+		const bool open = ImGui::CollapsingHeader(id, flags);
+		const ImVec2 headerMin = ImGui::GetItemRectMin();
+		const ImVec2 headerMax = ImGui::GetItemRectMax();
+		const float32 iconX = headerMin.x + ImGui::GetFontSize() + 12.0f;
+		const float32 rowHeight = headerMax.y - headerMin.y;
+		const ImU32 textColor = ImGui::GetColorU32(ImGuiCol_Text);
+
+		DrawIcon(ImVec2(iconX, headerMin.y), ImVec2(kIconSize, rowHeight), icon, textColor, kIconSize);
+		ImGui::GetWindowDrawList()->AddText(
+			ImVec2(iconX + kIconSize + 8.0f, ImFloor(headerMin.y + (rowHeight - ImGui::GetTextLineHeight()) * 0.5f)),
+			textColor, name);
+		return open;
+	}
+
+	// Inspector and modal combos use the same disclosure arrow as the Scene Hierarchy. Their rectangle is
+	// captured before BeginCombo: opening the popup changes ImGui's current window and its last item data.
+	bool BeginCompactCombo(const char8* id, const char8* preview)
+	{
+		ImDrawList* draw = ImGui::GetWindowDrawList();
+		const ImVec2 minimum = ImGui::GetCursorScreenPos();
+		const ImVec2 maximum(minimum.x + ImGui::CalcItemWidth(), minimum.y + ImGui::GetFrameHeight());
+		const bool open = ImGui::BeginCombo(id, preview, ImGuiComboFlags_NoArrowButton);
+
+		EditorGui::DrawComboArrow(draw, minimum, maximum, open, ImGui::GetColorU32(ImGuiCol_Text));
+
+		return open;
+	}
+
+	bool CompactCombo(const char8* id, int32& selected, const char8* const* items, int32 count)
+	{
+		selected = std::clamp(selected, 0, count - 1);
+		bool changed = false;
+
+		if (BeginCompactCombo(id, items[selected]))
+		{
+			for (int32 option = 0; option < count; ++option)
+			{
+				const bool current = selected == option;
+
+				if (ImGui::Selectable(items[option], current))
+				{
+					selected = option;
+					changed = true;
+				}
+
+				if (current)
+					ImGui::SetItemDefaultFocus();
+			}
+
+			ImGui::EndCombo();
+		}
+
+		return changed;
+	}
+}
+
 void EditorLayer::DrawStatistics()
 {
 	if (!mShowStatistics)
@@ -910,7 +1017,8 @@ void EditorLayer::DrawStatistics()
 		return true;
 	};
 
-	if (ImGui::CollapsingHeader("Frame", ImGuiTreeNodeFlags_DefaultOpen) && beginTable("Frame"))
+	if (DrawSectionHeader("###statistics_frame", ICON_MDI_CLOCK, "Frame", ImGuiTreeNodeFlags_DefaultOpen)
+		&& beginTable("Frame"))
 	{
 		row("FPS", "%.1f", io.Framerate);
 		row("Frame time", "%.3f ms", 1000.0f / io.Framerate);
@@ -918,7 +1026,8 @@ void EditorLayer::DrawStatistics()
 		ImGui::EndTable();
 	}
 
-	if (ImGui::CollapsingHeader("Renderer", ImGuiTreeNodeFlags_DefaultOpen) && beginTable("Renderer"))
+	if (DrawSectionHeader("###statistics_renderer", ICON_MDI_CHART_BAR, "Renderer", ImGuiTreeNodeFlags_DefaultOpen)
+		&& beginTable("Renderer"))
 	{
 		// The batch's whole job is to turn many sprites into few draw calls, and none of that shows from
 		// the outside. These are the numbers that say whether it is doing it.
@@ -935,7 +1044,8 @@ void EditorLayer::DrawStatistics()
 		ImGui::EndTable();
 	}
 
-	if (ImGui::CollapsingHeader("Scene", ImGuiTreeNodeFlags_DefaultOpen) && beginTable("Scene"))
+	if (DrawSectionHeader("###statistics_scene", ICON_MDI_CUBE_OUTLINE, "Scene", ImGuiTreeNodeFlags_DefaultOpen)
+		&& beginTable("Scene"))
 	{
 		int32 components = 0;
 		int32 bodies = 0;
@@ -956,7 +1066,8 @@ void EditorLayer::DrawStatistics()
 		ImGui::EndTable();
 	}
 
-	if (ImGui::CollapsingHeader("Viewport", ImGuiTreeNodeFlags_DefaultOpen) && beginTable("Viewport"))
+	if (DrawSectionHeader("###statistics_viewport", ICON_MDI_MONITOR, "Viewport", ImGuiTreeNodeFlags_DefaultOpen)
+		&& beginTable("Viewport"))
 	{
 		row("Render target", "%.0f x %.0f", mViewportSize.x, mViewportSize.y);
 		row("Window", "%d x %d", static_cast<int32>(io.DisplaySize.x), static_cast<int32>(io.DisplaySize.y));
@@ -968,9 +1079,6 @@ void EditorLayer::DrawStatistics()
 
 namespace
 {
-	// Defined further down, next to the other icon helpers, but needed here for the console's filter icons.
-	void DrawIcon(const ImVec2& origin, const ImVec2& box, const char8* icon, ImU32 color, float32 pixels);
-
 	// Console severity buckets, mirroring the three filter toggles (Unity-style).
 	enum class LogBucket { Error, Warning, Info };
 
@@ -1326,7 +1434,7 @@ namespace
 	// construction arguments (a collider sizes itself to the sprite). Everything else in the registry
 	// comes from the game module and is added generically, by name.
 	constexpr const char8* kBuiltInComponents[] = {
-		"SpriteRenderer", "Camera2D", "RigidBody2D", "BoxCollider2D", "CircleCollider2D" };
+		"SpriteRenderer", "Camera2D", "AudioPlayer", "RigidBody2D", "BoxCollider2D", "CircleCollider2D" };
 
 	bool IsBuiltInComponent(const std::string& name)
 	{
@@ -1373,6 +1481,7 @@ namespace
 	void SetActiveProjectDirectory(const std::filesystem::path& project)
 	{
 		ActiveProjectStorage() = project;
+		SetResourceOverrideDirectory(project.empty() ? std::string() : (project / "Assets").string());
 	}
 
 	// The game's assets, in the active project. Empty when no project is around.
@@ -1798,6 +1907,25 @@ namespace
 		DrawIcon(origin, ImVec2(box, box), icon, color, pixels);
 	}
 
+	bool IconButton(const char8* id, const char8* icon, float32 size, const char8* tooltip)
+	{
+		const ImVec2 origin = ImGui::GetCursorScreenPos();
+		const bool clicked = ImGui::InvisibleButton(id, ImVec2(size, size));
+		const bool hovered = ImGui::IsItemHovered();
+		const bool active = ImGui::IsItemActive();
+		const ImGuiCol background = active ? ImGuiCol_ButtonActive
+			: hovered ? ImGuiCol_ButtonHovered : ImGuiCol_Button;
+
+		ImGui::GetWindowDrawList()->AddRectFilled(origin, ImVec2(origin.x + size, origin.y + size),
+			ImGui::GetColorU32(background), ImGui::GetStyle().FrameRounding);
+		DrawIcon(origin, size, icon, ImGui::GetColorU32(ImGuiCol_Text), kIconSize);
+
+		if (hovered && tooltip)
+			ImGui::SetTooltip("%s", tooltip);
+
+		return clicked;
+	}
+
 	// An icon drawn inline, as if it were a word, at an exact pixel size — larger than the merged inline
 	// glyphs. It claims its own space and leaves the cursor after it, so a SameLine puts the next item beside
 	// it, which is how the Inspector sets a large mark before an entity's name.
@@ -1817,7 +1945,7 @@ namespace
 
 	// The eye in the Hierarchy's Visibility column. Open, the entity is drawn; struck through, it is not
 	// — and that is all it is: a hidden entity still updates and still collides.
-	bool EyeButton(const char8* id, bool visible)
+	bool EyeButton(const char8* id, bool visible, bool assembly, bool selected)
 	{
 		const float32 size = RowEndSlot();
 		const ImVec2 origin = ImGui::GetCursorScreenPos();
@@ -1827,9 +1955,28 @@ namespace
 		if (hovered)
 			ImGui::SetTooltip(visible ? "Hide" : "Show");
 
-		const ImU32 color = ImGui::GetColorU32((visible || hovered) ? ImGuiCol_Text : ImGuiCol_TextDisabled);
+		const ImU32 color = assembly && !selected
+			? ImGui::GetColorU32(EditorGui::GetAccent())
+			: ImGui::GetColorU32((visible || hovered) ? ImGuiCol_Text : ImGuiCol_TextDisabled);
 
 		DrawIcon(origin, size, visible ? ICON_MDI_EYE : ICON_MDI_EYE_OFF, color, kIconSize);
+		return clicked;
+	}
+
+	// Hierarchy navigation is a row-end glyph rather than a framed toolbar button. It owns a complete
+	// 20 px hit target while the chevron itself stays on the shared 16 px icon metric.
+	bool HierarchyNavigationButton(const char8* id, const char8* icon, const char8* tooltip)
+	{
+		const float32 size = RowEndSlot();
+		const ImVec2 origin = ImGui::GetCursorScreenPos();
+		const bool clicked = ImGui::InvisibleButton(id, ImVec2(size, size));
+		const bool hovered = ImGui::IsItemHovered();
+
+		if (hovered && tooltip)
+			ImGui::SetTooltip("%s", tooltip);
+
+		DrawIcon(origin, size, icon,
+			ImGui::GetColorU32(hovered ? ImGuiCol_Text : ImGuiCol_TextDisabled), kIconSize);
 		return clicked;
 	}
 
@@ -1896,10 +2043,10 @@ namespace
 	// What the engine ships into a project, and what a project cannot be edited into not having.
 	//
 	// The two folders are where an asset of a kind goes: deleting one is not editing a project, it is
-	// breaking it. Lit.glsl is the shader everything is drawn with. And Sprites/Geometries is sealed —
+	// breaking it. Lit.lnshader is the shader everything is drawn with. And Sprites/Geometries is sealed —
 	// the simple shapes the engine will put there to build with are the engine's, all the way down, so
 	// what is inside it is as protected as the folder around it.
-	constexpr const char8* kEngineAssets[] = { "Shaders", "Shaders/Lit.glsl", "Sprites", "Sprites/Geometries" };
+	constexpr const char8* kEngineAssets[] = { "Shaders", "Shaders/Lit.lnshader", "Sprites", "Sprites/Geometries" };
 	constexpr const char8* kSealedAssetFolders[] = { "Sprites/Geometries" };
 
 	bool IsEngineAsset(const std::string& relative)
@@ -1942,12 +2089,35 @@ namespace
 		}
 	}
 
+	// A copied asset stays beside its source and follows Explorer's familiar naming rule.
+	std::filesystem::path UnusedCopyPath(const std::filesystem::path& source,
+		const std::filesystem::path& destinationDirectory)
+	{
+		std::error_code error;
+		const bool directory = std::filesystem::is_directory(source, error);
+		const std::string stem = directory ? source.filename().string() : source.stem().string();
+		const std::string extension = !directory && source.has_extension()
+			? source.extension().string() : std::string();
+
+		for (int32 number = 1; ; ++number)
+		{
+			const std::string suffix = number == 1 ? " Copy" : " Copy (" + std::to_string(number) + ")";
+			const std::filesystem::path candidate = destinationDirectory / (stem + suffix + extension);
+
+			if (!std::filesystem::exists(candidate, error))
+				return candidate;
+		}
+	}
+
 	// Only asset-like files are listed; the resource root also holds the executable and its DLLs.
 	// A script is one of the game's files too, so it is listed like any other: the Content Browser is
 	// where a component is created, and hiding the result would be a strange way to end that flow.
 	bool IsAssetFile(const std::filesystem::path& path)
 	{
-		static const char8* extensions[] = { ".png", ".jpg", ".jpeg", ".bmp", ".glsl", ".lnscene", ".h", ".cpp" };
+		static const char8* extensions[] = {
+			".png", ".jpg", ".jpeg", ".bmp", ".wav", ".lnshader", ".lnscene", ".lnassembly",
+			".lninput", ".h", ".cpp"
+		};
 
 		std::string extension = path.extension().string();
 		std::transform(extension.begin(), extension.end(), extension.begin(),
@@ -1966,9 +2136,13 @@ namespace
 void EditorLayer::DrawProject()
 {
 	if (!mShowProject)
+	{
+		mProjectFocused = false;
 		return;
+	}
 
 	ImGui::Begin(kProjectWindow, &mShowProject);
+	mProjectFocused = ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows);
 
 	const std::filesystem::path root = ProjectPanelDirectory();
 
@@ -2079,7 +2253,16 @@ void EditorLayer::DrawProject()
 		}
 		else
 		{
-			DrawAssetEntry(entry.name, entry.path, false);
+			if (DrawAssetEntry(entry.name, entry.path, false)
+				&& ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left) && !mPlaying)
+			{
+				const std::filesystem::path extension = std::filesystem::path(entry.path).extension();
+
+				if (extension == ".lnscene")
+					LoadScene((root / entry.path).string());
+				else if (extension == ".lnassembly")
+					LoadAssembly((root / entry.path).string());
+			}
 
 			// Drag an asset onto a field that accepts it (e.g. the Sprite Renderer's texture).
 			if (ImGui::BeginDragDropSource())
@@ -2097,11 +2280,15 @@ void EditorLayer::DrawProject()
 	if (ImGui::BeginPopupContextWindow("ContentBrowserContext",
 		ImGuiPopupFlags_MouseButtonRight | ImGuiPopupFlags_NoOpenOverItems))
 	{
-		if (ImGui::MenuItem("New Folder"))
+		if (ImGui::MenuItem(ICON_MDI_PACKAGE_VARIANT_CLOSED "  Create Assembly",
+			nullptr, false, !mPlaying && !mEditingAssembly))
+			CreateAssembly(mSelectedEntity);
+
+		if (ImGui::MenuItem(ICON_MDI_FOLDER_PLUS "  New Folder", ShortcutText(ShortcutAction::NewFolder).c_str()))
 			CreateAssetFolder();
 
 		// The component lands where you are standing: the popup opens with this folder already in it.
-		if (ImGui::MenuItem("New Component..."))
+		if (ImGui::MenuItem(ICON_MDI_CODE_TAGS "  New Component..."))
 		{
 			const std::string folder = mProjectPath.empty() ? std::string("Scripts") : mProjectPath;
 			const size_t copied = folder.copy(mNewComponentFolder, sizeof(mNewComponentFolder) - 1);
@@ -2109,11 +2296,34 @@ void EditorLayer::DrawProject()
 			mOpenNewComponentPopup = true;
 		}
 
+		ImGui::Separator();
+
+		if (ImGui::MenuItem(ICON_MDI_CONTENT_PASTE "  Paste", ShortcutText(ShortcutAction::PasteEntity).c_str(),
+			false, !mAssetClipboard.empty()))
+			PasteAsset();
+
+		ImGui::Separator();
+
+		if (ImGui::MenuItem(ICON_MDI_FOLDER_OPEN_OUTLINE "  Open in File Explorer"))
+			OpenAssetInFileExplorer(mProjectPath);
+
+		ImGui::Separator();
+
+		if (ImGui::MenuItem(ICON_MDI_FILE_EYE_OUTLINE "  Show File Extensions", nullptr,
+			mShowAssetExtensions))
+		{
+			mShowAssetExtensions = !mShowAssetExtensions;
+			SaveEditorSettings();
+		}
+
 		ImGui::EndPopup();
 	}
 
 	if (navigate)
+	{
 		mProjectPath = navigateTarget;
+		mSelectedAsset.clear();
+	}
 
 	ImGui::End();
 }
@@ -2131,11 +2341,20 @@ namespace
 		if (extension == ".h" || extension == ".cpp" || extension == ".cs")
 			return ICON_MDI_CODE_TAGS;
 
-		if (extension == ".glsl")
+		if (extension == ".lnshader")
 			return ICON_MDI_PALETTE;
+
+		if (extension == ".wav")
+			return ICON_MDI_FILE_MUSIC;
+
+		if (extension == ".lninput")
+			return ICON_MDI_GAMEPAD;
 
 		if (extension == ".lnscene")
 			return ICON_MDI_SHAPE;
+
+		if (extension == ".lnassembly")
+			return ICON_MDI_PACKAGE_VARIANT_CLOSED;
 
 		return ICON_MDI_FILE_DOCUMENT_OUTLINE;
 	}
@@ -2144,6 +2363,7 @@ namespace
 bool EditorLayer::DrawAssetEntry(const std::string& name, const std::string& assetPath, bool folder)
 {
 	const bool engineOwned = IsEngineAsset(assetPath);
+	const bool assemblyAsset = !folder && std::filesystem::path(assetPath).extension() == ".lnassembly";
 
 	// Renaming happens where the name is, so the row becomes the field.
 	if (mRenamingAsset == assetPath)
@@ -2175,19 +2395,31 @@ bool EditorLayer::DrawAssetEntry(const std::string& name, const std::string& ass
 
 	if (dimmed)
 		ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyle().Colors[ImGuiCol_TextDisabled]);
+	else if (assemblyAsset && mSelectedAsset != assetPath)
+		ImGui::PushStyleColor(ImGuiCol_Text, EditorGui::GetAccent());
 
 	// Hovered and clicked in the engine's orange, the same as the Hierarchy and the console: one selection
 	// colour across the editor.
 	const ImVec4 accent = EditorGui::GetAccent();
-	ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(accent.x, accent.y, accent.z, 0.30f));
+	const bool selected = mSelectedAsset == assetPath;
+	ImGui::PushStyleColor(ImGuiCol_Header, accent);
+	ImGui::PushStyleColor(ImGuiCol_HeaderHovered,
+		selected ? accent : ImVec4(accent.x, accent.y, accent.z, 0.30f));
 	ImGui::PushStyleColor(ImGuiCol_HeaderActive, accent);
 
-	const std::string label = std::string(folder ? ICON_MDI_FOLDER : AssetIcon(name)) + "  " + name;
-	const bool activated = ImGui::Selectable(label.c_str(), false, ImGuiSelectableFlags_AllowDoubleClick);
+	const std::string displayName = !folder && !mShowAssetExtensions
+		? std::filesystem::path(name).stem().generic_string()
+		: name;
+	const std::string label = std::string(folder ? ICON_MDI_FOLDER : AssetIcon(name)) + "  " + displayName;
+	const bool activated = ImGui::Selectable(label.c_str(), selected,
+		ImGuiSelectableFlags_AllowDoubleClick);
 
-	ImGui::PopStyleColor(2);
+	if (activated)
+		mSelectedAsset = assetPath;
 
-	if (dimmed)
+	ImGui::PopStyleColor(3);
+
+	if (dimmed || (assemblyAsset && !selected))
 		ImGui::PopStyleColor();
 
 	if (ImGui::IsItemHovered())
@@ -2196,7 +2428,30 @@ bool EditorLayer::DrawAssetEntry(const std::string& name, const std::string& ass
 
 	if (ImGui::BeginPopupContextItem())
 	{
-		if (ImGui::MenuItem("Copy path"))
+		mSelectedAsset = assetPath;
+
+		if (assemblyAsset)
+		{
+			if (ImGui::MenuItem(ICON_MDI_PACKAGE_VARIANT_CLOSED "  Open Assembly", nullptr, false, !mPlaying))
+				LoadAssembly((ProjectPanelDirectory() / assetPath).string());
+
+			if (ImGui::MenuItem(ICON_MDI_PACKAGE_UP "  Instantiate", nullptr, false,
+				!mPlaying && !mEditingAssembly))
+				InstantiateAssembly(assetPath);
+
+			ImGui::Separator();
+		}
+
+		if (ImGui::MenuItem(ICON_MDI_PACKAGE_VARIANT_CLOSED "  Create Assembly",
+			nullptr, false, !mPlaying && !mEditingAssembly))
+			CreateAssembly(mSelectedEntity);
+
+		ImGui::Separator();
+
+		if (ImGui::MenuItem(ICON_MDI_FOLDER_OPEN_OUTLINE "  Open in File Explorer"))
+			OpenAssetInFileExplorer(assetPath);
+
+		if (ImGui::MenuItem(ICON_MDI_CONTENT_COPY "  Copy Path"))
 			ImGui::SetClipboardText(assetPath.c_str());
 
 		ImGui::Separator();
@@ -2206,19 +2461,33 @@ bool EditorLayer::DrawAssetEntry(const std::string& name, const std::string& ass
 		// is looking for teaches them nothing.
 		ImGui::BeginDisabled(engineOwned);
 
-		if (ImGui::MenuItem("Rename"))
-		{
-			mRenamingAsset = assetPath;
-			mAssetRenameFocus = true;
+		if (ImGui::MenuItem(ICON_MDI_PENCIL "  Rename", ShortcutText(ShortcutAction::RenameEntity).c_str()))
+			BeginRenameAsset(assetPath);
 
-			const size_t copied = name.copy(mAssetRenameBuffer, sizeof(mAssetRenameBuffer) - 1);
-			mAssetRenameBuffer[copied] = '\0';
-		}
+		if (ImGui::MenuItem(ICON_MDI_CONTENT_COPY "  Copy", ShortcutText(ShortcutAction::CopyEntity).c_str()))
+			CopyAsset(false);
 
-		if (ImGui::MenuItem("Delete"))
+		if (ImGui::MenuItem(ICON_MDI_CONTENT_CUT "  Cut", ShortcutText(ShortcutAction::CutSelection).c_str()))
+			CopyAsset(true);
+
+		if (ImGui::MenuItem(ICON_MDI_CONTENT_DUPLICATE "  Duplicate", ShortcutText(ShortcutAction::DuplicateEntity).c_str()))
+			DuplicateAsset();
+
+		ImGui::Separator();
+
+		if (ImGui::MenuItem(ICON_MDI_DELETE_OUTLINE "  Delete"))
 			mAssetToDelete = assetPath;
 
 		ImGui::EndDisabled();
+
+		ImGui::Separator();
+
+		if (ImGui::MenuItem(ICON_MDI_FILE_EYE_OUTLINE "  Show File Extensions", nullptr,
+			mShowAssetExtensions))
+		{
+			mShowAssetExtensions = !mShowAssetExtensions;
+			SaveEditorSettings();
+		}
 
 		if (engineOwned)
 			ImGui::TextDisabled("Shipped with the engine.");
@@ -2283,6 +2552,122 @@ void EditorLayer::CreateAssetFolder()
 
 	const size_t copied = name.copy(mAssetRenameBuffer, sizeof(mAssetRenameBuffer) - 1);
 	mAssetRenameBuffer[copied] = '\0';
+	mSelectedAsset = mRenamingAsset;
+}
+
+void EditorLayer::BeginRenameAsset(const std::string& assetPath)
+{
+	if (assetPath.empty() || IsEngineAsset(assetPath))
+		return;
+
+	mRenamingAsset = assetPath;
+	mSelectedAsset = assetPath;
+	mAssetRenameFocus = true;
+
+	const std::string name = std::filesystem::path(assetPath).filename().string();
+	const size_t copied = name.copy(mAssetRenameBuffer, sizeof(mAssetRenameBuffer) - 1);
+	mAssetRenameBuffer[copied] = '\0';
+}
+
+void EditorLayer::CopyAsset(bool cut)
+{
+	if (mSelectedAsset.empty() || (cut && IsEngineAsset(mSelectedAsset)))
+		return;
+
+	mAssetClipboard = mSelectedAsset;
+	mAssetClipboardCut = cut;
+}
+
+void EditorLayer::PasteAsset()
+{
+	if (mAssetClipboard.empty())
+		return;
+
+	const std::filesystem::path root = ProjectPanelDirectory();
+	const std::filesystem::path source = root / mAssetClipboard;
+	const std::filesystem::path destinationDirectory = root / mProjectPath;
+	std::error_code error;
+
+	if (!std::filesystem::exists(source, error) || !std::filesystem::is_directory(destinationDirectory, error))
+	{
+		mAssetClipboard.clear();
+		mAssetClipboardCut = false;
+		return;
+	}
+
+	std::filesystem::path destination = destinationDirectory / source.filename();
+
+	if (mAssetClipboardCut && source.parent_path() == destinationDirectory)
+		return;
+
+	if (std::filesystem::exists(destination, error))
+		destination = UnusedCopyPath(source, destinationDirectory);
+
+	if (mAssetClipboardCut)
+	{
+		std::filesystem::rename(source, destination, error);
+	}
+	else if (std::filesystem::is_directory(source, error))
+	{
+		std::filesystem::copy(source, destination, std::filesystem::copy_options::recursive, error);
+	}
+	else
+	{
+		std::filesystem::copy_file(source, destination, error);
+	}
+
+	if (error)
+	{
+		Log::Console(LogLevel::Error,
+			LION_FORMAT_TEXT("[Editor] Could not paste '{}': {}.", mAssetClipboard, error.message()));
+		return;
+	}
+
+	mSelectedAsset = destination.lexically_relative(root).generic_string();
+	mProjectDirty = true;
+
+	if (mAssetClipboardCut)
+	{
+		mAssetClipboard.clear();
+		mAssetClipboardCut = false;
+	}
+}
+
+void EditorLayer::DuplicateAsset()
+{
+	if (mSelectedAsset.empty() || IsEngineAsset(mSelectedAsset))
+		return;
+
+	const std::string savedClipboard = mAssetClipboard;
+	const bool savedCut = mAssetClipboardCut;
+	const std::string savedPath = mProjectPath;
+
+	mAssetClipboard = mSelectedAsset;
+	mAssetClipboardCut = false;
+	mProjectPath = std::filesystem::path(mSelectedAsset).parent_path().generic_string();
+	PasteAsset();
+	mProjectPath = savedPath;
+	mAssetClipboard = savedClipboard;
+	mAssetClipboardCut = savedCut;
+}
+
+void EditorLayer::OpenAssetInFileExplorer(const std::string& assetPath) const
+{
+#ifdef LN_PLATFORM_WIN
+	const std::filesystem::path absolute = std::filesystem::absolute(ProjectPanelDirectory() / assetPath);
+	std::error_code error;
+
+	if (std::filesystem::is_directory(absolute, error))
+	{
+		ShellExecuteW(nullptr, L"open", absolute.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+		return;
+	}
+
+	const std::wstring arguments = L"/select,\"" + absolute.wstring() + L"\"";
+	ShellExecuteW(nullptr, L"open", L"explorer.exe", arguments.c_str(), nullptr, SW_SHOWNORMAL);
+#else
+	(void)assetPath;
+#endif
 }
 
 void EditorLayer::RenameAsset(const std::string& assetPath, const std::string& name)
@@ -2310,6 +2695,8 @@ void EditorLayer::RenameAsset(const std::string& assetPath, const std::string& n
 
 	if (error)
 		Log::Console(LogLevel::Error, LION_FORMAT_TEXT("[Editor] Could not rename '{}': {}.", assetPath, error.message()));
+	else
+		mSelectedAsset = to.lexically_relative(root).generic_string();
 }
 
 void EditorLayer::DrawDeleteAssetPopup()
@@ -2353,6 +2740,15 @@ void EditorLayer::DrawDeleteAssetPopup()
 		else
 			Log::Console(LogLevel::Information, LION_FORMAT_TEXT("[Editor] Deleted '{}'.", mAssetToDelete));
 
+		if (mSelectedAsset == mAssetToDelete)
+			mSelectedAsset.clear();
+
+		if (mAssetClipboard == mAssetToDelete)
+		{
+			mAssetClipboard.clear();
+			mAssetClipboardCut = false;
+		}
+
 		mAssetToDelete.clear();
 		ImGui::CloseCurrentPopup();
 	}
@@ -2368,45 +2764,122 @@ void EditorLayer::DrawDeleteAssetPopup()
 	ImGui::EndPopup();
 }
 
-void EditorLayer::DrawShortcuts()
+void EditorLayer::DrawWindowSettings()
 {
-	if (!mShowShortcuts)
+	if (mOpenWindowSettingsPopup)
+	{
+		mOpenWindowSettingsPopup = false;
+		ImGui::OpenPopup("Window Settings");
+	}
+
+	const ImVec2 center = ImGui::GetMainViewport()->GetCenter();
+	ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+	ImGui::SetNextWindowSize(ImVec2(860.0f, 620.0f), ImGuiCond_Appearing);
+
+	if (!ImGui::BeginPopupModal("Window Settings", nullptr, ImGuiWindowFlags_NoResize))
 		return;
 
-	ImGui::SetNextWindowSize(ImVec2(800.0f, 600.0f), ImGuiCond_FirstUseEver);
+	const float32 footerHeight = ImGui::GetFrameHeightWithSpacing() + ImGui::GetStyle().ItemSpacing.y;
+	ImGui::BeginChild("##editor_settings_body", ImVec2(0.0f, -footerHeight));
 
-	if (ImGui::Begin(kShortcutsWindow, &mShowShortcuts))
+	if (ImGui::BeginTabBar("##editor_settings_tabs"))
+	{
+		if (ImGui::BeginTabItem("General"))
+		{
+			DrawWindowGeneralSettings();
+			ImGui::EndTabItem();
+		}
+
+		if (ImGui::BeginTabItem("Shortcuts"))
+		{
+			DrawShortcutsTab();
+			ImGui::EndTabItem();
+		}
+
+		ImGui::EndTabBar();
+	}
+	ImGui::EndChild();
+	ImGui::Separator();
+
+	const float32 closeWidth = 96.0f;
+	ImGui::SetCursorPosX(ImGui::GetWindowWidth() - closeWidth - ImGui::GetStyle().WindowPadding.x);
+
+	if (ImGui::Button("Close", ImVec2(closeWidth, 0.0f)))
+		ImGui::CloseCurrentPopup();
+
+	ImGui::EndPopup();
+}
+
+void EditorLayer::DrawWindowGeneralSettings()
+{
+	ImGui::SeparatorText("Viewport");
+
+	if (ImGui::Checkbox("Show collider overlays", &mShowColliders))
+		SaveEditorSettings();
+
+	ImGui::TextDisabled("Collider outlines are an editor visualization and are never exported.");
+
+	ImGui::Spacing();
+	ImGui::SeparatorText("Content Browser");
+
+	if (ImGui::Checkbox("Show file extensions", &mShowAssetExtensions))
+		SaveEditorSettings();
+
+	ImGui::Spacing();
+	ImGui::SeparatorText("Workspace");
+
+	if (ImGui::Button("Reset Layout to Default"))
+	{
+		mLayoutRequest = LayoutRequest::Reset;
+		mLayoutToLoad.clear();
+	}
+
+	ImGui::Spacing();
+	ImGui::SeparatorText("About");
+	ImGui::TextUnformatted(kEditorName);
+	ImGui::TextDisabled("Lion Engine %s", kVersion);
+}
+
+void EditorLayer::DrawShortcutsTab()
+{
+	ImGui::BeginChild("##shortcut_settings", ImVec2(0.0f, 0.0f));
 	{
 		// The rebindable actions, grouped by category (order defines the display order).
 		struct Row { ShortcutAction action; const char8* category; const char8* name; };
 		static const Row rows[] = {
+			{ ShortcutAction::OpenWindowSettings,  "General",   "Open Window Settings" },
+			{ ShortcutAction::Undo,                "General",   "Undo" },
+			{ ShortcutAction::Redo,                "General",   "Redo" },
 			{ ShortcutAction::NewProject,      "Project",   "New project..." },
 			{ ShortcutAction::OpenProject,     "Project",   "Open a project..." },
+			{ ShortcutAction::OpenProjectSettings, "Project", "Open Project Settings" },
+			{ ShortcutAction::CompileModule,   "Project",   "Compile the game module" },
+			{ ShortcutAction::ReloadModule,    "Project",   "Reload the game module" },
 			{ ShortcutAction::NewScene,        "Scene",     "New scene" },
-				{ ShortcutAction::OpenScene,       "Scene",     "Open a scene" },
-				{ ShortcutAction::SaveScene,       "Scene",     "Save the scene" },
-				{ ShortcutAction::SaveSceneAs,     "Scene",     "Save the scene as..." },
-				{ ShortcutAction::ToggleShortcuts, "General",   "Toggle Shortcuts panel" },
-			{ ShortcutAction::Undo,            "General",   "Undo" },
-			{ ShortcutAction::Redo,            "General",   "Redo" },
+			{ ShortcutAction::OpenScene,       "Scene",     "Open a scene" },
+			{ ShortcutAction::SaveScene,       "Scene",     "Save the scene" },
+			{ ShortcutAction::SaveSceneAs,     "Scene",     "Save the scene as..." },
 			{ ShortcutAction::Play,            "Play Mode", "Play (run the simulation)" },
 			{ ShortcutAction::Pause,           "Play Mode", "Pause / resume the simulation" },
 			{ ShortcutAction::Stop,            "Play Mode", "Stop (return to edited state)" },
+			{ ShortcutAction::StepFrame,       "Play Mode", "Step one frame" },
 			{ ShortcutAction::ToolSelect,      "Tools",     "Select tool" },
 			{ ShortcutAction::GizmoMove,       "Tools",     "Move tool (translate)" },
 			{ ShortcutAction::GizmoRotate,     "Tools",     "Rotate tool" },
 			{ ShortcutAction::GizmoScale,      "Tools",     "Scale tool" },
 			{ ShortcutAction::FocusSelection,  "Viewport",  "Frame the selection" },
-			{ ShortcutAction::Deselect,        "Hierarchy", "Clear the selection" },
-				{ ShortcutAction::RenameEntity,    "Hierarchy", "Rename selected entity" },
-			{ ShortcutAction::DeleteEntity,    "Hierarchy", "Delete selected entity" },
-			{ ShortcutAction::CopyEntity,      "Hierarchy", "Copy selected entity" },
-			{ ShortcutAction::PasteEntity,     "Hierarchy", "Paste entity from clipboard" },
-			{ ShortcutAction::DuplicateEntity, "Hierarchy", "Duplicate selected entity" },
-			{ ShortcutAction::StepFrame,       "Play Mode", "Step one frame" },
+			{ ShortcutAction::ViewLit,         "Viewport",  "Lit shading" },
+			{ ShortcutAction::ViewUnlit,       "Viewport",  "Unlit shading" },
+			{ ShortcutAction::ViewWireframe,   "Viewport",  "Wireframe shading" },
 			{ ShortcutAction::ToggleColliders, "Viewport",  "Toggle collider hitboxes" },
-			{ ShortcutAction::CompileModule,   "Game",      "Compile the game module" },
-			{ ShortcutAction::ReloadModule,    "Game",      "Reload the game module" },
+			{ ShortcutAction::Deselect,        "Editing", "Clear the selection" },
+			{ ShortcutAction::RenameEntity,    "Editing", "Rename selected item" },
+			{ ShortcutAction::DeleteEntity,    "Editing", "Delete selected item" },
+			{ ShortcutAction::CopyEntity,      "Editing", "Copy selected item" },
+			{ ShortcutAction::CutSelection,    "Editing", "Cut selected item" },
+			{ ShortcutAction::PasteEntity,     "Editing", "Paste clipboard item" },
+			{ ShortcutAction::DuplicateEntity, "Editing", "Duplicate selected item" },
+			{ ShortcutAction::NewFolder,       "Editing", "Create a folder" },
 			{ ShortcutAction::ToggleHierarchy,  "Panels",   "Show/hide Scene Hierarchy" },
 			{ ShortcutAction::ToggleProperties, "Panels",   "Show/hide Properties" },
 			{ ShortcutAction::ToggleProject,    "Panels",   "Show/hide Project" },
@@ -2500,8 +2973,577 @@ void EditorLayer::DrawShortcuts()
 			}
 		}
 	}
+	ImGui::EndChild();
+}
 
-	ImGui::End();
+namespace
+{
+	struct InputChoice
+	{
+		const char8* name;
+		int32 code;
+	};
+
+	const InputChoice kKeyboardChoices[] = {
+		{ "A", GLFW_KEY_A }, { "B", GLFW_KEY_B }, { "C", GLFW_KEY_C }, { "D", GLFW_KEY_D },
+		{ "E", GLFW_KEY_E }, { "F", GLFW_KEY_F }, { "G", GLFW_KEY_G }, { "H", GLFW_KEY_H },
+		{ "I", GLFW_KEY_I }, { "J", GLFW_KEY_J }, { "K", GLFW_KEY_K }, { "L", GLFW_KEY_L },
+		{ "M", GLFW_KEY_M }, { "N", GLFW_KEY_N }, { "O", GLFW_KEY_O }, { "P", GLFW_KEY_P },
+		{ "Q", GLFW_KEY_Q }, { "R", GLFW_KEY_R }, { "S", GLFW_KEY_S }, { "T", GLFW_KEY_T },
+		{ "U", GLFW_KEY_U }, { "V", GLFW_KEY_V }, { "W", GLFW_KEY_W }, { "X", GLFW_KEY_X },
+		{ "Y", GLFW_KEY_Y }, { "Z", GLFW_KEY_Z },
+		{ "Up", GLFW_KEY_UP }, { "Down", GLFW_KEY_DOWN }, { "Left", GLFW_KEY_LEFT }, { "Right", GLFW_KEY_RIGHT },
+		{ "Space", GLFW_KEY_SPACE }, { "Enter", GLFW_KEY_ENTER }, { "Escape", GLFW_KEY_ESCAPE },
+		{ "Left Shift", GLFW_KEY_LEFT_SHIFT }, { "Left Control", GLFW_KEY_LEFT_CONTROL },
+		{ "Tab", GLFW_KEY_TAB }, { "Backspace", GLFW_KEY_BACKSPACE },
+	};
+
+	const InputChoice kMouseChoices[] = {
+		{ "Left Button", GLFW_MOUSE_BUTTON_LEFT },
+		{ "Right Button", GLFW_MOUSE_BUTTON_RIGHT },
+		{ "Middle Button", GLFW_MOUSE_BUTTON_MIDDLE },
+		{ "Button 4", GLFW_MOUSE_BUTTON_4 }, { "Button 5", GLFW_MOUSE_BUTTON_5 },
+	};
+
+	const InputChoice kGamepadButtonChoices[] = {
+		{ "A / Cross", GLFW_GAMEPAD_BUTTON_A }, { "B / Circle", GLFW_GAMEPAD_BUTTON_B },
+		{ "X / Square", GLFW_GAMEPAD_BUTTON_X }, { "Y / Triangle", GLFW_GAMEPAD_BUTTON_Y },
+		{ "Left Bumper", GLFW_GAMEPAD_BUTTON_LEFT_BUMPER }, { "Right Bumper", GLFW_GAMEPAD_BUTTON_RIGHT_BUMPER },
+		{ "Select / Back / Share", GLFW_GAMEPAD_BUTTON_BACK }, { "Start / Options", GLFW_GAMEPAD_BUTTON_START },
+		{ "Guide", GLFW_GAMEPAD_BUTTON_GUIDE }, { "Left Stick", GLFW_GAMEPAD_BUTTON_LEFT_THUMB },
+		{ "Right Stick", GLFW_GAMEPAD_BUTTON_RIGHT_THUMB }, { "D-pad Up", GLFW_GAMEPAD_BUTTON_DPAD_UP },
+		{ "D-pad Right", GLFW_GAMEPAD_BUTTON_DPAD_RIGHT }, { "D-pad Down", GLFW_GAMEPAD_BUTTON_DPAD_DOWN },
+		{ "D-pad Left", GLFW_GAMEPAD_BUTTON_DPAD_LEFT },
+	};
+
+	const InputChoice kGamepadAxisChoices[] = {
+		{ "Left Stick X", GLFW_GAMEPAD_AXIS_LEFT_X }, { "Left Stick Y", GLFW_GAMEPAD_AXIS_LEFT_Y },
+		{ "Right Stick X", GLFW_GAMEPAD_AXIS_RIGHT_X }, { "Right Stick Y", GLFW_GAMEPAD_AXIS_RIGHT_Y },
+		{ "Left Trigger", GLFW_GAMEPAD_AXIS_LEFT_TRIGGER }, { "Right Trigger", GLFW_GAMEPAD_AXIS_RIGHT_TRIGGER },
+	};
+
+	template<size_t Size>
+	const char8* ChoiceName(const InputChoice (&choices)[Size], int32 code)
+	{
+		for (const InputChoice& choice : choices)
+			if (choice.code == code)
+				return choice.name;
+
+		return "Unknown";
+	}
+
+	bool IsInputActionNameValid(const std::string& name)
+	{
+		if (name.empty() || std::isdigit(static_cast<unsigned char>(name.front())))
+			return false;
+
+		return std::all_of(name.begin(), name.end(), [](char8 character)
+			{
+				return std::isalnum(static_cast<unsigned char>(character)) || character == '_';
+			});
+	}
+
+	std::string Lower(std::string value)
+	{
+		std::transform(value.begin(), value.end(), value.begin(), [](unsigned char character)
+			{ return static_cast<char8>(std::tolower(character)); });
+		return value;
+	}
+
+	std::string InputBindingText(const InputBinding& binding)
+	{
+		switch (binding.device)
+		{
+			case InputDevice::Keyboard:
+				return ChoiceName(kKeyboardChoices, binding.code);
+			case InputDevice::MouseButton:
+				return ChoiceName(kMouseChoices, binding.code);
+			case InputDevice::GamepadButton:
+				return ChoiceName(kGamepadButtonChoices, binding.code);
+			case InputDevice::GamepadAxis:
+				return std::string(ChoiceName(kGamepadAxisChoices, binding.code))
+					+ (binding.scale < 0.0f ? " -" : " +");
+		}
+
+		return "Unknown";
+	}
+
+	const char8* InputBindingIcon(InputDevice device)
+	{
+		switch (device)
+		{
+			case InputDevice::Keyboard:      return ICON_MDI_KEYBOARD;
+			case InputDevice::MouseButton:   return ICON_MDI_MOUSE;
+			case InputDevice::GamepadButton: return ICON_MDI_GAMEPAD_VARIANT;
+			case InputDevice::GamepadAxis:   return ICON_MDI_GAMEPAD;
+		}
+
+		return ICON_MDI_TUNE;
+	}
+}
+
+void EditorLayer::DrawProjectSettings()
+{
+	if (mOpenProjectSettingsPopup)
+	{
+		mOpenProjectSettingsPopup = false;
+		LoadProjectInputMap();
+		ImGui::OpenPopup("Project Settings");
+	}
+
+	const ImVec2 center = ImGui::GetMainViewport()->GetCenter();
+	ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+	ImGui::SetNextWindowSize(ImVec2(920.0f, 650.0f), ImGuiCond_Appearing);
+
+	if (!ImGui::BeginPopupModal("Project Settings", nullptr, ImGuiWindowFlags_NoResize))
+		return;
+
+	const float32 footerHeight = ImGui::GetFrameHeightWithSpacing() + ImGui::GetStyle().ItemSpacing.y;
+	ImGui::BeginChild("##project_settings_body", ImVec2(0.0f, -footerHeight));
+
+	if (ImGui::BeginTabBar("##project_settings_tabs"))
+	{
+		if (ImGui::BeginTabItem("General"))
+		{
+			DrawProjectGeneralSettings();
+			ImGui::EndTabItem();
+		}
+
+		if (ImGui::BeginTabItem("Input"))
+		{
+			DrawInputSettings();
+			ImGui::EndTabItem();
+		}
+
+		ImGui::EndTabBar();
+	}
+	ImGui::EndChild();
+
+	DrawInputBindingPopup();
+	ImGui::Separator();
+
+	const float32 closeWidth = 96.0f;
+	ImGui::SetCursorPosX(ImGui::GetWindowWidth() - closeWidth - ImGui::GetStyle().WindowPadding.x);
+
+	if (ImGui::Button("Close", ImVec2(closeWidth, 0.0f)))
+		ImGui::CloseCurrentPopup();
+
+	ImGui::EndPopup();
+}
+
+void EditorLayer::DrawProjectGeneralSettings()
+{
+	const std::filesystem::path project = ActiveProjectDirectory();
+	const std::filesystem::path scene = Projects::DefaultScene(project);
+
+	ImGui::SeparatorText("Project");
+	ImGui::TextUnformatted("Name");
+	ImGui::SameLine(160.0f);
+	ImGui::TextUnformatted(Projects::DisplayName(project).c_str());
+
+	ImGui::TextUnformatted("Root Path");
+	ImGui::SameLine(160.0f);
+	ImGui::TextDisabled("%s", project.generic_string().c_str());
+
+	ImGui::Spacing();
+	ImGui::SeparatorText("Startup");
+	ImGui::TextUnformatted("Default Scene");
+	ImGui::SameLine(160.0f);
+	ImGui::TextDisabled("%s", scene.empty() ? "None" : scene.lexically_relative(project).generic_string().c_str());
+
+	const bool builtIn = project.lexically_normal() == Projects::DefaultProjectDirectory().lexically_normal();
+	ImGui::BeginDisabled(mScenePath.empty() || mEditingAssembly || builtIn);
+
+	if (ImGui::Button("Use Current Scene"))
+	{
+		if (Projects::SetDefaultScene(project, mScenePath))
+			mProjectSettingsError.clear();
+		else
+			mProjectSettingsError = "The current scene must be saved inside this project.";
+	}
+
+	ImGui::EndDisabled();
+
+	if (builtIn)
+		ImGui::TextDisabled("The built-in Sandbox always starts from Assets/Scenes/Level01.lnscene.");
+	else if (!mProjectSettingsError.empty())
+		ImGui::TextColored(LogLevelColor(LogLevel::Error), "%s", mProjectSettingsError.c_str());
+}
+
+void EditorLayer::LoadProjectInputMap()
+{
+	const std::filesystem::path file = GameAssetsDirectory() / Input::kDefaultActionMapFile;
+	mInputActions.clear();
+	Input::SetActionMap({});
+
+	if (Input::LoadActionMap(file.string()))
+		mInputActions = Input::GetActionMap();
+}
+
+void EditorLayer::SaveProjectInputMap()
+{
+	const std::filesystem::path file = GameAssetsDirectory() / Input::kDefaultActionMapFile;
+	Input::SetActionMap(mInputActions);
+
+	if (!Input::SaveActionMap(file.string(), mInputActions))
+		mProjectSettingsError = "Could not save Assets/Config/Input.lninput.";
+	else
+		mProjectSettingsError.clear();
+}
+
+void EditorLayer::DrawInputSettings()
+{
+	int32 connectedGamepad = -1;
+
+	for (int32 gamepad = 0; gamepad < 16; ++gamepad)
+	{
+		if (!Input::IsGamepadConnected(gamepad))
+			continue;
+
+		if (connectedGamepad < 0)
+			connectedGamepad = gamepad;
+	}
+
+	const ImGuiStyle& style = ImGui::GetStyle();
+	const ImVec4 inputBodyColor(20.0f / 255.0f, 21.0f / 255.0f, 23.0f / 255.0f, 1.0f);
+	const float32 deviceHeight = ImGui::GetFrameHeight() + style.WindowPadding.y * 2.0f;
+	ImGui::PushStyleColor(ImGuiCol_ChildBg, ImGui::GetStyleColorVec4(ImGuiCol_FrameBg));
+	ImGui::BeginChild("##input_devices", ImVec2(0.0f, deviceHeight), true,
+		ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+	ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(style.CellPadding.x, 0.0f));
+
+	if (ImGui::BeginTable("##input_device_status", 2, ImGuiTableFlags_SizingStretchProp))
+	{
+		ImGui::TableSetupColumn("status", ImGuiTableColumnFlags_WidthStretch);
+		ImGui::TableSetupColumn("details", ImGuiTableColumnFlags_WidthFixed, 330.0f);
+		ImGui::TableNextRow();
+		ImGui::TableSetColumnIndex(0);
+		ImGui::AlignTextToFramePadding();
+
+		if (connectedGamepad >= 0)
+		{
+			std::string controllerName = Input::GetGamepadName(connectedGamepad);
+			const size_t technicalSuffix = controllerName.rfind(" (");
+
+			if (technicalSuffix != std::string::npos && controllerName.back() == ')')
+				controllerName.erase(technicalSuffix);
+
+			ImGui::TextUnformatted(ICON_MDI_GAMEPAD "  Controller connected");
+			ImGui::SameLine();
+			ImGui::TextColored(LogLevelColor(LogLevel::Success), "%s", controllerName.c_str());
+			ImGui::TableSetColumnIndex(1);
+			ImGui::AlignTextToFramePadding();
+			const float32 testWidth = 72.0f;
+			const std::string padLabel = "Pad " + std::to_string(connectedGamepad + 1);
+			const float32 controlsWidth = ImGui::CalcTextSize(padLabel.c_str()).x
+				+ style.ItemSpacing.x + testWidth;
+			ImGui::SetCursorPosX(ImGui::GetCursorPosX()
+				+ ImMax(ImGui::GetContentRegionAvail().x - controlsWidth, 0.0f));
+			ImGui::TextDisabled("%s", padLabel.c_str());
+			ImGui::SameLine();
+			ImGui::Button("Test##controller_test", ImVec2(testWidth, 0.0f));
+
+			if (ImGui::IsItemHovered())
+				ImGui::SetTooltip("Controller test will be implemented later.");
+		}
+		else
+		{
+			ImGui::TextDisabled(ICON_MDI_GAMEPAD "  No controller connected");
+			ImGui::TableSetColumnIndex(1);
+			ImGui::AlignTextToFramePadding();
+			ImGui::TextDisabled("Xbox, PlayStation and compatible controllers");
+		}
+
+		ImGui::EndTable();
+	}
+	ImGui::PopStyleVar();
+
+	ImGui::EndChild();
+	ImGui::PopStyleColor();
+
+	ImGui::Spacing();
+	const float32 addWidth = 124.0f;
+	const float32 filterWidth = ImGui::GetContentRegionAvail().x * 0.30f;
+	ImGui::SetNextItemWidth(filterWidth);
+	ImGui::InputTextWithHint("##input_filter", ICON_MDI_MAGNIFY "  Filter actions", mInputFilter, IM_ARRAYSIZE(mInputFilter));
+
+	ImGui::SameLine();
+	ImGui::SetNextItemWidth(-addWidth - style.ItemSpacing.x);
+	const bool submitted = ImGui::InputTextWithHint("##new_input_action", "New action name", mNewInputAction,
+		IM_ARRAYSIZE(mNewInputAction), ImGuiInputTextFlags_EnterReturnsTrue);
+	ImGui::SameLine();
+
+	const std::string newName = mNewInputAction;
+	const bool duplicate = std::any_of(mInputActions.begin(), mInputActions.end(), [&](const InputAction& action)
+		{ return action.name == newName; });
+	const bool canAdd = IsInputActionNameValid(newName) && !duplicate;
+
+	ImGui::BeginDisabled(!canAdd);
+	if (ImGui::Button(ICON_MDI_PLUS "  Add action", ImVec2(addWidth, 0.0f)) || (submitted && canAdd))
+	{
+		mInputActions.push_back({ newName, 0.2f, {} });
+		mNewInputAction[0] = '\0';
+		SaveProjectInputMap();
+	}
+	ImGui::EndDisabled();
+	if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+		ImGui::SetTooltip("Add action");
+
+	if (!newName.empty() && (!IsInputActionNameValid(newName) || duplicate))
+		ImGui::TextDisabled(duplicate ? "That action already exists." : "Use letters, digits and _, not starting with a digit.");
+
+	ImGui::Spacing();
+	const float32 summaryHeight = ImGui::GetTextLineHeightWithSpacing() + style.ItemSpacing.y;
+	ImGui::BeginChild("##input_action_list", ImVec2(0.0f, -summaryHeight));
+	int removeAction = -1;
+	const std::string filter = Lower(mInputFilter);
+
+	for (int actionIndex = 0; actionIndex < static_cast<int>(mInputActions.size()); ++actionIndex)
+	{
+		InputAction& action = mInputActions[actionIndex];
+
+		if (!filter.empty() && Lower(action.name).find(filter) == std::string::npos)
+			continue;
+
+		ImGui::PushID(actionIndex);
+		ImGui::SetNextItemAllowOverlap();
+		const bool open = ImGui::CollapsingHeader("##action",
+			ImGuiTreeNodeFlags_SpanAvailWidth | ImGuiTreeNodeFlags_AllowOverlap);
+		const ImVec2 headerMin = ImGui::GetItemRectMin();
+		const ImVec2 headerMax = ImGui::GetItemRectMax();
+		const ImVec2 cursorAfterHeader = ImGui::GetCursorScreenPos();
+		const float32 headerHeight = headerMax.y - headerMin.y;
+		const float32 buttonSize = headerHeight - 6.0f;
+		const float32 deleteX = headerMax.x - buttonSize - 4.0f;
+		const float32 addX = deleteX - buttonSize - style.ItemSpacing.x;
+		const float32 textY = ImFloor(headerMin.y + (headerHeight - ImGui::GetTextLineHeight()) * 0.5f);
+		ImDrawList* drawList = ImGui::GetWindowDrawList();
+		drawList->AddText(ImVec2(headerMin.x + ImGui::GetFontSize() + 12.0f, textY),
+			ImGui::GetColorU32(ImGuiCol_Text), action.name.c_str());
+
+		char8 summary[96];
+		std::snprintf(summary, sizeof(summary), "Deadzone %.2f    %d binding%s", action.deadzone,
+			static_cast<int32>(action.bindings.size()), action.bindings.size() == 1 ? "" : "s");
+		const ImVec2 summarySize = ImGui::CalcTextSize(summary);
+		drawList->AddText(ImVec2(addX - style.ItemSpacing.x - summarySize.x, textY),
+			ImGui::GetColorU32(ImGuiCol_TextDisabled), summary);
+
+		ImGui::SetCursorScreenPos(ImVec2(addX, headerMin.y + 3.0f));
+		if (IconButton("##add_binding", ICON_MDI_PLUS, buttonSize, "Add binding"))
+		{
+			mInputBindingAction = actionIndex;
+			mInputBindingIndex = -1;
+			mInputBindingDraft = { InputDevice::Keyboard, GLFW_KEY_SPACE, 1.0f, -1 };
+			mOpenInputBindingPopup = true;
+		}
+
+		ImGui::SetCursorScreenPos(ImVec2(deleteX, headerMin.y + 3.0f));
+		if (IconButton("##remove_action", ICON_MDI_DELETE_OUTLINE, buttonSize, "Remove action"))
+			removeAction = actionIndex;
+		ImGui::SetCursorScreenPos(cursorAfterHeader);
+
+		if (open)
+		{
+			const float32 bodyHeight = style.WindowPadding.y * 2.0f + ImGui::GetFrameHeight()
+				+ ImGui::GetTextLineHeightWithSpacing() + style.ItemSpacing.y * 2.0f
+				+ ImGui::GetFrameHeightWithSpacing() * ImMax(1, static_cast<int32>(action.bindings.size()));
+			ImGui::PushStyleColor(ImGuiCol_ChildBg, inputBodyColor);
+			ImGui::BeginChild("##action_body", ImVec2(0.0f, bodyHeight), true,
+				ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+
+			ImGui::AlignTextToFramePadding();
+			ImGui::TextUnformatted("Deadzone");
+			ImGui::SameLine(160.0f);
+			ImGui::SetNextItemWidth(260.0f);
+			ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.055f, 0.057f, 0.063f, 1.0f));
+			ImGui::DragFloat("##deadzone", &action.deadzone, 0.01f, 0.0f, 0.95f, "%.2f");
+			ImGui::PopStyleColor();
+			if (ImGui::IsItemDeactivatedAfterEdit())
+				SaveProjectInputMap();
+
+			ImGui::Spacing();
+			ImGui::TextUnformatted("Bindings");
+			const char8* bindingColumns = "Input  /  Device";
+			ImGui::SameLine(ImGui::GetWindowWidth() - style.WindowPadding.x - ImGui::CalcTextSize(bindingColumns).x);
+			ImGui::TextDisabled("%s", bindingColumns);
+			ImGui::Separator();
+
+			int removeBinding = -1;
+			if (ImGui::BeginTable("##bindings", 3,
+				ImGuiTableFlags_BordersInnerH | ImGuiTableFlags_SizingStretchProp))
+			{
+				ImGui::TableSetupColumn("Input", ImGuiTableColumnFlags_WidthStretch);
+				ImGui::TableSetupColumn("Device", ImGuiTableColumnFlags_WidthFixed, 150.0f);
+				ImGui::TableSetupColumn("##binding_actions", ImGuiTableColumnFlags_WidthFixed, 76.0f);
+
+				if (action.bindings.empty())
+				{
+					ImGui::TableNextRow(ImGuiTableRowFlags_None, ImGui::GetFrameHeight());
+					ImGui::TableSetColumnIndex(0);
+					ImGui::TextDisabled("No bindings. Use + to add one.");
+				}
+
+				for (int bindingIndex = 0; bindingIndex < static_cast<int>(action.bindings.size()); ++bindingIndex)
+				{
+					InputBinding& binding = action.bindings[bindingIndex];
+					ImGui::TableNextRow(ImGuiTableRowFlags_None, ImGui::GetFrameHeightWithSpacing());
+					ImGui::TableSetColumnIndex(0);
+					ImGui::AlignTextToFramePadding();
+					ImGui::Text("%s  %s", InputBindingIcon(binding.device), InputBindingText(binding).c_str());
+					ImGui::TableSetColumnIndex(1);
+					ImGui::AlignTextToFramePadding();
+					ImGui::TextDisabled("%s", binding.gamepad < 0
+						? (binding.device == InputDevice::Keyboard ? "Keyboard"
+							: binding.device == InputDevice::MouseButton ? "Mouse" : "All pads")
+						: ("Pad " + std::to_string(binding.gamepad + 1)).c_str());
+					ImGui::TableSetColumnIndex(2);
+					ImGui::PushID(bindingIndex);
+					if (IconButton("##edit_binding", ICON_MDI_PENCIL, RowEndSlot(), "Edit binding"))
+					{
+						mInputBindingAction = actionIndex;
+						mInputBindingIndex = bindingIndex;
+						mInputBindingDraft = binding;
+						mOpenInputBindingPopup = true;
+					}
+					ImGui::SameLine();
+					if (IconButton("##remove_binding", ICON_MDI_DELETE_OUTLINE, RowEndSlot(), "Remove binding"))
+						removeBinding = bindingIndex;
+					ImGui::PopID();
+				}
+
+				ImGui::EndTable();
+			}
+
+			if (removeBinding >= 0)
+			{
+				action.bindings.erase(action.bindings.begin() + removeBinding);
+				SaveProjectInputMap();
+			}
+
+			ImGui::EndChild();
+			ImGui::PopStyleColor();
+		}
+
+		ImGui::Spacing();
+		ImGui::PopID();
+	}
+
+	ImGui::EndChild();
+
+	if (removeAction >= 0)
+	{
+		mInputActions.erase(mInputActions.begin() + removeAction);
+		SaveProjectInputMap();
+	}
+
+	int32 bindingCount = 0;
+	for (const InputAction& action : mInputActions)
+		bindingCount += static_cast<int32>(action.bindings.size());
+
+	ImGui::Separator();
+	ImGui::TextDisabled("%d action%s  /  %d binding%s", static_cast<int32>(mInputActions.size()),
+		mInputActions.size() == 1 ? "" : "s", bindingCount, bindingCount == 1 ? "" : "s");
+
+	if (!mProjectSettingsError.empty())
+		ImGui::TextColored(LogLevelColor(LogLevel::Error), "%s", mProjectSettingsError.c_str());
+}
+
+void EditorLayer::DrawInputBindingPopup()
+{
+	if (mOpenInputBindingPopup)
+	{
+		mOpenInputBindingPopup = false;
+		ImGui::OpenPopup("Input Binding");
+	}
+
+	if (!ImGui::BeginPopupModal("Input Binding", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoResize))
+		return;
+
+	static const char8* devices[] = { "Keyboard", "Mouse Button", "Gamepad Button", "Gamepad Axis" };
+	int device = static_cast<int>(mInputBindingDraft.device);
+
+	ImGui::TextUnformatted(ICON_MDI_TUNE "  Device");
+	ImGui::SetNextItemWidth(340.0f);
+	if (CompactCombo("##binding_device", device, devices, IM_ARRAYSIZE(devices)))
+	{
+		mInputBindingDraft.device = static_cast<InputDevice>(device);
+		mInputBindingDraft.scale = 1.0f;
+		mInputBindingDraft.code = device == static_cast<int>(InputDevice::Keyboard) ? GLFW_KEY_SPACE : 0;
+	}
+
+	const auto drawChoices = [&](const char8* label, const auto& choices)
+	{
+		ImGui::Text("%s  %s", InputBindingIcon(mInputBindingDraft.device), label);
+		ImGui::SetNextItemWidth(340.0f);
+
+		if (BeginCompactCombo("##binding_code", ChoiceName(choices, mInputBindingDraft.code)))
+		{
+			for (const InputChoice& choice : choices)
+			{
+				const bool selected = choice.code == mInputBindingDraft.code;
+				if (ImGui::Selectable(choice.name, selected))
+					mInputBindingDraft.code = choice.code;
+				if (selected)
+					ImGui::SetItemDefaultFocus();
+			}
+			ImGui::EndCombo();
+		}
+	};
+
+	switch (mInputBindingDraft.device)
+	{
+		case InputDevice::Keyboard:      drawChoices("Key", kKeyboardChoices); break;
+		case InputDevice::MouseButton:   drawChoices("Button", kMouseChoices); break;
+		case InputDevice::GamepadButton: drawChoices("Button", kGamepadButtonChoices); break;
+		case InputDevice::GamepadAxis:   drawChoices("Axis", kGamepadAxisChoices); break;
+	}
+
+	if (mInputBindingDraft.device == InputDevice::GamepadButton
+		|| mInputBindingDraft.device == InputDevice::GamepadAxis)
+	{
+		const char8* pads[] = { "All Gamepads", "Gamepad 1", "Gamepad 2", "Gamepad 3", "Gamepad 4" };
+		int pad = mInputBindingDraft.gamepad + 1;
+		ImGui::TextUnformatted(ICON_MDI_GAMEPAD "  Gamepad");
+		ImGui::SetNextItemWidth(340.0f);
+		if (CompactCombo("##binding_gamepad", pad, pads, IM_ARRAYSIZE(pads)))
+			mInputBindingDraft.gamepad = pad - 1;
+	}
+
+	if (mInputBindingDraft.device == InputDevice::GamepadAxis
+		&& mInputBindingDraft.code != GLFW_GAMEPAD_AXIS_LEFT_TRIGGER
+		&& mInputBindingDraft.code != GLFW_GAMEPAD_AXIS_RIGHT_TRIGGER)
+	{
+		const char8* directions[] = { "Positive", "Negative" };
+		int direction = mInputBindingDraft.scale < 0.0f ? 1 : 0;
+		ImGui::TextUnformatted(ICON_MDI_SWAP_HORIZONTAL "  Direction");
+		ImGui::SetNextItemWidth(340.0f);
+		if (CompactCombo("##binding_direction", direction, directions, IM_ARRAYSIZE(directions)))
+			mInputBindingDraft.scale = direction == 0 ? 1.0f : -1.0f;
+	}
+
+	ImGui::Spacing();
+	const bool validAction = mInputBindingAction >= 0
+		&& mInputBindingAction < static_cast<int>(mInputActions.size());
+	ImGui::BeginDisabled(!validAction);
+
+	const bool editing = mInputBindingIndex >= 0;
+	if (ImGui::Button(editing ? "Save" : "Add", ImVec2(96.0f, 0.0f)))
+	{
+		if (editing && mInputBindingIndex < static_cast<int>(mInputActions[mInputBindingAction].bindings.size()))
+			mInputActions[mInputBindingAction].bindings[mInputBindingIndex] = mInputBindingDraft;
+		else
+			mInputActions[mInputBindingAction].bindings.push_back(mInputBindingDraft);
+		SaveProjectInputMap();
+		ImGui::CloseCurrentPopup();
+	}
+
+	ImGui::EndDisabled();
+	ImGui::SameLine();
+
+	if (ImGui::Button("Cancel", ImVec2(96.0f, 0.0f)) || ImGui::IsKeyPressed(ImGuiKey_Escape))
+		ImGui::CloseCurrentPopup();
+
+	ImGui::EndPopup();
 }
 
 void EditorLayer::RecordSnapshot()
@@ -2513,6 +3555,11 @@ void EditorLayer::RecordSnapshot()
 		mUndoStack.erase(mUndoStack.begin());
 
 	mRedoStack.clear();
+
+	if (mEditingAssembly)
+		mAssemblyDirty = true;
+	else
+		mSceneDirty = true;
 }
 
 void EditorLayer::BeginEdit()
@@ -2542,6 +3589,11 @@ void EditorLayer::CommitEdit()
 		mUndoStack.erase(mUndoStack.begin());
 
 	mRedoStack.clear();
+
+	if (mEditingAssembly)
+		mAssemblyDirty = true;
+	else
+		mSceneDirty = true;
 }
 
 EditorLayer::EditState EditorLayer::CaptureCurrent(EditKind kind) const
@@ -2562,7 +3614,12 @@ void EditorLayer::RestoreState(const EditState& state)
 
 	// The scene is rebuilt from scratch, so any selected-entity pointer becomes stale.
 	SetSelection(nullptr);
-	SceneSerializer::DeserializeFromString(mScene, state.data);
+	SceneSerializer::DeserializeFromString(mScene, state.data, GameAssetsDirectory().string());
+
+	if (mEditingAssembly)
+		mAssemblyDirty = true;
+	else
+		mSceneDirty = SceneSerializer::SerializeToString(mScene) != mSavedSceneSnapshot;
 }
 
 void EditorLayer::Undo()
@@ -2597,6 +3654,39 @@ namespace
 	{
 		return EditorDataDirectory() / "lion-shortcuts.ini";
 	}
+
+	std::filesystem::path EditorSettingsFile()
+	{
+		return EditorDataDirectory() / "lion-editor.ini";
+	}
+}
+
+void EditorLayer::LoadEditorSettings()
+{
+	std::ifstream file(EditorSettingsFile());
+	std::string name;
+	int value = 0;
+
+	while (file >> name >> value)
+	{
+		if (name == "show_colliders")
+			mShowColliders = value != 0;
+		else if (name == "show_asset_extensions")
+			mShowAssetExtensions = value != 0;
+	}
+}
+
+void EditorLayer::SaveEditorSettings() const
+{
+	std::error_code error;
+	std::filesystem::create_directories(EditorDataDirectory(), error);
+	std::ofstream file(EditorSettingsFile(), std::ios::trunc);
+
+	if (file.is_open())
+	{
+		file << "show_colliders " << (mShowColliders ? 1 : 0) << '\n';
+		file << "show_asset_extensions " << (mShowAssetExtensions ? 1 : 0) << '\n';
+	}
 }
 
 void EditorLayer::ResetShortcutsToDefault()
@@ -2610,11 +3700,11 @@ void EditorLayer::ResetShortcutsToDefault()
 	set(ShortcutAction::Redo, ImGuiKey_Y, true);
 	set(ShortcutAction::Play, ImGuiKey_F5);
 	set(ShortcutAction::Stop, ImGuiKey_F8);
-	set(ShortcutAction::ToggleShortcuts, ImGuiKey_F10);
+	set(ShortcutAction::OpenWindowSettings, ImGuiKey_F11);
 	set(ShortcutAction::GizmoMove, ImGuiKey_W);
 	set(ShortcutAction::GizmoRotate, ImGuiKey_E);
 	set(ShortcutAction::GizmoScale, ImGuiKey_R);
-	set(ShortcutAction::RenameEntity, ImGuiKey_F2);
+	set(ShortcutAction::RenameEntity, ImGuiKey_None);
 	set(ShortcutAction::DeleteEntity, ImGuiKey_Delete);
 	set(ShortcutAction::Pause, ImGuiKey_F7);
 	set(ShortcutAction::ToggleColliders, ImGuiKey_F4);
@@ -2649,6 +3739,12 @@ void EditorLayer::ResetShortcutsToDefault()
 
 	// F frames the selection, where every 3D and 2D editor has put it.
 	set(ShortcutAction::FocusSelection, ImGuiKey_F);
+	set(ShortcutAction::OpenProjectSettings, ImGuiKey_F10);
+	set(ShortcutAction::CutSelection, ImGuiKey_X, true);
+	set(ShortcutAction::NewFolder, ImGuiKey_N, true, true);
+	set(ShortcutAction::ViewLit, ImGuiKey_F1);
+	set(ShortcutAction::ViewUnlit, ImGuiKey_F2);
+	set(ShortcutAction::ViewWireframe, ImGuiKey_F3);
 }
 
 void EditorLayer::SetSelection(const Reference<Entity>& entity)
@@ -2735,12 +3831,14 @@ void EditorLayer::RenameSelection(const std::string& name, const Reference<Entit
 	// Windows' answer to several things wanting one name is a number after it.
 	if (mSelection.size() <= 1 || !IsSelected(renamed.get()))
 	{
-		renamed->SetName(name);
+		if (!IsLinkedAssemblyEntity(renamed.get()))
+			renamed->SetName(name);
 		return;
 	}
 
 	for (const auto& entity : mSelection)
-		entity->SetName(NumberedName(mScene, name));
+		if (!IsLinkedAssemblyEntity(entity.get()))
+			entity->SetName(NumberedName(mScene, name));
 }
 
 bool EditorLayer::IsSelected(const Entity* entity) const
@@ -2755,6 +3853,9 @@ bool EditorLayer::IsSelected(const Entity* entity) const
 Reference<Entity> EditorLayer::CreateEntity(Entity* parent, const Vector* position)
 {
 	RecordSnapshot();
+
+	if (mEditingAssembly && !parent && !mScene->GetEntities().empty())
+		parent = mScene->GetEntities().front().get();
 
 	auto entity = MakeReference<Entity>();
 	mScene->Add(entity);
@@ -2781,6 +3882,10 @@ void EditorLayer::CreateFolder()
 	folder->SetName("Folder");
 	mScene->Add(folder);
 
+	if (mEditingAssembly && !mScene->GetEntities().empty()
+		&& mScene->GetEntities().front() != folder)
+		folder->SetParent(mScene->GetEntities().front().get());
+
 	SetSelection(folder);
 	mRenamingEntity = folder;   // Let the user name it right away.
 	mRenameFocus = true;
@@ -2792,6 +3897,23 @@ void EditorLayer::CopyEntity()
 		mEntityClipboard = SceneSerializer::SerializeEntityToString(mSelectedEntity);
 }
 
+void EditorLayer::CutEntity()
+{
+	if (!mSelectedEntity)
+		return;
+
+	const Entity* assemblyRoot = LinkedAssemblyRoot(mSelectedEntity.get());
+	if ((assemblyRoot && assemblyRoot != mSelectedEntity.get())
+		|| (mEditingAssembly && mSelectedEntity->GetParent() == nullptr))
+		return;
+
+	CopyEntity();
+	RecordSnapshot();
+	mScene->Remove(mSelectedEntity);
+	mScene->FlushRemovals();
+	SetSelection(nullptr);
+}
+
 void EditorLayer::PasteEntity()
 {
 	if (mEntityClipboard.empty())
@@ -2799,9 +3921,22 @@ void EditorLayer::PasteEntity()
 
 	RecordSnapshot();
 
-	if (Reference<Entity> pasted = SceneSerializer::DeserializeEntityFromString(mScene, mEntityClipboard))
+	if (Reference<Entity> pasted = SceneSerializer::DeserializeEntityFromString(
+		mScene, mEntityClipboard, GameAssetsDirectory().string()))
 	{
-		pasted->SetName(NumberedName(mScene, pasted->GetName()));
+		if (mEditingAssembly && IsLinkedAssemblyEntity(pasted.get()))
+		{
+			mScene->Remove(pasted);
+			mScene->FlushRemovals();
+			return;
+		}
+
+		if (mEditingAssembly && !mScene->GetEntities().empty())
+			pasted->SetParent(mScene->GetEntities().front().get());
+
+		if (!IsLinkedAssemblyEntity(pasted.get()))
+			pasted->SetName(NumberedName(mScene, pasted->GetName()));
+
 		SetSelection(pasted);
 	}
 }
@@ -2820,11 +3955,22 @@ void EditorLayer::DuplicateEntity()
 
 	for (const auto& original : originals)
 	{
+		const Entity* assemblyRoot = LinkedAssemblyRoot(original.get());
+		if ((assemblyRoot && assemblyRoot != original.get())
+			|| (mEditingAssembly && original->GetParent() == nullptr))
+			continue;
+
 		const std::string data = SceneSerializer::SerializeEntityToString(original);
 
-		if (Reference<Entity> copy = SceneSerializer::DeserializeEntityFromString(mScene, data))
+		if (Reference<Entity> copy = SceneSerializer::DeserializeEntityFromString(
+			mScene, data, GameAssetsDirectory().string()))
 		{
-			copy->SetName(NumberedName(mScene, original->GetName()));
+			if (mEditingAssembly && !mScene->GetEntities().empty())
+				copy->SetParent(mScene->GetEntities().front().get());
+
+			if (!IsLinkedAssemblyEntity(copy.get()))
+				copy->SetName(NumberedName(mScene, original->GetName()));
+
 			mSelection.push_back(copy);
 		}
 	}
@@ -2846,11 +3992,38 @@ void EditorLayer::LoadShortcuts()
 		return;
 
 	int index = 0, key = 0, ctrl = 0, shift = 0, alt = 0;
+	bool loadedViewportModes = false;
 
 	while (file >> index >> key >> ctrl >> shift >> alt)
 	{
 		if (index >= 0 && index < static_cast<int>(ShortcutAction::Count))
+		{
 			mBinds[index] = { static_cast<ImGuiKey>(key), ctrl != 0, shift != 0, alt != 0 };
+			loadedViewportModes |= index == static_cast<int>(ShortcutAction::ViewLit)
+				|| index == static_cast<int>(ShortcutAction::ViewUnlit)
+				|| index == static_cast<int>(ShortcutAction::ViewWireframe);
+		}
+	}
+
+	Keybind& editor = mBinds[static_cast<int>(ShortcutAction::OpenWindowSettings)];
+	Keybind& project = mBinds[static_cast<int>(ShortcutAction::OpenProjectSettings)];
+	Keybind& rename = mBinds[static_cast<int>(ShortcutAction::RenameEntity)];
+
+	// Migrate the former built-in pair without replacing shortcuts the user deliberately rebound.
+	if (editor.key == ImGuiKey_F10 && !editor.ctrl && !editor.shift && !editor.alt
+		&& project.key == ImGuiKey_F11 && !project.ctrl && !project.shift && !project.alt)
+	{
+		editor.key = ImGuiKey_F11;
+		project.key = ImGuiKey_F10;
+		SaveShortcuts();
+	}
+
+	// F2 became the explicit Unlit view key. Retire only the former built-in rename binding; a custom
+	// rename shortcut remains untouched.
+	if (!loadedViewportModes && rename.key == ImGuiKey_F2 && !rename.ctrl && !rename.shift && !rename.alt)
+	{
+		rename = {};
+		SaveShortcuts();
 	}
 }
 
@@ -2911,7 +4084,7 @@ std::string EditorLayer::KeybindToString(const Keybind& bind) const
 
 void EditorLayer::HandleShortcuts()
 {
-	// Don't trigger actions while the user is capturing a new key in the Shortcuts panel.
+	// Don't trigger actions while the user is capturing a new key in Window Settings.
 	if (mRebindingIndex >= 0)
 		return;
 
@@ -2927,8 +4100,12 @@ void EditorLayer::HandleShortcuts()
 	if (IsShortcutPressed(ShortcutAction::Play)) StartPlay();
 	if (IsShortcutPressed(ShortcutAction::Pause)) TogglePause();
 	if (IsShortcutPressed(ShortcutAction::Stop)) StopPlay();
-	if (IsShortcutPressed(ShortcutAction::ToggleShortcuts)) mShowShortcuts = !mShowShortcuts;
+	if (IsShortcutPressed(ShortcutAction::OpenWindowSettings)) mOpenWindowSettingsPopup = true;
+	if (IsShortcutPressed(ShortcutAction::OpenProjectSettings)) mOpenProjectSettingsPopup = true;
 	if (IsShortcutPressed(ShortcutAction::ToggleColliders)) mShowColliders = !mShowColliders;
+	if (IsShortcutPressed(ShortcutAction::ViewLit)) mViewportMode = ViewportMode::Lit;
+	if (IsShortcutPressed(ShortcutAction::ViewUnlit)) mViewportMode = ViewportMode::Unlit;
+	if (IsShortcutPressed(ShortcutAction::ViewWireframe)) mViewportMode = ViewportMode::Wireframe;
 	if (IsShortcutPressed(ShortcutAction::StepFrame)) StepOneFrame();
 	if (IsShortcutPressed(ShortcutAction::CompileModule)) CompileGameModule();
 	if (IsShortcutPressed(ShortcutAction::ReloadModule)) ReloadGameModule();
@@ -2965,17 +4142,42 @@ void EditorLayer::HandleShortcuts()
 	if (IsShortcutPressed(ShortcutAction::SaveScene)) SaveScene();
 	if (IsShortcutPressed(ShortcutAction::SaveSceneAs)) SaveSceneAs();
 	if (IsShortcutPressed(ShortcutAction::FocusSelection)) FocusViewportOnSelection();
-	if (IsShortcutPressed(ShortcutAction::NewProject)) mOpenProjectManagerPopup = true;
+	if (IsShortcutPressed(ShortcutAction::NewProject) && !mProjectFocused && !mHierarchyFocused)
+		mOpenProjectManagerPopup = true;
 	if (IsShortcutPressed(ShortcutAction::OpenProject)) BrowseForProject();
 
 	if (IsShortcutPressed(ShortcutAction::Undo)) Undo();
 	if (IsShortcutPressed(ShortcutAction::Redo)) Redo();
 
+	// File and hierarchy operations share the conventional shortcuts. The focused panel supplies the
+	// subject, exactly as Explorer and a scene editor do; this keeps one customizable binding per intent.
+	if (mProjectFocused)
+	{
+		if (IsShortcutPressed(ShortcutAction::CopyEntity)) CopyAsset(false);
+		if (IsShortcutPressed(ShortcutAction::CutSelection)) CopyAsset(true);
+		if (IsShortcutPressed(ShortcutAction::PasteEntity)) PasteAsset();
+		if (IsShortcutPressed(ShortcutAction::DuplicateEntity)) DuplicateAsset();
+		if (IsShortcutPressed(ShortcutAction::NewFolder)) CreateAssetFolder();
+
+		if (!mSelectedAsset.empty() && IsShortcutPressed(ShortcutAction::RenameEntity))
+			BeginRenameAsset(mSelectedAsset);
+
+		if (!mSelectedAsset.empty() && !IsEngineAsset(mSelectedAsset)
+			&& IsShortcutPressed(ShortcutAction::DeleteEntity))
+			mAssetToDelete = mSelectedAsset;
+
+		return;
+	}
+
 	if (IsShortcutPressed(ShortcutAction::CopyEntity)) CopyEntity();
+
+	if (IsShortcutPressed(ShortcutAction::CutSelection)) CutEntity();
 	if (IsShortcutPressed(ShortcutAction::PasteEntity)) PasteEntity();
 	if (IsShortcutPressed(ShortcutAction::DuplicateEntity)) DuplicateEntity();
+	if (mHierarchyFocused && IsShortcutPressed(ShortcutAction::NewFolder)) CreateFolder();
 
-	if (mSelectedEntity && IsShortcutPressed(ShortcutAction::RenameEntity))
+	if (mSelectedEntity && !IsLinkedAssemblyEntity(mSelectedEntity.get())
+		&& IsShortcutPressed(ShortcutAction::RenameEntity))
 	{
 		mRenamingEntity = mSelectedEntity;
 		mRenameFocus = true;
@@ -2987,7 +4189,13 @@ void EditorLayer::HandleShortcuts()
 
 		// Del deletes what is selected, all of it — the same rule the context menu follows.
 		for (const auto& entity : mSelection)
-			mScene->Remove(entity);
+		{
+			const Entity* assemblyRoot = LinkedAssemblyRoot(entity.get());
+			const bool editingRoot = mEditingAssembly && entity->GetParent() == nullptr;
+
+			if (!editingRoot && (!assemblyRoot || assemblyRoot == entity.get()))
+				mScene->Remove(entity);
+		}
 
 		mScene->FlushRemovals();
 		SetSelection(nullptr);
@@ -3013,6 +4221,25 @@ void EditorLayer::DrawViewport()
 	const ImVec2 imageSize = ImGui::GetItemRectSize();
 	const bool imageHovered = ImGui::IsItemHovered();
 
+	// An Assembly dragged from the Content Browser becomes a linked instance at the world point under the
+	// cursor. The definition remains in its asset; only this placement belongs to the open scene.
+	if (!mPlaying && !mEditingAssembly && ImGui::BeginDragDropTarget())
+	{
+		if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("LN_ASSET_PATH"))
+		{
+			const std::string assetPath = static_cast<const char8*>(payload->Data);
+
+			if (std::filesystem::path(assetPath).extension() == ".lnassembly")
+			{
+				const glm::vec2 world = ViewportToWorld(ImGui::GetMousePos(), imageMin, imageSize);
+				const Vector position(world.x, world.y, 0.0f);
+				InstantiateAssembly(assetPath, nullptr, &position);
+			}
+		}
+
+		ImGui::EndDragDropTarget();
+	}
+
 	// Kept for the dim: it darkens everything the game is not.
 	mViewportImageMin = imageMin;
 	mViewportImageMax = ImVec2(imageMin.x + imageSize.x, imageMin.y + imageSize.y);
@@ -3021,7 +4248,9 @@ void EditorLayer::DrawViewport()
 
 	// The gizmo is an editing tool; hide it while the simulation is running, for folders (no
 	// meaningful transform), and for the Select tool, which only picks entities.
-	if (mSelectedEntity && !mPlaying && mTool != Tool::Select && !mSelectedEntity->IsFolder())
+	const Entity* gizmoAssemblyRoot = LinkedAssemblyRoot(mSelectedEntity.get());
+	if (mSelectedEntity && !mPlaying && mTool != Tool::Select && !mSelectedEntity->IsFolder()
+		&& (!gizmoAssemblyRoot || gizmoAssemblyRoot == mSelectedEntity.get()))
 	{
 		ImGuizmo::SetOrthographic(true);
 		ImGuizmo::SetDrawlist();
@@ -3071,7 +4300,8 @@ void EditorLayer::DrawViewport()
 
 			for (const auto& entity : mSelection)
 			{
-				if (!entity || entity->IsFolder())
+				const Entity* assemblyRoot = LinkedAssemblyRoot(entity.get());
+				if (!entity || entity->IsFolder() || (assemblyRoot && assemblyRoot != entity.get()))
 					continue;
 
 				const Vector2 entityPosition = entity->GetWorldPosition();
@@ -3281,7 +4511,8 @@ void EditorLayer::DrawViewportToolbar(const ImVec2& imageMin, const ImVec2& imag
 		ImVec2(imageMin.x + (imageSize.x - playDockWidth) * 0.5f, imageMin.y + kDockMargin), 4);
 
 	// Play doubles as "resume" while paused, so it stays enabled in that state.
-	if (ToolbarButton("##play", ICON_MDI_PLAY, false, !(mPlaying && !mPaused), "Run the scene simulation (F5)"))
+	if (ToolbarButton("##play", ICON_MDI_PLAY, false, !mEditingAssembly && !(mPlaying && !mPaused),
+		mEditingAssembly ? "Assemblies are edited, not played" : "Run the scene simulation (F5)"))
 		StartPlay();
 
 	// Step advances a halted simulation one frame at a time, so it only means anything while playing.
@@ -3309,16 +4540,21 @@ void EditorLayer::DrawViewportToolbar(const ImVec2& imageMin, const ImVec2& imag
 
 	if (ImGui::BeginPopup("ViewportSettings"))
 	{
-		// Shading modes are placeholders until the renderer supports them.
-		bool unavailable = false;
-		ImGui::BeginDisabled();
-		ImGui::MenuItem("Lit", nullptr, &unavailable);
-		ImGui::MenuItem("Unlit", nullptr, &unavailable);
-		ImGui::MenuItem("Wireframe", nullptr, &unavailable);
-		ImGui::EndDisabled();
+		if (ImGui::MenuItem(ICON_MDI_LIGHTBULB_ON_OUTLINE "  Lit", ShortcutText(ShortcutAction::ViewLit).c_str(),
+			mViewportMode == ViewportMode::Lit))
+			mViewportMode = ViewportMode::Lit;
+
+		if (ImGui::MenuItem(ICON_MDI_LIGHTBULB_OUTLINE "  Unlit", ShortcutText(ShortcutAction::ViewUnlit).c_str(),
+			mViewportMode == ViewportMode::Unlit))
+			mViewportMode = ViewportMode::Unlit;
+
+		if (ImGui::MenuItem(ICON_MDI_GRID "  Wireframe", ShortcutText(ShortcutAction::ViewWireframe).c_str(),
+			mViewportMode == ViewportMode::Wireframe))
+			mViewportMode = ViewportMode::Wireframe;
 
 		ImGui::Separator();
-		ImGui::MenuItem("Colliders", "F4", &mShowColliders);
+		ImGui::MenuItem(ICON_MDI_VECTOR_SQUARE "  Colliders",
+			ShortcutText(ShortcutAction::ToggleColliders).c_str(), &mShowColliders);
 
 		ImGui::EndPopup();
 	}
@@ -3568,14 +4804,18 @@ void EditorLayer::DrawColliderOverlays(const ImVec2& imageMin, const ImVec2& ima
 void EditorLayer::DrawHierarchy()
 {
 	if (!mShowHierarchy)
+	{
+		mHierarchyFocused = false;
 		return;
+	}
 
 	ImGui::Begin(kHierarchyWindow, &mShowHierarchy);
+	mHierarchyFocused = ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows);
 
 	const ImGuiStyle& style = ImGui::GetStyle();
 
-	// Add, then what you are looking for, then what you are looking in. The icon is part of the label: it is
-	// a character, so the button lays it out beside the word the way it lays out the word itself.
+	// Isolation is still a normal authoring scene: Add and every creation path remain available. Returning
+	// belongs to the definition root row below, where it cannot displace a primary authoring command.
 	if (ImGui::Button(ICON_MDI_PLUS "  Add"))
 		CreateEntity();
 
@@ -3591,10 +4831,28 @@ void EditorLayer::DrawHierarchy()
 
 	// Children are stored as raw pointers; this maps them back to the scene's owning references.
 	mEntityLookup.clear();
+	mHierarchyEntityKeys.clear();
 	for (const auto& entity : mScene->GetEntities())
 		mEntityLookup.emplace(entity.get(), entity);
 
+	// A structural address survives scene reconstruction and does not shift when an Assembly gains a new
+	// descendant: each segment is a sibling position, rather than a flat scene-list index or transient id.
+	const auto indexHierarchy = [&](const auto& self, Entity* entity, const std::string& key) -> void
+	{
+		mHierarchyEntityKeys.emplace(entity, key);
+
+		int32 childIndex = 0;
+		for (Entity* child : entity->GetChildren())
+			self(self, child, key + "/" + std::to_string(childIndex++));
+	};
+
+	int32 rootIndex = 0;
+	for (const auto& entity : mScene->GetEntities())
+		if (entity->GetParent() == nullptr)
+			indexHierarchy(indexHierarchy, entity.get(), std::to_string(rootIndex++));
+
 	mEntityToDelete = nullptr;
+	mDeleteOnlyTarget = false;
 	mReparentChild = nullptr;
 	mReparentTarget = nullptr;
 	mReparentRequested = false;
@@ -3618,8 +4876,8 @@ void EditorLayer::DrawHierarchy()
 
 	const int32 count = static_cast<int32>(mScene->GetEntities().size());
 
-	// Two columns: what a thing is called, and whether it is drawn. The eye is a property of the entity
-	// and not of the editor, so the game can reach for it too.
+	// Name and visibility keep their established columns. Assembly navigation gets a small, headerless
+	// third column after Visibility; in isolation that same column moves before Name for the root's return.
 	//
 	// No banding and no rules: a striped list is a table pretending it has more to say than one column of
 	// names, and the lines around it only fence off what was already fenced by the panel it is in.
@@ -3638,14 +4896,29 @@ void EditorLayer::DrawHierarchy()
 	ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(style.CellPadding.x, 0.0f));
 	ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(style.FramePadding.x, kRowPadding));
 
-	if (ImGui::BeginTable("Entities", 2, ImGuiTableFlags_NoPadOuterX))
+	if (ImGui::BeginTable("Entities", 3, ImGuiTableFlags_NoPadOuterX))
 	{
 		// Wide enough for its own header: a column called Visibility that reads "Visi..." is a column that
 		// gave its name away to save a dozen pixels.
 		const float32 visibilityWidth = ImMax(ImGui::CalcTextSize("Visibility").x, RowEndSlot()) + style.CellPadding.x * 2.0f;
 
-		ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_WidthStretch);
-		ImGui::TableSetupColumn("Visibility", ImGuiTableColumnFlags_WidthFixed, visibilityWidth);
+		const float32 navigationWidth = RowEndSlot() + style.CellPadding.x * 2.0f;
+		const int32 navigationColumn = mEditingAssembly ? 0 : 2;
+		const int32 nameColumn = mEditingAssembly ? 1 : 0;
+		const int32 visibilityColumn = mEditingAssembly ? 2 : 1;
+
+		if (mEditingAssembly)
+		{
+			ImGui::TableSetupColumn("##AssemblyNavigation", ImGuiTableColumnFlags_WidthFixed, navigationWidth);
+			ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_WidthStretch);
+			ImGui::TableSetupColumn("Visibility", ImGuiTableColumnFlags_WidthFixed, visibilityWidth);
+		}
+		else
+		{
+			ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_WidthStretch);
+			ImGui::TableSetupColumn("Visibility", ImGuiTableColumnFlags_WidthFixed, visibilityWidth);
+			ImGui::TableSetupColumn("##AssemblyNavigation", ImGuiTableColumnFlags_WidthFixed, navigationWidth);
+		}
 
 		// The header row is drawn by hand for two reasons. A tree node starts its label past the arrow, so
 		// a header written at the column's edge sits to the left of every name under it. And the rows carry
@@ -3656,15 +4929,18 @@ void EditorLayer::DrawHierarchy()
 
 		ImGui::TableNextRow(ImGuiTableRowFlags_Headers, headerHeight);
 
-		ImGui::TableSetColumnIndex(0);
+		ImGui::TableSetColumnIndex(nameColumn);
 		ImGui::SetCursorPos(ImVec2(
 			ImGui::GetCursorPosX() + ImGui::GetTreeNodeToLabelSpacing(),
 			ImGui::GetCursorPosY() + headerText));
 		ImGui::TableHeader("Name");
 
-		ImGui::TableSetColumnIndex(1);
+		ImGui::TableSetColumnIndex(visibilityColumn);
 		ImGui::SetCursorPosY(ImGui::GetCursorPosY() + headerText);
 		ImGui::TableHeader("Visibility");
+
+		// Keep the column physically present without giving the navigation glyph a misleading heading.
+		ImGui::TableSetColumnIndex(navigationColumn);
 
 		for (const auto& entity : mScene->GetEntities())
 			if (entity->GetParent() == nullptr)
@@ -3703,29 +4979,42 @@ void EditorLayer::DrawHierarchy()
 	// Deferred hierarchy edits (never mutate the tree while iterating it above).
 	if (mReparentRequested && mReparentChild)
 	{
-		RecordSnapshot();
+		const bool protectedChild = IsLinkedAssemblyEntity(mReparentChild)
+			|| (mEditingAssembly && mReparentChild->GetParent() == nullptr);
+		const bool protectedTarget = IsLinkedAssemblyEntity(mReparentTarget);
 
 		// A drag carries the whole selection when the thing dragged is part of it, which is the only
 		// reading of "drag them onto a folder" that does not mean doing it one at a time.
 		const Reference<Entity> dragged = mEntityLookup.count(mReparentChild) ? mEntityLookup[mReparentChild] : nullptr;
 		const bool dragSelection = dragged && IsSelected(mReparentChild);
 
-		if (dragSelection)
+		if (!protectedChild && !protectedTarget)
 		{
-			for (const auto& entity : mSelection)
-				if (entity.get() != mReparentTarget && !(mReparentTarget && mReparentTarget->IsDescendantOf(entity.get())))
-					entity->SetParent(mReparentTarget);
-		}
-		else
-		{
-			mReparentChild->SetParent(mReparentTarget);
+			RecordSnapshot();
+
+			if (dragSelection)
+			{
+				for (const auto& entity : mSelection)
+					if (!IsLinkedAssemblyEntity(entity.get())
+						&& !(mEditingAssembly && entity->GetParent() == nullptr)
+						&& entity.get() != mReparentTarget
+						&& !(mReparentTarget && mReparentTarget->IsDescendantOf(entity.get())))
+						entity->SetParent(mReparentTarget);
+			}
+			else
+			{
+				mReparentChild->SetParent(mReparentTarget);
+			}
 		}
 	}
 
 	if (mReorderRequested && mReorderMoved && mReorderBefore && mReorderMoved != mReorderBefore)
 	{
 		// Dropping a row onto its own descendant would ask the hierarchy to contain itself.
-		if (!mReorderBefore->IsDescendantOf(mReorderMoved))
+		if (!IsLinkedAssemblyEntity(mReorderMoved) && !IsLinkedAssemblyEntity(mReorderBefore)
+			&& !(mEditingAssembly && mReorderMoved->GetParent() == nullptr)
+			&& !(mEditingAssembly && mReorderParent == nullptr)
+			&& !mReorderBefore->IsDescendantOf(mReorderMoved))
 		{
 			RecordSnapshot();
 
@@ -3775,12 +5064,18 @@ void EditorLayer::DrawHierarchy()
 		RecordSnapshot();
 
 		// Deleting one of several deletes all of them, for the same reason dragging one drags all of them.
-		const std::vector<Reference<Entity>> doomed = IsSelected(mEntityToDelete.get())
+		const std::vector<Reference<Entity>> doomed = !mDeleteOnlyTarget && IsSelected(mEntityToDelete.get())
 			? mSelection
 			: std::vector<Reference<Entity>>{ mEntityToDelete };
 
 		for (const auto& entity : doomed)
 		{
+			const Entity* assemblyRoot = LinkedAssemblyRoot(entity.get());
+			const bool editingRoot = mEditingAssembly && entity->GetParent() == nullptr;
+
+			if (editingRoot || (assemblyRoot && assemblyRoot != entity.get()))
+				continue;
+
 			if (mRenamingEntity == entity)
 				mRenamingEntity = nullptr;
 
@@ -3790,6 +5085,7 @@ void EditorLayer::DrawHierarchy()
 		SetSelection(nullptr);
 		mScene->FlushRemovals();
 		mEntityToDelete = nullptr;
+		mDeleteOnlyTarget = false;
 	}
 
 	ImGui::End();
@@ -3802,23 +5098,31 @@ void EditorLayer::DrawEntityMenuItems(const Reference<Entity>& target, const Vec
 	// between them, and no reason for a second menu.
 	if (target)
 	{
-		if (ImGui::MenuItem("Rename", "F2"))
+		ImGui::BeginDisabled(IsLinkedAssemblyEntity(target.get()));
+		if (ImGui::MenuItem(ICON_MDI_PENCIL "  Rename", ShortcutText(ShortcutAction::RenameEntity).c_str()))
 		{
 			mRenamingEntity = target;
 			mRenameFocus = true;
 		}
+		ImGui::EndDisabled();
 
 		ImGui::Separator();
 	}
 
-	if (ImGui::MenuItem("Create Entity"))
+	if (ImGui::MenuItem(ICON_MDI_CUBE_OUTLINE "  Create Entity"))
 		CreateEntity(nullptr, position);
 
-	if (target && ImGui::MenuItem("Create Entity as Child"))
-		CreateEntity(target.get(), nullptr);
+	if (target)
+	{
+		ImGui::BeginDisabled(IsLinkedAssemblyEntity(target.get()));
+		if (ImGui::MenuItem(ICON_MDI_FILE_TREE "  Create Entity as Child"))
+			CreateEntity(target.get(), nullptr);
+		ImGui::EndDisabled();
+	}
 
 	// A folder is a place in the Hierarchy, not a thing in the scene, so the viewport does not offer one.
-	if (!inViewport && ImGui::MenuItem("Create Folder"))
+	if (!inViewport && ImGui::MenuItem(ICON_MDI_FOLDER_PLUS "  Create Folder",
+		ShortcutText(ShortcutAction::NewFolder).c_str()))
 		CreateFolder();
 
 	// Copy, paste and duplicate act on the Hierarchy's selection; over the scene they have no subject the
@@ -3826,31 +5130,75 @@ void EditorLayer::DrawEntityMenuItems(const Reference<Entity>& target, const Vec
 	if (!inViewport)
 	{
 		ImGui::Separator();
-
 		if (target)
 		{
-			if (ImGui::MenuItem("Copy", "Ctrl+C"))      CopyEntity();
-			if (ImGui::MenuItem("Duplicate", "Ctrl+D")) DuplicateEntity();
+			if (ImGui::MenuItem(ICON_MDI_CONTENT_COPY "  Copy",
+				ShortcutText(ShortcutAction::CopyEntity).c_str())) CopyEntity();
+
+			const Entity* assemblyRoot = LinkedAssemblyRoot(target.get());
+			const bool protectedEntity = (assemblyRoot && assemblyRoot != target.get())
+				|| (mEditingAssembly && target->GetParent() == nullptr);
+			ImGui::BeginDisabled(protectedEntity);
+			if (ImGui::MenuItem(ICON_MDI_CONTENT_CUT "  Cut",
+				ShortcutText(ShortcutAction::CutSelection).c_str()))
+			{
+				mEntityClipboard = SceneSerializer::SerializeEntityToString(target);
+				mEntityToDelete = target;
+				mDeleteOnlyTarget = true;
+			}
+			if (ImGui::MenuItem(ICON_MDI_CONTENT_DUPLICATE "  Duplicate",
+				ShortcutText(ShortcutAction::DuplicateEntity).c_str())) DuplicateEntity();
+			ImGui::EndDisabled();
 		}
 
-		if (ImGui::MenuItem("Paste", "Ctrl+V", false, !mEntityClipboard.empty()))
+		if (ImGui::MenuItem(ICON_MDI_CONTENT_PASTE "  Paste",
+			ShortcutText(ShortcutAction::PasteEntity).c_str(), false,
+			!mEntityClipboard.empty()))
 			PasteEntity();
+
 	}
 
 	if (!target)
+	{
+		ImGui::Separator();
+		if (ImGui::MenuItem(ICON_MDI_PACKAGE_VARIANT_CLOSED "  Create Assembly",
+			nullptr, false, !mPlaying && !mEditingAssembly))
+			CreateAssembly(mSelectedEntity);
+
 		return;
+	}
 
 	ImGui::Separator();
 
-	if (ImGui::MenuItem("Unparent", nullptr, false, target->GetParent() != nullptr))
+	if (const Entity* assemblyRoot = LinkedAssemblyRoot(target.get()))
+	{
+		if (ImGui::MenuItem(ICON_MDI_PACKAGE_VARIANT_CLOSED "  Open Assembly"))
+			mPendingAssemblyPath = (GameAssetsDirectory() / assemblyRoot->GetAssemblyPath()).string();
+	}
+	else if (!target->IsFolder() && !mEditingAssembly)
+	{
+		if (ImGui::MenuItem(ICON_MDI_PACKAGE_VARIANT_CLOSED "  Create Assembly"))
+			CreateAssembly(target);
+	}
+
+	ImGui::Separator();
+
+	const bool canUnparent = target->GetParent() != nullptr && !IsLinkedAssemblyEntity(target.get())
+		&& !mEditingAssembly;
+	if (ImGui::MenuItem(ICON_MDI_LINK_VARIANT_OFF "  Unparent", nullptr, false, canUnparent))
 	{
 		mReparentChild = target.get();
 		mReparentTarget = nullptr;
 		mReparentRequested = true;
 	}
 
-	if (ImGui::MenuItem("Delete", "Del"))
+	const Entity* assemblyRoot = LinkedAssemblyRoot(target.get());
+	const bool protectedEntity = (assemblyRoot && assemblyRoot != target.get())
+		|| (mEditingAssembly && target->GetParent() == nullptr);
+	ImGui::BeginDisabled(protectedEntity);
+	if (ImGui::MenuItem(ICON_MDI_DELETE_OUTLINE "  Delete", "Del"))
 		mEntityToDelete = target;
+	ImGui::EndDisabled();
 }
 
 void EditorLayer::DrawEntityNode(const Reference<Entity>& entity)
@@ -3861,8 +5209,13 @@ void EditorLayer::DrawEntityNode(const Reference<Entity>& entity)
 		return;
 
 	ImGui::PushID(entity->GetId());
+	const auto hierarchyKey = mHierarchyEntityKeys.find(entity.get());
+	const std::string entityKey = hierarchyKey == mHierarchyEntityKeys.end() ? std::string() : hierarchyKey->second;
 	ImGui::TableNextRow();
-	ImGui::TableSetColumnIndex(0);
+	const int32 navigationColumn = mEditingAssembly ? 0 : 2;
+	const int32 nameColumn = mEditingAssembly ? 1 : 0;
+	const int32 visibilityColumn = mEditingAssembly ? 2 : 1;
+	ImGui::TableSetColumnIndex(nameColumn);
 
 	if (entity == mRenamingEntity)
 	{
@@ -3905,9 +5258,17 @@ void EditorLayer::DrawEntityNode(const Reference<Entity>& entity)
 	if (IsSelected(entity.get()))
 		flags |= ImGuiTreeNodeFlags_Selected;
 
-	// A search that hid the branch would hide the match inside it, so a filtered tree opens itself.
-	if (mHierarchyFilter[0] != '\0')
-		ImGui::SetNextItemOpen(true, ImGuiCond_Always);
+	const bool filtering = mHierarchyFilter[0] != '\0';
+	const bool revealingRename = mRenamingEntity && mRenamingEntity->IsDescendantOf(entity.get());
+
+	// Tree openness belongs to the document rather than to transient entity pointers. Rebuilt scenes get
+	// new ids, so keeping this state explicitly is what makes entering and leaving Assembly isolation return
+	// every folder to exactly the state it had. Filtering opens branches temporarily without rewriting it.
+	if (!entity->GetChildren().empty())
+	{
+		const bool rememberedOpen = !entityKey.empty() && mHierarchyExpanded.count(entityKey) != 0;
+		ImGui::SetNextItemOpen(filtering || revealingRename || rememberedOpen, ImGuiCond_Always);
+	}
 
 	const std::string& name = entity->GetName();
 	const bool folder = entity->IsFolder();
@@ -3916,10 +5277,18 @@ void EditorLayer::DrawEntityNode(const Reference<Entity>& entity)
 	// scene object looks like an object. The yellow that used to say it was a thing you had to learn.
 	//
 	// A hidden or disabled entity is dimmed — the eye says why, and the name says so at a glance.
-	const bool dimmed = !folder && (!entity->IsVisible() || !entity->IsEnabled());
+	const bool dimmed = !folder && (!entity->IsVisibleInHierarchy() || !entity->IsEnabled());
+	const Entity* linkedRoot = LinkedAssemblyRoot(entity.get());
+	const bool linkedAssembly = linkedRoot != nullptr;
+	const bool linkedRootRow = linkedRoot == entity.get();
+	const bool definitionRoot = mEditingAssembly && entity->GetParent() == nullptr;
+	const bool assemblyDefinition = mEditingAssembly;
+	const bool assemblyVisual = linkedAssembly || assemblyDefinition;
 
 	if (dimmed)
 		ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyle().Colors[ImGuiCol_TextDisabled]);
+	else if (assemblyVisual && !IsSelected(entity.get()))
+		ImGui::PushStyleColor(ImGuiCol_Text, EditorGui::GetAccent());
 
 	// A selected row wears the engine's orange — the same colour as its outline in the viewport and the
 	// frame around a running game. The selection is one thing; it looks like one thing wherever it shows.
@@ -3929,12 +5298,15 @@ void EditorLayer::DrawEntityNode(const Reference<Entity>& entity)
 	ImGui::PushStyleColor(ImGuiCol_HeaderActive, accent);
 
 	const bool expanded = folder && ImGui::TreeNodeGetOpen(ImGui::GetID("##node"));
-	const char8* icon = folder ? (expanded ? ICON_MDI_FOLDER_OPEN : ICON_MDI_FOLDER) : ICON_MDI_CUBE_OUTLINE;
+	const bool assemblyRootRow = linkedRootRow || definitionRoot;
+	const char8* icon = folder ? (expanded ? ICON_MDI_FOLDER_OPEN : ICON_MDI_FOLDER)
+		: (assemblyRootRow ? ICON_MDI_PACKAGE_VARIANT_CLOSED : ICON_MDI_CUBE_OUTLINE);
 
 	// The row icon is drawn by hand, so the label reserves room for it with spaces and the glyph is painted
 	// into that gap after the node is laid out — inline in the label it could only be the small merged size.
 	const float32 spaceWidth = ImMax(ImGui::CalcTextSize(" ").x, 1.0f);
-	const int32 spaces = static_cast<int32>(ImCeil((kIconSize + 6.0f) / spaceWidth));
+	const float32 reservedWidth = kIconSize + 6.0f;
+	const int32 spaces = static_cast<int32>(ImCeil(reservedWidth / spaceWidth));
 	const std::string label = std::string(spaces, ' ') + (name.empty() ? "(unnamed)" : name);
 
 	const ImVec2 rowStart = ImGui::GetCursorScreenPos();
@@ -3942,14 +5314,24 @@ void EditorLayer::DrawEntityNode(const Reference<Entity>& entity)
 	ImGui::SetNextItemAllowOverlap();   // The eye sits in the row the node spans, and gets its own clicks.
 	const bool open = ImGui::TreeNodeEx("##node", flags, "%s", label.c_str());
 
+	if (!entity->GetChildren().empty() && !filtering && !entityKey.empty())
+	{
+		if (open)
+			mHierarchyExpanded.insert(entityKey);
+		else
+			mHierarchyExpanded.erase(entityKey);
+	}
+
 	// Paint the icon into the space reserved for it: after the expand arrow, centred down the row.
 	const float32 iconX = rowStart.x + ImGui::GetTreeNodeToLabelSpacing();
 	const ImU32 iconColor = ImGui::GetColorU32(dimmed ? ImGuiCol_TextDisabled : ImGuiCol_Text);
-	DrawIcon(ImVec2(iconX, ImGui::GetItemRectMin().y), ImVec2(kIconSize, ImGui::GetItemRectSize().y), icon, iconColor, kIconSize);
+
+	DrawIcon(ImVec2(iconX, ImGui::GetItemRectMin().y), ImVec2(kIconSize, ImGui::GetItemRectSize().y),
+		icon, iconColor, kIconSize);
 
 	ImGui::PopStyleColor(3);
 
-	if (dimmed)
+	if (dimmed || (assemblyVisual && !IsSelected(entity.get())))
 		ImGui::PopStyleColor();
 
 	// Clicking the label (not the expand arrow) selects. Ctrl adds one, Shift takes everything between.
@@ -3979,12 +5361,18 @@ void EditorLayer::DrawEntityNode(const Reference<Entity>& entity)
 
 	if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
 	{
-		mRenamingEntity = entity;
-		mRenameFocus = true;
+		if (linkedAssembly)
+			mPendingAssemblyPath = (GameAssetsDirectory() / linkedRoot->GetAssemblyPath()).string();
+		else
+		{
+			mRenamingEntity = entity;
+			mRenameFocus = true;
+		}
 	}
 
 	// Drag a node onto another to reparent it (the child keeps its world transform).
-	if (ImGui::BeginDragDropSource())
+	const bool protectedHierarchy = linkedAssembly || (mEditingAssembly && definitionRoot);
+	if (!protectedHierarchy && ImGui::BeginDragDropSource())
 	{
 		Entity* dragged = entity.get();
 		ImGui::SetDragDropPayload("LN_ENTITY", &dragged, sizeof(Entity*));
@@ -4000,7 +5388,7 @@ void EditorLayer::DrawEntityNode(const Reference<Entity>& entity)
 	// A row is three drop zones down its height, the way Unity's hierarchy is: the top and bottom
 	// quarters put the dragged entity *between* rows, and the half in the middle drops it *onto* this one
 	// to reparent. One row, both gestures, told apart by where in it the pointer is.
-	if (ImGui::BeginDragDropTarget())
+	if (!linkedAssembly && ImGui::BeginDragDropTarget())
 	{
 		const ImVec2 rowMin = ImGui::GetItemRectMin();
 		const ImVec2 rowMax = ImGui::GetItemRectMax();
@@ -4008,8 +5396,9 @@ void EditorLayer::DrawEntityNode(const Reference<Entity>& entity)
 		const float32 offset = ImClamp((ImGui::GetMousePos().y - rowMin.y) / height, 0.0f, 1.0f);
 
 		constexpr float32 kEdge = 0.25f;
-		const bool above = offset < kEdge;
-		const bool below = offset > 1.0f - kEdge;
+		const bool rootBoundary = mEditingAssembly && definitionRoot;
+		const bool above = !rootBoundary && offset < kEdge;
+		const bool below = !rootBoundary && offset > 1.0f - kEdge;
 
 		// The line shows where it would land, drawn over the row rather than in it: the answer to "where
 		// does letting go put this?" should not need to be guessed.
@@ -4041,6 +5430,16 @@ void EditorLayer::DrawEntityNode(const Reference<Entity>& entity)
 				mReparentRequested = true;
 			}
 		}
+		else if (!mPlaying && !mEditingAssembly)
+		{
+			if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("LN_ASSET_PATH"))
+			{
+				const std::string assetPath = static_cast<const char8*>(payload->Data);
+
+				if (std::filesystem::path(assetPath).extension() == ".lnassembly")
+					InstantiateAssembly(assetPath, entity.get());
+			}
+		}
 
 		ImGui::EndDragDropTarget();
 	}
@@ -4057,11 +5456,14 @@ void EditorLayer::DrawEntityNode(const Reference<Entity>& entity)
 	}
 
 	// The Visibility column. A folder has nothing to draw, so it has no eye.
-	ImGui::TableSetColumnIndex(1);
+	ImGui::TableSetColumnIndex(visibilityColumn);
 	ImGui::SetCursorPosX(ImGui::GetCursorPosX() + ImMax((ImGui::GetContentRegionAvail().x - RowEndSlot()) * 0.5f, 0.0f));
 	AlignRowEndGlyph();   // The row is a frame tall now; the eye is a glyph, and sits in the middle of it.
 
-	if (!folder && EyeButton("##visible", entity->IsVisible()))
+	// A linked root owns the scene-level visibility of its complete instance. Descendant eyes remain
+	// authored by the Assembly definition and therefore stay read-only here.
+	ImGui::BeginDisabled(linkedAssembly && !linkedRootRow);
+	if (!folder && EyeButton("##visible", entity->IsVisible(), assemblyVisual, IsSelected(entity.get())))
 	{
 		RecordSnapshot();
 		const bool visible = !entity->IsVisible();
@@ -4070,9 +5472,38 @@ void EditorLayer::DrawEntityNode(const Reference<Entity>& entity)
 		// clicking one of their eyes is the same rule as dragging or deleting them.
 		if (IsSelected(entity.get()))
 			for (const auto& selected : mSelection)
-				selected->SetVisible(visible);
+			{
+				const Entity* selectedAssemblyRoot = LinkedAssemblyRoot(selected.get());
+
+				if (!selectedAssemblyRoot || selectedAssemblyRoot == selected.get())
+					selected->SetVisible(visible);
+			}
 		else
 			entity->SetVisible(visible);
+	}
+	ImGui::EndDisabled();
+
+	// Navigation owns its own compact, headerless column. Linked roots go into their source definition;
+	// the definition root returns to the exact scene/editor state that opened isolation.
+	ImGui::TableSetColumnIndex(navigationColumn);
+	ImGui::SetCursorPosX(ImGui::GetCursorPosX()
+		+ ImMax((ImGui::GetContentRegionAvail().x - RowEndSlot()) * 0.5f, 0.0f));
+	AlignRowEndGlyph();
+
+	if (linkedRootRow)
+	{
+		if (HierarchyNavigationButton("##openAssembly", ICON_MDI_CHEVRON_RIGHT, "Open Assembly"))
+			mPendingAssemblyPath = (GameAssetsDirectory() / linkedRoot->GetAssemblyPath()).string();
+	}
+	else if (definitionRoot)
+	{
+		std::string tooltip = "Return to the previous scene";
+
+		if (mAssemblyNavigation && !mAssemblyNavigation->scenePath.empty())
+			tooltip += " (" + std::filesystem::path(mAssemblyNavigation->scenePath).stem().string() + ")";
+
+		if (HierarchyNavigationButton("##returnFromAssembly", ICON_MDI_CHEVRON_LEFT, tooltip.c_str()))
+			mPendingAssemblyReturn = true;
 	}
 
 	if (open)
@@ -4098,27 +5529,13 @@ bool EditorLayer::DrawComponentHeader(const char8* icon, const char8* name, int 
 	const ImGuiStyle& style = ImGui::GetStyle();
 	const float32 lineHeight = ImGui::GetFontSize() + style.FramePadding.y * 2.0f;
 
-	// The header draws the arrow and the background; the icon and the name are painted onto it, so the icon
-	// sits a hair after the arrow instead of at the wide default label offset — that offset was the gap.
-	ImGui::SetNextItemAllowOverlap();
-	const bool open = ImGui::CollapsingHeader("###header",
-		ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_SpanAvailWidth | ImGuiTreeNodeFlags_AllowOverlap);
+	// Components and the other editor sections share this header primitive, so the arrow, icon and label
+	// keep one rhythm everywhere instead of acquiring panel-specific offsets.
+	const bool open = DrawSectionHeader("###header", icon, name, ImGuiTreeNodeFlags_DefaultOpen);
 
 	// Exact header bounds, so the remove button sits flush against its right edge.
 	const ImVec2 headerMin = ImGui::GetItemRectMin();
 	const ImVec2 headerMax = ImGui::GetItemRectMax();
-
-	// Icon then name, laid out by hand: the arrow takes about a font's width, the icon follows it with a
-	// little air, and the name follows the icon.
-	const float32 iconX = headerMin.x + ImGui::GetFontSize() + 12.0f;
-	const float32 rowHeight = headerMax.y - headerMin.y;
-	const ImU32 textColor = ImGui::GetColorU32(ImGuiCol_Text);
-
-	DrawIcon(ImVec2(iconX, headerMin.y), ImVec2(kIconSize, rowHeight), icon, textColor, kIconSize);
-
-	ImGui::GetWindowDrawList()->AddText(
-		ImVec2(iconX + kIconSize + 8.0f, ImFloor(headerMin.y + (rowHeight - ImGui::GetTextLineHeight()) * 0.5f)),
-		textColor, name);
 
 	// A negative index is a fixed component — the Transform — which reorders into nothing and cannot be
 	// removed. Everything below is for the ones that can.
@@ -4479,9 +5896,14 @@ void EditorLayer::ApplyReflectorToSelection(const std::string& typeName, Reflect
 		return;
 
 	for (const auto& entity : mSelection)
+	{
+		if (IsLinkedAssemblyEntity(entity.get()))
+			continue;
+
 		for (const auto& component : entity->GetComponents())
 			if (component->GetTypeName() == typeName)
 				component->Reflect(setter);
+	}
 }
 
 void EditorLayer::ApplyReflectedField(const std::string& typeName, const char8* field, float32 value)
@@ -4517,6 +5939,20 @@ void EditorLayer::ApplyReflectedField(const std::string& typeName, const char8* 
 void EditorLayer::InspectorReflector::Field(const char8* name, float32& value)
 {
 	mDrew = true;
+
+	if (mTypeName == "AudioPlayer" && std::string(name) == "Volume")
+	{
+		if (mEditor.DrawFloatProperty(name, value, 0.01f, 0.0f, 1.0f, 1.0f))
+			mEditor.ApplyReflectedField(mTypeName, name, value);
+		return;
+	}
+
+	if (mTypeName == "AudioPlayer" && std::string(name) == "Pitch")
+	{
+		if (mEditor.DrawFloatProperty(name, value, 0.01f, 0.25f, 4.0f, 1.0f))
+			mEditor.ApplyReflectedField(mTypeName, name, value);
+		return;
+	}
 
 	// No range and no default: the component said it was a number, not what a sensible one would be.
 	if (mEditor.DrawFloatProperty(name, value, 0.1f, 0.0f, 0.0f, std::nullopt))
@@ -4571,6 +6007,27 @@ void EditorLayer::InspectorReflector::Field(const char8* name, bool& value)
 void EditorLayer::InspectorReflector::Field(const char8* name, std::string& value)
 {
 	mDrew = true;
+
+	if (mTypeName == "AudioPlayer" && std::string(name) == "Bus")
+	{
+		static const char8* buses[] = { "Master", "SFX", "Music" };
+		int32 selected = value == "Master" ? 0 : (value == "Music" ? 2 : 1);
+
+		ImGui::PushID(name);
+		PropertyLabel(name);
+
+		if (CompactCombo("##value", selected, buses, IM_ARRAYSIZE(buses)))
+		{
+			mEditor.RecordSnapshot();
+			value = buses[selected];
+			mEditor.ApplyReflectedField(mTypeName, name, value);
+		}
+
+		SameLineRowEnd();
+		ResetToDefaultButton("##reset", false);
+		ImGui::PopID();
+		return;
+	}
 
 	char8 buffer[256];
 	const size_t length = value.copy(buffer, sizeof(buffer) - 1);
@@ -4680,20 +6137,29 @@ void EditorLayer::DrawProperties()
 
 	// The same icon the Hierarchy draws, so the two panels agree about what they are pointing at — but larger
 	// here, because this is the one entity the whole panel is about, not one row among many.
-	DrawInlineIcon(mSelectedEntity->IsFolder() ? ICON_MDI_FOLDER : ICON_MDI_CUBE_OUTLINE,
-		kIconTitle, ImGui::GetColorU32(ImGuiCol_Text));
+	const Entity* linkedRoot = LinkedAssemblyRoot(mSelectedEntity.get());
+	const bool assemblyInstance = linkedRoot != nullptr;
+	const bool assemblyRoot = linkedRoot == mSelectedEntity.get()
+		|| (mEditingAssembly && mSelectedEntity->GetParent() == nullptr);
+	const bool assemblyEntity = assemblyInstance || mEditingAssembly;
+	const char8* entityIcon = mSelectedEntity->IsFolder() ? ICON_MDI_FOLDER
+		: (assemblyRoot ? ICON_MDI_PACKAGE_VARIANT_CLOSED : ICON_MDI_CUBE_OUTLINE);
+	DrawInlineIcon(entityIcon,
+		kIconTitle, ImGui::GetColorU32(assemblyEntity ? EditorGui::GetAccent() : ImGui::GetStyle().Colors[ImGuiCol_Text]));
 	ImGui::SameLine();
 
 	// Whether the entity is switched on at all — the checkbox Unity puts before the name, and the same
 	// flag the game reads. Hiding is a different thing entirely, and lives on the eye in the Hierarchy.
 	bool enabled = mSelectedEntity->IsEnabled();
 
+	ImGui::BeginDisabled(assemblyInstance);
 	if (ImGui::Checkbox("##enabled", &enabled))
 	{
 		RecordSnapshot();
 
 		for (const auto& entity : mSelection)
-			entity->SetEnabled(enabled);
+			if (!IsLinkedAssemblyEntity(entity.get()))
+				entity->SetEnabled(enabled);
 	}
 
 	if (ImGui::IsItemHovered())
@@ -4712,8 +6178,29 @@ void EditorLayer::DrawProperties()
 		mSelectedEntity->SetName(nameBuffer);
 	if (ImGui::IsItemActivated()) BeginEdit();
 	if (ImGui::IsItemDeactivatedAfterEdit()) CommitEdit();
+	ImGui::EndDisabled();
 
 	ImGui::Separator();
+
+	if (assemblyInstance)
+	{
+		ImGui::TextColored(EditorGui::GetAccent(), ICON_MDI_PACKAGE_VARIANT_CLOSED "  Assembly");
+		SameLineRowEnd();
+
+		if (IconButton("##editAssembly", ICON_MDI_PENCIL, RowEndSlot(), "Edit the original Assembly"))
+		{
+			mPendingAssemblyPath = (GameAssetsDirectory() / linkedRoot->GetAssemblyPath()).string();
+		}
+
+		ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyle().Colors[ImGuiCol_TextDisabled]);
+		ImGui::TextWrapped("%s", linkedRoot->GetAssemblyPath().c_str());
+		if (linkedRoot == mSelectedEntity.get())
+			ImGui::TextWrapped("Transform is this instance's scene placement. Edit the Assembly to change its definition.");
+		else
+			ImGui::TextWrapped("This entity is authored by the linked Assembly. Edit the Assembly to change it.");
+		ImGui::PopStyleColor();
+		ImGui::Separator();
+	}
 
 	// The fields scroll; the summary below them does not. It is the same bargain the Hierarchy strikes: what
 	// you are looking at is stated in one place, at the bottom, and it stays there however long the list is.
@@ -4729,6 +6216,13 @@ void EditorLayer::DrawProperties()
 
 	bool transformRemove = false;
 	int transformDrag = -1;
+	const bool linkedChild = linkedRoot && linkedRoot != mSelectedEntity.get();
+	const auto canEditTransform = [this](const Reference<Entity>& entity)
+	{
+		const Entity* root = LinkedAssemblyRoot(entity.get());
+		return !root || root == entity.get();
+	};
+	ImGui::BeginDisabled(linkedChild);
 	if (DrawComponentHeader(ICON_MDI_AXIS_ARROW, "Transform", -1, transformRemove, transformDrag, transformDrag))
 	{
 		// Every entity has a Transform, so a transform edit is the one edit the whole selection always
@@ -4739,25 +6233,30 @@ void EditorLayer::DrawProperties()
 		float32 positionValues[2] = { position.x, position.y };
 		if (DrawTransformVector("Position", positionValues, 2, 1.0f, 0.0f, ""))
 			for (const auto& entity : mSelection)
-				entity->GetTransform()->SetPosition(Vector2(positionValues[0], positionValues[1]));
+				if (canEditTransform(entity))
+					entity->GetTransform()->SetPosition(Vector2(positionValues[0], positionValues[1]));
 
 		// A rotation on a plane is one angle, not a vector whose X and Y meant nothing — one field, in
 		// degrees, turning about Z, so it wears the Z tag (axis base 2).
 		float32 rotationValue[1] = { transform->GetRotation() };
 		if (DrawTransformVector("Rotation", rotationValue, 1, 0.5f, 0.0f, "", nullptr, 2))
 			for (const auto& entity : mSelection)
-				entity->GetTransform()->SetRotation(rotationValue[0]);
+				if (canEditTransform(entity))
+					entity->GetTransform()->SetRotation(rotationValue[0]);
 
 		Vector2 scale = transform->GetScale();
 		float32 scaleValues[2] = { scale.x, scale.y };
 		if (DrawTransformVector("Scale", scaleValues, 2, 0.01f, 1.0f, "", &mScaleUniform))
 			for (const auto& entity : mSelection)
-				entity->GetTransform()->SetScale(Vector2(scaleValues[0], scaleValues[1]));
+				if (canEditTransform(entity))
+					entity->GetTransform()->SetScale(Vector2(scaleValues[0], scaleValues[1]));
 	}
+	ImGui::EndDisabled();
 
 	// Draw components in their stored order so a newly added one always appears at the end; headers
 	// can be dragged onto each other to reorder. Removal/reorder are deferred to after the loop so
 	// the component list is never mutated mid-iteration.
+	ImGui::BeginDisabled(assemblyInstance);
 	Component* componentToRemove = nullptr;
 	int dragFrom = -1, dragTo = -1;
 
@@ -4874,7 +6373,7 @@ void EditorLayer::DrawProperties()
 		}
 		else if (Camera2D* camera = dynamic_cast<Camera2D*>(component))
 		{
-			if (DrawComponentHeader(ICON_MDI_CAMERA, "Camera 2D", i, remove, dragFrom, dragTo))
+			if (DrawComponentHeader(ICON_MDI_VIDEO, "Camera 2D", i, remove, dragFrom, dragTo))
 			{
 				Vector2 offset = camera->GetOffset();
 				float32 offsetValues[2] = { offset.x, offset.y };
@@ -4954,6 +6453,14 @@ void EditorLayer::DrawProperties()
 				}
 			}
 		}
+		else if (AudioPlayer* player = dynamic_cast<AudioPlayer*>(component))
+		{
+			if (DrawComponentHeader(ICON_MDI_VOLUME_HIGH, "Audio Player", i, remove, dragFrom, dragTo))
+			{
+				InspectorReflector reflector(*this, player->GetTypeName());
+				player->Reflect(reflector);
+			}
+		}
 		else if (RigidBody2D* body = dynamic_cast<RigidBody2D*>(component))
 		{
 			if (DrawComponentHeader(ICON_MDI_WEIGHT, "Rigid Body 2D", i, remove, dragFrom, dragTo))
@@ -4963,7 +6470,7 @@ void EditorLayer::DrawProperties()
 
 				int32 typeIndex = static_cast<int32>(body->GetBodyType());
 				PropertyLabel("Type");
-				if (ImGui::Combo("##type", &typeIndex, bodyTypes, IM_ARRAYSIZE(bodyTypes)))
+				if (CompactCombo("##type", typeIndex, bodyTypes, IM_ARRAYSIZE(bodyTypes)))
 				{
 					RecordSnapshot();
 					ApplyToSelection<RigidBody2D>([&](RigidBody2D* target) { target->SetBodyType(static_cast<BodyType>(typeIndex)); });
@@ -5085,7 +6592,7 @@ void EditorLayer::DrawProperties()
 		const auto selectionLacks = [&](const auto& has)
 		{
 			for (const auto& entity : mSelection)
-				if (!entity->IsFolder() && !has(entity))
+				if (!entity->IsFolder() && !IsLinkedAssemblyEntity(entity.get()) && !has(entity))
 					return true;
 			return false;
 		};
@@ -5099,7 +6606,8 @@ void EditorLayer::DrawProperties()
 		{
 			RecordSnapshot();
 			for (const auto& entity : mSelection)
-				if (!entity->IsFolder() && !entity->HasComponent<SpriteRenderer>())
+				if (!entity->IsFolder() && !IsLinkedAssemblyEntity(entity.get())
+					&& !entity->HasComponent<SpriteRenderer>())
 					entity->AddComponent<SpriteRenderer>();
 		}
 
@@ -5107,17 +6615,28 @@ void EditorLayer::DrawProperties()
 		{
 			RecordSnapshot();
 			for (const auto& entity : mSelection)
-				if (!entity->IsFolder() && !entity->HasComponent<Camera2D>())
+				if (!entity->IsFolder() && !IsLinkedAssemblyEntity(entity.get())
+					&& !entity->HasComponent<Camera2D>())
 					entity->AddComponent<Camera2D>();
 
 			FocusViewportOnSelection();
+		}
+
+		if (lacksBuiltIn.operator()<AudioPlayer>() && ImGui::MenuItem("Audio Player"))
+		{
+			RecordSnapshot();
+			for (const auto& entity : mSelection)
+				if (!entity->IsFolder() && !IsLinkedAssemblyEntity(entity.get())
+					&& !entity->HasComponent<AudioPlayer>())
+					entity->AddComponent<AudioPlayer>();
 		}
 
 		if (lacksBuiltIn.operator()<RigidBody2D>() && ImGui::MenuItem("Rigid Body 2D"))
 		{
 			RecordSnapshot();
 			for (const auto& entity : mSelection)
-				if (!entity->IsFolder() && !entity->HasComponent<RigidBody2D>())
+				if (!entity->IsFolder() && !IsLinkedAssemblyEntity(entity.get())
+					&& !entity->HasComponent<RigidBody2D>())
 					entity->AddComponent<RigidBody2D>();
 		}
 
@@ -5129,7 +6648,8 @@ void EditorLayer::DrawProperties()
 			RecordSnapshot();
 			for (const auto& entity : mSelection)
 			{
-				if (entity->IsFolder() || entity->HasComponent<BoxCollider2D>())
+				if (entity->IsFolder() || IsLinkedAssemblyEntity(entity.get())
+					|| entity->HasComponent<BoxCollider2D>())
 					continue;
 
 				const SpriteRenderer* sprite = entity->GetComponent<SpriteRenderer>();
@@ -5143,7 +6663,8 @@ void EditorLayer::DrawProperties()
 			RecordSnapshot();
 			for (const auto& entity : mSelection)
 			{
-				if (entity->IsFolder() || entity->HasComponent<CircleCollider2D>())
+				if (entity->IsFolder() || IsLinkedAssemblyEntity(entity.get())
+					|| entity->HasComponent<CircleCollider2D>())
 					continue;
 
 				const SpriteRenderer* sprite = entity->GetComponent<SpriteRenderer>();
@@ -5175,7 +6696,8 @@ void EditorLayer::DrawProperties()
 			{
 				RecordSnapshot();
 				for (const auto& entity : mSelection)
-					if (!entity->IsFolder() && !entity->HasComponentByName(name))
+					if (!entity->IsFolder() && !IsLinkedAssemblyEntity(entity.get())
+						&& !entity->HasComponentByName(name))
 						entity->AddComponentByName(name);
 			}
 		}
@@ -5188,6 +6710,7 @@ void EditorLayer::DrawProperties()
 
 		ImGui::EndPopup();
 	}
+	ImGui::EndDisabled();
 
 	EndPropertiesPanel();
 }
@@ -5351,17 +6874,38 @@ void EditorLayer::DrawTitleBar()
 
 	// --- Bottom row: the scene open in the project, picking up where the menus left off. It used to be named
 	// in the Hierarchy, which is a panel that shows a scene, not the thing that has one open.
-	const std::string sceneName = mScenePath.empty()
+	std::string sceneName = mScenePath.empty()
 		? std::string("Untitled")
 		: std::filesystem::path(mScenePath).stem().generic_string();
+
+	if (mEditingAssembly)
+	{
+		sceneName = std::string(ICON_MDI_PACKAGE_VARIANT_CLOSED) + "  " + sceneName;
+
+		if (mAssemblyDirty)
+			sceneName += " *";
+	}
+	else if (mSceneDirty)
+	{
+		sceneName += " *";
+	}
 
 	ImGui::SetCursorPos(ImVec2(menusEnd - barMin.x + kSceneGap, row + (row - ImGui::GetTextLineHeight()) * 0.5f));
 	ImGui::TextDisabled("|");
 	ImGui::SameLine(0.0f, 8.0f);
 	ImGui::TextDisabled("%s", sceneName.c_str());
 
-	if (!mScenePath.empty() && ImGui::IsItemHovered())
-		ImGui::SetTooltip("%s", mScenePath.c_str());
+	if (ImGui::IsItemHovered())
+	{
+		if (mAssemblyDirty)
+			ImGui::SetTooltip("%s\nUnsaved Assembly changes",
+				mScenePath.empty() ? "Untitled" : mScenePath.c_str());
+		else if (mSceneDirty)
+			ImGui::SetTooltip("%s\nUnsaved scene changes",
+				mScenePath.empty() ? "Untitled" : mScenePath.c_str());
+		else
+			ImGui::SetTooltip("%s", mScenePath.empty() ? "Untitled" : mScenePath.c_str());
+	}
 
 	// What is left of the bar is what the window is dragged by; what the editor drew in it is not. A drag
 	// that began on a menu would open nothing and move everything.
@@ -5465,10 +7009,30 @@ void EditorLayer::DrawWindowButtons(const ImVec2& barMin, float32 barWidth, floa
 
 void EditorLayer::NewScene()
 {
+	if (mEditingAssembly)
+	{
+		if (mAssemblyDirty)
+		{
+			mOpenUnsavedAssemblyPopup = true;
+			return;
+		}
+
+		if (!ReturnFromAssembly())
+			return;
+	}
+
 	RecordSnapshot();
 	mScene->Clear();
 	SetSelection(nullptr);
 	mScenePath.clear();
+	mSavedSceneSnapshot = SceneSerializer::SerializeToString(mScene);
+	mSceneDirty = false;
+	mEditingAssembly = false;
+	mAssemblyDirty = false;
+	mHierarchyExpanded.clear();
+	mAssemblyNavigation.reset();
+	mPendingAssemblyReturn = false;
+	ResetAssemblyTracking();
 }
 
 void EditorLayer::OpenScene()
@@ -5481,6 +7045,18 @@ void EditorLayer::OpenScene()
 
 bool EditorLayer::LoadScene(const std::string& path)
 {
+	if (mEditingAssembly)
+	{
+		if (mAssemblyDirty)
+		{
+			mOpenUnsavedAssemblyPopup = true;
+			return false;
+		}
+
+		if (!ReturnFromAssembly())
+			return false;
+	}
+
 	RecordSnapshot();
 	SetSelection(nullptr);
 
@@ -5491,12 +7067,188 @@ bool EditorLayer::LoadScene(const std::string& path)
 	}
 
 	mScenePath = path;
+	mSavedSceneSnapshot = SceneSerializer::SerializeToString(mScene);
+	mSceneDirty = false;
+	mEditingAssembly = false;
+	mAssemblyDirty = false;
+	mHierarchyExpanded.clear();
+	mAssemblyNavigation.reset();
+	mPendingAssemblyReturn = false;
+	ResetAssemblyTracking();
 	RememberRecentScene(path);
 	return true;
 }
 
+bool EditorLayer::LoadAssembly(const std::string& path)
+{
+	if (mPlaying)
+		return false;
+
+	std::vector<Reference<Entity>> definition =
+		AssemblySerializer::DeserializeTree(path, GameAssetsDirectory().string());
+
+	if (definition.empty())
+	{
+		Log::Console(LogLevel::Error, LION_FORMAT_TEXT("[Editor] Could not open Assembly '{}'.", path));
+		return false;
+	}
+
+	// The scene is not saved merely to visit a reusable definition. Keep its live, possibly unsaved state
+	// and its editor context in memory, exactly as prefab isolation does in mature editors.
+	if (!mEditingAssembly && !mAssemblyNavigation)
+	{
+		AssemblyNavigationState navigation;
+		navigation.scenePath = mScenePath;
+		navigation.sceneData = SceneSerializer::SerializeToString(mScene);
+		navigation.savedSceneSnapshot = mSavedSceneSnapshot;
+		navigation.sceneDirty = mSceneDirty;
+		navigation.viewCenter = mViewCenter;
+		navigation.viewZoom = mViewZoom;
+		navigation.undoStack = std::move(mUndoStack);
+		navigation.redoStack = std::move(mRedoStack);
+		navigation.pendingSnapshot = std::move(mPendingSnapshot);
+		navigation.hierarchyExpanded = mHierarchyExpanded;
+		navigation.hasPending = mHasPending;
+
+		const auto& entities = mScene->GetEntities();
+		int32 selectedIndex = 0;
+		for (const auto& entity : entities)
+		{
+			if (entity == mSelectedEntity)
+			{
+				navigation.selectedEntity = selectedIndex;
+				break;
+			}
+
+			++selectedIndex;
+		}
+
+		mAssemblyNavigation = std::move(navigation);
+	}
+	else if (mEditingAssembly && !mScenePath.empty() && !mScene->GetEntities().empty())
+	{
+		// A document switch is not a save command. Keep dirty authored data in hand until the user explicitly
+		// saves or returns and chooses what to do with it.
+		if (mAssemblyDirty)
+		{
+			mOpenUnsavedAssemblyPopup = true;
+			return false;
+		}
+
+		const std::string currentDocument =
+			std::filesystem::absolute(mScenePath).lexically_normal().generic_string();
+		mAssemblyHierarchyExpanded[currentDocument] = mHierarchyExpanded;
+	}
+
+	mScene->Clear();
+	SetSelection(nullptr);
+
+	for (const auto& entity : definition)
+		mScene->Add(entity);
+
+	SetSelection(definition.front());
+	mScenePath = path;
+	mEditingAssembly = true;
+	mAssemblyDirty = false;
+	const std::string document = std::filesystem::absolute(path).lexically_normal().generic_string();
+	const auto expanded = mAssemblyHierarchyExpanded.find(document);
+	mHierarchyExpanded = expanded == mAssemblyHierarchyExpanded.end()
+		? std::unordered_set<std::string>() : expanded->second;
+	mUndoStack.clear();
+	mRedoStack.clear();
+	mPendingSnapshot.clear();
+	mHasPending = false;
+	ResetAssemblyTracking();
+	Log::Console(LogLevel::Information,
+		LION_FORMAT_TEXT("[Editor] Editing Assembly '{}'.", std::filesystem::path(path).stem().string()));
+	return true;
+}
+
+bool EditorLayer::ReturnFromAssembly()
+{
+	if (!mEditingAssembly || !mAssemblyNavigation)
+		return false;
+
+	// Returning is navigation, not an implicit apply. Unsaved work remains isolated until the user chooses
+	// Save or Discard; only an explicit save changes the source every linked instance reads.
+	if (mAssemblyDirty)
+	{
+		mOpenUnsavedAssemblyPopup = true;
+		return false;
+	}
+
+	const std::string assemblyDocument =
+		std::filesystem::absolute(mScenePath).lexically_normal().generic_string();
+	mAssemblyHierarchyExpanded[assemblyDocument] = mHierarchyExpanded;
+
+	AssemblyNavigationState navigation = std::move(*mAssemblyNavigation);
+
+	SetSelection(nullptr);
+	if (!SceneSerializer::DeserializeFromString(mScene, navigation.sceneData, GameAssetsDirectory().string()))
+	{
+		Log::Console(LogLevel::Error, "[Editor] Could not restore the scene that opened this Assembly.");
+		return false;
+	}
+
+	mAssemblyNavigation.reset();
+	mScenePath = std::move(navigation.scenePath);
+	mSavedSceneSnapshot = std::move(navigation.savedSceneSnapshot);
+	mSceneDirty = navigation.sceneDirty;
+	mEditingAssembly = false;
+	mAssemblyDirty = false;
+	mViewCenter = navigation.viewCenter;
+	mViewZoom = navigation.viewZoom;
+	mUndoStack = std::move(navigation.undoStack);
+	mRedoStack = std::move(navigation.redoStack);
+	mPendingSnapshot = std::move(navigation.pendingSnapshot);
+	mHasPending = navigation.hasPending;
+	mHierarchyExpanded = std::move(navigation.hierarchyExpanded);
+
+	const auto& entities = mScene->GetEntities();
+	if (navigation.selectedEntity >= 0
+		&& navigation.selectedEntity < static_cast<int32>(entities.size()))
+	{
+		auto selected = entities.begin();
+		std::advance(selected, navigation.selectedEntity);
+		SetSelection(*selected);
+	}
+
+	ResetAssemblyTracking();
+	mProjectDirty = true;
+	Log::Console(LogLevel::Information, "[Editor] Returned from Assembly isolation.");
+	return true;
+}
+
+bool EditorLayer::SaveAssembly()
+{
+	if (!mEditingAssembly || mScenePath.empty() || mScene->GetEntities().empty())
+		return false;
+
+	if (AssemblySerializer::Serialize(mScene->GetEntities().front(), mScenePath))
+	{
+		mAssemblyDirty = false;
+		mProjectDirty = true;
+		PushToast("Saved " + std::filesystem::path(mScenePath).stem().string() + " Assembly", false);
+		return true;
+	}
+
+	return false;
+}
+
 void EditorLayer::SaveScene()
 {
+	if (mEditingAssembly)
+	{
+		if (mScenePath.empty())
+		{
+			SaveAssemblyAs();
+			return;
+		}
+
+		SaveAssembly();
+		return;
+	}
+
 	// A scene that has never been anywhere has to be told where to go, so this is Save As until it is not.
 	if (mScenePath.empty())
 	{
@@ -5505,11 +7257,22 @@ void EditorLayer::SaveScene()
 	}
 
 	if (SceneSerializer::Serialize(mScene, mScenePath))
+	{
+		mSavedSceneSnapshot = SceneSerializer::SerializeToString(mScene);
+		mSceneDirty = false;
 		Projects::RememberDefaultScene(ActiveProjectDirectory(), mScenePath);
+		PushToast("Saved " + std::filesystem::path(mScenePath).stem().string() + " Scene", false);
+	}
 }
 
 void EditorLayer::SaveSceneAs()
 {
+	if (mEditingAssembly)
+	{
+		SaveAssemblyAs();
+		return;
+	}
+
 	const std::string path = FileDialog::Save(kSceneFilter, "lnscene", GameAssetsDirectory().string());
 
 	if (path.empty())
@@ -5518,8 +7281,11 @@ void EditorLayer::SaveSceneAs()
 	if (SceneSerializer::Serialize(mScene, path))
 	{
 		mScenePath = path;
+		mSavedSceneSnapshot = SceneSerializer::SerializeToString(mScene);
+		mSceneDirty = false;
 		RememberRecentScene(path);
 		Projects::RememberDefaultScene(ActiveProjectDirectory(), path);
+		PushToast("Saved " + std::filesystem::path(path).stem().string() + " Scene", false);
 	}
 }
 
@@ -5541,10 +7307,16 @@ float32 EditorLayer::DrawMenuBar(const ImVec2& barMin, const ImVec2& barMax)
 
 			ImGui::Separator();
 
-			if (ImGui::MenuItem(ICON_MDI_CONTENT_SAVE_OUTLINE "  Save Scene", ShortcutText(ShortcutAction::SaveScene).c_str()))
+			const char8* saveLabel = mEditingAssembly
+				? ICON_MDI_CONTENT_SAVE_OUTLINE "  Save Assembly"
+				: ICON_MDI_CONTENT_SAVE_OUTLINE "  Save Scene";
+			if (ImGui::MenuItem(saveLabel, ShortcutText(ShortcutAction::SaveScene).c_str()))
 				SaveScene();
 
-			if (ImGui::MenuItem(ICON_MDI_CONTENT_SAVE_ALL_OUTLINE "  Save Scene As...", ShortcutText(ShortcutAction::SaveSceneAs).c_str()))
+			const char8* saveAsLabel = mEditingAssembly
+				? ICON_MDI_CONTENT_SAVE_ALL_OUTLINE "  Save Assembly As..."
+				: ICON_MDI_CONTENT_SAVE_ALL_OUTLINE "  Save Scene As...";
+			if (ImGui::MenuItem(saveAsLabel, ShortcutText(ShortcutAction::SaveSceneAs).c_str()))
 				SaveSceneAs();
 
 			ImGui::Separator();
@@ -5658,8 +7430,14 @@ float32 EditorLayer::DrawMenuBar(const ImVec2& barMin, const ImVec2& barMax)
 			ImGui::EndMenu();
 		}
 
-		if (ImGui::BeginMenu("Game"))
+		if (ImGui::BeginMenu("Project"))
 		{
+			if (ImGui::MenuItem(ICON_MDI_TUNE "  Settings...",
+				ShortcutText(ShortcutAction::OpenProjectSettings).c_str()))
+				mOpenProjectSettingsPopup = true;
+
+			ImGui::Separator();
+
 			if (ImGui::MenuItem(ICON_MDI_HAMMER_WRENCH "  Compile", ShortcutText(ShortcutAction::CompileModule).c_str(), false, !mBuilding))
 				CompileGameModule();
 
@@ -5672,18 +7450,31 @@ float32 EditorLayer::DrawMenuBar(const ImVec2& barMin, const ImVec2& barMax)
 			if (ImGui::IsItemHovered())
 				ImGui::SetTooltip("Pick up an already-rebuilt Game.dll without restarting the editor");
 
+			ImGui::Separator();
+
+			if (ImGui::MenuItem(ICON_MDI_PACKAGE_VARIANT_CLOSED "  Export...", nullptr, false, !mBuilding && !mExporting))
+				mOpenExportPopup = true;
+
 			ImGui::EndMenu();
 		}
 
 		if (ImGui::BeginMenu("Window"))
 		{
+			if (ImGui::MenuItem(ICON_MDI_TUNE "  Window Settings...",
+				ShortcutText(ShortcutAction::OpenWindowSettings).c_str()))
+				mOpenWindowSettingsPopup = true;
+
+			ImGui::Separator();
 			DrawLayoutMenu();
 			ImGui::EndMenu();
 		}
 
 		if (ImGui::BeginMenu("Help"))
 		{
-			ImGui::MenuItem(ICON_MDI_KEYBOARD "  Shortcuts", ShortcutText(ShortcutAction::ToggleShortcuts).c_str(), &mShowShortcuts);
+			ImGui::MenuItem(ICON_MDI_INFORMATION_OUTLINE "  About");
+			ImGui::MenuItem(ICON_MDI_BOOK_OPEN_PAGE_VARIANT "  Documentation");
+			ImGui::Separator();
+			ImGui::MenuItem(ICON_MDI_HEART "  Donate");
 			ImGui::EndMenu();
 		}
 
@@ -5819,7 +7610,7 @@ void EditorLayer::ApplyPendingLayout()
 
 void EditorLayer::DrawLayoutMenu()
 {
-	if (!ImGui::BeginMenu("Layouts"))
+	if (!ImGui::BeginMenu(ICON_MDI_VIEW_DASHBOARD "  Layouts..."))
 		return;
 
 	if (ImGui::MenuItem(ICON_MDI_VIEW_DASHBOARD_OUTLINE "  Default"))
@@ -5953,6 +7744,507 @@ bool EditorLayer::LoadGameModule()
 		Log::Console(LogLevel::Success, "[Editor] Loaded the game module.");
 
 	return loaded;
+}
+
+void EditorLayer::DrawExportPopup()
+{
+	if (mOpenExportPopup)
+	{
+		mOpenExportPopup = false;
+		const std::string projectName = Projects::DisplayName(ActiveProjectDirectory());
+
+		if (mExportLocation[0] == '\0')
+		{
+			const std::string suggested = (ActiveProjectDirectory().parent_path() / "Exports").generic_string();
+			const size_t copied = suggested.copy(mExportLocation, sizeof(mExportLocation) - 1);
+			mExportLocation[copied] = '\0';
+		}
+
+		if (mExportExecutableName[0] == '\0')
+		{
+			const size_t copied = projectName.copy(mExportExecutableName, sizeof(mExportExecutableName) - 1);
+			mExportExecutableName[copied] = '\0';
+		}
+
+		ImGui::OpenPopup("Export");
+	}
+
+	const ImVec2 center = ImGui::GetMainViewport()->GetCenter();
+	ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+	ImGui::SetNextWindowSize(ImVec2(980.0f, 680.0f), ImGuiCond_Appearing);
+
+	if (!ImGui::BeginPopupModal("Export", nullptr, ImGuiWindowFlags_NoResize))
+		return;
+
+	const ImGuiStyle& style = ImGui::GetStyle();
+	const float32 footerHeight = ImGui::GetFrameHeightWithSpacing() + style.ItemSpacing.y;
+	ImGui::BeginChild("##export_body", ImVec2(0.0f, -footerHeight));
+
+	if (ImGui::BeginTable("##export_layout", 2, ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_Resizable))
+	{
+		ImGui::TableSetupColumn("Presets", ImGuiTableColumnFlags_WidthFixed, 220.0f);
+		ImGui::TableSetupColumn("Configuration", ImGuiTableColumnFlags_WidthStretch);
+		ImGui::TableNextRow();
+		ImGui::TableSetColumnIndex(0);
+
+		ImGui::TextUnformatted("Presets");
+		const float32 addWidth = ImGui::CalcTextSize(ICON_MDI_PLUS).x + style.FramePadding.x * 2.0f;
+		const float32 copyWidth = ImGui::CalcTextSize(ICON_MDI_CONTENT_COPY).x + style.FramePadding.x * 2.0f;
+		const float32 presetButtonsWidth = addWidth + copyWidth + style.ItemSpacing.x;
+		ImGui::SameLine(ImGui::GetCursorPosX() + ImGui::GetContentRegionAvail().x - presetButtonsWidth);
+		ImGui::BeginDisabled();
+		ImGui::SmallButton(ICON_MDI_PLUS "##add_export_preset");
+		if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+			ImGui::SetTooltip("Additional platforms will appear here when export templates are available.");
+		ImGui::SameLine();
+		ImGui::SmallButton(ICON_MDI_CONTENT_COPY "##duplicate_export_preset");
+		ImGui::EndDisabled();
+		ImGui::Spacing();
+
+		ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(ImGuiCol_TabSelected));
+		ImGui::Button(ICON_MDI_MICROSOFT_WINDOWS "  Windows\n     Shipping",
+			ImVec2(-1.0f, ImGui::GetFrameHeightWithSpacing() * 2.0f));
+		ImGui::PopStyleColor();
+
+		ImGui::Spacing();
+		ImGui::TextDisabled("One Shipping preset is available.");
+		ImGui::TextDisabled("More platforms can be added later\nthrough dedicated export templates.");
+
+		ImGui::TableSetColumnIndex(1);
+		ImGui::TextUnformatted(ICON_MDI_PACKAGE_VARIANT_CLOSED "  Windows");
+		ImGui::SameLine();
+		ImGui::TextColored(LogLevelColor(LogLevel::Success), "Shipping");
+
+		ImGui::Separator();
+		ImGui::TextUnformatted("Export path");
+		ImGui::SameLine(128.0f);
+		const float32 browseWidth = ImGui::CalcTextSize(ICON_MDI_FOLDER_OPEN).x + style.FramePadding.x * 2.0f;
+		ImGui::SetNextItemWidth(-browseWidth - style.ItemInnerSpacing.x);
+		ImGui::InputText("##export_location", mExportLocation, IM_ARRAYSIZE(mExportLocation));
+		ImGui::SameLine(0.0f, style.ItemInnerSpacing.x);
+
+		if (ImGui::Button(ICON_MDI_FOLDER_OPEN "##export_browse"))
+		{
+			const std::string picked = FileDialog::OpenFolder(mExportLocation);
+
+			if (!picked.empty())
+			{
+				const size_t copied = picked.copy(mExportLocation, sizeof(mExportLocation) - 1);
+				mExportLocation[copied] = '\0';
+			}
+		}
+
+		ImGui::Spacing();
+		if (ImGui::BeginTabBar("##export_tabs"))
+		{
+			if (ImGui::BeginTabItem(ICON_MDI_TUNE "  Options"))
+			{
+				ImGui::Spacing();
+				ImGui::SeparatorText("Application");
+				ImGui::TextUnformatted("Executable name");
+				ImGui::SameLine(176.0f);
+				ImGui::SetNextItemWidth(-1.0f);
+				ImGui::InputText("##export_executable", mExportExecutableName, IM_ARRAYSIZE(mExportExecutableName));
+
+				ImGui::TextUnformatted("Build configuration");
+				ImGui::SameLine(176.0f);
+				ImGui::TextDisabled("Shipping");
+				ImGui::TextUnformatted("Architecture");
+				ImGui::SameLine(176.0f);
+				ImGui::TextDisabled("x86_64");
+				ImGui::TextUnformatted("Game module");
+				ImGui::SameLine(176.0f);
+				ImGui::TextDisabled("%s", Lion::kGameModuleFile);
+
+				ImGui::Spacing();
+				ImGui::SeparatorText("Package");
+				ImGui::Checkbox("Include runtime icons", &mExportIncludeIcons);
+				ImGui::Checkbox("Include engine and third-party licences", &mExportIncludeLicenses);
+				ImGui::TextDisabled("C++ sources, generated build files and editor-only data are excluded.");
+				ImGui::EndTabItem();
+			}
+
+			if (ImGui::BeginTabItem(ICON_MDI_FILE_TREE "  Resources"))
+			{
+				ImGui::Spacing();
+				ImGui::SeparatorText("Export mode");
+				ImGui::TextUnformatted("All project resources");
+				ImGui::TextDisabled("Everything under Assets is packaged except source and editor configuration files.");
+				ImGui::Spacing();
+				ImGui::SeparatorText("Excluded");
+				ImGui::BulletText("Assets/Scripts and C++ headers/sources");
+				ImGui::BulletText("Build folders and Visual Studio project files");
+				ImGui::BulletText("Lion export preset metadata");
+				ImGui::Spacing();
+				ImGui::TextDisabled("Resource filters will be added when the asset importer exposes stable dependency data.");
+				ImGui::EndTabItem();
+			}
+
+			if (ImGui::BeginTabItem(ICON_MDI_SHIELD_LOCK "  Security"))
+			{
+				ImGui::Spacing();
+				ImGui::Checkbox("Seal all game assets", &mExportSealAssets);
+				ImGui::TextWrapped("Sealing obfuscates every packaged resource under Assets with Lion Vault before delivery, "
+					"including .lnscene, .lnassembly, .lnshader, .lninput, images and audio. It discourages casual edits, but it is not encryption.");
+				ImGui::Spacing();
+				ImGui::TextDisabled("The game module and runtime binaries are copied unchanged.");
+				ImGui::EndTabItem();
+			}
+
+			if (ImGui::BeginTabItem(ICON_MDI_PUZZLE "  Features"))
+			{
+				ImGui::Spacing();
+				ImGui::SeparatorText("Feature list");
+				ImGui::TextDisabled("windows, x86_64, shipping, standard-gamepad-input, dynamic-game-module");
+				ImGui::Spacing();
+				ImGui::TextWrapped("The preset creates a standalone folder ready to deliver to a Windows player. "
+					"The launcher owns no gameplay; it loads the packaged lion-game.dll and project resources.");
+				ImGui::EndTabItem();
+			}
+
+			ImGui::EndTabBar();
+		}
+
+		ImGui::EndTable();
+	}
+
+	ImGui::EndChild();
+	ImGui::Separator();
+	const float32 buttonWidth = 112.0f;
+	ImGui::SetCursorPosX(ImGui::GetWindowWidth() - style.WindowPadding.x - buttonWidth * 2.0f - style.ItemSpacing.x);
+	if (ImGui::Button("Close", ImVec2(buttonWidth, 0.0f)) || ImGui::IsKeyPressed(ImGuiKey_Escape))
+		ImGui::CloseCurrentPopup();
+	ImGui::SameLine();
+	ImGui::BeginDisabled(mExportLocation[0] == '\0' || mExportExecutableName[0] == '\0' || mExporting || mBuilding);
+	if (ImGui::Button(ICON_MDI_PACKAGE_UP "  Export", ImVec2(buttonWidth, 0.0f)))
+	{
+		StartExport();
+		ImGui::CloseCurrentPopup();
+	}
+	ImGui::EndDisabled();
+
+	ImGui::EndPopup();
+}
+
+void EditorLayer::StartExport()
+{
+	if (mExporting || mExportLocation[0] == '\0')
+		return;
+
+	const std::filesystem::path project = ActiveProjectDirectory();
+	ProjectExporter::Options options;
+	options.destination = mExportLocation;
+	options.executableName = mExportExecutableName;
+	options.sealAssets = mExportSealAssets;
+	options.includeLicenses = mExportIncludeLicenses;
+	options.includeIcons = mExportIncludeIcons;
+	Log::Console(LogLevel::Information, "[Editor] Exporting the game for Windows...");
+	PushToast("Exporting the Windows game", true);
+	mExporting = true;
+	mExport = std::async(std::launch::async, [project, options]
+		{ return ProjectExporter::ExportWindows(project, options); });
+}
+
+void EditorLayer::PollExport()
+{
+	if (!mExporting || !mExport.valid()
+		|| mExport.wait_for(std::chrono::seconds(0)) != std::future_status::ready)
+		return;
+
+	const ProjectExporter::Result result = mExport.get();
+	mExporting = false;
+	DismissBusyToasts();
+
+	std::istringstream lines(result.buildOutput);
+	std::string line;
+
+	while (std::getline(lines, line))
+	{
+		while (!line.empty() && (line.back() == '\r' || line.back() == ' '))
+			line.pop_back();
+
+		if (!line.empty())
+			Log::Console(line.find("error") == std::string::npos ? LogLevel::Information : LogLevel::Error,
+				"[Export] " + line);
+	}
+
+	if (result.succeeded)
+	{
+		Log::Console(LogLevel::Success,
+			LION_FORMAT_TEXT("[Editor] {} Output: {}", result.message, result.outputDirectory.generic_string()));
+		PushToast("Export complete", false);
+	}
+	else
+	{
+		Log::Console(LogLevel::Error, "[Editor] Export failed: " + result.message);
+		PushToast("Export failed", false);
+	}
+}
+
+void EditorLayer::SaveAssemblyAs()
+{
+	if (mScene->GetEntities().empty())
+		return;
+
+	const std::filesystem::path assets = GameAssetsDirectory();
+	const std::string path = FileDialog::Save(kAssemblyFilter, "lnassembly", assets.string());
+
+	if (path.empty())
+		return;
+
+	const std::filesystem::path absolute = std::filesystem::absolute(path).lexically_normal();
+	const std::string relative = absolute.lexically_relative(std::filesystem::absolute(assets).lexically_normal()).generic_string();
+
+	if (relative.empty() || relative.rfind("..", 0) == 0)
+	{
+		Log::Console(LogLevel::Error, "[Editor] Assemblies must be saved inside the project's Assets folder.");
+		PushToast("Save the Assembly inside Assets", false);
+		return;
+	}
+
+	if (AssemblySerializer::Serialize(mScene->GetEntities().front(), absolute.string()))
+	{
+		mScenePath = absolute.string();
+		mEditingAssembly = true;
+		mAssemblyDirty = false;
+		mProjectDirty = true;
+	}
+}
+
+void EditorLayer::DrawUnsavedAssemblyPopup()
+{
+	if (mOpenUnsavedAssemblyPopup)
+	{
+		mOpenUnsavedAssemblyPopup = false;
+		ImGui::OpenPopup("Unsaved Assembly");
+	}
+
+	if (!ImGui::BeginPopupModal("Unsaved Assembly", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+		return;
+
+	const std::string name = mScenePath.empty()
+		? std::string("this Assembly")
+		: std::filesystem::path(mScenePath).stem().string();
+
+	ImGui::Text("Save changes to %s before returning?", name.c_str());
+	ImGui::TextDisabled("Linked instances change only after the Assembly is saved.");
+	ImGui::Spacing();
+
+	if (ImGui::Button("Save and Return", ImVec2(136.0f, 0.0f)))
+	{
+		if (SaveAssembly())
+		{
+			ImGui::CloseCurrentPopup();
+			ReturnFromAssembly();
+		}
+	}
+
+	ImGui::SameLine();
+	if (ImGui::Button("Discard", ImVec2(96.0f, 0.0f)))
+	{
+		mAssemblyDirty = false;
+		ImGui::CloseCurrentPopup();
+		ReturnFromAssembly();
+	}
+
+	ImGui::SameLine();
+	if (ImGui::Button("Cancel", ImVec2(96.0f, 0.0f)) || ImGui::IsKeyPressed(ImGuiKey_Escape))
+		ImGui::CloseCurrentPopup();
+
+	ImGui::EndPopup();
+}
+
+void EditorLayer::CreateAssembly(const Reference<Entity>& entity)
+{
+	if (mPlaying || mEditingAssembly)
+		return;
+
+	Reference<Entity> definition = entity;
+
+	if (definition && (definition->IsFolder() || IsLinkedAssemblyEntity(definition.get())))
+		definition = nullptr;
+
+	const std::filesystem::path assets = GameAssetsDirectory();
+	const std::filesystem::path directory = assets / "Assemblies";
+	std::error_code error;
+	std::filesystem::create_directories(directory, error);
+
+	const std::string path = FileDialog::Save(kAssemblyFilter, "lnassembly", directory.string());
+
+	if (path.empty())
+		return;
+
+	const std::filesystem::path absolute = std::filesystem::absolute(path).lexically_normal();
+	const std::string relative = absolute.lexically_relative(std::filesystem::absolute(assets).lexically_normal()).generic_string();
+
+	if (relative.empty() || relative.rfind("..", 0) == 0)
+	{
+		Log::Console(LogLevel::Error, "[Editor] Assemblies must be saved inside the project's Assets folder.");
+		PushToast("Save the Assembly inside Assets", false);
+		return;
+	}
+
+	if (!definition)
+	{
+		definition = MakeReference<Entity>();
+		definition->SetName(absolute.stem().string());
+	}
+
+	if (!AssemblySerializer::Serialize(definition, absolute.string()))
+		return;
+
+	if (entity == definition)
+	{
+		RecordSnapshot();
+		entity->SetAssemblyPath(relative);
+		ResetAssemblyTracking();
+	}
+
+	mProjectDirty = true;
+	PushToast("Created Assembly " + absolute.stem().string(), false);
+}
+
+Reference<Entity> EditorLayer::InstantiateAssembly(const std::string& assetPath, Entity* parent,
+	const Vector* position)
+{
+	if (assetPath.empty() || mPlaying || mEditingAssembly)
+		return nullptr;
+
+	std::vector<Reference<Entity>> tree =
+		AssemblySerializer::DeserializeTree(assetPath, GameAssetsDirectory().string());
+
+	if (tree.empty())
+		return nullptr;
+
+	RecordSnapshot();
+	Reference<Entity> instance = tree.front();
+	instance->SetAssemblyPath(std::filesystem::path(assetPath).generic_string());
+
+	if (parent)
+		instance->SetParent(parent, false);
+
+	if (position)
+		instance->SetWorldPosition(Vector2(*position));
+
+	for (const auto& entity : tree)
+		mScene->Add(entity);
+
+	SetSelection(instance);
+	ResetAssemblyTracking();
+	return instance;
+}
+
+Entity* EditorLayer::LinkedAssemblyRoot(Entity* entity) const
+{
+	for (Entity* current = entity; current; current = current->GetParent())
+		if (current->IsAssemblyInstance())
+			return current;
+
+	return nullptr;
+}
+
+const Entity* EditorLayer::LinkedAssemblyRoot(const Entity* entity) const
+{
+	for (const Entity* current = entity; current; current = current->GetParent())
+		if (current->IsAssemblyInstance())
+			return current;
+
+	return nullptr;
+}
+
+bool EditorLayer::IsLinkedAssemblyEntity(const Entity* entity) const
+{
+	return LinkedAssemblyRoot(entity) != nullptr;
+}
+
+void EditorLayer::ResetAssemblyTracking()
+{
+	mAssemblyStamps.clear();
+	const std::filesystem::path assets = GameAssetsDirectory();
+
+	for (const auto& entity : mScene->GetEntities())
+	{
+		if (!entity->IsAssemblyInstance())
+			continue;
+
+		std::error_code error;
+		const auto stamp = std::filesystem::last_write_time(assets / entity->GetAssemblyPath(), error);
+		mAssemblyStamps[entity->GetAssemblyPath()] = error
+			? std::filesystem::file_time_type::min() : stamp;
+	}
+}
+
+void EditorLayer::PollAssemblyChanges()
+{
+	if (mPlaying || mEditingAssembly || ImGui::GetTime() - mAssemblyPollTime < 0.5)
+		return;
+
+	mAssemblyPollTime = ImGui::GetTime();
+	const std::filesystem::path assets = GameAssetsDirectory();
+	std::unordered_set<std::string> active;
+
+	for (const auto& entity : mScene->GetEntities())
+		if (entity->IsAssemblyInstance())
+			active.insert(entity->GetAssemblyPath());
+
+	for (const std::string& path : active)
+	{
+		std::error_code error;
+		const auto stamp = std::filesystem::last_write_time(assets / path, error);
+		const auto current = error ? std::filesystem::file_time_type::min() : stamp;
+		const auto known = mAssemblyStamps.find(path);
+
+		if (known == mAssemblyStamps.end())
+		{
+			mAssemblyStamps.emplace(path, current);
+			continue;
+		}
+
+		if (current == known->second)
+			continue;
+
+		known->second = current;
+
+		if (error)
+		{
+			Log::Console(LogLevel::Warning, LION_FORMAT_TEXT("[Assembly] Source removed: '{}'.", path));
+			continue;
+		}
+
+		int32 refreshed = 0;
+		std::vector<Reference<Entity>> instances;
+
+		for (const auto& entity : mScene->GetEntities())
+			if (entity->GetAssemblyPath() == path)
+				instances.push_back(entity);
+
+		for (const auto& instance : instances)
+		{
+			const bool selectionTouchesInstance = std::any_of(mSelection.begin(), mSelection.end(),
+				[&](const Reference<Entity>& selected)
+				{
+					return LinkedAssemblyRoot(selected.get()) == instance.get();
+				});
+
+			// Refresh replaces every descendant reference. Keep no stale multi-selection entry alive after
+			// that replacement; the stable linked root remains the closest truthful selection.
+			if (selectionTouchesInstance)
+				SetSelection(instance);
+
+			if (AssemblySerializer::Refresh(instance, assets.string()))
+				refreshed++;
+		}
+
+		if (refreshed > 0)
+		{
+			Log::Console(LogLevel::Success,
+				LION_FORMAT_TEXT("[Assembly] Refreshed {} instance(s) from '{}'.", refreshed, path));
+			PushToast("Updated " + std::filesystem::path(path).stem().string() + " Assembly", false);
+		}
+	}
+
+	for (auto it = mAssemblyStamps.begin(); it != mAssemblyStamps.end(); )
+		it = active.count(it->first) ? std::next(it) : mAssemblyStamps.erase(it);
 }
 
 void EditorLayer::CompileGameModule()
@@ -6131,7 +8423,7 @@ void EditorLayer::ReloadGameModule()
 
 	// Restore the scene either way: without the module its components are simply skipped, which beats
 	// throwing the scene away because a rebuild was broken.
-	SceneSerializer::DeserializeFromString(mScene, scene);
+	SceneSerializer::DeserializeFromString(mScene, scene, GameAssetsDirectory().string());
 	SelectEntityByIndex(selected);
 
 	if (loaded)
@@ -6191,7 +8483,7 @@ void EditorLayer::DrawNewComponentPopup()
 
 	ImGui::TextUnformatted("Language");
 	ImGui::SetNextItemWidth(320.0f);
-	if (ImGui::BeginCombo("##language", languages[mNewComponentLanguage].displayName))
+	if (BeginCompactCombo("##language", languages[mNewComponentLanguage].displayName))
 	{
 		for (int index = 0; index < static_cast<int>(languages.size()); ++index)
 		{
@@ -6378,6 +8670,12 @@ void EditorLayer::BrowseForProject()
 
 void EditorLayer::OpenProject(const std::filesystem::path& folder)
 {
+	if (mEditingAssembly && mAssemblyDirty)
+	{
+		mOpenUnsavedAssemblyPopup = true;
+		return;
+	}
+
 	if (!IsProjectFolder(folder))
 	{
 		Log::Console(LogLevel::Error, LION_FORMAT_TEXT("[Editor] '{}' is not a Lion project (no Assets folder).", folder.generic_string()));
@@ -6392,6 +8690,7 @@ void EditorLayer::OpenProject(const std::filesystem::path& folder)
 		return;
 
 	SetActiveProjectDirectory(folder);
+	LoadProjectInputMap();
 
 	// The Content Browser returns to the new project's root, and its listing is stale by definition.
 	mProjectPath.clear();
@@ -6403,6 +8702,15 @@ void EditorLayer::OpenProject(const std::filesystem::path& folder)
 	mScene->Clear();
 	SetSelection(nullptr);
 	mScenePath.clear();
+	mSavedSceneSnapshot = SceneSerializer::SerializeToString(mScene);
+	mSceneDirty = false;
+	mEditingAssembly = false;
+	mAssemblyDirty = false;
+	mHierarchyExpanded.clear();
+	mAssemblyHierarchyExpanded.clear();
+	mAssemblyNavigation.reset();
+	mPendingAssemblyReturn = false;
+	ResetAssemblyTracking();
 	mUndoStack.clear();
 	mRedoStack.clear();
 	mPendingScenePath = Projects::DefaultScene(folder).string();

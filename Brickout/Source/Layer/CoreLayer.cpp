@@ -1,0 +1,26 @@
+#include "CoreLayer.h"
+
+using namespace Lion;
+
+void CoreLayer::OnAttach()
+{
+	Window::SetSize(Window::kDefaultViewportWidth, Window::kDefaultViewportHeight);
+	Window::SetResizable(false);
+	Window::SetTitle("Brickout");
+	Window::SetBackgroundColor(0.05f, 0.05f, 0.05f);
+	Window::SetIcon("Sprites/Brickout/tile-3.png");
+
+	Graphics::SetVerticalSynchronization(false);
+}
+
+void CoreLayer::OnEvent(Event& event)
+{
+	EventDispatcher dispatcher(event);
+	dispatcher.Bind<EventWindowClose>(LION_BIND_EVENT(CoreLayer::OnEventWindowClose));
+}
+
+bool CoreLayer::OnEventWindowClose(const EventWindowClose& event)
+{
+    Window::Close();
+    return false;
+}

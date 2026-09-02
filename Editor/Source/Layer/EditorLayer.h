@@ -3,6 +3,8 @@
 #include <filesystem>
 #include <future>
 #include <optional>
+#include <unordered_map>
+#include <unordered_set>
 
 #include <Lion/Lion.h>
 #include <Lion/Core/DynamicLibrary.h>
@@ -10,6 +12,8 @@
 
 #include <imgui/imgui.h>
 #include <ImGuizmo.h>
+
+#include "../ProjectExporter.h"
 
 // Root editor layer: sets up the window, renders a scene into a framebuffer and draws the
 // docked editor UI (menu bar + panels), displaying the framebuffer inside the Viewport panel.
@@ -28,7 +32,7 @@ private:
 	// New actions are appended so indices already saved in shortcuts.cfg stay valid.
 	enum class ShortcutAction
 	{
-		Undo, Redo, Play, Stop, ToggleShortcuts,
+		Undo, Redo, Play, Stop, OpenWindowSettings,
 		GizmoMove, GizmoRotate, GizmoScale, RenameEntity, DeleteEntity,
 		Pause, ToggleColliders,
 		CopyEntity, PasteEntity, DuplicateEntity,
@@ -40,11 +44,15 @@ private:
 		Deselect,
 		NewProject, OpenProject,
 		FocusSelection,
+		OpenProjectSettings,
+		CutSelection, NewFolder,
+		ViewLit, ViewUnlit, ViewWireframe,
 		Count
 	};
 
 	// Viewport tools, mirroring the Q/W/E/R row in the top-left corner.
 	enum class Tool { Select, Move, Rotate, Scale };
+	enum class ViewportMode { Lit, Unlit, Wireframe };
 
 	// A dock-layout change requested from the menu, deferred to the top of the next frame.
 	enum class LayoutRequest { None, Reset, Load };
@@ -60,7 +68,8 @@ private:
 	Keybind mBinds[static_cast<int>(ShortcutAction::Count)];
 	int mRebindingIndex = -1;  // Index of the action currently capturing a new key (-1 = none).
 
-	bool mShowShortcuts = false;
+	bool mOpenWindowSettingsPopup = false;
+	bool mOpenProjectSettingsPopup = false;
 	bool mLayoutInitialized = false;
 	bool mFocusViewport = false;   // Set at boot, consumed a frame later: focus cannot be claimed while the panels are still appearing.
 
@@ -149,6 +158,7 @@ private:
 	// Panning and zooming move these; a running game frames itself through its own Camera2D instead.
 	glm::vec2 mViewCenter{ 0.0f, 0.0f };
 	Lion::float32 mViewZoom = 1.0f;
+	ViewportMode mViewportMode = ViewportMode::Lit;
 
 	// Navigating the viewport, Godot-style: drag with the middle button (or space held) to pan, wheel to
 	// zoom about the cursor, F to frame the selection.
@@ -171,6 +181,13 @@ private:
 	Lion::Reference<Lion::Entity> mRenamingEntity;  // Entity whose name is being edited inline (F2 / context menu).
 	char mHierarchyFilter[64] = {};                 // The Hierarchy's search box: a name, or part of one.
 	std::string mScenePath;                         // The scene on disk, empty until it has been saved once.
+	bool mSceneDirty = false;                       // The open scene differs from its last successful save/load.
+	std::string mSavedSceneSnapshot;                // Lets undo/redo recognize the last saved state exactly.
+	bool mEditingAssembly = false;                  // The current document is one reusable entity definition.
+	bool mAssemblyDirty = false;                    // Authored hierarchy differs from the last explicit save.
+	std::string mPendingAssemblyPath;               // Opened after panels finish drawing; hierarchy iteration stays valid.
+	bool mPendingAssemblyReturn = false;             // Restored after panels finish drawing for the same reason.
+	bool mOpenUnsavedAssemblyPopup = false;          // Returning never discards or applies authored changes silently.
 	std::string mPendingScenePath;                  // Loaded after the selected project's module is ready.
 	glm::vec2 mViewportSize{ 0.0f, 0.0f };
 	Lion::Vector mViewportMenuPosition;   // Where the mouse was when the viewport's context menu opened.
@@ -213,9 +230,28 @@ private:
 		std::string data;   // Scene JSON, or the ini text SaveIniSettingsToMemory produced.
 	};
 
+	// Prefab-style isolation keeps the scene alive while its Assembly is edited. Returning restores the
+	// exact unsaved scene, selection, viewport and edit history that were in hand before entering it.
+	struct AssemblyNavigationState
+	{
+		std::string scenePath;
+		std::string sceneData;
+		std::string savedSceneSnapshot;
+		Lion::int32 selectedEntity = -1;
+		glm::vec2 viewCenter{ 0.0f, 0.0f };
+		Lion::float32 viewZoom = 1.0f;
+		std::vector<EditState> undoStack;
+		std::vector<EditState> redoStack;
+		std::string pendingSnapshot;
+		std::unordered_set<std::string> hierarchyExpanded;
+		bool hasPending = false;
+		bool sceneDirty = false;
+	};
+
 	std::vector<EditState> mUndoStack;
 	std::vector<EditState> mRedoStack;
 	std::string mPendingSnapshot;
+	std::optional<AssemblyNavigationState> mAssemblyNavigation;
 
 	// A panel resize is one undoable step, and it is bracketed by the mouse: the layout is snapshotted when
 	// the button goes down, and pushed onto the history when it comes up if a resize happened between.
@@ -236,6 +272,23 @@ private:
 	char mAssetRenameBuffer[128] = {};
 	bool mAssetRenameFocus = false;
 	std::string mAssetToDelete;                // Relative path awaiting the confirmation modal.
+	std::string mSelectedAsset;                // Relative path selected in the Content Browser.
+	std::string mAssetClipboard;               // Relative source path copied or cut in the Content Browser.
+	bool mAssetClipboardCut = false;
+	bool mShowAssetExtensions = false;         // Content Browser defaults to concise, extension-free labels.
+	bool mProjectFocused = false;               // Routes shared editing shortcuts to the Content Browser.
+	bool mHierarchyFocused = false;             // Routes folder creation to the Scene Hierarchy.
+
+	// The project's named input actions. They live under Assets/Config so the same resource-relative file
+	// is copied into a standalone build and loaded by the engine before the first game layer is created.
+	std::vector<Lion::InputAction> mInputActions;
+	char mInputFilter[64] = {};
+	char mNewInputAction[64] = {};
+	int mInputBindingAction = -1;
+	int mInputBindingIndex = -1;
+	bool mOpenInputBindingPopup = false;
+	Lion::InputBinding mInputBindingDraft;
+	std::string mProjectSettingsError;
 
 	// What is in that folder, read once and kept.
 	//
@@ -255,10 +308,16 @@ private:
 	std::filesystem::file_time_type mProjectStamp;         // Its modification time when it was read.
 	double mProjectPollTime = 0.0;                         // When the timestamp was last checked.
 	bool mProjectDirty = true;                             // The editor changed something; read it again.
+	std::unordered_map<std::string, std::filesystem::file_time_type> mAssemblyStamps;
+	double mAssemblyPollTime = 0.0;
 
 	// Hierarchy tree state, applied after the tree is drawn (never mutate it mid-iteration).
 	std::unordered_map<Lion::Entity*, Lion::Reference<Lion::Entity>> mEntityLookup;
+	std::unordered_map<Lion::Entity*, std::string> mHierarchyEntityKeys;
+	std::unordered_set<std::string> mHierarchyExpanded;
+	std::unordered_map<std::string, std::unordered_set<std::string>> mAssemblyHierarchyExpanded;
 	Lion::Reference<Lion::Entity> mEntityToDelete;
+	bool mDeleteOnlyTarget = false;   // Cut removes the copied row, while Delete removes the selection.
 	Lion::Entity* mReparentChild = nullptr;
 	Lion::Entity* mReparentTarget = nullptr;   // Null target with mReparentChild set means "to root".
 	bool mReparentRequested = false;
@@ -349,12 +408,27 @@ private:
 	bool DrawAssetEntry(const std::string& name, const std::string& assetPath, bool folder);
 
 	void CreateAssetFolder();
+	void BeginRenameAsset(const std::string& assetPath);
+	void CopyAsset(bool cut);
+	void PasteAsset();
+	void DuplicateAsset();
+	void OpenAssetInFileExplorer(const std::string& assetPath) const;
 
 	// Reads the browsed folder into mProjectEntries, directories first.
 	void ScanProjectDirectory(const std::filesystem::path& directory);
 	void RenameAsset(const std::string& assetPath, const std::string& name);
 	void DrawDeleteAssetPopup();   // Deleting a file is not an undo step, so it is a question first.
-	void DrawShortcuts();
+	void DrawWindowSettings();
+	void DrawWindowGeneralSettings();
+	void DrawShortcutsTab();
+	void DrawProjectSettings();
+	void DrawProjectGeneralSettings();
+	void DrawInputSettings();
+	void DrawInputBindingPopup();
+	void LoadProjectInputMap();
+	void SaveProjectInputMap();
+	void LoadEditorSettings();
+	void SaveEditorSettings() const;
 
 	// Drawn over the panels rather than in one of them.
 	void DrawPlayModeDim();        // Everything but the game goes dark while the game is running.
@@ -365,7 +439,7 @@ private:
 
 	void BuildDefaultLayout(unsigned int dockspaceId);
 
-	// Dock layout management (Window > Layouts). A layout is just an imgui.ini saved under
+	// Dock layout management (Editor > Layouts). A layout is just an imgui.ini saved under
 	// "Layouts/<name>.ini", so loading one restores every panel's dock node, position and size.
 	void ApplyPendingLayout();                        // Consumes a pending reset/load, before any window is drawn.
 	void DrawLayoutMenu();                            // The "Layouts" submenu: default, saved ones, save, delete.
@@ -397,6 +471,19 @@ private:
 	// in the File menu. LoadScene is the one door a scene comes in through — the Open dialog, a recent
 	// entry and the command line all land here, so all of them are remembered.
 	bool LoadScene(const std::string& path);
+	bool LoadAssembly(const std::string& path);
+	bool ReturnFromAssembly();
+	bool SaveAssembly();
+	void SaveAssemblyAs();
+	void DrawUnsavedAssemblyPopup();
+	void CreateAssembly(const Lion::Reference<Lion::Entity>& entity = nullptr);
+	Lion::Reference<Lion::Entity> InstantiateAssembly(const std::string& assetPath,
+		Lion::Entity* parent = nullptr, const Lion::Vector* position = nullptr);
+	void ResetAssemblyTracking();
+	void PollAssemblyChanges();
+	Lion::Entity* LinkedAssemblyRoot(Lion::Entity* entity) const;
+	const Lion::Entity* LinkedAssemblyRoot(const Lion::Entity* entity) const;
+	bool IsLinkedAssemblyEntity(const Lion::Entity* entity) const;
 	void LoadRecentScenes();
 	void SaveRecentScenes() const;
 	void RememberRecentScene(const std::string& path);
@@ -429,6 +516,18 @@ private:
 
 	std::future<GameBuild> mGameBuild;
 	bool mBuilding = false;
+
+	bool mOpenExportPopup = false;
+	char mExportLocation[512] = {};
+	char mExportExecutableName[128] = {};
+	bool mExportSealAssets = true;
+	bool mExportIncludeLicenses = true;
+	bool mExportIncludeIcons = true;
+	std::future<ProjectExporter::Result> mExport;
+	bool mExporting = false;
+	void DrawExportPopup();
+	void StartExport();
+	void PollExport();
 
 	// Draws a collapsing header for a component with a right-aligned "X" remove button and
 	// drag-to-reorder support. Returns whether the body is open; sets removeRequested when the X is
@@ -487,8 +586,13 @@ private:
 	void ApplyToSelection(Apply apply)
 	{
 		for (const auto& entity : mSelection)
+		{
+			if (IsLinkedAssemblyEntity(entity.get()))
+				continue;
+
 			if (T* component = entity->GetComponent<T>())
 				apply(component);
+		}
 	}
 
 	// The same idea for a component the editor was never compiled against: it cannot call a setter it does
@@ -527,6 +631,7 @@ private:
 	// Entity clipboard: copy the selection, paste a new entity from the clipboard, or do both at
 	// once (duplicate). The new entity is appended to the scene and becomes the selection.
 	void CopyEntity();
+	void CutEntity();
 	void PasteEntity();
 	void DuplicateEntity();
 

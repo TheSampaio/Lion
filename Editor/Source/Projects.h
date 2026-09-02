@@ -48,6 +48,10 @@ namespace Projects
 	// selection can become an explicit project setting without changing today's contract.
 	void RememberDefaultScene(const std::filesystem::path& project, const std::filesystem::path& scene);
 
+	// Explicitly changes the scene opened with the project. Unlike RememberDefaultScene, this replaces an
+	// existing choice and is used only by Project Settings.
+	bool SetDefaultScene(const std::filesystem::path& project, const std::filesystem::path& scene);
+
 	// The recently-opened projects, newest first, dead entries dropped — with the built-in Sandbox appended
 	// when absent: it is the one project never opened through the manager, and it must stay reachable.
 	std::vector<std::string> LoadRecent();
@@ -89,9 +93,9 @@ namespace Projects
 	// Sweeps the recents of every entry whose folder no longer exists.
 	void RemoveMissing();
 
-	// Renames the project's marker — the name the manager and the editor show. The folder keeps its name:
-	// a rename that moved directories would break every path that reaches the project.
-	bool Rename(const std::filesystem::path& folder, const std::string& newName, std::string& error);
+	// Renames the project and its root folder together, then repairs the manager's persisted paths. Returns
+	// the new folder, or an empty path with 'error' saying why the move could not be completed.
+	std::filesystem::path Rename(const std::filesystem::path& folder, const std::string& newName, std::string& error);
 
 	// Copies the project to a sibling folder and puts the copy on the recents. Returns the copy's folder,
 	// or an empty path with 'error' saying why not.

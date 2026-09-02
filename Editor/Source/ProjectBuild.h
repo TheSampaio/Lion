@@ -22,10 +22,12 @@ namespace ProjectBuild
 
 	// Whether there is anything to compile against: the Include and Bin folders beside the editor.
 	bool Available();
+	bool Available(const std::filesystem::path& sdkDirectory);
 
 	// Where the project's compiled module lands — and where the editor looks for a project's own module
 	// before falling back to the one beside itself.
 	std::filesystem::path ModulePath(const std::filesystem::path& project);
+	std::filesystem::path ModulePath(const std::filesystem::path& project, const std::string& configuration);
 
 	// The project file the editor builds. Under Build/, out of the way of the assets.
 	std::filesystem::path VcxprojPath(const std::filesystem::path& project);
@@ -33,4 +35,13 @@ namespace ProjectBuild
 	// Writes the .vcxproj (fresh file list) and the .sln (once; it never changes). Returns whether it
 	// wrote, with 'error' saying why not.
 	bool Generate(const std::filesystem::path& project, std::string& error);
+	bool Generate(const std::filesystem::path& project, const std::string& configuration,
+		const std::filesystem::path& sdkDirectory, std::string& error);
+
+	// Visual Studio discovery and hidden-process execution are shared by live compile and export so both
+	// routes build a project through the same toolchain and diagnostics path.
+	const std::string& MSBuildPath();
+	Lion::int32 RunCommand(const std::string& command, std::string& output);
+	bool Build(const std::filesystem::path& project, const std::string& configuration,
+		const std::filesystem::path& sdkDirectory, std::string& output, std::string& error);
 }

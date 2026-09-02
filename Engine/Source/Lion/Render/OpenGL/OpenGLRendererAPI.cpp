@@ -25,6 +25,11 @@ namespace Lion
 		glClear(GL_COLOR_BUFFER_BIT);
 	}
 
+	void OpenGLRendererAPI::SetWireframe(bool enabled)
+	{
+		glPolygonMode(GL_FRONT_AND_BACK, enabled ? GL_LINE : GL_FILL);
+	}
+
 	void OpenGLRendererAPI::DrawIndexed(uint32 indexCount)
 	{
 		glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(indexCount), GL_UNSIGNED_INT, nullptr);

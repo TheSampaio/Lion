@@ -7,6 +7,11 @@
 #include <Lion/Type/Allocator.h>
 #include <Lion/Type/Primitive.h>
 
+// Audio
+#include <Lion/Audio/Audio.h>
+#include <Lion/Audio/AudioClip.h>
+#include <Lion/Audio/AudioPlayer.h>
+
 // Core
 #include <Lion/Core/Application.h>
 #include <Lion/Core/Asset.h>
@@ -23,10 +28,12 @@
 #include <Lion/Core/Window.h>
 
 // Logic
+#include <Lion/Logic/AssemblySerializer.h>
 #include <Lion/Logic/Component.h>
 #include <Lion/Logic/Entity.h>
 #include <Lion/Logic/Reflector.h>
 #include <Lion/Logic/Scene.h>
+#include <Lion/Logic/SceneManager.h>
 #include <Lion/Logic/SceneSerializer.h>
 #include <Lion/Logic/Timer.h>
 

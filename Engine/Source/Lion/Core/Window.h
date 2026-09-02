@@ -74,6 +74,17 @@ namespace Lion
         // Immediate keyboard state, using engine key codes.
         static LION_API bool IsKeyPressed(int32 keyCode) { return sInstance->mBackend->IsKeyPressed(keyCode); }
         static LION_API bool IsKeyReleased(int32 keyCode) { return sInstance->mBackend->IsKeyReleased(keyCode); }
+		static LION_API bool IsMouseButtonPressed(int32 button) { return sInstance->mBackend->IsMouseButtonPressed(button); }
+		static LION_API bool IsGamepadConnected(int32 gamepad) { return sInstance->mBackend->IsGamepadConnected(gamepad); }
+		static LION_API std::string GetGamepadName(int32 gamepad) { return sInstance->mBackend->GetGamepadName(gamepad); }
+		static LION_API bool IsGamepadButtonPressed(int32 gamepad, int32 button)
+		{
+			return sInstance->mBackend->IsGamepadButtonPressed(gamepad, button);
+		}
+		static LION_API float32 GetGamepadAxis(int32 gamepad, int32 axis)
+		{
+			return sInstance->mBackend->GetGamepadAxis(gamepad, axis);
+		}
 
         static LION_API bool Close();
 

@@ -5,6 +5,12 @@
 
 #include <Lion/Core/Filesystem.h>
 
+#ifdef LN_PLATFORM_WIN
+	#define WIN32_LEAN_AND_MEAN
+	#define NOMINMAX
+	#include <Windows.h>
+#endif
+
 using namespace Lion;
 
 namespace ProjectBuild
@@ -18,14 +24,19 @@ namespace ProjectBuild
 		// The headers and the import library beside the editor, assembled by Scripts/PackSdk.bat: one
 		// merged include tree (every package keeps to its own subfolder, so one path serves them all) and
 		// the lib the module links.
-		std::filesystem::path IncludeDirectory()
+		std::filesystem::path DefaultSdkDirectory()
 		{
-			return std::filesystem::path(ResourceRootDirectory()) / "Include";
+			return ResourceRootDirectory();
 		}
 
-		std::filesystem::path LibraryDirectory()
+		std::filesystem::path IncludeDirectory(const std::filesystem::path& sdkDirectory)
 		{
-			return std::filesystem::path(ResourceRootDirectory()) / "Bin";
+			return sdkDirectory / "Include";
+		}
+
+		std::filesystem::path LibraryDirectory(const std::filesystem::path& sdkDirectory)
+		{
+			return sdkDirectory / "Bin";
 		}
 
 		// The sources the module is built from: everything the project keeps, except what the build itself
@@ -103,14 +114,24 @@ namespace ProjectBuild
 
 	bool Available()
 	{
+		return Available(DefaultSdkDirectory());
+	}
+
+	bool Available(const std::filesystem::path& sdkDirectory)
+	{
 		std::error_code error;
-		return std::filesystem::is_directory(IncludeDirectory(), error)
-			&& std::filesystem::exists(LibraryDirectory() / "lion-core.lib", error);
+		return std::filesystem::is_directory(IncludeDirectory(sdkDirectory), error)
+			&& std::filesystem::exists(LibraryDirectory(sdkDirectory) / "lion-core.lib", error);
 	}
 
 	std::filesystem::path ModulePath(const std::filesystem::path& project)
 	{
-		return project / "Build" / "Bin" / BuildConfiguration() / kGameModuleFile;
+		return ModulePath(project, BuildConfiguration());
+	}
+
+	std::filesystem::path ModulePath(const std::filesystem::path& project, const std::string& configuration)
+	{
+		return project / "Build" / "Bin" / configuration / kGameModuleFile;
 	}
 
 	std::filesystem::path VcxprojPath(const std::filesystem::path& project)
@@ -120,7 +141,13 @@ namespace ProjectBuild
 
 	bool Generate(const std::filesystem::path& project, std::string& error)
 	{
-		if (!Available())
+		return Generate(project, BuildConfiguration(), DefaultSdkDirectory(), error);
+	}
+
+	bool Generate(const std::filesystem::path& project, const std::string& configuration,
+		const std::filesystem::path& sdkDirectory, std::string& error)
+	{
+		if (!Available(sdkDirectory))
 		{
 			error = "The editor's Include and Bin folders are missing; there is nothing to compile against.";
 			return false;
@@ -142,10 +169,9 @@ namespace ProjectBuild
 		// The one configuration this editor can load: the module shares the engine's C++ runtime, so it is
 		// built the way the engine running it was built — a Debug editor takes a Debug module, an optimised
 		// one takes an optimised module, and mixing the two is an allocator dispute inside one process.
-		const std::string configuration = BuildConfiguration();
 		const bool debug = configuration == "Debug";
 
-		const std::string includes = IncludeDirectory().generic_string() + ";";
+		const std::string includes = IncludeDirectory(sdkDirectory).generic_string() + ";";
 
 		// LN_DISABLE_WARNINGS mirrors the workspace define in premake5.lua — the engine's headers hand it
 		// to #pragma warning, and a build without it trips over the bare macro name.
@@ -200,7 +226,7 @@ namespace ProjectBuild
 			<< "    </ClCompile>\n"
 			<< "    <Link>\n"
 			<< "      <AdditionalDependencies>lion-core.lib;%(AdditionalDependencies)</AdditionalDependencies>\n"
-			<< "      <AdditionalLibraryDirectories>" << LibraryDirectory().generic_string() << ";%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>\n"
+			<< "      <AdditionalLibraryDirectories>" << LibraryDirectory(sdkDirectory).generic_string() << ";%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>\n"
 			<< "      <GenerateDebugInformation>" << (debug ? "true" : "false") << "</GenerateDebugInformation>\n"
 			<< "    </Link>\n"
 			<< "  </ItemDefinitionGroup>\n"
@@ -243,6 +269,116 @@ namespace ProjectBuild
 				<< "\t\t" << kProjectGuid << "." << configuration << "|x64.Build.0 = " << configuration << "|x64\n"
 				<< "\tEndGlobalSection\n"
 				<< "EndGlobal\n";
+		}
+
+		return true;
+	}
+
+	Lion::int32 RunCommand(const std::string& command, std::string& output)
+	{
+#ifdef LN_PLATFORM_WIN
+		SECURITY_ATTRIBUTES security = {};
+		security.nLength = sizeof(security);
+		security.bInheritHandle = TRUE;
+
+		HANDLE readPipe = nullptr;
+		HANDLE writePipe = nullptr;
+
+		if (!CreatePipe(&readPipe, &writePipe, &security, 0))
+			return -1;
+
+		SetHandleInformation(readPipe, HANDLE_FLAG_INHERIT, 0);
+
+		STARTUPINFOA startup = {};
+		startup.cb = sizeof(startup);
+		startup.dwFlags = STARTF_USESTDHANDLES;
+		startup.hStdOutput = writePipe;
+		startup.hStdError = writePipe;
+
+		std::string line = "cmd.exe /C \"" + command + "\"";
+		PROCESS_INFORMATION process = {};
+		const BOOL started = CreateProcessA(nullptr, line.data(), nullptr, nullptr, TRUE,
+			CREATE_NO_WINDOW, nullptr, nullptr, &startup, &process);
+
+		CloseHandle(writePipe);
+
+		if (!started)
+		{
+			CloseHandle(readPipe);
+			return -1;
+		}
+
+		char8 buffer[512];
+		DWORD read = 0;
+
+		while (ReadFile(readPipe, buffer, sizeof(buffer), &read, nullptr) && read > 0)
+			output.append(buffer, read);
+
+		WaitForSingleObject(process.hProcess, INFINITE);
+
+		DWORD exitCode = 0;
+		GetExitCodeProcess(process.hProcess, &exitCode);
+		CloseHandle(readPipe);
+		CloseHandle(process.hThread);
+		CloseHandle(process.hProcess);
+		return static_cast<Lion::int32>(exitCode);
+#else
+		(void)command;
+		(void)output;
+		return -1;
+#endif
+	}
+
+	const std::string& MSBuildPath()
+	{
+		static const std::string path = []
+		{
+			char8* programFiles = nullptr;
+			size_t length = 0;
+
+			if (_dupenv_s(&programFiles, &length, "ProgramFiles(x86)") != 0 || !programFiles)
+				return std::string();
+
+			const std::string vswhere = "\"" + std::string(programFiles)
+				+ "\\Microsoft Visual Studio\\Installer\\vswhere.exe\"";
+			std::free(programFiles);
+			std::string output;
+
+			if (RunCommand(vswhere + " -latest -requires Microsoft.Component.MSBuild -find MSBuild\\**\\Bin\\MSBuild.exe", output) != 0)
+				return std::string();
+
+			const size_t end = output.find_first_of("\r\n");
+			return end == std::string::npos ? output : output.substr(0, end);
+		}();
+
+		return path;
+	}
+
+	bool Build(const std::filesystem::path& project, const std::string& configuration,
+		const std::filesystem::path& sdkDirectory, std::string& output, std::string& error)
+	{
+		if (MSBuildPath().empty())
+		{
+			error = "Could not locate MSBuild; install Visual Studio with the C++ tools.";
+			return false;
+		}
+
+		if (!Generate(project, configuration, sdkDirectory, error))
+			return false;
+
+		const std::string command =
+			"\"" + MSBuildPath() + "\""
+			" \"" + VcxprojPath(project).string() + "\""
+			" -p:PlatformToolset=" + PlatformToolset() +
+			" -p:Configuration=" + configuration +
+			" -p:Platform=x64 -v:minimal -nologo";
+
+		const int32 exitCode = RunCommand(command, output);
+
+		if (exitCode != 0)
+		{
+			error = "The game module build failed.";
+			return false;
 		}
 
 		return true;

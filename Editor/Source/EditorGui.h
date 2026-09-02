@@ -1,8 +1,9 @@
 #pragma once
 
 struct ImFont;
+struct ImDrawList;
+struct ImVec2;
 struct ImVec4;
-struct ImFont;
 
 // Dear ImGui lifecycle for the editor (GLFW + OpenGL 3 backends).
 //
@@ -35,4 +36,9 @@ public:
 	// hand use this rather than the copy merged into the text, so they stay sharp at any size down from it.
 	static ImFont* GetIconFont();
 	static Lion::float32 GetIconAtlasSize();
+
+	// Draws the shared combo triangle inside a control rectangle. Closed combos point down and open combos
+	// point up, at the same 0.70 scale used by Scene Hierarchy disclosure triangles.
+	static void DrawComboArrow(ImDrawList* draw, const ImVec2& minimum, const ImVec2& maximum,
+		bool open, unsigned int color);
 };

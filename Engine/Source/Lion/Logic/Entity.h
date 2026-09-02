@@ -7,6 +7,8 @@ namespace Lion
 {
 	class PhysicsWorld;
 	class Scene;
+	class SceneSerializer;
+	class AssemblySerializer;
 
 	// The engine's game object: a name, a Transform, and the components attached to it.
 	//
@@ -44,12 +46,29 @@ namespace Lion
 
 		// Whether the entity is drawn. This is *only* about being seen: a hidden entity still updates,
 		// still collides, still runs its components — it is invisible, not switched off. Both the editor's
-		// eye and the game's own code set this, which is the point of it being on the entity.
+		// eye and the game's own code set this. Visibility is inherited, so hiding a hierarchy root also
+		// hides everything under it.
 		LION_API bool IsVisible() const { return mVisible; }
 		LION_API void SetVisible(bool value) { mVisible = value; }
+		LION_API bool IsVisibleInHierarchy() const;
 
 		// Returns the scene that currently owns this entity (null while detached).
 		LION_API Reference<Scene> GetScene() const { return mScene; }
+
+		// A non-empty resource-relative path means this entity is an instance of an Assembly. The Assembly
+		// owns its authored definition; the scene owns this instance's placement and visibility.
+		LION_API bool IsAssemblyInstance() const { return !mAssemblyPath.empty(); }
+		LION_API const std::string& GetAssemblyPath() const { return mAssemblyPath; }
+		LION_API void SetAssemblyPath(const std::string& path)
+		{
+			if (mAssemblyPath.empty() && !path.empty())
+				mAssemblySourceTransform = *mTransform;
+
+			mAssemblyPath = path;
+		}
+
+		// Authored root Transform used as the origin for this instance's relative scene placement.
+		LION_API const Transform& GetAssemblySourceTransform() const { return mAssemblySourceTransform; }
 
 		// Returns the entity's Transform, always present and never null. Its position/rotation/scale
 		// are LOCAL to the parent; use the world accessors below for the composed transform.
@@ -136,6 +155,8 @@ namespace Lion
 
 		friend Scene;
 		friend PhysicsWorld;
+		friend SceneSerializer;
+		friend AssemblySerializer;
 
 	private:
 		const int32 mId;
@@ -143,6 +164,8 @@ namespace Lion
 		bool mEnabled = true;
 		bool mVisible = true;
 		std::string mName = "Entity";
+		std::string mAssemblyPath;
+		Transform mAssemblySourceTransform;
 		Reference<Transform> mTransform;
 		Reference<Scene> mScene;
 

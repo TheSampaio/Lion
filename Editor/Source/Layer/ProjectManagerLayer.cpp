@@ -83,6 +83,29 @@ namespace
 		else
 			draw->PathStroke(color, ImDrawFlags_Closed, 1.0f);
 	}
+
+	// Action buttons keep their label centred while the icon occupies a fixed lane at the left. Building
+	// that layout from one invisible label also keeps hover, disabled and keyboard behaviour ImGui-native.
+	bool ActionButton(const char8* id, const char8* icon, const char8* label, const ImVec2& size)
+	{
+		const bool pressed = ImGui::Button(id, size);
+		const ImVec2 minimum = ImGui::GetItemRectMin();
+		const ImVec2 maximum = ImGui::GetItemRectMax();
+		const ImVec2 iconSize = ImGui::CalcTextSize(icon);
+		const ImVec2 labelSize = ImGui::CalcTextSize(label);
+		const ImU32 color = ImGui::GetColorU32(ImGuiCol_Text);
+		const ImGuiStyle& style = ImGui::GetStyle();
+
+		ImDrawList* draw = ImGui::GetWindowDrawList();
+		draw->AddText(ImVec2(
+			ImFloor(minimum.x + style.FramePadding.x + 2.0f),
+			ImFloor((minimum.y + maximum.y - iconSize.y) * 0.5f)), color, icon);
+		draw->AddText(ImVec2(
+			ImFloor((minimum.x + maximum.x - labelSize.x) * 0.5f),
+			ImFloor((minimum.y + maximum.y - labelSize.y) * 0.5f)), color, label);
+
+		return pressed;
+	}
 }
 
 void ProjectManagerLayer::OnAttach()
@@ -90,7 +113,7 @@ void ProjectManagerLayer::OnAttach()
 	// A picker, not a workspace: a fixed window that cannot be resized or maximised — what would a bigger
 	// list of the same projects say? It wears the editor's own caption so the two read as one program.
 	Window::SetSize(1100, 700);
-	Window::SetTitle("Lion Engine - Project Manager");
+	Window::SetTitle("Lion's Mane - Project Manager");
 	Window::SetBackgroundColor(0.10f, 0.10f, 0.11f);
 	Window::SetResizable(false);
 	Window::SetMaximized(false);
@@ -216,7 +239,7 @@ void ProjectManagerLayer::DrawCaption(float32 width)
 			kFlipTop, kFlipBottom);
 
 	// The window's name in the middle of the strip, where a window says what it is.
-	constexpr const char8* kTitle = "Lion Engine - Project Manager";
+	constexpr const char8* kTitle = "Lion's Mane - Project Manager";
 
 	ImGui::PushFont(EditorGui::GetBoldFont());
 	const float32 titleWidth = ImGui::CalcTextSize(kTitle).x;
@@ -339,8 +362,30 @@ void ProjectManagerLayer::DrawToolbar()
 
 	ImGui::SetNextItemWidth(kSortWidth);
 
-	if (ImGui::Combo("##sort", &sort, kSortNames, 3))
-		mSort = static_cast<Sort>(sort);
+	ImDrawList* sortDraw = ImGui::GetWindowDrawList();
+	const ImVec2 sortMin = ImGui::GetCursorScreenPos();
+	const ImVec2 sortMax(sortMin.x + kSortWidth, sortMin.y + ImGui::GetFrameHeight());
+	const bool sortOpen = ImGui::BeginCombo("##sort", kSortNames[sort], ImGuiComboFlags_NoArrowButton);
+	EditorGui::DrawComboArrow(sortDraw, sortMin, sortMax, sortOpen, ImGui::GetColorU32(ImGuiCol_Text));
+
+	if (sortOpen)
+	{
+		for (int32 option = 0; option < 3; ++option)
+		{
+			const bool selected = option == sort;
+
+			if (ImGui::Selectable(kSortNames[option], selected))
+			{
+				sort = option;
+				mSort = static_cast<Sort>(sort);
+			}
+
+			if (selected)
+				ImGui::SetItemDefaultFocus();
+		}
+
+		ImGui::EndCombo();
+	}
 
 	if (!mCreateError.empty() && !mOpenCreatePopup)
 	{
@@ -417,41 +462,32 @@ void ProjectManagerLayer::DrawProjectList()
 		const ImVec2 rowMin = ImGui::GetCursorScreenPos();
 		const float32 rowWidth = ImGui::GetContentRegionAvail().x;
 
-		// The star first, its own button, so favouriting does not select or open.
+		// The whole row is one hover target. The star is a hit region inside it, not a second widget, so
+		// crossing that lane never changes the row colour or leaves overlapping selection rectangles.
 		constexpr float32 kStarLane = 34.0f;
+		const bool isSelected = (entry->path == mSelected);
+		const bool activated = ImGui::Selectable("##row", isSelected, ImGuiSelectableFlags_AllowDoubleClick,
+			ImVec2(rowWidth, kRowHeight));
+		const bool rowHovered = ImGui::IsItemHovered();
+		const bool starHovered = rowHovered && ImGui::GetMousePos().x < rowMin.x + kStarLane;
 
-		ImGui::SetCursorScreenPos(ImVec2(rowMin.x, rowMin.y));
-
-		if (ImGui::InvisibleButton("##favorite", ImVec2(kStarLane, kRowHeight)))
+		if (activated && starHovered)
 		{
 			Projects::SetFavorite(entry->path, !entry->favorite);
 			Refresh();
 			ImGui::PopID();
 			return;   // The entries were just replaced; finish this frame's list here.
 		}
+		else if (activated && !entry->missing)
+		{
+			mSelected = entry->path;
 
-		const bool starHovered = ImGui::IsItemHovered();
+			if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
+				openRequest = entry->path;
+		}
 
 		if (starHovered)
 			ImGui::SetTooltip("%s", entry->favorite ? "Unfavorite" : "Favorite");
-
-		// Then the row itself: one selectable the height of both its lines. A click selects, a double
-		// click opens — a missing project takes neither.
-		ImGui::SetCursorScreenPos(ImVec2(rowMin.x + kStarLane, rowMin.y));
-
-		const bool isSelected = (entry->path == mSelected);
-
-		if (ImGui::Selectable("##row", isSelected, ImGuiSelectableFlags_AllowDoubleClick,
-			ImVec2(rowWidth - kStarLane, kRowHeight)))
-		{
-			if (!entry->missing)
-			{
-				mSelected = entry->path;
-
-				if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
-					openRequest = entry->path;
-			}
-		}
 
 		DrawStar(draw, ImVec2(rowMin.x + kStarLane * 0.5f, rowMin.y + kRowHeight * 0.5f), 7.0f,
 			entry->favorite, entry->favorite ? accentColor : (starHovered ? textColor : dimColor));
@@ -512,7 +548,7 @@ void ProjectManagerLayer::DrawActionsPanel()
 
 	ImGui::BeginDisabled(!selected || selected->missing);
 
-	if (ImGui::Button("Open", button) && selected)
+	if (ActionButton("##open", ICON_MDI_FOLDER_OPEN, "Open", button) && selected)
 		OpenInEditor(selected->path);
 
 	ImGui::EndDisabled();
@@ -520,7 +556,7 @@ void ProjectManagerLayer::DrawActionsPanel()
 	// The built-in keeps its name and its place on the list: it is the engine's, not the machine's.
 	ImGui::BeginDisabled(!selected || selected->missing || selected->builtIn);
 
-	if (ImGui::Button("Rename", button) && selected)
+	if (ActionButton("##rename", ICON_MDI_PENCIL, "Rename", button) && selected)
 	{
 		mOpenRenamePopup = true;
 		mRenameError.clear();
@@ -533,7 +569,7 @@ void ProjectManagerLayer::DrawActionsPanel()
 
 	ImGui::BeginDisabled(!selected || selected->missing);
 
-	if (ImGui::Button("Duplicate", button) && selected)
+	if (ActionButton("##duplicate", ICON_MDI_CONTENT_COPY, "Duplicate", button) && selected)
 	{
 		std::string error;
 		const std::filesystem::path copy = Projects::Duplicate(selected->path, error);
@@ -549,7 +585,7 @@ void ProjectManagerLayer::DrawActionsPanel()
 
 	ImGui::BeginDisabled(!selected || selected->builtIn);
 
-	if (ImGui::Button("Remove", button) && selected)
+	if (ActionButton("##remove", ICON_MDI_DELETE_OUTLINE, "Remove", button) && selected)
 		mOpenRemovePopup = true;
 
 	ImGui::EndDisabled();
@@ -559,7 +595,7 @@ void ProjectManagerLayer::DrawActionsPanel()
 
 	ImGui::BeginDisabled(!anyMissing);
 
-	if (ImGui::Button("Remove Missing", button))
+	if (ActionButton("##remove_missing", ICON_MDI_DATABASE_REMOVE_OUTLINE, "Remove Missing", button))
 	{
 		Projects::RemoveMissing();
 		Refresh();
@@ -569,7 +605,7 @@ void ProjectManagerLayer::DrawActionsPanel()
 
 	// Donate keeps the door open at the bottom, the way Godot keeps it. It goes nowhere yet.
 	ImGui::SetCursorPosY(ImGui::GetWindowHeight() - ImGui::GetFrameHeight() - 8.0f);
-	ImGui::Button("Donate", button);
+	ActionButton("##donate", ICON_MDI_HEART, "Donate", button);
 }
 
 void ProjectManagerLayer::DrawPopups()
@@ -670,8 +706,11 @@ void ProjectManagerLayer::DrawPopups()
 		{
 			mRenameError.clear();
 
-			if (Projects::Rename(Selected()->path, mRenameBuffer, mRenameError))
+			const std::filesystem::path renamed = Projects::Rename(Selected()->path, mRenameBuffer, mRenameError);
+
+			if (!renamed.empty())
 			{
+				mSelected = renamed.generic_string();
 				Refresh();
 				ImGui::CloseCurrentPopup();
 			}

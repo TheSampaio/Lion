@@ -20,11 +20,30 @@ namespace Lion
 
 		// Replaces the scene's contents from an in-memory JSON string. Returns false on failure.
 		static LION_API bool DeserializeFromString(const Reference<Scene>& scene, const std::string& text);
+		static LION_API bool DeserializeFromString(const Reference<Scene>& scene, const std::string& text,
+			const std::string& resourceRoot);
 
 		// Serializes a single entity (for the editor's copy/paste/duplicate clipboard).
 		static LION_API std::string SerializeEntityToString(const Reference<Entity>& entity);
 
 		// Rebuilds a single entity from JSON and adds it to the scene. Returns null on failure.
 		static LION_API Reference<Entity> DeserializeEntityFromString(const Reference<Scene>& scene, const std::string& text);
+		static LION_API Reference<Entity> DeserializeEntityFromString(const Reference<Scene>& scene,
+			const std::string& text, const std::string& resourceRoot);
+
+		// Assembly definitions use the complete authored entity rather than the compact linked-instance
+		// representation scenes and the editor clipboard use.
+		static LION_API std::string SerializeEntityDefinitionToString(const Reference<Entity>& entity);
+		static LION_API Reference<Entity> DeserializeEntityDefinitionFromString(const std::string& text);
+		static LION_API bool DeserializeEntityDefinitionInto(const Reference<Entity>& entity,
+			const std::string& text, bool preserveTransform);
+
+		// Assembly definitions own one root and its complete descendant hierarchy. The root remains the
+		// instance identity while every child is rebuilt from the same source definition.
+		static LION_API std::string SerializeEntityTreeDefinitionToString(const Reference<Entity>& root);
+		static LION_API std::vector<Reference<Entity>> DeserializeEntityTreeDefinitionFromString(
+			const std::string& text);
+		static LION_API bool DeserializeEntityTreeDefinitionInto(const Reference<Scene>& scene,
+			const Reference<Entity>& root, const std::string& text, bool preserveRootTransform);
 	};
 }

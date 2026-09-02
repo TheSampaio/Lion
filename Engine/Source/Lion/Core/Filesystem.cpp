@@ -16,6 +16,12 @@ namespace Lion
 		return std::ifstream(path).good();
 	}
 
+	static std::string& ResourceOverrideDirectory()
+	{
+		static std::string directory;
+		return directory;
+	}
+
 	// Directory of the running executable (with a trailing separator), or empty if unavailable.
 	// Resources are copied next to the executable by the build, so this anchors them regardless
 	// of the current working directory (Visual Studio project dir, output folder, ...).
@@ -39,17 +45,35 @@ namespace Lion
 
 	std::string ResolveResourcePath(const std::string& path)
 	{
-		// 1. Relative to the working directory (standalone run from the output folder).
+		// An absolute path already says exactly where it belongs. Relative paths deliberately wait until
+		// after the authored override so a stale packaged copy cannot shadow the active project.
+		if (std::filesystem::path(path).is_absolute() && FileExists(path))
+			return path;
+
+		// Tools author against the active project's Assets folder, not the last copy produced by a build.
+		// This must precede the working directory: Lion's Mane runs beside a packaged asset copy that may be
+		// older than the Assembly or Scene currently being edited.
+		const std::string& overrideDirectory = ResourceOverrideDirectory();
+
+		if (!overrideDirectory.empty())
+		{
+			const std::filesystem::path authored = std::filesystem::path(overrideDirectory) / path;
+
+			if (FileExists(authored.string()))
+				return authored.string();
+		}
+
+		// A standalone run launched from its output folder finds the flattened resource beside itself.
 		if (FileExists(path))
 			return path;
 
-		// 2. Development fallback: running from the project folder, assets live under "Assets/".
+		// Development fallback: running from the project folder, assets live under "Assets/".
 		const std::string devPath = "Assets/" + path;
 
 		if (FileExists(devPath))
 			return devPath;
 
-		// 3. Next to the executable (robust: independent of the working directory).
+		// Packaged resources live next to the executable, independent of the working directory.
 		const std::string& executableDirectory = ExecutableDirectory();
 
 		if (!executableDirectory.empty())
@@ -63,6 +87,13 @@ namespace Lion
 		return path;
 	}
 
+	void SetResourceOverrideDirectory(const std::string& directory)
+	{
+		ResourceOverrideDirectory() = directory.empty()
+			? std::string()
+			: std::filesystem::absolute(directory).lexically_normal().string();
+	}
+
 	const std::string& ResourceRootDirectory()
 	{
 		return ExecutableDirectory();
@@ -70,18 +101,23 @@ namespace Lion
 
 	std::string ToResourceRelativePath(const std::string& absolutePath)
 	{
-		const std::string& root = ExecutableDirectory();
-
-		if (!root.empty())
+		const auto relativeTo = [&](const std::string& root) -> std::string
 		{
+			if (root.empty())
+				return {};
+
 			std::error_code error;
 			const std::filesystem::path relative = std::filesystem::relative(absolutePath, root, error);
 			const std::string result = error ? std::string() : relative.generic_string();
 
-			// Keep it only when the file actually lives under the resource root (no ".." escapes).
-			if (!result.empty() && result.rfind("..", 0) != 0)
-				return result;
-		}
+			return !result.empty() && result.rfind("..", 0) != 0 ? result : std::string();
+		};
+
+		if (const std::string authored = relativeTo(ResourceOverrideDirectory()); !authored.empty())
+			return authored;
+
+		if (const std::string packaged = relativeTo(ExecutableDirectory()); !packaged.empty())
+			return packaged;
 
 		return absolutePath;
 	}

@@ -33,6 +33,11 @@ namespace Lion
 		sRendererAPI->Clear();
 	}
 
+	void RenderCommand::SetWireframe(bool enabled)
+	{
+		sRendererAPI->SetWireframe(enabled);
+	}
+
 	void RenderCommand::DrawIndexed(uint32 indexCount)
 	{
 		sRendererAPI->DrawIndexed(indexCount);

@@ -8,6 +8,12 @@
 
 namespace Lion
 {
+	enum class ApplicationKind
+	{
+		Game,
+		Editor,
+	};
+
 	class Asset;
 	class Event;
 	class Layer;
@@ -16,8 +22,12 @@ namespace Lion
 	class Application
 	{
 	public:
-		LION_API Application();
+		explicit LION_API Application(ApplicationKind kind = ApplicationKind::Game);
 		LION_API virtual ~Application();
+
+		// Whether the current host is an editor tool rather than the standalone player. Game modules use
+		// this to keep development-only controls out of player runs as well as Shipping binaries.
+		static LION_API bool IsEditor();
 
 		LION_API void PushLayer(Layer* layer);
 		LION_API void PushOverlay(Layer* overlay);
@@ -28,6 +38,7 @@ namespace Lion
 		Scope<Asset> mAsset;
 		Scope<Stack> mStack;
 		bool mMinimized;
+		static ApplicationKind sKind;
 
 		LION_API void Run();
 

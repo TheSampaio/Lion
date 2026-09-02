@@ -32,6 +32,9 @@ namespace Lion
 		// Clears the currently bound framebuffer.
 		virtual void Clear() = 0;
 
+		// Chooses filled triangles or their rasterized edges for subsequent draws.
+		virtual void SetWireframe(bool enabled) = 0;
+
 		// Issues an indexed draw for the currently bound geometry.
 		virtual void DrawIndexed(uint32 indexCount) = 0;
 
