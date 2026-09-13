@@ -23,6 +23,7 @@ namespace Lion
 		void PollEvents() override;
 		bool ShouldClose() const override;
 		void RequestClose() override;
+		void CancelClose() override;
 
 		void SetDisplayTitle(const std::string& title) override;
 		void SetResizable(bool enable) override;

@@ -41,6 +41,9 @@ namespace Lion
         // Clears the currently bound framebuffer with the given color.
         static LION_API void Clear(float32 red, float32 green, float32 blue, float32 alpha = 1.0f);
 
+        // Draws subsequent sprite batches as solid, high-contrast edges instead of textured fills.
+        static LION_API void SetWireframe(bool enabled);
+
         // Begins a batch: binds the shared shader/geometry and uploads the camera matrices.
         static LION_API void RenderBegin(const Reference<Camera>& camera);
 
@@ -61,6 +64,7 @@ namespace Lion
 
     private:
         Reference<Shader> mShader;
+        Reference<Shader> mWireframeShader;
         Reference<VertexArray> mVertexArray;
         Reference<VertexBuffer> mVertexBuffer;
         Reference<IndexBuffer> mIndexBuffer;
@@ -69,6 +73,7 @@ namespace Lion
         std::vector<Texture*> mTextureSlots;      // Slot index -> texture, rebuilt every frame.
         std::vector<Vertex> mVertexData;          // CPU-side staging for the vertex buffer.
         RenderStats mStats;                       // What the last flush cost (see GetStats).
+        bool mWireframe = false;
 
         Renderer() = default;
 

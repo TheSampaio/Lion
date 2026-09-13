@@ -215,6 +215,23 @@ void EditorLayer::OnDetach()
 	EditorGui::Shutdown();
 }
 
+void EditorLayer::OnEvent(Event& event)
+{
+	EventDispatcher dispatcher(event);
+	dispatcher.Bind<EventWindowClose>(LION_BIND_EVENT(EditorLayer::OnWindowClose));
+}
+
+bool EditorLayer::OnWindowClose(const EventWindowClose&)
+{
+	const bool hiddenSceneDirty = mAssemblyNavigation && mAssemblyNavigation->sceneDirty;
+	if (!IsDocumentDirty() && !hiddenSceneDirty)
+		return false;
+
+	Window::CancelClose();
+	RequestEditorClose();
+	return true;
+}
+
 int EditorLayer::SelectedEntityIndex() const
 {
 	if (!mSelectedEntity)
@@ -265,6 +282,9 @@ void EditorLayer::StartPlay()
 		mPaused = false;  // Play acts as "resume" while paused.
 		return;
 	}
+
+	if (mConsoleClearOnPlay)
+		Log::ClearHistory();
 
 	// Save the edited scene, then rebuild it so every component runs OnAwake again (which creates
 	// the Box2D bodies/shapes needed for the simulation). The rebuild preserves entity order, so the
@@ -558,11 +578,11 @@ void EditorLayer::RenderScene()
 	Renderer::Clear(0.12f, 0.12f, 0.15f, 1.0f);
 	mFramebuffer->ClearEntityId(-1);  // Empty pixels map to "no entity".
 
-	RenderCommand::SetWireframe(mViewportMode == ViewportMode::Wireframe);
+	Renderer::SetWireframe(mViewportMode == ViewportMode::Wireframe);
 	Renderer::RenderBegin(mCamera);
 	mScene->OnRender();
 	Renderer::RenderEnd();
-	RenderCommand::SetWireframe(false);
+	Renderer::SetWireframe(false);
 
 	mFramebuffer->Unbind();
 }
@@ -659,7 +679,7 @@ void EditorLayer::DrawUI()
 		ReturnFromAssembly();
 	}
 
-	DrawUnsavedAssemblyPopup();
+	DrawUnsavedDocumentPopup();
 
 	// Drawn over everything, because that is what they are: the dim that says the game is running, the
 	// size a panel reports while it is being dragged, and the toast that says the module is building.
@@ -927,9 +947,10 @@ namespace
 		const ImU32 textColor = ImGui::GetColorU32(ImGuiCol_Text);
 
 		DrawIcon(ImVec2(iconX, headerMin.y), ImVec2(kIconSize, rowHeight), icon, textColor, kIconSize);
-		ImGui::GetWindowDrawList()->AddText(
-			ImVec2(iconX + kIconSize + 8.0f, ImFloor(headerMin.y + (rowHeight - ImGui::GetTextLineHeight()) * 0.5f)),
-			textColor, name);
+		const ImVec2 textMin(iconX + kIconSize + 8.0f,
+			ImFloor(headerMin.y + (rowHeight - ImGui::GetTextLineHeight()) * 0.5f));
+		EditorGui::DrawTextEllipsis(name, textMin,
+			ImVec2(headerMax.x - kIconSize * 3.0f, headerMax.y), textColor);
 		return open;
 	}
 
@@ -1208,10 +1229,16 @@ void EditorLayer::DrawConsole()
 	ImGui::Checkbox("Auto-scroll", &mConsoleAutoScroll);
 
 	ImGui::SameLine();
-	ImGui::Checkbox("Collapse", &mConsoleCollapse);
+	ImGui::Checkbox("Group", &mConsoleCollapse);
 
 	if (ImGui::IsItemHovered())
 		ImGui::SetTooltip("Show one line per distinct message, with how many times it was logged");
+
+	ImGui::SameLine();
+	ImGui::Checkbox("Clear on Play", &mConsoleClearOnPlay);
+
+	if (ImGui::IsItemHovered())
+		ImGui::SetTooltip("Clear previous console output when Play mode starts");
 
 	const std::string errorText = std::string(ICON_MDI_ALERT_CIRCLE "  ") + std::to_string(errorCount);
 	const std::string warnText = std::string(ICON_MDI_ALERT "  ") + std::to_string(warningCount);
@@ -1434,7 +1461,8 @@ namespace
 	// construction arguments (a collider sizes itself to the sprite). Everything else in the registry
 	// comes from the game module and is added generically, by name.
 	constexpr const char8* kBuiltInComponents[] = {
-		"SpriteRenderer", "Camera2D", "AudioPlayer", "RigidBody2D", "BoxCollider2D", "CircleCollider2D" };
+		"SpriteRenderer", "Camera2D", "AudioPlayer", "RigidBody2D", "BoxCollider2D", "CircleCollider2D",
+		"WidgetAnchor" };
 
 	bool IsBuiltInComponent(const std::string& name)
 	{
@@ -1723,8 +1751,16 @@ namespace
 		const float32 available = ImGui::GetContentRegionAvail().x - kPropertyLabelWidth
 			- RowEndSlot() - kRowEndGap;
 
-		ImGui::AlignTextToFramePadding();
-		ImGui::TextUnformatted(label);
+		const ImVec2 labelMin = ImGui::GetCursorScreenPos();
+		const float32 frameHeight = ImGui::GetFrameHeight();
+		const ImVec2 textMin(labelMin.x,
+			ImFloor(labelMin.y + (frameHeight - ImGui::GetTextLineHeight()) * 0.5f));
+		const bool clipped = EditorGui::DrawTextEllipsis(label, textMin,
+			ImVec2(labelMin.x + kPropertyLabelWidth - ImGui::GetStyle().ItemInnerSpacing.x,
+				labelMin.y + frameHeight), ImGui::GetColorU32(ImGuiCol_Text));
+		ImGui::Dummy(ImVec2(kPropertyLabelWidth - ImGui::GetStyle().ItemInnerSpacing.x, frameHeight));
+		if (clipped && ImGui::IsItemHovered())
+			ImGui::SetTooltip("%s", label);
 		ImGui::SameLine(kPropertyLabelWidth);
 		ImGui::SetNextItemWidth((widgetWidth > 0.0f) ? widgetWidth : ImMax(available, 32.0f));
 	}
@@ -2049,7 +2085,8 @@ namespace
 	// breaking it. Lit.lnshader is the shader everything is drawn with. And Sprites/Geometries is sealed —
 	// the simple shapes the engine will put there to build with are the engine's, all the way down, so
 	// what is inside it is as protected as the folder around it.
-	constexpr const char8* kEngineAssets[] = { "Shaders", "Shaders/Lit.lnshader", "Sprites", "Sprites/Geometries" };
+	constexpr const char8* kEngineAssets[] = { "Shaders", "Shaders/Lit.lnshader", "Shaders/Wireframe.lnshader",
+		"Sprites", "Sprites/Geometries" };
 	constexpr const char8* kSealedAssetFolders[] = { "Sprites/Geometries" };
 
 	bool IsEngineAsset(const std::string& relative)
@@ -2279,6 +2316,10 @@ void EditorLayer::DrawProject()
 		ImGui::PopID();
 	}
 
+	if (ImGui::IsWindowHovered() && !ImGui::IsAnyItemHovered()
+		&& ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+		SetAssetSelection({});
+
 	// Right-clicking the empty space is about the folder being browsed, not about anything in it.
 	if (ImGui::BeginPopupContextWindow("ContentBrowserContext",
 		ImGuiPopupFlags_MouseButtonRight | ImGuiPopupFlags_NoOpenOverItems))
@@ -2286,6 +2327,10 @@ void EditorLayer::DrawProject()
 		if (ImGui::MenuItem(ICON_MDI_PACKAGE_VARIANT_CLOSED "  Create Assembly",
 			nullptr, false, !mPlaying && !mEditingAssembly))
 			CreateAssembly(mSelectedEntity);
+
+		if (ImGui::MenuItem(ICON_MDI_MONITOR "  Create Widget Assembly...",
+			nullptr, false, !mPlaying && !mEditingAssembly))
+			CreateAssembly(nullptr, true);
 
 		if (ImGui::MenuItem(ICON_MDI_FOLDER_PLUS "  New Folder", ShortcutText(ShortcutAction::NewFolder).c_str()))
 			CreateAssetFolder();
@@ -2325,7 +2370,7 @@ void EditorLayer::DrawProject()
 	if (navigate)
 	{
 		mProjectPath = navigateTarget;
-		mSelectedAsset.clear();
+		SetAssetSelection({});
 	}
 
 	ImGui::End();
@@ -2398,13 +2443,13 @@ bool EditorLayer::DrawAssetEntry(const std::string& name, const std::string& ass
 
 	if (dimmed)
 		ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyle().Colors[ImGuiCol_TextDisabled]);
-	else if (assemblyAsset && mSelectedAsset != assetPath)
+	else if (assemblyAsset && !IsAssetSelected(assetPath))
 		ImGui::PushStyleColor(ImGuiCol_Text, EditorGui::GetAccent());
 
 	// Hovered and clicked in the engine's orange, the same as the Hierarchy and the console: one selection
 	// colour across the editor.
 	const ImVec4 accent = EditorGui::GetAccent();
-	const bool selected = mSelectedAsset == assetPath;
+	const bool selected = IsAssetSelected(assetPath);
 	ImGui::PushStyleColor(ImGuiCol_Header, accent);
 	ImGui::PushStyleColor(ImGuiCol_HeaderHovered,
 		selected ? accent : ImVec4(accent.x, accent.y, accent.z, 0.30f));
@@ -2413,12 +2458,38 @@ bool EditorLayer::DrawAssetEntry(const std::string& name, const std::string& ass
 	const std::string displayName = !folder && !mShowAssetExtensions
 		? std::filesystem::path(name).stem().generic_string()
 		: name;
-	const std::string label = std::string(folder ? ICON_MDI_FOLDER : AssetIcon(name)) + "  " + displayName;
-	const bool activated = ImGui::Selectable(label.c_str(), selected,
+	const ImVec2 entryStart = ImGui::GetCursorScreenPos();
+	const bool activated = ImGui::Selectable("##entry", selected,
 		ImGuiSelectableFlags_AllowDoubleClick);
 
 	if (activated)
-		mSelectedAsset = assetPath;
+	{
+		const ImGuiIO& io = ImGui::GetIO();
+		if (io.KeyShift)
+			SelectAssetRangeTo(assetPath);
+		else if (io.KeyCtrl)
+			AddToAssetSelection(assetPath);
+		else if (!selected)
+			SetAssetSelection(assetPath);
+	}
+
+	const ImVec2 entryMin = ImGui::GetItemRectMin();
+	const ImVec2 entryMax = ImGui::GetItemRectMax();
+	const ImU32 textColor = ImGui::GetColorU32(ImGuiCol_Text);
+	const char8* icon = folder ? ICON_MDI_FOLDER : AssetIcon(name);
+	DrawIcon(entryStart, ImVec2(kIconSize, entryMax.y - entryMin.y), icon, textColor, kIconSize);
+	const float32 textX = entryStart.x + kIconSize + 8.0f;
+	const float32 textY = ImFloor(entryMin.y + (entryMax.y - entryMin.y - ImGui::GetTextLineHeight()) * 0.5f);
+	const bool clipped = EditorGui::DrawTextEllipsis(displayName.c_str(), ImVec2(textX, textY),
+		ImVec2(entryMax.x - ImGui::GetStyle().FramePadding.x, entryMax.y), textColor);
+
+	if (ImGui::IsItemHovered() && ImGui::IsMouseReleased(ImGuiMouseButton_Left)
+		&& !ImGui::GetIO().KeyShift && !ImGui::GetIO().KeyCtrl
+		&& !ImGui::IsMouseDragPastThreshold(ImGuiMouseButton_Left)
+		&& mAssetSelection.size() > 1 && selected)
+	{
+		SetAssetSelection(assetPath);
+	}
 
 	ImGui::PopStyleColor(3);
 
@@ -2427,11 +2498,12 @@ bool EditorLayer::DrawAssetEntry(const std::string& name, const std::string& ass
 
 	if (ImGui::IsItemHovered())
 		ImGui::SetTooltip(engineOwned ? "%s\nShipped with the engine. It cannot be renamed or deleted." : "%s",
-			assetPath.c_str());
+			(clipped ? displayName : assetPath).c_str());
 
 	if (ImGui::BeginPopupContextItem())
 	{
-		mSelectedAsset = assetPath;
+		if (!selected)
+			SetAssetSelection(assetPath);
 
 		if (assemblyAsset)
 		{
@@ -2478,8 +2550,14 @@ bool EditorLayer::DrawAssetEntry(const std::string& name, const std::string& ass
 
 		ImGui::Separator();
 
-		if (ImGui::MenuItem(ICON_MDI_DELETE_OUTLINE "  Delete"))
-			mAssetToDelete = assetPath;
+		if (ImGui::MenuItem(ICON_MDI_DELETE_OUTLINE "  Delete",
+			ShortcutText(ShortcutAction::DeleteEntity).c_str()))
+		{
+			mAssetsToDelete.clear();
+			for (const std::string& selectedAsset : mAssetSelection)
+				if (!IsEngineAsset(selectedAsset))
+					mAssetsToDelete.push_back(selectedAsset);
+		}
 
 		ImGui::EndDisabled();
 
@@ -2529,6 +2607,16 @@ void EditorLayer::ScanProjectDirectory(const std::filesystem::path& directory)
 		const std::string name = entry.path().filename().generic_string();
 		mProjectEntries.push_back({ name, mProjectPath.empty() ? name : mProjectPath + "/" + name, false });
 	}
+
+	mAssetSelection.erase(std::remove_if(mAssetSelection.begin(), mAssetSelection.end(),
+		[&](const std::string& selected)
+		{
+			return std::none_of(mProjectEntries.begin(), mProjectEntries.end(),
+				[&](const AssetEntry& entry) { return entry.path == selected; });
+		}), mAssetSelection.end());
+
+	if (!mSelectedAsset.empty() && !IsAssetSelected(mSelectedAsset))
+		mSelectedAsset = mAssetSelection.empty() ? std::string() : mAssetSelection.back();
 }
 
 void EditorLayer::CreateAssetFolder()
@@ -2555,7 +2643,7 @@ void EditorLayer::CreateAssetFolder()
 
 	const size_t copied = name.copy(mAssetRenameBuffer, sizeof(mAssetRenameBuffer) - 1);
 	mAssetRenameBuffer[copied] = '\0';
-	mSelectedAsset = mRenamingAsset;
+	SetAssetSelection(mRenamingAsset);
 }
 
 void EditorLayer::BeginRenameAsset(const std::string& assetPath)
@@ -2564,7 +2652,7 @@ void EditorLayer::BeginRenameAsset(const std::string& assetPath)
 		return;
 
 	mRenamingAsset = assetPath;
-	mSelectedAsset = assetPath;
+	SetAssetSelection(assetPath);
 	mAssetRenameFocus = true;
 
 	const std::string name = std::filesystem::path(assetPath).filename().string();
@@ -2572,12 +2660,85 @@ void EditorLayer::BeginRenameAsset(const std::string& assetPath)
 	mAssetRenameBuffer[copied] = '\0';
 }
 
-void EditorLayer::CopyAsset(bool cut)
+void EditorLayer::SetAssetSelection(const std::string& assetPath)
 {
-	if (mSelectedAsset.empty() || (cut && IsEngineAsset(mSelectedAsset)))
+	mAssetSelection.clear();
+
+	if (!assetPath.empty())
+		mAssetSelection.push_back(assetPath);
+
+	mSelectedAsset = assetPath;
+}
+
+void EditorLayer::AddToAssetSelection(const std::string& assetPath)
+{
+	if (assetPath.empty())
 		return;
 
-	mAssetClipboard = mSelectedAsset;
+	const auto selected = std::find(mAssetSelection.begin(), mAssetSelection.end(), assetPath);
+
+	if (selected != mAssetSelection.end())
+	{
+		mAssetSelection.erase(selected);
+		mSelectedAsset = mAssetSelection.empty() ? std::string() : mAssetSelection.back();
+		return;
+	}
+
+	mAssetSelection.push_back(assetPath);
+	mSelectedAsset = assetPath;
+}
+
+void EditorLayer::SelectAssetRangeTo(const std::string& assetPath)
+{
+	if (assetPath.empty() || mSelectedAsset.empty())
+	{
+		SetAssetSelection(assetPath);
+		return;
+	}
+
+	int32 anchor = -1;
+	int32 target = -1;
+
+	for (int32 index = 0; index < static_cast<int32>(mProjectEntries.size()); ++index)
+	{
+		if (mProjectEntries[index].path == mSelectedAsset) anchor = index;
+		if (mProjectEntries[index].path == assetPath)     target = index;
+	}
+
+	if (anchor < 0 || target < 0)
+	{
+		SetAssetSelection(assetPath);
+		return;
+	}
+
+	const int32 first = std::min(anchor, target);
+	const int32 last = std::max(anchor, target);
+	mAssetSelection.clear();
+
+	for (int32 index = first; index <= last; ++index)
+		mAssetSelection.push_back(mProjectEntries[index].path);
+
+	mSelectedAsset = assetPath;
+}
+
+bool EditorLayer::IsAssetSelected(const std::string& assetPath) const
+{
+	return std::find(mAssetSelection.begin(), mAssetSelection.end(), assetPath) != mAssetSelection.end();
+}
+
+void EditorLayer::CopyAsset(bool cut)
+{
+	if (mAssetSelection.empty())
+		return;
+
+	mAssetClipboard.clear();
+	for (const std::string& assetPath : mAssetSelection)
+		if (!cut || !IsEngineAsset(assetPath))
+			mAssetClipboard.push_back(assetPath);
+
+	if (mAssetClipboard.empty())
+		return;
+
 	mAssetClipboardCut = cut;
 }
 
@@ -2587,46 +2748,56 @@ void EditorLayer::PasteAsset()
 		return;
 
 	const std::filesystem::path root = ProjectPanelDirectory();
-	const std::filesystem::path source = root / mAssetClipboard;
 	const std::filesystem::path destinationDirectory = root / mProjectPath;
 	std::error_code error;
 
-	if (!std::filesystem::exists(source, error) || !std::filesystem::is_directory(destinationDirectory, error))
+	if (!std::filesystem::is_directory(destinationDirectory, error))
 	{
 		mAssetClipboard.clear();
 		mAssetClipboardCut = false;
 		return;
 	}
 
-	std::filesystem::path destination = destinationDirectory / source.filename();
+	std::vector<std::string> pasted;
 
-	if (mAssetClipboardCut && source.parent_path() == destinationDirectory)
-		return;
-
-	if (std::filesystem::exists(destination, error))
-		destination = UnusedCopyPath(source, destinationDirectory);
-
-	if (mAssetClipboardCut)
+	for (const std::string& assetPath : mAssetClipboard)
 	{
-		std::filesystem::rename(source, destination, error);
-	}
-	else if (std::filesystem::is_directory(source, error))
-	{
-		std::filesystem::copy(source, destination, std::filesystem::copy_options::recursive, error);
-	}
-	else
-	{
-		std::filesystem::copy_file(source, destination, error);
+		const std::filesystem::path source = root / assetPath;
+
+		if (!std::filesystem::exists(source, error))
+			continue;
+
+		std::filesystem::path destination = destinationDirectory / source.filename();
+
+		if (mAssetClipboardCut && source.parent_path() == destinationDirectory)
+			continue;
+
+		if (std::filesystem::exists(destination, error))
+			destination = UnusedCopyPath(source, destinationDirectory);
+
+		error.clear();
+		if (mAssetClipboardCut)
+			std::filesystem::rename(source, destination, error);
+		else if (std::filesystem::is_directory(source, error))
+			std::filesystem::copy(source, destination, std::filesystem::copy_options::recursive, error);
+		else
+			std::filesystem::copy_file(source, destination, error);
+
+		if (error)
+		{
+			Log::Console(LogLevel::Error,
+				LION_FORMAT_TEXT("[Editor] Could not paste '{}': {}.", assetPath, error.message()));
+			continue;
+		}
+
+		pasted.push_back(destination.lexically_relative(root).generic_string());
 	}
 
-	if (error)
+	if (!pasted.empty())
 	{
-		Log::Console(LogLevel::Error,
-			LION_FORMAT_TEXT("[Editor] Could not paste '{}': {}.", mAssetClipboard, error.message()));
-		return;
+		mAssetSelection = pasted;
+		mSelectedAsset = pasted.back();
 	}
-
-	mSelectedAsset = destination.lexically_relative(root).generic_string();
 	mProjectDirty = true;
 
 	if (mAssetClipboardCut)
@@ -2638,20 +2809,39 @@ void EditorLayer::PasteAsset()
 
 void EditorLayer::DuplicateAsset()
 {
-	if (mSelectedAsset.empty() || IsEngineAsset(mSelectedAsset))
+	if (mAssetSelection.empty())
 		return;
 
-	const std::string savedClipboard = mAssetClipboard;
+	const std::vector<std::string> savedClipboard = mAssetClipboard;
 	const bool savedCut = mAssetClipboardCut;
 	const std::string savedPath = mProjectPath;
+	const std::vector<std::string> originalSelection = mAssetSelection;
 
-	mAssetClipboard = mSelectedAsset;
-	mAssetClipboardCut = false;
-	mProjectPath = std::filesystem::path(mSelectedAsset).parent_path().generic_string();
-	PasteAsset();
+	std::vector<std::string> duplicates;
+	for (const std::string& assetPath : originalSelection)
+	{
+		if (IsEngineAsset(assetPath))
+			continue;
+
+		mAssetClipboard = { assetPath };
+		mAssetClipboardCut = false;
+		mProjectPath = std::filesystem::path(assetPath).parent_path().generic_string();
+		SetAssetSelection({});
+		PasteAsset();
+
+		if (!mSelectedAsset.empty())
+			duplicates.push_back(mSelectedAsset);
+	}
+
 	mProjectPath = savedPath;
 	mAssetClipboard = savedClipboard;
 	mAssetClipboardCut = savedCut;
+
+	if (!duplicates.empty())
+	{
+		mAssetSelection = duplicates;
+		mSelectedAsset = duplicates.back();
+	}
 }
 
 void EditorLayer::OpenAssetInFileExplorer(const std::string& assetPath) const
@@ -2699,12 +2889,18 @@ void EditorLayer::RenameAsset(const std::string& assetPath, const std::string& n
 	if (error)
 		Log::Console(LogLevel::Error, LION_FORMAT_TEXT("[Editor] Could not rename '{}': {}.", assetPath, error.message()));
 	else
-		mSelectedAsset = to.lexically_relative(root).generic_string();
+	{
+		const std::string renamed = to.lexically_relative(root).generic_string();
+		for (std::string& selected : mAssetSelection)
+			if (selected == assetPath)
+				selected = renamed;
+		mSelectedAsset = renamed;
+	}
 }
 
 void EditorLayer::DrawDeleteAssetPopup()
 {
-	if (mAssetToDelete.empty())
+	if (mAssetsToDelete.empty())
 		return;
 
 	// Opened here, at the root, and not from the row's context menu: that menu closes on click and takes
@@ -2718,41 +2914,52 @@ void EditorLayer::DrawDeleteAssetPopup()
 	if (!ImGui::BeginPopupModal("Delete Asset", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
 		return;
 
-	const std::filesystem::path full = ProjectPanelDirectory() / mAssetToDelete;
-
+	const std::filesystem::path root = ProjectPanelDirectory();
 	std::error_code error;
-	const bool folder = std::filesystem::is_directory(full, error);
+	const bool multiple = mAssetsToDelete.size() > 1;
+	const bool folder = !multiple && std::filesystem::is_directory(root / mAssetsToDelete.front(), error);
 
-	ImGui::TextUnformatted(mAssetToDelete.c_str());
+	if (multiple)
+		ImGui::Text("Delete %d selected assets?", static_cast<int32>(mAssetsToDelete.size()));
+	else
+		ImGui::TextUnformatted(mAssetsToDelete.front().c_str());
 
 	// A file goes to the recycle bin nowhere: this is the project's disk, and the editor's undo history
 	// is about the scene, not about the files under it. Say so before doing it.
-	ImGui::TextDisabled(folder
-		? "The folder and everything in it will be deleted. This cannot be undone."
-		: "The file will be deleted. This cannot be undone.");
+	ImGui::TextDisabled(multiple
+		? "The selected files and folders will be deleted. This cannot be undone."
+		: (folder
+			? "The folder and everything in it will be deleted. This cannot be undone."
+			: "The file will be deleted. This cannot be undone."));
 
 	ImGui::Spacing();
 
 	if (ImGui::Button("Delete", ImVec2(96.0f, 0.0f)))
 	{
-		std::filesystem::remove_all(full, error);
-		mProjectDirty = true;
-
-		if (error)
-			Log::Console(LogLevel::Error, LION_FORMAT_TEXT("[Editor] Could not delete '{}': {}.", mAssetToDelete, error.message()));
-		else
-			Log::Console(LogLevel::Information, LION_FORMAT_TEXT("[Editor] Deleted '{}'.", mAssetToDelete));
-
-		if (mSelectedAsset == mAssetToDelete)
-			mSelectedAsset.clear();
-
-		if (mAssetClipboard == mAssetToDelete)
+		for (const std::string& assetPath : mAssetsToDelete)
 		{
-			mAssetClipboard.clear();
-			mAssetClipboardCut = false;
+			error.clear();
+			std::filesystem::remove_all(root / assetPath, error);
+
+			if (error)
+				Log::Console(LogLevel::Error,
+					LION_FORMAT_TEXT("[Editor] Could not delete '{}': {}.", assetPath, error.message()));
+			else
+				Log::Console(LogLevel::Information, LION_FORMAT_TEXT("[Editor] Deleted '{}'.", assetPath));
 		}
 
-		mAssetToDelete.clear();
+		mProjectDirty = true;
+		SetAssetSelection({});
+		mAssetClipboard.erase(std::remove_if(mAssetClipboard.begin(), mAssetClipboard.end(),
+			[&](const std::string& assetPath)
+			{
+				return std::find(mAssetsToDelete.begin(), mAssetsToDelete.end(), assetPath)
+					!= mAssetsToDelete.end();
+			}), mAssetClipboard.end());
+		if (mAssetClipboard.empty())
+			mAssetClipboardCut = false;
+
+		mAssetsToDelete.clear();
 		ImGui::CloseCurrentPopup();
 	}
 
@@ -2760,7 +2967,7 @@ void EditorLayer::DrawDeleteAssetPopup()
 
 	if (ImGui::Button("Cancel", ImVec2(96.0f, 0.0f)))
 	{
-		mAssetToDelete.clear();
+		mAssetsToDelete.clear();
 		ImGui::CloseCurrentPopup();
 	}
 
@@ -3168,7 +3375,7 @@ void EditorLayer::DrawProjectGeneralSettings()
 	ImGui::EndDisabled();
 
 	if (builtIn)
-		ImGui::TextDisabled("The built-in Sandbox always starts from Assets/Scenes/Level01.lnscene.");
+		ImGui::TextDisabled("The built-in Sandbox always starts from Assets/Scenes/MainMenu.lnscene.");
 	else if (!mProjectSettingsError.empty())
 		ImGui::TextColored(LogLevelColor(LogLevel::Error), "%s", mProjectSettingsError.c_str());
 }
@@ -3676,6 +3883,8 @@ void EditorLayer::LoadEditorSettings()
 			mShowColliders = value != 0;
 		else if (name == "show_asset_extensions")
 			mShowAssetExtensions = value != 0;
+		else if (name == "console_clear_on_play")
+			mConsoleClearOnPlay = value != 0;
 	}
 }
 
@@ -3689,6 +3898,7 @@ void EditorLayer::SaveEditorSettings() const
 	{
 		file << "show_colliders " << (mShowColliders ? 1 : 0) << '\n';
 		file << "show_asset_extensions " << (mShowAssetExtensions ? 1 : 0) << '\n';
+		file << "console_clear_on_play " << (mConsoleClearOnPlay ? 1 : 0) << '\n';
 	}
 }
 
@@ -3707,7 +3917,7 @@ void EditorLayer::ResetShortcutsToDefault()
 	set(ShortcutAction::GizmoMove, ImGuiKey_W);
 	set(ShortcutAction::GizmoRotate, ImGuiKey_E);
 	set(ShortcutAction::GizmoScale, ImGuiKey_R);
-	set(ShortcutAction::RenameEntity, ImGuiKey_None);
+	set(ShortcutAction::RenameEntity, ImGuiKey_F2);
 	set(ShortcutAction::DeleteEntity, ImGuiKey_Delete);
 	set(ShortcutAction::Pause, ImGuiKey_F7);
 	set(ShortcutAction::ToggleColliders, ImGuiKey_F4);
@@ -3746,7 +3956,7 @@ void EditorLayer::ResetShortcutsToDefault()
 	set(ShortcutAction::CutSelection, ImGuiKey_X, true);
 	set(ShortcutAction::NewFolder, ImGuiKey_N, true, true);
 	set(ShortcutAction::ViewLit, ImGuiKey_F1);
-	set(ShortcutAction::ViewUnlit, ImGuiKey_F2);
+	set(ShortcutAction::ViewUnlit, ImGuiKey_F2, false, true);
 	set(ShortcutAction::ViewWireframe, ImGuiKey_F3);
 }
 
@@ -3995,22 +4205,19 @@ void EditorLayer::LoadShortcuts()
 		return;
 
 	int index = 0, key = 0, ctrl = 0, shift = 0, alt = 0;
-	bool loadedViewportModes = false;
-
 	while (file >> index >> key >> ctrl >> shift >> alt)
 	{
 		if (index >= 0 && index < static_cast<int>(ShortcutAction::Count))
 		{
 			mBinds[index] = { static_cast<ImGuiKey>(key), ctrl != 0, shift != 0, alt != 0 };
-			loadedViewportModes |= index == static_cast<int>(ShortcutAction::ViewLit)
-				|| index == static_cast<int>(ShortcutAction::ViewUnlit)
-				|| index == static_cast<int>(ShortcutAction::ViewWireframe);
 		}
 	}
 
 	Keybind& editor = mBinds[static_cast<int>(ShortcutAction::OpenWindowSettings)];
 	Keybind& project = mBinds[static_cast<int>(ShortcutAction::OpenProjectSettings)];
 	Keybind& rename = mBinds[static_cast<int>(ShortcutAction::RenameEntity)];
+	Keybind& unlit = mBinds[static_cast<int>(ShortcutAction::ViewUnlit)];
+	bool migrated = false;
 
 	// Migrate the former built-in pair without replacing shortcuts the user deliberately rebound.
 	if (editor.key == ImGuiKey_F10 && !editor.ctrl && !editor.shift && !editor.alt
@@ -4018,16 +4225,25 @@ void EditorLayer::LoadShortcuts()
 	{
 		editor.key = ImGuiKey_F11;
 		project.key = ImGuiKey_F10;
-		SaveShortcuts();
+		migrated = true;
 	}
 
-	// F2 became the explicit Unlit view key. Retire only the former built-in rename binding; a custom
-	// rename shortcut remains untouched.
-	if (!loadedViewportModes && rename.key == ImGuiKey_F2 && !rename.ctrl && !rename.shift && !rename.alt)
+	// F2 is the conventional rename key shared by the Content Browser and Scene Hierarchy. Move the
+	// former default Unlit binding one modifier away without replacing unrelated custom bindings.
+	if (unlit.key == ImGuiKey_F2 && !unlit.ctrl && !unlit.shift && !unlit.alt)
 	{
-		rename = {};
-		SaveShortcuts();
+		unlit = { ImGuiKey_F2, false, true, false };
+		migrated = true;
 	}
+
+	if (rename.key == ImGuiKey_None)
+	{
+		rename = { ImGuiKey_F2, false, false, false };
+		migrated = true;
+	}
+
+	if (migrated)
+		SaveShortcuts();
 }
 
 void EditorLayer::SaveShortcuts() const
@@ -4126,6 +4342,10 @@ void EditorLayer::HandleShortcuts()
 		!ImGui::IsPopupOpen(nullptr, ImGuiPopupFlags_AnyPopupId | ImGuiPopupFlags_AnyPopupLevel))
 		SetSelection(nullptr);
 
+	if (mProjectFocused && IsShortcutPressed(ShortcutAction::Deselect) && !mAssetSelection.empty()
+		&& !ImGui::IsPopupOpen(nullptr, ImGuiPopupFlags_AnyPopupId | ImGuiPopupFlags_AnyPopupLevel))
+		SetAssetSelection({});
+
 	// The actions below are edit-mode only (typing is already ruled out above).
 	if (mPlaying)
 		return;
@@ -4165,9 +4385,13 @@ void EditorLayer::HandleShortcuts()
 		if (!mSelectedAsset.empty() && IsShortcutPressed(ShortcutAction::RenameEntity))
 			BeginRenameAsset(mSelectedAsset);
 
-		if (!mSelectedAsset.empty() && !IsEngineAsset(mSelectedAsset)
-			&& IsShortcutPressed(ShortcutAction::DeleteEntity))
-			mAssetToDelete = mSelectedAsset;
+		if (!mAssetSelection.empty() && IsShortcutPressed(ShortcutAction::DeleteEntity))
+		{
+			mAssetsToDelete.clear();
+			for (const std::string& assetPath : mAssetSelection)
+				if (!IsEngineAsset(assetPath))
+					mAssetsToDelete.push_back(assetPath);
+		}
 
 		return;
 	}
@@ -4543,21 +4767,31 @@ void EditorLayer::DrawViewportToolbar(const ImVec2& imageMin, const ImVec2& imag
 
 	if (ImGui::BeginPopup("ViewportSettings"))
 	{
-		if (ImGui::MenuItem(ICON_MDI_LIGHTBULB_ON_OUTLINE "  Lit", ShortcutText(ShortcutAction::ViewLit).c_str(),
+		const auto spacedShortcut = [this](ShortcutAction action)
+		{
+			const std::string shortcut = ShortcutText(action);
+			return shortcut.empty() ? shortcut : "      " + shortcut;
+		};
+		const std::string litShortcut = spacedShortcut(ShortcutAction::ViewLit);
+		const std::string unlitShortcut = spacedShortcut(ShortcutAction::ViewUnlit);
+		const std::string wireframeShortcut = spacedShortcut(ShortcutAction::ViewWireframe);
+		const std::string collidersShortcut = spacedShortcut(ShortcutAction::ToggleColliders);
+
+		if (ImGui::MenuItem(ICON_MDI_LIGHTBULB_ON_OUTLINE "  Lit", litShortcut.c_str(),
 			mViewportMode == ViewportMode::Lit))
 			mViewportMode = ViewportMode::Lit;
 
-		if (ImGui::MenuItem(ICON_MDI_LIGHTBULB_OUTLINE "  Unlit", ShortcutText(ShortcutAction::ViewUnlit).c_str(),
+		if (ImGui::MenuItem(ICON_MDI_LIGHTBULB_OUTLINE "  Unlit", unlitShortcut.c_str(),
 			mViewportMode == ViewportMode::Unlit))
 			mViewportMode = ViewportMode::Unlit;
 
-		if (ImGui::MenuItem(ICON_MDI_GRID "  Wireframe", ShortcutText(ShortcutAction::ViewWireframe).c_str(),
+		if (ImGui::MenuItem(ICON_MDI_GRID "  Wireframe", wireframeShortcut.c_str(),
 			mViewportMode == ViewportMode::Wireframe))
 			mViewportMode = ViewportMode::Wireframe;
 
 		ImGui::Separator();
 		ImGui::MenuItem(ICON_MDI_VECTOR_SQUARE "  Colliders",
-			ShortcutText(ShortcutAction::ToggleColliders).c_str(), &mShowColliders);
+			collidersShortcut.c_str(), &mShowColliders);
 
 		ImGui::EndPopup();
 	}
@@ -4955,7 +5189,7 @@ void EditorLayer::DrawHierarchy()
 	ImGui::PopStyleVar(2);
 
 	if (count == 0)
-		ImGui::TextDisabled("Empty scene — right-click to create an entity.");
+		ImGui::TextDisabled("Empty scene. Right-click to create an entity.");
 
 	// Right-click empty space in the panel to create an entity (Unity/Hazel-style).
 	if (ImGui::BeginPopupContextWindow("HierarchyContext",
@@ -5310,7 +5544,7 @@ void EditorLayer::DrawEntityNode(const Reference<Entity>& entity)
 	const float32 spaceWidth = ImMax(ImGui::CalcTextSize(" ").x, 1.0f);
 	const float32 reservedWidth = kIconSize + 6.0f;
 	const int32 spaces = static_cast<int32>(ImCeil(reservedWidth / spaceWidth));
-	const std::string label = std::string(spaces, ' ') + (name.empty() ? "(unnamed)" : name);
+	const std::string label = std::string(spaces, ' ');
 
 	const ImVec2 rowStart = ImGui::GetCursorScreenPos();
 
@@ -5332,10 +5566,21 @@ void EditorLayer::DrawEntityNode(const Reference<Entity>& entity)
 	DrawIcon(ImVec2(iconX, ImGui::GetItemRectMin().y), ImVec2(kIconSize, ImGui::GetItemRectSize().y),
 		icon, iconColor, kIconSize);
 
+	const char8* shownName = name.empty() ? "(unnamed)" : name.c_str();
+	const float32 textX = iconX + kIconSize + 6.0f;
+	const float32 textY = ImFloor(ImGui::GetItemRectMin().y
+		+ (ImGui::GetItemRectSize().y - ImGui::GetTextLineHeight()) * 0.5f);
+	const bool nameClipped = EditorGui::DrawTextEllipsis(shownName, ImVec2(textX, textY),
+		ImVec2(ImGui::GetItemRectMax().x - ImGui::GetStyle().FramePadding.x,
+			ImGui::GetItemRectMax().y), iconColor);
+
 	ImGui::PopStyleColor(3);
 
 	if (dimmed || (assemblyVisual && !IsSelected(entity.get())))
 		ImGui::PopStyleColor();
+
+	if (nameClipped && ImGui::IsItemHovered())
+		ImGui::SetTooltip("%s", shownName);
 
 	// Clicking the label (not the expand arrow) selects. Ctrl adds one, Shift takes everything between.
 	//
@@ -6168,7 +6413,7 @@ void EditorLayer::DrawProperties()
 	}
 
 	if (ImGui::IsItemHovered())
-		ImGui::SetTooltip(enabled ? "Enabled" : "Disabled — neither updated nor drawn");
+		ImGui::SetTooltip(enabled ? "Enabled" : "Disabled: neither updated nor drawn");
 
 	// Editable entity name.
 	char nameBuffer[128];
@@ -6214,7 +6459,7 @@ void EditorLayer::DrawProperties()
 	// A folder only organizes the hierarchy: it has no transform or components to edit.
 	if (mSelectedEntity->IsFolder())
 	{
-		ImGui::TextDisabled("Folder — groups entities in the hierarchy.");
+		ImGui::TextDisabled("Folder groups entities in the hierarchy.");
 		EndPropertiesPanel();
 		return;
 	}
@@ -6559,7 +6804,7 @@ void EditorLayer::DrawProperties()
 				component->Reflect(reflector);
 
 				if (!reflector.DrewAnything())
-					ImGui::TextDisabled("No fields — describe them in Reflect().");
+					ImGui::TextDisabled("No fields. Describe them in Reflect().");
 			}
 		}
 
@@ -6625,6 +6870,15 @@ void EditorLayer::DrawProperties()
 					entity->AddComponent<Camera2D>();
 
 			FocusViewportOnSelection();
+		}
+
+		if (lacksBuiltIn.operator()<WidgetAnchor>() && ImGui::MenuItem("Widget Anchor"))
+		{
+			RecordSnapshot();
+			for (const auto& entity : mSelection)
+				if (!entity->IsFolder() && !IsLinkedAssemblyEntity(entity.get())
+					&& !entity->HasComponent<WidgetAnchor>())
+					entity->AddComponent<WidgetAnchor>();
 		}
 
 		if (lacksBuiltIn.operator()<AudioPlayer>() && ImGui::MenuItem("Audio Player"))
@@ -7007,23 +7261,28 @@ void EditorLayer::DrawWindowButtons(const ImVec2& barMin, float32 barWidth, floa
 		{
 			case 0: Window::Minimize();       break;
 			case 1: Window::ToggleMaximize(); break;
-			case 2: Window::RequestClose();   break;
+			case 2: RequestEditorClose();     break;
 		}
 	}
 }
 
 void EditorLayer::NewScene()
 {
+	if (IsDocumentDirty())
+	{
+		ConfirmDocumentChange([this] { NewScene(); });
+		return;
+	}
+
 	if (mEditingAssembly)
 	{
-		if (mAssemblyDirty)
-		{
-			mOpenUnsavedAssemblyPopup = true;
-			return;
-		}
-
 		if (!ReturnFromAssembly())
 			return;
+
+		// The scene kept behind Assembly isolation can itself be dirty. Re-enter through the same
+		// document guard now that it is current so a navigation step can never bypass its prompt.
+		NewScene();
+		return;
 	}
 
 	RecordSnapshot();
@@ -7050,16 +7309,18 @@ void EditorLayer::OpenScene()
 
 bool EditorLayer::LoadScene(const std::string& path)
 {
+	if (IsDocumentDirty())
+	{
+		ConfirmDocumentChange([this, path] { LoadScene(path); });
+		return false;
+	}
+
 	if (mEditingAssembly)
 	{
-		if (mAssemblyDirty)
-		{
-			mOpenUnsavedAssemblyPopup = true;
-			return false;
-		}
-
 		if (!ReturnFromAssembly())
 			return false;
+
+		return LoadScene(path);
 	}
 
 	RecordSnapshot();
@@ -7088,6 +7349,12 @@ bool EditorLayer::LoadAssembly(const std::string& path)
 {
 	if (mPlaying)
 		return false;
+
+	if (mEditingAssembly && mAssemblyDirty)
+	{
+		ConfirmDocumentChange([this, path] { LoadAssembly(path); });
+		return false;
+	}
 
 	std::vector<Reference<Entity>> definition =
 		AssemblySerializer::DeserializeTree(path, GameAssetsDirectory().string());
@@ -7134,12 +7401,6 @@ bool EditorLayer::LoadAssembly(const std::string& path)
 	{
 		// A document switch is not a save command. Keep dirty authored data in hand until the user explicitly
 		// saves or returns and chooses what to do with it.
-		if (mAssemblyDirty)
-		{
-			mOpenUnsavedAssemblyPopup = true;
-			return false;
-		}
-
 		const std::string currentDocument =
 			std::filesystem::absolute(mScenePath).lexically_normal().generic_string();
 		mAssemblyHierarchyExpanded[currentDocument] = mHierarchyExpanded;
@@ -7178,7 +7439,7 @@ bool EditorLayer::ReturnFromAssembly()
 	// Save or Discard; only an explicit save changes the source every linked instance reads.
 	if (mAssemblyDirty)
 	{
-		mOpenUnsavedAssemblyPopup = true;
+		ConfirmDocumentChange([this] { ReturnFromAssembly(); });
 		return false;
 	}
 
@@ -7384,7 +7645,7 @@ float32 EditorLayer::DrawMenuBar(const ImVec2& barMin, const ImVec2& barMax)
 			ImGui::Separator();
 
 			if (ImGui::MenuItem(ICON_MDI_EXIT_TO_APP "  Exit", "Alt+F4"))
-				Window::RequestClose();
+				RequestEditorClose();
 
 			ImGui::EndMenu();
 
@@ -8016,50 +8277,105 @@ void EditorLayer::SaveAssemblyAs()
 	}
 }
 
-void EditorLayer::DrawUnsavedAssemblyPopup()
+bool EditorLayer::IsDocumentDirty() const
 {
-	if (mOpenUnsavedAssemblyPopup)
+	return mEditingAssembly ? mAssemblyDirty : mSceneDirty;
+}
+
+bool EditorLayer::ConfirmDocumentChange(std::function<void()> action)
+{
+	if (!IsDocumentDirty())
 	{
-		mOpenUnsavedAssemblyPopup = false;
-		ImGui::OpenPopup("Unsaved Assembly");
+		action();
+		return true;
 	}
 
-	if (!ImGui::BeginPopupModal("Unsaved Assembly", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+	mPendingDocumentAction = std::move(action);
+	mOpenUnsavedDocumentPopup = true;
+	return false;
+}
+
+void EditorLayer::RequestEditorClose()
+{
+	if (mEditingAssembly && !IsDocumentDirty() && mAssemblyNavigation)
+	{
+		if (ReturnFromAssembly())
+			RequestEditorClose();
+		return;
+	}
+
+	if (mEditingAssembly && mAssemblyNavigation)
+	{
+		ConfirmDocumentChange([this]
+		{
+			if (ReturnFromAssembly())
+				RequestEditorClose();
+		});
+		return;
+	}
+
+	ConfirmDocumentChange([] { Window::RequestClose(); });
+}
+
+void EditorLayer::DrawUnsavedDocumentPopup()
+{
+	if (mOpenUnsavedDocumentPopup)
+	{
+		mOpenUnsavedDocumentPopup = false;
+		ImGui::OpenPopup("Unsaved Changes");
+	}
+
+	if (!ImGui::BeginPopupModal("Unsaved Changes", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
 		return;
 
 	const std::string name = mScenePath.empty()
-		? std::string("this Assembly")
+		? std::string(mEditingAssembly ? "Untitled Assembly" : "Untitled Scene")
 		: std::filesystem::path(mScenePath).stem().string();
 
-	ImGui::Text("Save changes to %s before returning?", name.c_str());
-	ImGui::TextDisabled("Linked instances change only after the Assembly is saved.");
+	ImGui::Text("Save changes to %s?", name.c_str());
+	ImGui::TextDisabled(mEditingAssembly
+		? "Linked instances update only after the Assembly is saved."
+		: "Your scene changes will be lost if you discard them.");
 	ImGui::Spacing();
 
-	if (ImGui::Button("Save and Return", ImVec2(136.0f, 0.0f)))
+	if (ImGui::Button("Save", ImVec2(96.0f, 0.0f)))
 	{
-		if (SaveAssembly())
+		SaveScene();
+
+		if (!IsDocumentDirty())
 		{
+			std::function<void()> action = std::move(mPendingDocumentAction);
 			ImGui::CloseCurrentPopup();
-			ReturnFromAssembly();
+			if (action)
+				action();
 		}
 	}
 
 	ImGui::SameLine();
 	if (ImGui::Button("Discard", ImVec2(96.0f, 0.0f)))
 	{
-		mAssemblyDirty = false;
+		if (mEditingAssembly)
+			mAssemblyDirty = false;
+		else
+			mSceneDirty = false;
+
+		std::function<void()> action = std::move(mPendingDocumentAction);
 		ImGui::CloseCurrentPopup();
-		ReturnFromAssembly();
+		if (action)
+			action();
 	}
 
 	ImGui::SameLine();
 	if (ImGui::Button("Cancel", ImVec2(96.0f, 0.0f)) || ImGui::IsKeyPressed(ImGuiKey_Escape))
+	{
+		mPendingDocumentAction = {};
 		ImGui::CloseCurrentPopup();
+	}
 
 	ImGui::EndPopup();
 }
 
-void EditorLayer::CreateAssembly(const Reference<Entity>& entity)
+void EditorLayer::CreateAssembly(const Reference<Entity>& entity, bool widget)
 {
 	if (mPlaying || mEditingAssembly)
 		return;
@@ -8093,6 +8409,9 @@ void EditorLayer::CreateAssembly(const Reference<Entity>& entity)
 	{
 		definition = MakeReference<Entity>();
 		definition->SetName(absolute.stem().string());
+
+		if (widget)
+			definition->AddComponent<WidgetAnchor>();
 	}
 
 	if (!AssemblySerializer::Serialize(definition, absolute.string()))
@@ -8675,12 +8994,6 @@ void EditorLayer::BrowseForProject()
 
 void EditorLayer::OpenProject(const std::filesystem::path& folder)
 {
-	if (mEditingAssembly && mAssemblyDirty)
-	{
-		mOpenUnsavedAssemblyPopup = true;
-		return;
-	}
-
 	if (!IsProjectFolder(folder))
 	{
 		Log::Console(LogLevel::Error, LION_FORMAT_TEXT("[Editor] '{}' is not a Lion project (no Assets folder).", folder.generic_string()));
@@ -8694,11 +9007,27 @@ void EditorLayer::OpenProject(const std::filesystem::path& folder)
 	if (ActiveProjectDirectory().lexically_normal() == folder.lexically_normal())
 		return;
 
+	if (IsDocumentDirty())
+	{
+		ConfirmDocumentChange([this, folder] { OpenProject(folder); });
+		return;
+	}
+
+	if (mEditingAssembly)
+	{
+		if (!ReturnFromAssembly())
+			return;
+
+		OpenProject(folder);
+		return;
+	}
+
 	SetActiveProjectDirectory(folder);
 	LoadProjectInputMap();
 
 	// The Content Browser returns to the new project's root, and its listing is stale by definition.
 	mProjectPath.clear();
+	SetAssetSelection({});
 	mProjectDirty = true;
 
 	// The editor initialises on the project, the way an engine opens a game: what was open belonged to the
@@ -8799,7 +9128,7 @@ void EditorLayer::DrawProjectManagerPopup()
 	std::string openRequest;   // Applied after the loop, so the list is not switched out mid-draw.
 
 	if (mRecentProjects.empty())
-		ImGui::TextDisabled("  Nothing yet — open or create a project below.");
+		ImGui::TextDisabled("  Nothing yet. Open or create a project below.");
 
 	for (const std::string& path : mRecentProjects)
 	{

@@ -56,6 +56,11 @@ namespace Lion
         sInstance->mBackend->RequestClose();
     }
 
+    void Window::CancelClose()
+    {
+        sInstance->mBackend->CancelClose();
+    }
+
     void Window::SetBackgroundColor(float32 red, float32 green, float32 blue)
     {
         sInstance->mBackgroundColor = { red, green, blue };

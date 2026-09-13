@@ -62,6 +62,9 @@
 #include <Lion/Render/SpriteRenderer.h>
 #include <Lion/Render/Texture.h>
 
+// UI
+#include <Lion/UI/WidgetAnchor.h>
+
 // Signal
 #include <Lion/Signal/Event.h>
 #include <Lion/Signal/EventDispatcher.h>

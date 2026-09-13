@@ -1,6 +1,7 @@
 #pragma once
 
 #include <filesystem>
+#include <functional>
 #include <future>
 #include <optional>
 #include <unordered_map>
@@ -25,6 +26,7 @@ public:
 	void OnUpdate() override;
 	void OnRender() override;
 	void OnDetach() override;
+	void OnEvent(Lion::Event& event) override;
 
 private:
 	// Rebindable editor shortcuts. Each action holds a key plus modifier flags; the Shortcuts panel
@@ -132,6 +134,7 @@ private:
 	bool mConsoleShowInfo = true;
 
 	bool mConsoleCollapse = true;      // Unity's: identical lines become one line with a count.
+	bool mConsoleClearOnPlay = true;
 
 	// Console rendering: only the entries passing the filters are indexed here, and a list clipper
 	// draws just the visible slice, so a full history costs the same as a screenful. When collapsed, the
@@ -187,7 +190,8 @@ private:
 	bool mAssemblyDirty = false;                    // Authored hierarchy differs from the last explicit save.
 	std::string mPendingAssemblyPath;               // Opened after panels finish drawing; hierarchy iteration stays valid.
 	bool mPendingAssemblyReturn = false;             // Restored after panels finish drawing for the same reason.
-	bool mOpenUnsavedAssemblyPopup = false;          // Returning never discards or applies authored changes silently.
+	bool mOpenUnsavedDocumentPopup = false;
+	std::function<void()> mPendingDocumentAction;
 	std::string mPendingScenePath;                  // Loaded after the selected project's module is ready.
 	glm::vec2 mViewportSize{ 0.0f, 0.0f };
 	Lion::Vector mViewportMenuPosition;   // Where the mouse was when the viewport's context menu opened.
@@ -271,9 +275,10 @@ private:
 	std::string mRenamingAsset;                // Relative path of the entry being renamed in place.
 	char mAssetRenameBuffer[128] = {};
 	bool mAssetRenameFocus = false;
-	std::string mAssetToDelete;                // Relative path awaiting the confirmation modal.
+	std::vector<std::string> mAssetsToDelete;  // Relative paths awaiting the confirmation modal.
 	std::string mSelectedAsset;                // Relative path selected in the Content Browser.
-	std::string mAssetClipboard;               // Relative source path copied or cut in the Content Browser.
+	std::vector<std::string> mAssetSelection;
+	std::vector<std::string> mAssetClipboard;  // Relative source paths copied or cut in the Content Browser.
 	bool mAssetClipboardCut = false;
 	bool mShowAssetExtensions = false;         // Content Browser defaults to concise, extension-free labels.
 	bool mProjectFocused = false;               // Routes shared editing shortcuts to the Content Browser.
@@ -409,6 +414,10 @@ private:
 
 	void CreateAssetFolder();
 	void BeginRenameAsset(const std::string& assetPath);
+	void SetAssetSelection(const std::string& assetPath);
+	void AddToAssetSelection(const std::string& assetPath);
+	void SelectAssetRangeTo(const std::string& assetPath);
+	bool IsAssetSelected(const std::string& assetPath) const;
 	void CopyAsset(bool cut);
 	void PasteAsset();
 	void DuplicateAsset();
@@ -475,8 +484,12 @@ private:
 	bool ReturnFromAssembly();
 	bool SaveAssembly();
 	void SaveAssemblyAs();
-	void DrawUnsavedAssemblyPopup();
-	void CreateAssembly(const Lion::Reference<Lion::Entity>& entity = nullptr);
+	void DrawUnsavedDocumentPopup();
+	bool ConfirmDocumentChange(std::function<void()> action);
+	bool IsDocumentDirty() const;
+	void RequestEditorClose();
+	bool OnWindowClose(const Lion::EventWindowClose& event);
+	void CreateAssembly(const Lion::Reference<Lion::Entity>& entity = nullptr, bool widget = false);
 	Lion::Reference<Lion::Entity> InstantiateAssembly(const std::string& assetPath,
 		Lion::Entity* parent = nullptr, const Lion::Vector* position = nullptr);
 	void ResetAssemblyTracking();

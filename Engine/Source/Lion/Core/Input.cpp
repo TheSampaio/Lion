@@ -12,8 +12,9 @@
 
 namespace Lion
 {
-    Input* Input::sInstance = nullptr;
+	Input* Input::sInstance = nullptr;
 	bool Input::sControlKeys[GLFW_KEY_LAST + 1] = { false };
+	bool Input::sAnyKeyControl = false;
 	std::vector<InputAction> Input::sActions;
 	std::unordered_map<std::string, float32> Input::sActionStrengths;
 	std::unordered_map<std::string, float32> Input::sPreviousActionStrengths;
@@ -53,19 +54,41 @@ namespace Lion
         sInstance = nullptr;
     }
 
-    bool Input::GetKeyPress(KeyCode keyCode)
-    {
-        return Window::IsKeyPressed(static_cast<int32>(keyCode));
-    }
+	bool Input::GetKeyPress(KeyCode keyCode)
+	{
+		if (keyCode == KeyCode::AnyKey)
+			return IsAnyKeyPressed();
 
-    bool Input::GetKeyRelease(KeyCode keyCode)
-    {
-        return Window::IsKeyReleased(static_cast<int32>(keyCode));
-    }
+		return Window::IsKeyPressed(static_cast<int32>(keyCode));
+	}
 
-    bool Input::GetKeyTap(KeyCode keyCode)
-    {
-        const int32 keyCodeId = static_cast<int32>(keyCode);
+	bool Input::GetKeyRelease(KeyCode keyCode)
+	{
+		if (keyCode == KeyCode::AnyKey)
+			return !IsAnyKeyPressed();
+
+		return Window::IsKeyReleased(static_cast<int32>(keyCode));
+	}
+
+	bool Input::GetKeyTap(KeyCode keyCode)
+	{
+		if (keyCode == KeyCode::AnyKey)
+		{
+			const bool pressed = IsAnyKeyPressed();
+
+			if (pressed)
+				sAnyKeyControl = true;
+
+			if (!pressed && sAnyKeyControl)
+			{
+				sAnyKeyControl = false;
+				return true;
+			}
+
+			return false;
+		}
+
+		const int32 keyCodeId = static_cast<int32>(keyCode);
 
 		if (keyCodeId < 0 || keyCodeId > GLFW_KEY_LAST)
 			return false;
@@ -79,8 +102,31 @@ namespace Lion
             return true;
         }
 
-        return false;
-    }
+		return false;
+	}
+
+	bool Input::IsAnyKeyPressed()
+	{
+		for (int32 key = GLFW_KEY_SPACE; key <= GLFW_KEY_LAST; ++key)
+			if (Window::IsKeyPressed(key))
+				return true;
+
+		for (int32 button = GLFW_MOUSE_BUTTON_1; button <= GLFW_MOUSE_BUTTON_LAST; ++button)
+			if (Window::IsMouseButtonPressed(button))
+				return true;
+
+		for (int32 gamepad = 0; gamepad <= GLFW_JOYSTICK_LAST; ++gamepad)
+		{
+			if (!Window::IsGamepadConnected(gamepad))
+				continue;
+
+			for (int32 button = GLFW_GAMEPAD_BUTTON_A; button <= GLFW_GAMEPAD_BUTTON_LAST; ++button)
+				if (Window::IsGamepadButtonPressed(gamepad, button))
+					return true;
+		}
+
+		return false;
+	}
 
 	bool Input::GetMouseButtonPress(int32 button)
 	{

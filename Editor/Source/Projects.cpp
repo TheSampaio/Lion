@@ -20,7 +20,7 @@ namespace Projects
 		// name. It is what the walk below recognises the root by.
 		constexpr const Lion::char8* kGameFolder = "Sandbox";
 		constexpr const Lion::char8* kDefaultScene = "Assets/Scenes/Main.lnscene";
-		constexpr const Lion::char8* kBuiltInDefaultScene = "Assets/Scenes/Level01.lnscene";
+		constexpr const Lion::char8* kBuiltInDefaultScene = "Assets/Scenes/MainMenu.lnscene";
 
 		struct ProjectMarker
 		{

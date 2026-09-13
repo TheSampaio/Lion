@@ -43,6 +43,7 @@ namespace Lion
         Renderer* self = sInstance;
 
         self->mShader = Shader::Create("Shaders/Lit.lnshader");
+        self->mWireframeShader = Shader::Create("Shaders/Wireframe.lnshader");
 
         // Dynamic vertex buffer streamed once per batch, described by the sprite vertex layout.
         self->mVertexArray = VertexArray::Create();
@@ -91,17 +92,25 @@ namespace Lion
         RenderCommand::Clear();
     }
 
+    void Renderer::SetWireframe(bool enabled)
+    {
+        Renderer* self = sInstance;
+        self->mWireframe = enabled;
+        RenderCommand::SetWireframe(enabled);
+    }
+
     void Renderer::RenderBegin(const Reference<Camera>& camera)
     {
         Renderer* self = sInstance;
 
-        self->mShader->Bind();
+        const Reference<Shader>& shader = self->mWireframe ? self->mWireframeShader : self->mShader;
+        shader->Bind();
         self->mVertexArray->Bind();
 
         camera->OnUsage();
 
-        self->mShader->SetMat4("uView", camera->GetViewMatrix());
-        self->mShader->SetMat4("uProjection", camera->GetProjectionMatrix());
+        shader->SetMat4("uView", camera->GetViewMatrix());
+        shader->SetMat4("uProjection", camera->GetProjectionMatrix());
     }
 
     const RenderStats& Renderer::GetStats()
@@ -179,12 +188,14 @@ namespace Lion
             for (int32 i = 0; i < static_cast<int32>(maxTextureCount); ++i)
                 samplers[i] = i;
 
-            self->mShader->SetIntArray("uDiffuseTextureArray", samplers, static_cast<uint32>(maxTextureCount));
+            if (!self->mWireframe)
+                self->mShader->SetIntArray("uDiffuseTextureArray", samplers, static_cast<uint32>(maxTextureCount));
         }
 
         // Bind each used texture to the unit matching its slot index.
-        for (uint32 slot = 1; slot < textureSlots.size(); ++slot)
-            textureSlots[slot]->Bind(slot);
+        if (!self->mWireframe)
+            for (uint32 slot = 1; slot < textureSlots.size(); ++slot)
+                textureSlots[slot]->Bind(slot);
 
         RenderCommand::DrawIndexed(indexCount);
 

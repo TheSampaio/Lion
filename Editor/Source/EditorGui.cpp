@@ -55,6 +55,18 @@ void EditorGui::DrawComboArrow(ImDrawList* draw, const ImVec2& minimum, const Im
 	ImGui::RenderArrow(draw, origin, color, open ? ImGuiDir_Up : ImGuiDir_Down, kDisclosureScale);
 }
 
+bool EditorGui::DrawTextEllipsis(const char* text, const ImVec2& minimum, const ImVec2& maximum,
+	unsigned int color)
+{
+	const ImVec2 size = ImGui::CalcTextSize(text);
+	const bool clipped = size.x > maximum.x - minimum.x;
+	ImGui::PushStyleColor(ImGuiCol_Text, color);
+	ImGui::RenderTextEllipsis(ImGui::GetWindowDrawList(), minimum, maximum, maximum.x,
+		text, nullptr, &size);
+	ImGui::PopStyleColor();
+	return clipped;
+}
+
 // The icon font, twice over: merged into the text so an icon can sit inline with a label, and standalone at
 // atlas resolution so a hand-drawn icon is sharp at 20, 24 or 32 pixels. One .ttf, two ImFonts.
 void LoadIconFont()

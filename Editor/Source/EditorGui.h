@@ -41,4 +41,8 @@ public:
 	// point up, at the same 0.70 scale used by Scene Hierarchy disclosure triangles.
 	static void DrawComboArrow(ImDrawList* draw, const ImVec2& minimum, const ImVec2& maximum,
 		bool open, unsigned int color);
+
+	// Draws a single line inside a bounded rectangle and replaces its tail with an ellipsis when needed.
+	static bool DrawTextEllipsis(const char* text, const ImVec2& minimum, const ImVec2& maximum,
+		unsigned int color);
 };

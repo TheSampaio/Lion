@@ -57,8 +57,11 @@ namespace Lion
 	};
 
     // Enumerates all keyboard keys
-    enum class KeyCode
-    {
+	enum class KeyCode
+	{
+		// Virtual key that represents any keyboard, mouse or gamepad button.
+		AnyKey = -2,
+
         // Letters keys
         A = GLFW_KEY_A,
         B = GLFW_KEY_B,
@@ -215,10 +218,12 @@ namespace Lion
         Input() = default;
 
 		static bool sControlKeys[GLFW_KEY_LAST + 1];
+		static bool sAnyKeyControl;
 		static std::vector<InputAction> sActions;
 		static std::unordered_map<std::string, float32> sActionStrengths;
 		static std::unordered_map<std::string, float32> sPreviousActionStrengths;
 
 		static float32 EvaluateAction(const InputAction& action);
+		static bool IsAnyKeyPressed();
 	};
 }

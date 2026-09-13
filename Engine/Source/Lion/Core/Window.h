@@ -91,6 +91,9 @@ namespace Lion
         // Requests the window to close (used by editor/menu "Exit" actions).
         static LION_API void RequestClose();
 
+        // Cancels a close request so an application can ask how to handle unsaved work.
+        static LION_API void CancelClose();
+
         friend Application;
         friend Graphics;
 
