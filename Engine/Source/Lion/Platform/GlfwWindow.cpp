@@ -691,6 +691,14 @@ namespace Lion
 		return glfwGetMouseButton(mWindow, button) == GLFW_PRESS;
 	}
 
+	Vector2 GlfwWindow::GetPointerPosition() const
+	{
+		double x = 0.0;
+		double y = 0.0;
+		glfwGetCursorPos(mWindow, &x, &y);
+		return Vector2(static_cast<float32>(x), static_cast<float32>(y));
+	}
+
 	bool GlfwWindow::IsGamepadConnected(int32 gamepad) const
 	{
 		const int32 joystick = GLFW_JOYSTICK_1 + gamepad;

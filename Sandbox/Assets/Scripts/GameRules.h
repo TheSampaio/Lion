@@ -38,8 +38,8 @@ private:
 	Lion::TextRenderer* mAttemptsText = nullptr;
 	Lion::Vector2 mCameraBaseOffset;
 	Lion::float32 mLoseHeight = -310.0f;
-	Lion::float32 mShakeDuration = 0.09f;
-	Lion::float32 mShakeStrength = 2.0f;
+	Lion::float32 mShakeDuration = 0.07f;
+	Lion::float32 mShakeStrength = 1.0f;
 	Lion::float32 mShakeRemaining = 0.0f;
 	Lion::int32 mShakeFrame = 0;
 	Lion::int32 mLevel = 0;

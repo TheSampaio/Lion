@@ -65,6 +65,7 @@
 #include <Lion/Render/TextRenderer.h>
 
 // UI
+#include <Lion/UI/Button.h>
 #include <Lion/UI/WidgetAnchor.h>
 
 // Signal

@@ -116,6 +116,31 @@ function New-AnchorComponent([float]$anchorX, [float]$anchorY, [float]$offsetX =
 	}
 }
 
+function New-ButtonComponent([float]$width = 360, [float]$height = 56)
+{
+	return [ordered]@{
+		Background = 'Sprites/Brickout/tile-5.png'
+		'Size.x' = $width
+		'Size.y' = $height
+		'Size.z' = 0
+		'Normal Color.x' = 0.48
+		'Normal Color.y' = 0.48
+		'Normal Color.z' = 0.48
+		'Selected Color.x' = 1
+		'Selected Color.y' = 1
+		'Selected Color.z' = 1
+		'Hovered Color.x' = 0.82
+		'Hovered Color.y' = 0.82
+		'Hovered Color.z' = 0.82
+		'Pressed Color.x' = 0.65
+		'Pressed Color.y' = 0.65
+		'Pressed Color.z' = 0.65
+		Order = 90
+		Interactable = $true
+		type = 'Button'
+	}
+}
+
 function New-TextEntity([string]$name, [string]$text, [float]$size, [float]$anchorX,
 	[float]$anchorY, [float]$offsetX, [float]$offsetY, [int]$parent, [bool]$visible = $true)
 {
@@ -137,6 +162,21 @@ function New-TextEntity([string]$name, [string]$text, [float]$size, [float]$anch
 	return $entity
 }
 
+function New-ButtonEntity([string]$name, [string]$label, [float]$anchorX, [float]$anchorY,
+	[float]$offsetX, [float]$offsetY, [int]$parent, [float]$width = 360, [float]$height = 56)
+{
+	return [ordered]@{
+		components = @(
+			(New-TextComponent $label 28 100)
+			(New-AnchorComponent $anchorX $anchorY $offsetX $offsetY)
+			(New-ButtonComponent $width $height)
+		)
+		name = $name
+		parent = $parent
+		transform = New-Transform
+	}
+}
+
 function New-AssemblyInstance([string]$path, [int]$parent = -1)
 {
 	return [ordered]@{
@@ -153,8 +193,8 @@ $gameRulesAssembly = [ordered]@{
 			components = @(
 				[ordered]@{
 					'Lose Height' = -310
-					'Shake Duration' = 0.09
-					'Shake Strength' = 2.0
+					'Shake Duration' = 0.07
+					'Shake Strength' = 1.0
 					type = 'GameRules'
 				}
 			)
@@ -209,8 +249,20 @@ $mainMenuAssembly = [ordered]@{
 		$background
 		(New-TextEntity 'Menu Title' 'BRICKOUT' 72 0.5 0.5 0 190 0)
 		(New-TextEntity 'Menu Prompt' 'PRESS ANY KEY TO START' 28 0.5 0.5 0 -100 0)
-		(New-TextEntity 'Menu Options' "> PLAY <`n  CREDITS  `n  SETTINGS  `n  QUIT  " 34 0.5 0.5 0 20 0 $false)
-		(New-TextEntity 'Menu Detail' 'CREDITS' 24 0.5 0.5 0 40 0 $false)
+		[ordered]@{
+			components = @()
+			name = 'Menu Options'
+			parent = 0
+			transform = New-Transform
+			visible = $false
+		}
+		(New-ButtonEntity 'Play Button' 'PLAY' 0.5 0.5 0 70 4)
+		(New-ButtonEntity 'Credits Button' 'CREDITS' 0.5 0.5 0 0 4)
+		(New-ButtonEntity 'Settings Button' 'SETTINGS' 0.5 0.5 0 -70 4)
+		(New-ButtonEntity 'Quit Button' 'QUIT' 0.5 0.5 0 -140 4)
+		(New-TextEntity 'Menu Detail' 'CREDITS' 28 0.5 0.5 0 80 0 $false)
+		(New-ButtonEntity 'Sound Button' 'SOUND ON' 0.5 0.5 0 -20 9)
+		(New-ButtonEntity 'Back Button' 'BACK' 0.5 0.5 0 -110 9)
 	)
 	root = 0
 }
@@ -234,7 +286,8 @@ $endScreenAssembly = [ordered]@{
 		$endBackground
 		(New-TextEntity 'Result Title' 'YOU WIN!' 58 0.5 0.5 0 170 0)
 		(New-TextEntity 'Result Score' "TOTAL SCORE`n000000" 38 0.5 0.5 0 40 0)
-		(New-TextEntity 'Result Prompt' "ENTER: PLAY AGAIN`nESC: MAIN MENU" 24 0.5 0.5 0 -150 0)
+		(New-ButtonEntity 'Play Again Button' 'PLAY AGAIN' 0.5 0.5 0 -105 0)
+		(New-ButtonEntity 'Main Menu Button' 'MAIN MENU' 0.5 0.5 0 -180 0)
 	)
 	root = 0
 }

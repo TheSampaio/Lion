@@ -1,5 +1,7 @@
 #pragma once
 
+#include <Lion/Math/Vector2.h>
+
 namespace Lion
 {
 	class Event;
@@ -92,6 +94,7 @@ namespace Lion
 		virtual bool IsKeyPressed(int32 keyCode) const = 0;
 		virtual bool IsKeyReleased(int32 keyCode) const = 0;
 		virtual bool IsMouseButtonPressed(int32 button) const = 0;
+		virtual Vector2 GetPointerPosition() const = 0;
 		virtual bool IsGamepadConnected(int32 gamepad) const = 0;
 		virtual std::string GetGamepadName(int32 gamepad) const = 0;
 		virtual bool IsGamepadButtonPressed(int32 gamepad, int32 button) const = 0;

@@ -7,22 +7,48 @@ using namespace Lion;
 
 void MainMenu::OnAwake()
 {
+	Window::SetBackgroundColor(0.015f, 0.02f, 0.045f);
+}
+
+void MainMenu::Initialize()
+{
+	mInitialized = true;
 	const Reference<Scene> scene = GetOwner().GetScene();
 	const Reference<Entity> prompt = scene->FindEntity("Menu Prompt");
 	const Reference<Entity> options = scene->FindEntity("Menu Options");
 	const Reference<Entity> detail = scene->FindEntity("Menu Detail");
+	const Reference<Entity> soundButton = scene->FindEntity("Sound Button");
+	const Reference<Entity> backButton = scene->FindEntity("Back Button");
 	mPrompt = prompt.get();
 	mOptions = options.get();
 	mDetail = detail.get();
-	mOptionsText = mOptions ? mOptions->GetComponent<TextRenderer>() : nullptr;
+	mSoundButtonEntity = soundButton.get();
 	mDetailText = mDetail ? mDetail->GetComponent<TextRenderer>() : nullptr;
+	mSoundButtonText = mSoundButtonEntity ? mSoundButtonEntity->GetComponent<TextRenderer>() : nullptr;
+	mSoundButton = mSoundButtonEntity ? mSoundButtonEntity->GetComponent<Button>() : nullptr;
+	mBackButton = backButton ? backButton->GetComponent<Button>() : nullptr;
+
+	static const char8* buttonNames[] = { "Play Button", "Credits Button", "Settings Button", "Quit Button" };
+	for (int32 index = 0; index < static_cast<int32>(mMenuButtons.size()); ++index)
+	{
+		const Reference<Entity> button = scene->FindEntity(buttonNames[index]);
+		mMenuButtons[index] = button ? button->GetComponent<Button>() : nullptr;
+	}
+
 	mSoundEnabled = Audio::GetBusVolume(AudioBus::Master) > 0.0f;
-	Window::SetBackgroundColor(0.015f, 0.02f, 0.045f);
 	ShowState(State::Attract);
 }
 
 void MainMenu::OnUpdate()
 {
+	// Assembly roots Awake before their authored children are added to the scene. Resolve the complete UI
+	// on the first update, when every button is available.
+	if (!mInitialized)
+	{
+		Initialize();
+		return;
+	}
+
 	// Play is F5 in the editor. Requiring one completely released frame prevents that same F5 from
 	// becoming the title screen's AnyKey and skipping the menu before the player sees it.
 	if (!mInputArmed)
@@ -43,18 +69,43 @@ void MainMenu::OnUpdate()
 
 	if (mState == State::Credits || mState == State::Settings)
 	{
+		if ((mBackButton && mBackButton->WasClicked()) || Input::GetActionTap("menu_back"))
+		{
+			ShowState(State::Menu);
+			return;
+		}
+
 		if (mState == State::Settings
-			&& (Input::GetActionTap("menu_left") || Input::GetActionTap("menu_right")
+			&& ((mSoundButton && mSoundButton->WasClicked())
+				|| Input::GetActionTap("menu_left") || Input::GetActionTap("menu_right")
 				|| Input::GetActionTap("menu_confirm")))
 		{
 			mSoundEnabled = !mSoundEnabled;
 			Audio::SetBusVolume(AudioBus::Master, mSoundEnabled ? 1.0f : 0.0f);
 			ShowState(State::Settings);
 		}
-		else if (Input::GetActionTap("menu_back"))
-			ShowState(State::Menu);
 
 		return;
+	}
+
+	for (int32 index = 0; index < static_cast<int32>(mMenuButtons.size()); ++index)
+	{
+		Button* button = mMenuButtons[index];
+
+		if (!button || !button->IsHovered())
+			continue;
+
+		if (mSelection != index)
+		{
+			mSelection = index;
+			RefreshMenu();
+		}
+
+		if (button->WasClicked())
+		{
+			ActivateSelection();
+			return;
+		}
 	}
 
 	if (Input::GetActionTap("menu_up"))
@@ -76,41 +127,43 @@ void MainMenu::ShowState(State state)
 	mState = state;
 
 	if (mPrompt)
+	{
 		mPrompt->SetVisible(state == State::Attract);
+		mPrompt->SetEnabled(state == State::Attract);
+	}
 	if (mOptions)
+	{
 		mOptions->SetVisible(state == State::Menu);
+		mOptions->SetEnabled(state == State::Menu);
+	}
 	if (mDetail)
-		mDetail->SetVisible(state == State::Credits || state == State::Settings);
+	{
+		const bool showDetail = state == State::Credits || state == State::Settings;
+		mDetail->SetVisible(showDetail);
+		mDetail->SetEnabled(showDetail);
+	}
+	if (mSoundButtonEntity)
+	{
+		mSoundButtonEntity->SetVisible(state == State::Settings);
+		mSoundButtonEntity->SetEnabled(state == State::Settings);
+	}
 
 	if (state == State::Menu)
 		RefreshMenu();
 	else if (state == State::Credits && mDetailText)
-		mDetailText->SetText("CREDITS\n\nBRICKOUT\nBUILT WITH LION ENGINE\n\nPRESS ESC TO RETURN");
+		mDetailText->SetText("CREDITS\n\nBRICKOUT\nBUILT WITH LION ENGINE");
 	else if (state == State::Settings && mDetailText)
-		mDetailText->SetText(LION_FORMAT_TEXT(
-			"SETTINGS\n\nSOUND: {}\n\nLEFT OR RIGHT TO CHANGE\nPRESS ESC TO RETURN",
-			mSoundEnabled ? "ON" : "OFF"));
+		mDetailText->SetText("SETTINGS");
+
+	if (state == State::Settings && mSoundButtonText)
+		mSoundButtonText->SetText(mSoundEnabled ? "SOUND ON" : "SOUND OFF");
 }
 
 void MainMenu::RefreshMenu()
 {
-	if (!mOptionsText)
-		return;
-
-	static const char8* labels[] = { "PLAY", "CREDITS", "SETTINGS", "QUIT" };
-	std::string text;
-
-	for (int32 index = 0; index < 4; ++index)
-	{
-		if (index > 0)
-			text += '\n';
-
-		text += index == mSelection
-			? LION_FORMAT_TEXT("> {} <", labels[index])
-			: LION_FORMAT_TEXT("  {}  ", labels[index]);
-	}
-
-	mOptionsText->SetText(text);
+	for (int32 index = 0; index < static_cast<int32>(mMenuButtons.size()); ++index)
+		if (mMenuButtons[index])
+			mMenuButtons[index]->SetSelected(index == mSelection);
 }
 
 void MainMenu::ActivateSelection()

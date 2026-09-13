@@ -15,6 +15,8 @@ namespace Lion
 	Input* Input::sInstance = nullptr;
 	bool Input::sControlKeys[GLFW_KEY_LAST + 1] = { false };
 	bool Input::sAnyKeyControl = false;
+	Vector2 Input::sPointerViewportPosition;
+	Size Input::sPointerViewportSize;
 	std::vector<InputAction> Input::sActions;
 	std::unordered_map<std::string, float32> Input::sActionStrengths;
 	std::unordered_map<std::string, float32> Input::sPreviousActionStrengths;
@@ -131,6 +133,32 @@ namespace Lion
 	bool Input::GetMouseButtonPress(int32 button)
 	{
 		return Window::IsMouseButtonPressed(button);
+	}
+
+	Vector2 Input::GetPointerPosition()
+	{
+		const Vector2 pointer = Window::GetPointerPosition();
+		const Size windowSize = Window::GetSize();
+		const float32 viewportWidth = sPointerViewportSize.width > 0.0f
+			? sPointerViewportSize.width : windowSize.width;
+		const float32 viewportHeight = sPointerViewportSize.height > 0.0f
+			? sPointerViewportSize.height : windowSize.height;
+
+		if (viewportWidth <= 0.0f || viewportHeight <= 0.0f)
+			return Vector2();
+
+		const float32 x = (pointer.x - sPointerViewportPosition.x) / viewportWidth;
+		const float32 y = (pointer.y - sPointerViewportPosition.y) / viewportHeight;
+		return Vector2(
+			(x - 0.5f) * static_cast<float32>(Window::kDefaultViewportWidth),
+			(0.5f - y) * static_cast<float32>(Window::kDefaultViewportHeight));
+	}
+
+	void Input::SetPointerViewport(const Vector2& position, const Size& size)
+	{
+		sPointerViewportPosition = position;
+		sPointerViewportSize.width = size.width;
+		sPointerViewportSize.height = size.height;
 	}
 
 	bool Input::IsGamepadConnected(int32 gamepad)

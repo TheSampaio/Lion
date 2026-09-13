@@ -17,7 +17,11 @@ void EndScreen::InitializeForScene()
 	const Reference<Scene> scene = GetOwner().GetScene();
 	const Reference<Entity> titleEntity = scene->FindEntity("Result Title");
 	const Reference<Entity> scoreEntity = scene->FindEntity("Result Score");
+	const Reference<Entity> playAgainEntity = scene->FindEntity("Play Again Button");
+	const Reference<Entity> mainMenuEntity = scene->FindEntity("Main Menu Button");
 	const bool victory = SceneManager::GetActivePath().find("Victory") != std::string::npos;
+	mPlayAgainButton = playAgainEntity ? playAgainEntity->GetComponent<Button>() : nullptr;
+	mMainMenuButton = mainMenuEntity ? mainMenuEntity->GetComponent<Button>() : nullptr;
 
 	if (TextRenderer* title = titleEntity ? titleEntity->GetComponent<TextRenderer>() : nullptr)
 		title->SetText(victory ? "YOU WIN!" : "GAME OVER");
@@ -44,9 +48,9 @@ void EndScreen::OnUpdate()
 		return;
 	}
 
-	if (Input::GetActionTap("menu_confirm"))
+	if ((mPlayAgainButton && mPlayAgainButton->WasClicked()) || Input::GetActionTap("menu_confirm"))
 		GameRules::StartNewGame();
-	else if (Input::GetActionTap("menu_back"))
+	else if ((mMainMenuButton && mMainMenuButton->WasClicked()) || Input::GetActionTap("menu_back"))
 		SceneManager::LoadScene("Scenes/MainMenu.lnscene");
 }
 

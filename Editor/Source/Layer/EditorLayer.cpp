@@ -1461,7 +1461,7 @@ namespace
 	// construction arguments (a collider sizes itself to the sprite). Everything else in the registry
 	// comes from the game module and is added generically, by name.
 	constexpr const char8* kBuiltInComponents[] = {
-		"SpriteRenderer", "TextRenderer", "Camera2D", "AudioPlayer", "RigidBody2D", "BoxCollider2D", "CircleCollider2D",
+		"SpriteRenderer", "TextRenderer", "Button", "Camera2D", "AudioPlayer", "RigidBody2D", "BoxCollider2D", "CircleCollider2D",
 		"WidgetAnchor" };
 
 	bool IsBuiltInComponent(const std::string& name)
@@ -4451,6 +4451,9 @@ void EditorLayer::DrawViewport()
 	const ImVec2 imageMin = ImGui::GetItemRectMin();
 	const ImVec2 imageSize = ImGui::GetItemRectSize();
 	const bool imageHovered = ImGui::IsItemHovered();
+	Input::SetPointerViewport(
+		Vector2(imageMin.x, imageMin.y),
+		Size(imageSize.x, imageSize.y));
 
 	// An Assembly dragged from the Content Browser becomes a linked instance at the world point under the
 	// cursor. The definition remains in its asset; only this placement belongs to the open scene.
@@ -6633,6 +6636,14 @@ void EditorLayer::DrawProperties()
 				text->Reflect(reflector);
 			}
 		}
+		else if (Button* button = dynamic_cast<Button*>(component))
+		{
+			if (DrawComponentHeader(ICON_MDI_BUTTON_CURSOR, "Button", i, remove, dragFrom, dragTo))
+			{
+				InspectorReflector reflector(*this, button->GetTypeName());
+				button->Reflect(reflector);
+			}
+		}
 		else if (Camera2D* camera = dynamic_cast<Camera2D*>(component))
 		{
 			if (DrawComponentHeader(ICON_MDI_VIDEO, "Camera 2D", i, remove, dragFrom, dragTo))
@@ -6891,6 +6902,15 @@ void EditorLayer::DrawProperties()
 				if (!entity->IsFolder() && !IsLinkedAssemblyEntity(entity.get())
 					&& !entity->HasComponent<TextRenderer>())
 					entity->AddComponent<TextRenderer>();
+		}
+
+		if (lacksBuiltIn.operator()<Button>() && ImGui::MenuItem("Button"))
+		{
+			RecordSnapshot();
+			for (const auto& entity : mSelection)
+				if (!entity->IsFolder() && !IsLinkedAssemblyEntity(entity.get())
+					&& !entity->HasComponent<Button>())
+					entity->AddComponent<Button>();
 		}
 
 		if (lacksBuiltIn.operator()<WidgetAnchor>() && ImGui::MenuItem("Widget Anchor"))

@@ -1,5 +1,8 @@
 #pragma once
 
+#include <Lion/Math/Vector2.h>
+#include <Lion/Type/Size.h>
+
 namespace Lion
 {
 	class Application;
@@ -185,6 +188,11 @@ namespace Lion
         static LION_API bool GetKeyTap(KeyCode keyCode);
 
 		static LION_API bool GetMouseButtonPress(int32 button);
+
+		// Pointer position in the game's 1280x720 logical frame, centred at the origin with Y pointing up.
+		// A host such as the editor can identify the rectangle where that frame is displayed.
+		static LION_API Vector2 GetPointerPosition();
+		static LION_API void SetPointerViewport(const Vector2& position, const Size& size);
 		static LION_API bool IsGamepadConnected(int32 gamepad = 0);
 		static LION_API std::string GetGamepadName(int32 gamepad = 0);
 		static LION_API bool GetGamepadButtonPress(GamepadButton button, int32 gamepad = 0);
@@ -219,6 +227,8 @@ namespace Lion
 
 		static bool sControlKeys[GLFW_KEY_LAST + 1];
 		static bool sAnyKeyControl;
+		static Vector2 sPointerViewportPosition;
+		static Size sPointerViewportSize;
 		static std::vector<InputAction> sActions;
 		static std::unordered_map<std::string, float32> sActionStrengths;
 		static std::unordered_map<std::string, float32> sPreviousActionStrengths;

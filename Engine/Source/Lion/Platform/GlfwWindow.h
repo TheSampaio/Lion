@@ -36,6 +36,7 @@ namespace Lion
 		bool IsKeyPressed(int32 keyCode) const override;
 		bool IsKeyReleased(int32 keyCode) const override;
 		bool IsMouseButtonPressed(int32 button) const override;
+		Vector2 GetPointerPosition() const override;
 		bool IsGamepadConnected(int32 gamepad) const override;
 		std::string GetGamepadName(int32 gamepad) const override;
 		bool IsGamepadButtonPressed(int32 gamepad, int32 button) const override;

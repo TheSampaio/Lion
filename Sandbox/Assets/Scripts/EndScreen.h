@@ -13,6 +13,8 @@ public:
 private:
 	bool mInitialized = false;
 	bool mInputArmed = false;
+	Lion::Button* mPlayAgainButton = nullptr;
+	Lion::Button* mMainMenuButton = nullptr;
 
 	void InitializeForScene();
 };
