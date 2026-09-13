@@ -311,33 +311,33 @@ namespace Lion
 			component->OnDestroy();
 	}
 
-	void Entity::UpdateBegin()
+	void Entity::UpdateBegin(bool paused)
 	{
 		if (!IsActive())
 			return;
 
 		for (const auto& component : mComponents)
-			if (component->IsEnabled())
+			if (component->IsEnabled() && (!paused || component->UpdatesWhenPaused()))
 				component->OnUpdateBegin();
 	}
 
-	void Entity::Update()
+	void Entity::Update(bool paused)
 	{
 		if (!IsActive())
 			return;
 
 		for (const auto& component : mComponents)
-			if (component->IsEnabled())
+			if (component->IsEnabled() && (!paused || component->UpdatesWhenPaused()))
 				component->OnUpdate();
 	}
 
-	void Entity::UpdateEnd()
+	void Entity::UpdateEnd(bool paused)
 	{
 		if (!IsActive())
 			return;
 
 		for (const auto& component : mComponents)
-			if (component->IsEnabled())
+			if (component->IsEnabled() && (!paused || component->UpdatesWhenPaused()))
 				component->OnUpdateEnd();
 	}
 

@@ -4,7 +4,9 @@ namespace Lion
 {
     class Application;
     class Camera;
+	class Framebuffer;
     class Sprite;
+	class PostProcessingComponent;
 
     class Shader;
     class Texture;
@@ -50,6 +52,11 @@ namespace Lion
         // Ends a batch: builds geometry, binds textures and flushes a single draw call.
         static LION_API void RenderEnd();
 
+		// Redirects the scene to an intermediate target and composites it through the camera's full-screen
+		// effect after RenderEnd. Returns false when there is no enabled effect to apply.
+		static LION_API bool BeginPostProcessing(PostProcessingComponent* component, uint32 width, uint32 height);
+		static LION_API void EndPostProcessing(const Reference<Framebuffer>& target = nullptr);
+
         friend Application;
         friend Sprite;
 
@@ -68,6 +75,14 @@ namespace Lion
         Reference<VertexArray> mVertexArray;
         Reference<VertexBuffer> mVertexBuffer;
         Reference<IndexBuffer> mIndexBuffer;
+		Reference<Framebuffer> mPostFramebuffer;
+		Reference<Shader> mPostShader;
+		Reference<Shader> mCustomPostShader;
+		Reference<VertexArray> mPostVertexArray;
+		Reference<VertexBuffer> mPostVertexBuffer;
+		Reference<IndexBuffer> mPostIndexBuffer;
+		PostProcessingComponent* mActivePostProcessing = nullptr;
+		std::string mCustomPostShaderPath;
 
         std::vector<SpriteInfo*> mSpriteBuffer;   // Sprites submitted this frame.
         std::vector<Texture*> mTextureSlots;      // Slot index -> texture, rebuilt every frame.

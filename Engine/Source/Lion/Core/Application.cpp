@@ -16,11 +16,15 @@
 #include <Lion/Signal/EventWindow.h>
 
 #include <Lion/Render/Graphics.h>
+#include <Lion/Render/CameraOrthographic.h>
 #include <Lion/Render/Renderer.h>
+#include <Lion/Render/Sprite.h>
+#include <Lion/Render/Texture.h>
 
 namespace Lion
 {
 	ApplicationKind Application::sKind = ApplicationKind::Game;
+	bool Application::sQuitRequested = false;
 
 	template<typename T>
 	static T TryInitialize(T result, const char8* name)
@@ -98,6 +102,21 @@ namespace Lion
 		return sKind == ApplicationKind::Editor;
 	}
 
+	void Application::RequestQuit()
+	{
+		if (IsEditor())
+			sQuitRequested = true;
+		else
+			Window::RequestClose();
+	}
+
+	bool Application::ConsumeQuitRequest()
+	{
+		const bool requested = sQuitRequested;
+		sQuitRequested = false;
+		return requested;
+	}
+
 	Application::~Application()
 	{
 		Clock::Delete();
@@ -146,6 +165,9 @@ namespace Lion
 		// Show window
 		Window::Show();
 
+		if (!IsEditor())
+			ShowStartupSplash();
+
 		do
 		{
 			Window::PollEvents();
@@ -159,6 +181,36 @@ namespace Lion
 		// release GPU/UI resources safely (the stack destructor only deletes them afterwards).
 		for (Layer* layer : *mStack)
 			layer->OnDetach();
+	}
+
+	void Application::ShowStartupSplash()
+	{
+		const Reference<Texture> texture = Asset::LoadTexture(
+			"Lion Engine Startup Splash", "Images/lion-engine-banner.png");
+
+		if (!texture)
+			return;
+
+		const Size windowSize = Window::GetSize();
+		Reference<CameraOrthographic> camera = MakeReference<CameraOrthographic>();
+		camera->OnResize(windowSize.width, windowSize.height);
+		Sprite logo(texture);
+		const float32 targetWidth = std::min(windowSize.width * 0.48f, 620.0f);
+		const float32 scale = targetWidth / std::max(logo.GetSize().width, 1.0f);
+		const auto started = std::chrono::steady_clock::now();
+		constexpr auto duration = std::chrono::milliseconds(900);
+
+		while (!Window::Close() && std::chrono::steady_clock::now() - started < duration)
+		{
+			Window::PollEvents();
+			Input::Update();
+			Clock::UpdateFrameTime();
+			Renderer::Clear(0.012f, 0.012f, 0.014f, 1.0f);
+			Renderer::RenderBegin(camera);
+			logo.Draw(Vector2(0.0f, 0.0f), Vector(), Vector(scale, scale, 1.0f));
+			Renderer::RenderEnd();
+			Graphics::SwapBuffers();
+		}
 	}
 
 	void Application::Frame()

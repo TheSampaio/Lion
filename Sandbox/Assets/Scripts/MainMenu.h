@@ -25,6 +25,7 @@ private:
 	Lion::Entity* mOptions = nullptr;
 	Lion::Entity* mDetail = nullptr;
 	Lion::Entity* mSoundButtonEntity = nullptr;
+	Lion::Entity* mCreditsLogo = nullptr;
 	Lion::TextRenderer* mDetailText = nullptr;
 	Lion::TextRenderer* mSoundButtonText = nullptr;
 	std::array<Lion::Button*, 4> mMenuButtons{};

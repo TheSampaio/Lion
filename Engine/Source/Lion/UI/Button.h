@@ -24,6 +24,7 @@ namespace Lion
 		LION_API void OnEnable() override;
 		LION_API void OnDisable() override;
 		LION_API void OnUpdateBegin() override;
+		bool UpdatesWhenPaused() const override { return true; }
 		LION_API void OnRender() override;
 		LION_API void Reflect(Reflector& reflector) override;
 

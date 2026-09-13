@@ -32,6 +32,7 @@ namespace Lion
 
 		// Native handle of the color texture, usable as an ImGui image id.
 		virtual uint32 GetColorAttachment() const = 0;
+		virtual void BindColorAttachment(uint32 slot) const = 0;
 
 		// Clears the entity-id attachment to the given value (typically -1). No-op without the attachment.
 		virtual void ClearEntityId(int32 value) = 0;

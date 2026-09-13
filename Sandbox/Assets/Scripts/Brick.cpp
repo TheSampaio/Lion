@@ -10,7 +10,7 @@ void Brick::OnCollision(Entity& other)
 	if (!GetOwner().IsEnabled())
 		return;
 
-	GameRules::RegisterBrickHit();
+	GameRules::RegisterBrickHit(GetOwner().GetWorldPosition());
 	GetOwner().SetVisible(false);
 	GetOwner().SetEnabled(false);
 }

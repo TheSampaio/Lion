@@ -19,10 +19,12 @@ void MainMenu::Initialize()
 	const Reference<Entity> detail = scene->FindEntity("Menu Detail");
 	const Reference<Entity> soundButton = scene->FindEntity("Sound Button");
 	const Reference<Entity> backButton = scene->FindEntity("Back Button");
+	const Reference<Entity> creditsLogo = scene->FindEntity("Credits Logo");
 	mPrompt = prompt.get();
 	mOptions = options.get();
 	mDetail = detail.get();
 	mSoundButtonEntity = soundButton.get();
+	mCreditsLogo = creditsLogo.get();
 	mDetailText = mDetail ? mDetail->GetComponent<TextRenderer>() : nullptr;
 	mSoundButtonText = mSoundButtonEntity ? mSoundButtonEntity->GetComponent<TextRenderer>() : nullptr;
 	mSoundButton = mSoundButtonEntity ? mSoundButtonEntity->GetComponent<Button>() : nullptr;
@@ -92,17 +94,12 @@ void MainMenu::OnUpdate()
 	{
 		Button* button = mMenuButtons[index];
 
-		if (!button || !button->IsHovered())
+		if (!button)
 			continue;
-
-		if (mSelection != index)
-		{
-			mSelection = index;
-			RefreshMenu();
-		}
 
 		if (button->WasClicked())
 		{
+			mSelection = index;
 			ActivateSelection();
 			return;
 		}
@@ -147,11 +144,16 @@ void MainMenu::ShowState(State state)
 		mSoundButtonEntity->SetVisible(state == State::Settings);
 		mSoundButtonEntity->SetEnabled(state == State::Settings);
 	}
+	if (mCreditsLogo)
+	{
+		mCreditsLogo->SetVisible(state == State::Credits);
+		mCreditsLogo->SetEnabled(state == State::Credits);
+	}
 
 	if (state == State::Menu)
 		RefreshMenu();
 	else if (state == State::Credits && mDetailText)
-		mDetailText->SetText("CREDITS\n\nBRICKOUT\nBUILT WITH LION ENGINE");
+		mDetailText->SetText("CREDITS\n\nKELLVYN SAMPAIO\nSAMPAIO GAMES STUDIO\nPOWERED BY LION ENGINE");
 	else if (state == State::Settings && mDetailText)
 		mDetailText->SetText("SETTINGS");
 
@@ -173,12 +175,7 @@ void MainMenu::ActivateSelection()
 		case 0: GameRules::StartNewGame(); break;
 		case 1: ShowState(State::Credits); break;
 		case 2: ShowState(State::Settings); break;
-		case 3:
-			if (Application::IsEditor())
-				Log::Console(LogLevel::Information, "[Game] Quit is available in the standalone player.");
-			else
-				Window::RequestClose();
-			break;
+		case 3: Application::RequestQuit(); break;
 	}
 }
 

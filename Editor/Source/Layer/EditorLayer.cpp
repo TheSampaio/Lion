@@ -189,6 +189,9 @@ void EditorLayer::OnUpdate()
 
 		mStepFrame = false;
 	}
+
+	if (mPlaying && Application::ConsumeQuitRequest())
+		StopPlay();
 }
 
 void EditorLayer::StepOneFrame()
@@ -298,6 +301,7 @@ void EditorLayer::StartPlay()
 
 	mPlaying = true;
 	mPaused = false;
+	mPlaySelectionMode = false;
 	Log::Console(LogLevel::Information, "[Editor] Play mode started.");
 }
 
@@ -325,6 +329,7 @@ void EditorLayer::StopPlay()
 
 	mPlaying = false;
 	mPaused = false;
+	mPlaySelectionMode = false;
 	Log::Console(LogLevel::Information, "[Editor] Play mode stopped.");
 }
 
@@ -545,6 +550,7 @@ void EditorLayer::RenderScene()
 	// Whose eye the scene is seen through: the game's own Camera2D while it runs, and the editor's view
 	// otherwise. One camera object either way — what changes is who tells it where to be.
 	const Camera2D* current = nullptr;
+	PostProcessingComponent* postProcessing = nullptr;
 
 	if (mPlaying)
 	{
@@ -566,6 +572,8 @@ void EditorLayer::RenderScene()
 		mCamera->SetPosition(glm::vec3(view.x, view.y, 0.0f));
 
 		mCamera->SetZoomLevel(current->GetZoomForViewportHeight(mCamera->GetViewportHeight()));
+		if (!mPlaySelectionMode)
+			postProcessing = current->GetOwner().GetComponent<PostProcessingComponent>();
 	}
 	else
 	{
@@ -577,11 +585,14 @@ void EditorLayer::RenderScene()
 	mFramebuffer->Bind();
 	Renderer::Clear(0.12f, 0.12f, 0.15f, 1.0f);
 	mFramebuffer->ClearEntityId(-1);  // Empty pixels map to "no entity".
+	const bool postProcessingActive = Renderer::BeginPostProcessing(postProcessing, targetWidth, targetHeight);
 
 	Renderer::SetWireframe(mViewportMode == ViewportMode::Wireframe);
 	Renderer::RenderBegin(mCamera);
 	mScene->OnRender();
 	Renderer::RenderEnd();
+	if (postProcessingActive)
+		Renderer::EndPostProcessing(mFramebuffer);
 	Renderer::SetWireframe(false);
 
 	mFramebuffer->Unbind();
@@ -1462,7 +1473,7 @@ namespace
 	// comes from the game module and is added generically, by name.
 	constexpr const char8* kBuiltInComponents[] = {
 		"SpriteRenderer", "TextRenderer", "Button", "Camera2D", "AudioPlayer", "RigidBody2D", "BoxCollider2D", "CircleCollider2D",
-		"WidgetAnchor" };
+		"WidgetAnchor", "ParticleComponent", "PostProcessingComponent" };
 
 	bool IsBuiltInComponent(const std::string& name)
 	{
@@ -2086,6 +2097,7 @@ namespace
 	// the simple shapes the engine will put there to build with are the engine's, all the way down, so
 	// what is inside it is as protected as the folder around it.
 	constexpr const char8* kEngineAssets[] = { "Shaders", "Shaders/Lit.lnshader", "Shaders/Wireframe.lnshader",
+		"Shaders/PostProcessing.lnshader",
 		"Sprites", "Sprites/Geometries" };
 	constexpr const char8* kSealedAssetFolders[] = { "Sprites/Geometries" };
 
@@ -3084,6 +3096,7 @@ void EditorLayer::DrawShortcutsTab()
 			{ ShortcutAction::ViewLit,         "Viewport",  "Lit shading" },
 			{ ShortcutAction::ViewUnlit,       "Viewport",  "Unlit shading" },
 			{ ShortcutAction::ViewWireframe,   "Viewport",  "Wireframe shading" },
+			{ ShortcutAction::TogglePlaySelection, "Play Mode", "Toggle entity selection while playing" },
 			{ ShortcutAction::ToggleColliders, "Viewport",  "Toggle collider hitboxes" },
 			{ ShortcutAction::Deselect,        "Editing", "Clear the selection" },
 			{ ShortcutAction::RenameEntity,    "Editing", "Rename selected item" },
@@ -3961,6 +3974,7 @@ void EditorLayer::ResetShortcutsToDefault()
 	set(ShortcutAction::ViewLit, ImGuiKey_F1);
 	set(ShortcutAction::ViewUnlit, ImGuiKey_F2);
 	set(ShortcutAction::ViewWireframe, ImGuiKey_F3);
+	set(ShortcutAction::TogglePlaySelection, ImGuiKey_F9);
 }
 
 void EditorLayer::SetSelection(const Reference<Entity>& entity)
@@ -4329,6 +4343,13 @@ void EditorLayer::HandleShortcuts()
 	if (mViewportFocused && IsShortcutPressed(ShortcutAction::ViewUnlit)) mViewportMode = ViewportMode::Unlit;
 	if (mViewportFocused && IsShortcutPressed(ShortcutAction::ViewWireframe)) mViewportMode = ViewportMode::Wireframe;
 	if (IsShortcutPressed(ShortcutAction::StepFrame)) StepOneFrame();
+	if (mPlaying && IsShortcutPressed(ShortcutAction::TogglePlaySelection))
+	{
+		mPlaySelectionMode = !mPlaySelectionMode;
+		Log::Console(LogLevel::Information, mPlaySelectionMode
+			? "[Editor] Play-mode entity selection enabled."
+			: "[Editor] Play-mode entity selection disabled.");
+	}
 	if (IsShortcutPressed(ShortcutAction::CompileModule)) CompileGameModule();
 	if (IsShortcutPressed(ShortcutAction::ReloadModule)) ReloadGameModule();
 
@@ -4617,7 +4638,7 @@ void EditorLayer::DrawViewport()
 
 	// Pixel-perfect click-to-select: read the entity id under the cursor from the id attachment.
 	// Skipped while over/using the gizmo or the overlay toolbar (those clicks belong to them).
-	if (imageHovered && !ImGui::IsAnyItemHovered() &&
+	if ((!mPlaying || mPlaySelectionMode) && imageHovered && !ImGui::IsAnyItemHovered() &&
 		ImGui::IsMouseClicked(ImGuiMouseButton_Left) && !ImGuizmo::IsOver() && !ImGuizmo::IsUsing())
 	{
 		const ImVec2 mouse = ImGui::GetMousePos();
@@ -6920,6 +6941,24 @@ void EditorLayer::DrawProperties()
 				if (!entity->IsFolder() && !IsLinkedAssemblyEntity(entity.get())
 					&& !entity->HasComponent<WidgetAnchor>())
 					entity->AddComponent<WidgetAnchor>();
+		}
+
+		if (lacksBuiltIn.operator()<ParticleComponent>() && ImGui::MenuItem("Particle Component"))
+		{
+			RecordSnapshot();
+			for (const auto& entity : mSelection)
+				if (!entity->IsFolder() && !IsLinkedAssemblyEntity(entity.get())
+					&& !entity->HasComponent<ParticleComponent>())
+					entity->AddComponent<ParticleComponent>();
+		}
+
+		if (lacksBuiltIn.operator()<PostProcessingComponent>() && ImGui::MenuItem("Post Processing Component"))
+		{
+			RecordSnapshot();
+			for (const auto& entity : mSelection)
+				if (!entity->IsFolder() && !IsLinkedAssemblyEntity(entity.get())
+					&& !entity->HasComponent<PostProcessingComponent>())
+					entity->AddComponent<PostProcessingComponent>();
 		}
 
 		if (lacksBuiltIn.operator()<AudioPlayer>() && ImGui::MenuItem("Audio Player"))

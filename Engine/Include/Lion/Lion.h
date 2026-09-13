@@ -58,6 +58,8 @@
 #include <Lion/Render/Camera2D.h>
 #include <Lion/Render/BitmapFont.h>
 #include <Lion/Render/Graphics.h>
+#include <Lion/Render/ParticleComponent.h>
+#include <Lion/Render/PostProcessingComponent.h>
 #include <Lion/Render/Renderer.h>
 #include <Lion/Render/Sprite.h>
 #include <Lion/Render/SpriteRenderer.h>

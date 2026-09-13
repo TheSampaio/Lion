@@ -119,19 +119,19 @@ function New-AnchorComponent([float]$anchorX, [float]$anchorY, [float]$offsetX =
 function New-ButtonComponent([float]$width = 360, [float]$height = 56)
 {
 	return [ordered]@{
-		Background = 'Sprites/Brickout/tile-5.png'
+		Background = 'Sprites/UI/button-panel.png'
 		'Size.x' = $width
 		'Size.y' = $height
 		'Size.z' = 0
-		'Normal Color.x' = 0.48
-		'Normal Color.y' = 0.48
-		'Normal Color.z' = 0.48
+		'Normal Color.x' = 0.86
+		'Normal Color.y' = 0.86
+		'Normal Color.z' = 0.86
 		'Selected Color.x' = 1
 		'Selected Color.y' = 1
 		'Selected Color.z' = 1
-		'Hovered Color.x' = 0.82
-		'Hovered Color.y' = 0.82
-		'Hovered Color.z' = 0.82
+		'Hovered Color.x' = 1
+		'Hovered Color.y' = 1
+		'Hovered Color.z' = 1
 		'Pressed Color.x' = 0.65
 		'Pressed Color.y' = 0.65
 		'Pressed Color.z' = 0.65
@@ -187,15 +187,85 @@ function New-AssemblyInstance([string]$path, [int]$parent = -1)
 	}
 }
 
+function New-SpriteEntity([string]$name, [string]$texture, [float]$anchorX, [float]$anchorY,
+	[float]$offsetX, [float]$offsetY, [float]$scaleX, [float]$scaleY, [int]$parent,
+	[int]$order = 100, [bool]$visible = $true)
+{
+	$entity = [ordered]@{
+		components = @(
+			[ordered]@{
+				flipX = $false
+				flipY = $false
+				order = $order
+				texture = $texture
+				type = 'SpriteRenderer'
+			}
+			(New-AnchorComponent $anchorX $anchorY $offsetX $offsetY)
+		)
+		name = $name
+		parent = $parent
+		transform = New-Transform 0 0 $scaleX $scaleY
+	}
+
+	if (!$visible)
+	{
+		$entity.visible = $false
+	}
+
+	return $entity
+}
+
+function New-PostProcessingComponent
+{
+	return [ordered]@{
+		Bloom = $true
+		'Bloom Strength' = 0.18
+		'Bloom Threshold' = 0.72
+		'Color Correction' = $true
+		Brightness = 0
+		Contrast = 1.04
+		Saturation = 1.08
+		Gamma = 1
+		'Tint.x' = 1
+		'Tint.y' = 1
+		'Tint.z' = 1
+		Vignette = $true
+		'Vignette Strength' = 0.14
+		'Chromatic Aberration' = $false
+		'Chromatic Aberration Amount' = 0.0015
+		'Custom Shader' = ''
+		type = 'PostProcessingComponent'
+	}
+}
+
 $gameRulesAssembly = [ordered]@{
 	entities = @(
 		[ordered]@{
 			components = @(
 				[ordered]@{
 					'Lose Height' = -310
-					'Shake Duration' = 0.07
-					'Shake Strength' = 1.0
+					'Shake Duration' = 0.06
+					'Shake Strength' = 0.72
 					type = 'GameRules'
+				}
+				[ordered]@{
+					Texture = 'Sprites/Brickout/particle.png'
+					'Max Particles' = 160
+					'Emission Rate' = 0
+					Lifetime = 0.28
+					Speed = 125
+					Direction = 90
+					Spread = 360
+					'Start Size' = 15
+					'End Size' = 2
+					'Start Color.x' = 1
+					'Start Color.y' = 1
+					'Start Color.z' = 1
+					'End Color.x' = 0.25
+					'End Color.y' = 0.75
+					'End Color.z' = 1
+					Order = 70
+					type = 'ParticleComponent'
 				}
 			)
 			name = 'Game Rules'
@@ -228,14 +298,14 @@ $background = [ordered]@{
 			flipX = $false
 			flipY = $false
 			order = -10
-			texture = 'Sprites/Brickout/background.jpg'
+			texture = 'Sprites/Brickout/background.png'
 			type = 'SpriteRenderer'
 		}
 		(New-AnchorComponent 0.5 0.5)
 	)
 	name = 'Background'
 	parent = 0
-	transform = New-Transform 0 0 0.667 0.667
+	transform = New-Transform 0 0 0.765 0.765
 }
 
 $mainMenuAssembly = [ordered]@{
@@ -260,9 +330,10 @@ $mainMenuAssembly = [ordered]@{
 		(New-ButtonEntity 'Credits Button' 'CREDITS' 0.5 0.5 0 0 4)
 		(New-ButtonEntity 'Settings Button' 'SETTINGS' 0.5 0.5 0 -70 4)
 		(New-ButtonEntity 'Quit Button' 'QUIT' 0.5 0.5 0 -140 4)
-		(New-TextEntity 'Menu Detail' 'CREDITS' 28 0.5 0.5 0 80 0 $false)
+		(New-TextEntity 'Menu Detail' 'CREDITS' 24 0.5 0.5 0 105 0 $false)
+		(New-SpriteEntity 'Credits Logo' 'Images/sampaio-games-logo.png' 0.5 0.5 0 -50 0.105 0.105 0 100 $false)
 		(New-ButtonEntity 'Sound Button' 'SOUND ON' 0.5 0.5 0 -20 9)
-		(New-ButtonEntity 'Back Button' 'BACK' 0.5 0.5 0 -110 9)
+		(New-ButtonEntity 'Back Button' 'BACK' 0.5 0.5 0 -190 9)
 	)
 	root = 0
 }
@@ -293,12 +364,65 @@ $endScreenAssembly = [ordered]@{
 }
 Write-SealedJson (Join-Path $assetRoot 'Assemblies\End Screen.lnassembly') $endScreenAssembly
 
+$pauseAssembly = [ordered]@{
+	entities = @(
+		[ordered]@{
+			components = @([ordered]@{ type = 'PauseMenu' })
+			name = 'Pause Menu'
+			parent = -1
+			transform = New-Transform
+		}
+		[ordered]@{
+			components = @()
+			name = 'Pause Overlay'
+			parent = 0
+			transform = New-Transform
+			visible = $false
+		}
+		[ordered]@{
+			components = @(
+				[ordered]@{
+					Background = 'Sprites/UI/button-panel.png'
+					'Size.x' = 1280
+					'Size.y' = 720
+					'Size.z' = 0
+					'Normal Color.x' = 0.12
+					'Normal Color.y' = 0.12
+					'Normal Color.z' = 0.14
+					'Selected Color.x' = 0.12
+					'Selected Color.y' = 0.12
+					'Selected Color.z' = 0.14
+					'Hovered Color.x' = 0.12
+					'Hovered Color.y' = 0.12
+					'Hovered Color.z' = 0.14
+					'Pressed Color.x' = 0.12
+					'Pressed Color.y' = 0.12
+					'Pressed Color.z' = 0.14
+					Order = 80
+					Interactable = $false
+					type = 'Button'
+				}
+				(New-AnchorComponent 0.5 0.5)
+			)
+			name = 'Pause Dim'
+			parent = 1
+			transform = New-Transform
+		}
+		(New-TextEntity 'Pause Title' 'PAUSE' 58 0.5 0.5 0 115 1)
+		(New-ButtonEntity 'Resume Button' 'RESUME' 0.5 0.5 0 10 1)
+		(New-ButtonEntity 'Pause Main Menu Button' 'MAIN MENU' 0.5 0.5 0 -70 1)
+	)
+	root = 0
+}
+Write-SealedJson (Join-Path $assetRoot 'Assemblies\Pause Menu.lnassembly') $pauseAssembly
+
 for ($level = 1; $level -le 5; $level++)
 {
 	$scenePath = Join-Path $assetRoot ("Scenes\Level{0:D2}.lnscene" -f $level)
 	$scene = Read-SealedJson $scenePath
 	$systemsIndex = -1
 	$hasHud = $false
+	$hasPauseMenu = $false
 
 	for ($index = 0; $index -lt $scene.entities.Count; $index++)
 	{
@@ -318,11 +442,26 @@ for ($level = 1; $level -le 5; $level++)
 		{
 			$hasHud = $true
 		}
+
+		if ($entity.assembly -eq 'Assemblies/Pause Menu.lnassembly')
+		{
+			$hasPauseMenu = $true
+		}
+
+		if ($entity.name -eq 'Camera' -and !($entity.components | Where-Object { $_.type -eq 'PostProcessingComponent' }))
+		{
+			$entity.components = @($entity.components) + @((New-PostProcessingComponent))
+		}
 	}
 
 	if (!$hasHud)
 	{
 		$scene.entities = @($scene.entities) + @((New-AssemblyInstance 'Assemblies/HUD.lnassembly' $systemsIndex))
+	}
+
+	if (!$hasPauseMenu)
+	{
+		$scene.entities = @($scene.entities) + @((New-AssemblyInstance 'Assemblies/Pause Menu.lnassembly' $systemsIndex))
 	}
 
 	Write-SealedJson $scenePath $scene
@@ -335,6 +474,14 @@ $hasGameRules = $mainMenuScene.entities | Where-Object { $_.assembly -eq 'Assemb
 if (!$hasGameRules)
 {
 	$mainMenuScene.entities = @($mainMenuScene.entities) + @((New-AssemblyInstance 'Assemblies/Game Rules.lnassembly'))
+}
+
+foreach ($entity in $mainMenuScene.entities)
+{
+	if ($entity.name -eq 'Camera' -and !($entity.components | Where-Object { $_.type -eq 'PostProcessingComponent' }))
+	{
+		$entity.components = @($entity.components) + @((New-PostProcessingComponent))
+	}
 }
 
 Write-SealedJson $mainMenuPath $mainMenuScene
@@ -361,6 +508,7 @@ function New-EndScene
 						type = 'Camera2D'
 						zoom = 1
 					}
+					(New-PostProcessingComponent)
 				)
 				name = 'Camera'
 				parent = -1

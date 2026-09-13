@@ -17,7 +17,7 @@ public:
 	void Reflect(Lion::Reflector& reflector) override;
 
 	static void StartNewGame();
-	static void RegisterBrickHit();
+	static void RegisterBrickHit(const Lion::Vector2& position);
 	static Lion::int32 GetScore() { return sScore; }
 	static Lion::int32 GetAttempts() { return sAttempts; }
 
@@ -34,12 +34,13 @@ private:
 	Ball* mBall = nullptr;
 	Paddle* mPaddle = nullptr;
 	Lion::Camera2D* mCamera = nullptr;
+	Lion::ParticleComponent* mImpactParticles = nullptr;
 	Lion::TextRenderer* mScoreText = nullptr;
 	Lion::TextRenderer* mAttemptsText = nullptr;
 	Lion::Vector2 mCameraBaseOffset;
 	Lion::float32 mLoseHeight = -310.0f;
-	Lion::float32 mShakeDuration = 0.07f;
-	Lion::float32 mShakeStrength = 1.0f;
+	Lion::float32 mShakeDuration = 0.06f;
+	Lion::float32 mShakeStrength = 0.72f;
 	Lion::float32 mShakeRemaining = 0.0f;
 	Lion::int32 mShakeFrame = 0;
 	Lion::int32 mLevel = 0;

@@ -29,6 +29,11 @@ namespace Lion
 		// this to keep development-only controls out of player runs as well as Shipping binaries.
 		static LION_API bool IsEditor();
 
+		// Requests the current game session to end. Standalone players close their window; editor hosts
+		// consume the request and stop Play mode without closing the editor itself.
+		static LION_API void RequestQuit();
+		static LION_API bool ConsumeQuitRequest();
+
 		LION_API void PushLayer(Layer* layer);
 		LION_API void PushOverlay(Layer* overlay);
 
@@ -39,10 +44,12 @@ namespace Lion
 		Scope<Stack> mStack;
 		bool mMinimized;
 		static ApplicationKind sKind;
+		static bool sQuitRequested;
 
 		LION_API void Run();
 
 		void Initialize();
+		void ShowStartupSplash();
 
 		// One turn of the loop: update, render, present.
 		//

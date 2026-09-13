@@ -79,6 +79,12 @@ namespace Lion
 		glClearBufferiv(GL_COLOR, 1, &value);  // Draw buffer 1 == COLOR_ATTACHMENT1.
 	}
 
+	void OpenGLFramebuffer::BindColorAttachment(uint32 slot) const
+	{
+		glActiveTexture(GL_TEXTURE0 + slot);
+		glBindTexture(GL_TEXTURE_2D, mColorAttachment);
+	}
+
 	int32 OpenGLFramebuffer::ReadEntityId(uint32 x, uint32 y)
 	{
 		if (!mEntityIdAttachment)

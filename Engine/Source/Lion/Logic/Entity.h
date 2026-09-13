@@ -189,9 +189,9 @@ namespace Lion
 		// each hands the call to every component attached.
 		void Awake();
 		void Destroy();
-		void UpdateBegin();
-		void Update();
-		void UpdateEnd();
+		void UpdateBegin(bool paused = false);
+		void Update(bool paused = false);
+		void UpdateEnd(bool paused = false);
 		void Render();
 		void Collide(Entity& other);
 	};

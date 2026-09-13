@@ -105,22 +105,23 @@ namespace Lion
         mEntities.splice(destination, mEntities, source);
     }
 
-    void Scene::OnUpdate(float32 deltaTime)
+    void Scene::OnUpdate(float32 deltaTime, bool paused)
     {
         if (deltaTime < 0.0f)
             deltaTime = Clock::GetDeltaTime();
 
         for (auto& entity : mEntities)
-            entity->UpdateBegin();
+            entity->UpdateBegin(paused);
 
         for (auto& entity : mEntities)
-            entity->Update();
+            entity->Update(paused);
 
         for (auto& entity : mEntities)
-            entity->UpdateEnd();
+            entity->UpdateEnd(paused);
 
         // Advance the simulation, then reflect the results on the entities and fire collisions.
-        mPhysicsWorld->Step(deltaTime);
+        if (!paused)
+            mPhysicsWorld->Step(deltaTime);
 
         FlushPendingRemoval();
     }

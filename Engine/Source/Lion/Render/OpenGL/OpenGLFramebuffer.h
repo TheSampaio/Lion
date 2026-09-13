@@ -17,6 +17,7 @@ namespace Lion
 		void Resize(uint32 width, uint32 height) override;
 
 		uint32 GetColorAttachment() const override { return mColorAttachment; }
+		void BindColorAttachment(uint32 slot) const override;
 		void ClearEntityId(int32 value) override;
 		int32 ReadEntityId(uint32 x, uint32 y) override;
 		const FramebufferSpecification& GetSpecification() const override { return mSpecification; }

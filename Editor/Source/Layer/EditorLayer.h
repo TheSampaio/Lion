@@ -49,6 +49,7 @@ private:
 		OpenProjectSettings,
 		CutSelection, NewFolder,
 		ViewLit, ViewUnlit, ViewWireframe,
+		TogglePlaySelection,
 		Count
 	};
 
@@ -146,6 +147,7 @@ private:
 	bool mPlaying = false;
 	bool mPaused = false;        // In play mode but the simulation is halted.
 	bool mStepFrame = false;     // Advance the paused simulation by exactly one frame, then halt again.
+	bool mPlaySelectionMode = false; // Explicit opt-in: game UI clicks never edit the scene by accident.
 	bool mShowColliders = false;  // Collider outlines are a debug view, off until enabled in Settings.
 	bool mRenameFocus = false;   // Request keyboard focus on the inline rename field for one frame.
 	bool mScaleUniform = false;  // The Transform's scale padlock: the three axes move together.

@@ -15,6 +15,8 @@ namespace Lion
 		static LION_API bool ReloadScene();
 		static LION_API Reference<Scene> GetActiveScene();
 		static LION_API const std::string& GetActivePath();
+		static LION_API void SetPaused(bool paused);
+		static LION_API bool IsPaused();
 
 		// Hosts call these to adopt an editor-authored scene, advance the active scene, or release it before
 		// unloading a game module.
@@ -29,5 +31,6 @@ namespace Lion
 		static std::string sActivePath;
 		static std::string sPendingPath;
 		static bool sUpdating;
+		static bool sPaused;
 	};
 }

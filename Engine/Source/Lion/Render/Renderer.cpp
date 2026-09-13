@@ -3,11 +3,14 @@
 
 #include <Lion/Render/Buffer.h>
 #include <Lion/Render/Camera.h>
+#include <Lion/Render/Framebuffer.h>
+#include <Lion/Render/PostProcessingComponent.h>
 #include <Lion/Render/RenderCommand.h>
 #include <Lion/Render/Shader.h>
 #include <Lion/Render/Sprite.h>
 #include <Lion/Render/Texture.h>
 #include <Lion/Render/VertexArray.h>
+#include <Lion/Core/Window.h>
 
 namespace Lion
 {
@@ -24,6 +27,12 @@ namespace Lion
         float32 texture;
         float32 entityId;  // Owner entity id (as float; exact for ids well under 2^24), for editor picking.
     };
+
+	struct ScreenVertex
+	{
+		glm::vec2 position;
+		glm::vec2 textureCoord;
+	};
 
     Renderer* Renderer::sInstance = nullptr;
 
@@ -44,6 +53,7 @@ namespace Lion
 
         self->mShader = Shader::Create("Shaders/Lit.lnshader");
         self->mWireframeShader = Shader::Create("Shaders/Wireframe.lnshader");
+		self->mPostShader = Shader::Create("Shaders/PostProcessing.lnshader");
 
         // Dynamic vertex buffer streamed once per batch, described by the sprite vertex layout.
         self->mVertexArray = VertexArray::Create();
@@ -83,7 +93,24 @@ namespace Lion
         self->mTextureSlots.reserve(maxTextureCount);
         self->mVertexData.resize(maxVertexCount);
 
-        return self->mShader != nullptr;
+		const ScreenVertex screenVertices[] = {
+			{ { -1.0f,  1.0f }, { 0.0f, 1.0f } },
+			{ { -1.0f, -1.0f }, { 0.0f, 0.0f } },
+			{ {  1.0f, -1.0f }, { 1.0f, 0.0f } },
+			{ {  1.0f,  1.0f }, { 1.0f, 1.0f } },
+		};
+		const uint32 screenIndices[] = { 0, 1, 2, 0, 2, 3 };
+		self->mPostVertexArray = VertexArray::Create();
+		self->mPostVertexBuffer = VertexBuffer::Create(screenVertices, sizeof(screenVertices));
+		self->mPostVertexBuffer->SetLayout({
+			{ ShaderDataType::Float2, "iPosition" },
+			{ ShaderDataType::Float2, "iTexCoord" },
+		});
+		self->mPostVertexArray->AddVertexBuffer(self->mPostVertexBuffer);
+		self->mPostIndexBuffer = IndexBuffer::Create(screenIndices, 6);
+		self->mPostVertexArray->SetIndexBuffer(self->mPostIndexBuffer);
+
+        return self->mShader != nullptr && self->mPostShader != nullptr;
     }
 
     void Renderer::Clear(float32 red, float32 green, float32 blue, float32 alpha)
@@ -206,6 +233,80 @@ namespace Lion
 
         self->mSpriteBuffer.clear();
     }
+
+	bool Renderer::BeginPostProcessing(PostProcessingComponent* component, uint32 width, uint32 height)
+	{
+		Renderer* self = sInstance;
+
+		if (!component || !component->IsEnabled() || width == 0 || height == 0)
+			return false;
+
+		if (!self->mPostFramebuffer)
+			self->mPostFramebuffer = Framebuffer::Create({ width, height, false });
+		else
+			self->mPostFramebuffer->Resize(width, height);
+
+		self->mActivePostProcessing = component;
+		self->mPostFramebuffer->Bind();
+		RenderCommand::Clear();
+		return true;
+	}
+
+	void Renderer::EndPostProcessing(const Reference<Framebuffer>& target)
+	{
+		Renderer* self = sInstance;
+
+		if (!self->mActivePostProcessing || !self->mPostFramebuffer)
+			return;
+
+		if (target)
+			target->Bind();
+		else
+		{
+			self->mPostFramebuffer->Unbind();
+			const Size windowSize = Window::GetSize();
+			RenderCommand::SetViewport(0, 0, static_cast<uint32>(windowSize.width), static_cast<uint32>(windowSize.height));
+		}
+
+		PostProcessingComponent& effect = *self->mActivePostProcessing;
+		const std::string& customPath = effect.GetCustomShaderPath();
+		if (!customPath.empty() && customPath != self->mCustomPostShaderPath)
+		{
+			self->mCustomPostShaderPath = customPath;
+			self->mCustomPostShader = Shader::Create(customPath);
+		}
+		else if (customPath.empty())
+		{
+			self->mCustomPostShaderPath.clear();
+			self->mCustomPostShader.reset();
+		}
+
+		const Reference<Shader>& shader = self->mCustomPostShader ? self->mCustomPostShader : self->mPostShader;
+		shader->Bind();
+		shader->SetInt("uScreenTexture", 0);
+		const FramebufferSpecification& source = self->mPostFramebuffer->GetSpecification();
+		shader->SetFloat2("uResolution", glm::vec2(source.width, source.height));
+		shader->SetFloat("uBloomEnabled", effect.HasBloom() ? 1.0f : 0.0f);
+		shader->SetFloat("uBloomStrength", effect.GetBloomStrength());
+		shader->SetFloat("uBloomThreshold", effect.GetBloomThreshold());
+		shader->SetFloat("uColorCorrectionEnabled", effect.HasColorCorrection() ? 1.0f : 0.0f);
+		shader->SetFloat("uBrightness", effect.GetBrightness());
+		shader->SetFloat("uContrast", effect.GetContrast());
+		shader->SetFloat("uSaturation", effect.GetSaturation());
+		shader->SetFloat("uGamma", effect.GetGamma());
+		shader->SetFloat3("uTint", glm::vec3(effect.GetTint().x, effect.GetTint().y, effect.GetTint().z));
+		shader->SetFloat("uVignetteEnabled", effect.HasVignette() ? 1.0f : 0.0f);
+		shader->SetFloat("uVignetteStrength", effect.GetVignetteStrength());
+		shader->SetFloat("uChromaticAberrationEnabled", effect.HasChromaticAberration() ? 1.0f : 0.0f);
+		shader->SetFloat("uChromaticAberration", effect.GetChromaticAberration());
+
+		self->mPostFramebuffer->BindColorAttachment(0);
+		self->mPostVertexArray->Bind();
+		RenderCommand::SetWireframe(false);
+		RenderCommand::DrawIndexed(6);
+		RenderCommand::SetWireframe(self->mWireframe);
+		self->mActivePostProcessing = nullptr;
+	}
 
     void Renderer::Submit(SpriteInfo* spriteInfo)
     {

@@ -39,6 +39,7 @@ void GameRules::InitializeForScene()
 	mBall = scene->FindComponent<Ball>();
 	mPaddle = scene->FindComponent<Paddle>();
 	mCamera = scene->FindComponent<Camera2D>();
+	mImpactParticles = GetOwner().GetComponent<ParticleComponent>();
 
 	if (mCamera)
 		mCameraBaseOffset = mCamera->GetOffset();
@@ -97,7 +98,7 @@ void GameRules::StartNewGame()
 	SceneManager::LoadScene(LevelScene(1));
 }
 
-void GameRules::RegisterBrickHit()
+void GameRules::RegisterBrickHit(const Vector2& position)
 {
 	if (!sSessionActive)
 		return;
@@ -109,6 +110,8 @@ void GameRules::RegisterBrickHit()
 
 	sActiveRules->mShakeRemaining = sActiveRules->mShakeDuration;
 	sActiveRules->mShakeFrame = 0;
+	if (sActiveRules->mImpactParticles)
+		sActiveRules->mImpactParticles->EmitAt(position, 12);
 	sActiveRules->UpdateHud();
 }
 
