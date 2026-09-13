@@ -3,126 +3,183 @@ $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Drawing
 
 $assetRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\Sandbox\Assets\Sprites\Brickout'))
-$sourcePath = Join-Path $PSScriptRoot 'GeneratedArt\brickout-source.png'
+$uiRoot = [IO.Path]::GetFullPath((Join-Path $assetRoot '..\UI'))
+$spriteSourcePath = Join-Path $PSScriptRoot 'GeneratedArt\brickout-pixel-source.png'
+$buttonSourcePath = Join-Path $PSScriptRoot 'GeneratedArt\button-panel-pixel-source.png'
+$backgroundSourcePath = Join-Path $PSScriptRoot 'GeneratedArt\background-pixel-source.png'
 $atlasPath = Join-Path $assetRoot 'brickout-spritesheet.png'
-$particlePath = Join-Path $assetRoot 'particle.png'
-$buttonSourcePath = Join-Path $PSScriptRoot 'GeneratedArt\button-panel-source.png'
-$buttonOutputPath = [IO.Path]::GetFullPath((Join-Path $assetRoot '..\UI\button-panel.png'))
-$source = [Drawing.Bitmap]::FromFile($sourcePath)
+$buttonPath = Join-Path $uiRoot 'button-panel.png'
+$backgroundPath = Join-Path $assetRoot 'background.png'
+$spriteSize = 16
+$alphaThreshold = 32
 
-function New-RoundedPath([Drawing.RectangleF]$bounds, [float]$radius)
+function Get-AlphaBounds([Drawing.Bitmap]$bitmap, [Drawing.Rectangle]$region)
 {
-	$diameter = $radius * 2
-	$path = [Drawing.Drawing2D.GraphicsPath]::new()
-	$path.AddArc($bounds.Left, $bounds.Top, $diameter, $diameter, 180, 90)
-	$path.AddArc($bounds.Right - $diameter, $bounds.Top, $diameter, $diameter, 270, 90)
-	$path.AddArc($bounds.Right - $diameter, $bounds.Bottom - $diameter, $diameter, $diameter, 0, 90)
-	$path.AddArc($bounds.Left, $bounds.Bottom - $diameter, $diameter, $diameter, 90, 90)
-	$path.CloseFigure()
-	return $path
+	$minimumX = $region.Right
+	$minimumY = $region.Bottom
+	$maximumX = -1
+	$maximumY = -1
+
+	for ($y = $region.Top; $y -lt $region.Bottom; $y++)
+	{
+		for ($x = $region.Left; $x -lt $region.Right; $x++)
+		{
+			if ($bitmap.GetPixel($x, $y).A -lt $alphaThreshold)
+			{
+				continue
+			}
+
+			$minimumX = [Math]::Min($minimumX, $x)
+			$minimumY = [Math]::Min($minimumY, $y)
+			$maximumX = [Math]::Max($maximumX, $x)
+			$maximumY = [Math]::Max($maximumY, $y)
+		}
+	}
+
+	if ($maximumX -lt $minimumX -or $maximumY -lt $minimumY)
+	{
+		throw "No visible sprite was found in cell $region."
+	}
+
+	return [Drawing.Rectangle]::new(
+		$minimumX,
+		$minimumY,
+		$maximumX - $minimumX + 1,
+		$maximumY - $minimumY + 1)
 }
 
-function New-ExtractedSprite([Drawing.Rectangle]$crop, [int]$width, [int]$height, [string]$shape)
+function New-PixelSprite([Drawing.Bitmap]$source, [Drawing.Rectangle]$region)
 {
-	$bitmap = [Drawing.Bitmap]::new($width, $height, [Drawing.Imaging.PixelFormat]::Format32bppArgb)
+	$bounds = Get-AlphaBounds $source $region
+	$bitmap = [Drawing.Bitmap]::new($spriteSize, $spriteSize, [Drawing.Imaging.PixelFormat]::Format32bppArgb)
 	$graphics = [Drawing.Graphics]::FromImage($bitmap)
 	$graphics.Clear([Drawing.Color]::Transparent)
 	$graphics.CompositingMode = [Drawing.Drawing2D.CompositingMode]::SourceCopy
-	$graphics.CompositingQuality = [Drawing.Drawing2D.CompositingQuality]::HighQuality
-	$graphics.InterpolationMode = [Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
-	$graphics.SmoothingMode = [Drawing.Drawing2D.SmoothingMode]::HighQuality
-	$bounds = [Drawing.RectangleF]::new(0, 0, $width, $height)
-
-	if ($shape -eq 'Circle')
-	{
-		$path = [Drawing.Drawing2D.GraphicsPath]::new()
-		$path.AddEllipse($bounds)
-	}
-	elseif ($shape -eq 'Capsule')
-	{
-		$path = New-RoundedPath $bounds ($height * 0.5)
-	}
-	else
-	{
-		$path = New-RoundedPath $bounds ([Math]::Min($width, $height) * 0.18)
-	}
-
-	$graphics.SetClip($path)
-	$graphics.DrawImage($source, $bounds, $crop, [Drawing.GraphicsUnit]::Pixel)
+	$graphics.CompositingQuality = [Drawing.Drawing2D.CompositingQuality]::HighSpeed
+	$graphics.InterpolationMode = [Drawing.Drawing2D.InterpolationMode]::NearestNeighbor
+	$graphics.PixelOffsetMode = [Drawing.Drawing2D.PixelOffsetMode]::Half
+	$graphics.SmoothingMode = [Drawing.Drawing2D.SmoothingMode]::None
+	$graphics.DrawImage($source, [Drawing.Rectangle]::new(0, 0, $spriteSize, $spriteSize),
+		$bounds, [Drawing.GraphicsUnit]::Pixel)
 	$graphics.Dispose()
-	$path.Dispose()
+
+	for ($y = 0; $y -lt $spriteSize; $y++)
+	{
+		for ($x = 0; $x -lt $spriteSize; $x++)
+		{
+			$color = $bitmap.GetPixel($x, $y)
+			$cleanColor = if ($color.A -lt $alphaThreshold)
+			{
+				[Drawing.Color]::Transparent
+			}
+			else
+			{
+				[Drawing.Color]::FromArgb(255, $color.R, $color.G, $color.B)
+			}
+			$bitmap.SetPixel($x, $y, $cleanColor)
+		}
+	}
+
 	return $bitmap
 }
 
-function Save-Sprite([Drawing.Rectangle]$crop, [int]$width, [int]$height, [string]$shape, [string]$name)
+function New-CenteredPixelSprite([Drawing.Bitmap]$source)
 {
-	$bitmap = New-ExtractedSprite $crop $width $height $shape
-	$bitmap.Save((Join-Path $assetRoot $name), [Drawing.Imaging.ImageFormat]::Png)
-	$bitmap.Dispose()
+	return New-PixelSprite $source ([Drawing.Rectangle]::new(0, 0, $source.Width, $source.Height))
 }
 
-Save-Sprite ([Drawing.Rectangle]::new(81, 56, 205, 205)) 12 12 'Circle' 'ball.png'
-Save-Sprite ([Drawing.Rectangle]::new(353, 92, 605, 136)) 100 20 'Capsule' 'player.png'
+function Save-PixelSprite([Drawing.Bitmap]$sprite, [string]$path)
+{
+	$sprite.Save($path, [Drawing.Imaging.ImageFormat]::Png)
+}
 
-$brickCrops = @(
-	[Drawing.Rectangle]::new(460, 277, 618, 108),
-	[Drawing.Rectangle]::new(460, 411, 618, 108),
-	[Drawing.Rectangle]::new(460, 545, 618, 116),
-	[Drawing.Rectangle]::new(460, 686, 618, 119),
-	[Drawing.Rectangle]::new(460, 829, 618, 119)
+New-Item -ItemType Directory -Path $assetRoot -Force | Out-Null
+New-Item -ItemType Directory -Path $uiRoot -Force | Out-Null
+
+$source = [Drawing.Bitmap]::FromFile($spriteSourcePath)
+$cellWidth = [Math]::Floor($source.Width / 4)
+$cellHeight = [Math]::Floor($source.Height / 2)
+$spriteNames = @(
+	'ball.png',
+	'player.png',
+	'tile-1.png',
+	'tile-2.png',
+	'tile-3.png',
+	'tile-4.png',
+	'tile-5.png',
+	'particle.png'
 )
+$sprites = [Collections.Generic.List[Drawing.Bitmap]]::new()
 
-for ($index = 0; $index -lt $brickCrops.Count; $index++)
+for ($index = 0; $index -lt $spriteNames.Count; $index++)
 {
-	Save-Sprite $brickCrops[$index] 60 24 'Rounded' ("tile-{0}.png" -f ($index + 1))
+	$column = $index % 4
+	$row = [Math]::Floor($index / 4)
+	$left = $column * $cellWidth
+	$top = $row * $cellHeight
+	$width = if ($column -eq 3) { $source.Width - $left } else { $cellWidth }
+	$height = if ($row -eq 1) { $source.Height - $top } else { $cellHeight }
+	$sprite = New-PixelSprite $source ([Drawing.Rectangle]::new($left, $top, $width, $height))
+	Save-PixelSprite $sprite (Join-Path $assetRoot $spriteNames[$index])
+	$sprites.Add($sprite)
 }
 
-# Rebuild the deliverable atlas from isolated sprites so it has real alpha rather than a preview grid.
-$atlas = [Drawing.Bitmap]::new(1536, 1024, [Drawing.Imaging.PixelFormat]::Format32bppArgb)
+$atlas = [Drawing.Bitmap]::new($spriteSize * 4, $spriteSize * 2, [Drawing.Imaging.PixelFormat]::Format32bppArgb)
 $atlasGraphics = [Drawing.Graphics]::FromImage($atlas)
 $atlasGraphics.Clear([Drawing.Color]::Transparent)
 $atlasGraphics.CompositingMode = [Drawing.Drawing2D.CompositingMode]::SourceCopy
-$atlasGraphics.CompositingQuality = [Drawing.Drawing2D.CompositingQuality]::HighQuality
-$atlasGraphics.InterpolationMode = [Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
-$atlasGraphics.SmoothingMode = [Drawing.Drawing2D.SmoothingMode]::HighQuality
+$atlasGraphics.InterpolationMode = [Drawing.Drawing2D.InterpolationMode]::NearestNeighbor
+$atlasGraphics.PixelOffsetMode = [Drawing.Drawing2D.PixelOffsetMode]::Half
 
-$ball = New-ExtractedSprite ([Drawing.Rectangle]::new(81, 56, 205, 205)) 220 220 'Circle'
-$paddle = New-ExtractedSprite ([Drawing.Rectangle]::new(353, 92, 605, 136)) 610 145 'Capsule'
-$atlasGraphics.DrawImage($ball, 55, 45)
-$atlasGraphics.DrawImage($paddle, 340, 85)
-$ball.Dispose()
-$paddle.Dispose()
-
-for ($index = 0; $index -lt $brickCrops.Count; $index++)
+for ($index = 0; $index -lt $sprites.Count; $index++)
 {
-	$brick = New-ExtractedSprite $brickCrops[$index] 618 116 'Rounded'
-	$atlasGraphics.DrawImage($brick, 455, (275 + $index * 140))
-	$brick.Dispose()
+	$atlasGraphics.DrawImageUnscaled($sprites[$index], ($index % 4) * $spriteSize,
+		[Math]::Floor($index / 4) * $spriteSize)
+	$sprites[$index].Dispose()
 }
 
-$particle = [Drawing.Bitmap]::FromFile($particlePath)
-$atlasGraphics.DrawImage($particle, [Drawing.Rectangle]::new(1190, 55, 230, 230))
-$particle.Dispose()
 $atlasGraphics.Dispose()
-$source.Dispose()
 $atlas.Save($atlasPath, [Drawing.Imaging.ImageFormat]::Png)
 $atlas.Dispose()
+$source.Dispose()
 
-if (Test-Path $buttonSourcePath)
+$buttonSource = [Drawing.Bitmap]::FromFile($buttonSourcePath)
+$button = New-CenteredPixelSprite $buttonSource
+Save-PixelSprite $button $buttonPath
+$button.Dispose()
+$buttonSource.Dispose()
+
+$backgroundSource = [Drawing.Bitmap]::FromFile($backgroundSourcePath)
+$sourceRatio = $backgroundSource.Width / $backgroundSource.Height
+$targetRatio = 16.0 / 9.0
+
+if ($sourceRatio -gt $targetRatio)
 {
-	$buttonSource = [Drawing.Bitmap]::FromFile($buttonSourcePath)
-	$button = [Drawing.Bitmap]::new(1750, 365, [Drawing.Imaging.PixelFormat]::Format32bppArgb)
-	$buttonGraphics = [Drawing.Graphics]::FromImage($button)
-	$buttonGraphics.Clear([Drawing.Color]::Transparent)
-	$buttonGraphics.CompositingMode = [Drawing.Drawing2D.CompositingMode]::SourceCopy
-	$buttonGraphics.CompositingQuality = [Drawing.Drawing2D.CompositingQuality]::HighQuality
-	$buttonGraphics.InterpolationMode = [Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
-	$buttonGraphics.DrawImage($buttonSource, [Drawing.Rectangle]::new(0, 0, 1750, 365),
-		[Drawing.Rectangle]::new(115, 214, 1750, 365), [Drawing.GraphicsUnit]::Pixel)
-	$buttonGraphics.Dispose()
-	$buttonSource.Dispose()
-	$button.Save($buttonOutputPath, [Drawing.Imaging.ImageFormat]::Png)
-	$button.Dispose()
+	$cropHeight = $backgroundSource.Height
+	$cropWidth = [Math]::Floor($cropHeight * $targetRatio)
+	$cropX = [Math]::Floor(($backgroundSource.Width - $cropWidth) * 0.5)
+	$cropY = 0
+}
+else
+{
+	$cropWidth = $backgroundSource.Width
+	$cropHeight = [Math]::Floor($cropWidth / $targetRatio)
+	$cropX = 0
+	$cropY = [Math]::Floor(($backgroundSource.Height - $cropHeight) * 0.5)
 }
 
-Write-Host 'Brickout sprites and transparent atlas are ready.'
+$background = [Drawing.Bitmap]::new(320, 180, [Drawing.Imaging.PixelFormat]::Format32bppArgb)
+$backgroundGraphics = [Drawing.Graphics]::FromImage($background)
+$backgroundGraphics.CompositingMode = [Drawing.Drawing2D.CompositingMode]::SourceCopy
+$backgroundGraphics.CompositingQuality = [Drawing.Drawing2D.CompositingQuality]::HighSpeed
+$backgroundGraphics.InterpolationMode = [Drawing.Drawing2D.InterpolationMode]::NearestNeighbor
+$backgroundGraphics.PixelOffsetMode = [Drawing.Drawing2D.PixelOffsetMode]::Half
+$backgroundGraphics.SmoothingMode = [Drawing.Drawing2D.SmoothingMode]::None
+$backgroundGraphics.DrawImage($backgroundSource, [Drawing.Rectangle]::new(0, 0, 320, 180),
+	[Drawing.Rectangle]::new($cropX, $cropY, $cropWidth, $cropHeight), [Drawing.GraphicsUnit]::Pixel)
+$backgroundGraphics.Dispose()
+$backgroundSource.Dispose()
+$background.Save($backgroundPath, [Drawing.Imaging.ImageFormat]::Png)
+$background.Dispose()
+
+Write-Host 'Brickout pixel-art sprites are ready: eight 16x16 sprites, a 64x32 atlas, a 16x16 UI panel and a 320x180 background.'

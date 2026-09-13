@@ -305,7 +305,7 @@ $background = [ordered]@{
 	)
 	name = 'Background'
 	parent = 0
-	transform = New-Transform 0 0 0.765 0.765
+	transform = New-Transform 0 0 4 4
 }
 
 $mainMenuAssembly = [ordered]@{
@@ -416,6 +416,22 @@ $pauseAssembly = [ordered]@{
 }
 Write-SealedJson (Join-Path $assetRoot 'Assemblies\Pause Menu.lnassembly') $pauseAssembly
 
+# Gameplay art is authored as compact 16x16 pixel sprites. Preserve the established world-space
+# dimensions through entity scale and matching unscaled collider dimensions.
+$paddlePath = Join-Path $assetRoot 'Assemblies\Paddle.lnassembly'
+$paddleAssembly = Read-SealedJson $paddlePath
+$paddleRoot = $paddleAssembly.entities[$paddleAssembly.root]
+$paddleRoot.transform.scale = @(6.25, 1.25)
+$paddleCollider = $paddleRoot.components | Where-Object { $_.type -eq 'BoxCollider2D' } | Select-Object -First 1
+
+if ($paddleCollider)
+{
+	$paddleCollider.width = 16
+	$paddleCollider.height = 16
+}
+
+Write-SealedJson $paddlePath $paddleAssembly
+
 for ($level = 1; $level -le 5; $level++)
 {
 	$scenePath = Join-Path $assetRoot ("Scenes\Level{0:D2}.lnscene" -f $level)
@@ -427,6 +443,7 @@ for ($level = 1; $level -le 5; $level++)
 	for ($index = 0; $index -lt $scene.entities.Count; $index++)
 	{
 		$entity = $scene.entities[$index]
+		$sprite = $entity.components | Where-Object { $_.type -eq 'SpriteRenderer' } | Select-Object -First 1
 
 		if ($entity.name -eq 'Systems')
 		{
@@ -451,6 +468,33 @@ for ($level = 1; $level -le 5; $level++)
 		if ($entity.name -eq 'Camera' -and !($entity.components | Where-Object { $_.type -eq 'PostProcessingComponent' }))
 		{
 			$entity.components = @($entity.components) + @((New-PostProcessingComponent))
+		}
+
+		if ($sprite -and $sprite.texture -eq 'Sprites/Brickout/background.jpg')
+		{
+			$sprite.texture = 'Sprites/Brickout/background.png'
+			$entity.transform.scale = @(4, 4)
+		}
+		elseif ($sprite -and $sprite.texture -eq 'Sprites/Brickout/ball.png')
+		{
+			$entity.transform.scale = @(0.75, 0.75)
+			$collider = $entity.components | Where-Object { $_.type -eq 'CircleCollider2D' } | Select-Object -First 1
+
+			if ($collider)
+			{
+				$collider.radius = 8
+			}
+		}
+		elseif ($sprite -and $sprite.texture -like 'Sprites/Brickout/tile-*.png')
+		{
+			$entity.transform.scale = @(3.75, 1.5)
+			$collider = $entity.components | Where-Object { $_.type -eq 'BoxCollider2D' } | Select-Object -First 1
+
+			if ($collider)
+			{
+				$collider.width = 16
+				$collider.height = 16
+			}
 		}
 	}
 
