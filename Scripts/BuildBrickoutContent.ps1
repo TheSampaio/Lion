@@ -1,0 +1,352 @@
+$ErrorActionPreference = 'Stop'
+
+$assetRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\Sandbox\Assets'))
+$alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_'
+
+function Unseal-Content([string]$content)
+{
+	$stripped = $content -replace '[\s]', ''
+	$bytes = [Collections.Generic.List[byte]]::new()
+
+	for ($index = 0; $index -lt $stripped.Length; $index += 4)
+	{
+		$count = [Math]::Min(4, $stripped.Length - $index)
+		[uint32]$group = 0
+
+		for ($offset = 0; $offset -lt $count; $offset++)
+		{
+			$group = $group -bor ([uint32]$alphabet.IndexOf($stripped[$index + $offset]) -shl (18 - 6 * $offset))
+		}
+
+		for ($offset = 0; $offset + 1 -lt $count; $offset++)
+		{
+			$value = ($group -shr (16 - 8 * $offset)) -band 255
+			$key = if (($bytes.Count % 2) -eq 0) { 7 } else { 210 }
+			$bytes.Add([byte]($value -bxor $key))
+		}
+	}
+
+	return [Text.Encoding]::UTF8.GetString($bytes.ToArray())
+}
+
+function Seal-Content([string]$content)
+{
+	$bytes = [Text.Encoding]::UTF8.GetBytes($content)
+	$encoded = [Text.StringBuilder]::new()
+
+	for ($index = 0; $index -lt $bytes.Length; $index += 3)
+	{
+		$remaining = $bytes.Length - $index
+		[uint32]$group = 0
+
+		for ($offset = 0; $offset -lt 3; $offset++)
+		{
+			$value = 0
+
+			if ($offset -lt $remaining)
+			{
+				$key = if ((($index + $offset) % 2) -eq 0) { 7 } else { 210 }
+				$value = $bytes[$index + $offset] -bxor $key
+			}
+
+			$group = $group -bor ([uint32]$value -shl (16 - 8 * $offset))
+		}
+
+		$count = [Math]::Min($remaining + 1, 4)
+		for ($offset = 0; $offset -lt $count; $offset++)
+		{
+			[void]$encoded.Append($alphabet[($group -shr (18 - 6 * $offset)) -band 63])
+		}
+	}
+
+	$lines = for ($index = 0; $index -lt $encoded.Length; $index += 76)
+	{
+		$encoded.ToString($index, [Math]::Min(76, $encoded.Length - $index))
+	}
+
+	return ($lines -join "`n") + "`n"
+}
+
+function Read-SealedJson([string]$path)
+{
+	return (Unseal-Content ([IO.File]::ReadAllText($path))) | ConvertFrom-Json
+}
+
+function Write-SealedJson([string]$path, $value)
+{
+	$json = $value | ConvertTo-Json -Depth 100
+	[IO.File]::WriteAllText($path, (Seal-Content $json))
+}
+
+function New-Transform([float]$x = 0, [float]$y = 0, [float]$scaleX = 1, [float]$scaleY = 1)
+{
+	return [ordered]@{
+		position = @($x, $y)
+		rotation = 0
+		scale = @($scaleX, $scaleY)
+	}
+}
+
+function New-TextComponent([string]$text, [float]$size, [int]$order = 100)
+{
+	return [ordered]@{
+		Text = $text
+		Font = 'Fonts/Arcade.lnfont'
+		Size = $size
+		Spacing = 0
+		Centered = $true
+		Order = $order
+		'Color.x' = 1
+		'Color.y' = 1
+		'Color.z' = 1
+		type = 'TextRenderer'
+	}
+}
+
+function New-AnchorComponent([float]$anchorX, [float]$anchorY, [float]$offsetX = 0, [float]$offsetY = 0)
+{
+	return [ordered]@{
+		'Anchor.x' = $anchorX
+		'Anchor.y' = $anchorY
+		'Anchor.z' = 0
+		'Offset.x' = $offsetX
+		'Offset.y' = $offsetY
+		'Offset.z' = 0
+		type = 'WidgetAnchor'
+	}
+}
+
+function New-TextEntity([string]$name, [string]$text, [float]$size, [float]$anchorX,
+	[float]$anchorY, [float]$offsetX, [float]$offsetY, [int]$parent, [bool]$visible = $true)
+{
+	$entity = [ordered]@{
+		components = @(
+			(New-TextComponent $text $size)
+			(New-AnchorComponent $anchorX $anchorY $offsetX $offsetY)
+		)
+		name = $name
+		parent = $parent
+		transform = New-Transform
+	}
+
+	if (!$visible)
+	{
+		$entity.visible = $false
+	}
+
+	return $entity
+}
+
+function New-AssemblyInstance([string]$path, [int]$parent = -1)
+{
+	return [ordered]@{
+		assembly = $path
+		parent = $parent
+		placement = New-Transform
+		visible = $true
+	}
+}
+
+$gameRulesAssembly = [ordered]@{
+	entities = @(
+		[ordered]@{
+			components = @(
+				[ordered]@{
+					'Lose Height' = -310
+					'Shake Duration' = 0.09
+					'Shake Strength' = 2.0
+					type = 'GameRules'
+				}
+			)
+			name = 'Game Rules'
+			parent = -1
+			transform = New-Transform
+		}
+	)
+	root = 0
+}
+Write-SealedJson (Join-Path $assetRoot 'Assemblies\Game Rules.lnassembly') $gameRulesAssembly
+
+$hudAssembly = [ordered]@{
+	entities = @(
+		[ordered]@{
+			components = @()
+			name = 'HUD'
+			parent = -1
+			transform = New-Transform
+		}
+		(New-TextEntity 'Score Text' 'SCORE 000000' 24 0 1 150 -32 0)
+		(New-TextEntity 'Attempts Text' 'BALLS 3' 24 1 1 -110 -32 0)
+	)
+	root = 0
+}
+Write-SealedJson (Join-Path $assetRoot 'Assemblies\HUD.lnassembly') $hudAssembly
+
+$background = [ordered]@{
+	components = @(
+		[ordered]@{
+			flipX = $false
+			flipY = $false
+			order = -10
+			texture = 'Sprites/Brickout/background.jpg'
+			type = 'SpriteRenderer'
+		}
+		(New-AnchorComponent 0.5 0.5)
+	)
+	name = 'Background'
+	parent = 0
+	transform = New-Transform 0 0 0.667 0.667
+}
+
+$mainMenuAssembly = [ordered]@{
+	entities = @(
+		[ordered]@{
+			components = @([ordered]@{ type = 'MainMenu' })
+			name = 'Main Menu'
+			parent = -1
+			transform = New-Transform
+		}
+		$background
+		(New-TextEntity 'Menu Title' 'BRICKOUT' 72 0.5 0.5 0 190 0)
+		(New-TextEntity 'Menu Prompt' 'PRESS ANY KEY TO START' 28 0.5 0.5 0 -100 0)
+		(New-TextEntity 'Menu Options' "> PLAY <`n  CREDITS  `n  SETTINGS  `n  QUIT  " 34 0.5 0.5 0 20 0 $false)
+		(New-TextEntity 'Menu Detail' 'CREDITS' 24 0.5 0.5 0 40 0 $false)
+	)
+	root = 0
+}
+Write-SealedJson (Join-Path $assetRoot 'Assemblies\Main Menu.lnassembly') $mainMenuAssembly
+
+$endBackground = [ordered]@{}
+foreach ($property in $background.GetEnumerator())
+{
+	$endBackground[$property.Key] = $property.Value
+}
+$endBackground.parent = 0
+
+$endScreenAssembly = [ordered]@{
+	entities = @(
+		[ordered]@{
+			components = @([ordered]@{ type = 'EndScreen' })
+			name = 'End Screen'
+			parent = -1
+			transform = New-Transform
+		}
+		$endBackground
+		(New-TextEntity 'Result Title' 'YOU WIN!' 58 0.5 0.5 0 170 0)
+		(New-TextEntity 'Result Score' "TOTAL SCORE`n000000" 38 0.5 0.5 0 40 0)
+		(New-TextEntity 'Result Prompt' "ENTER: PLAY AGAIN`nESC: MAIN MENU" 24 0.5 0.5 0 -150 0)
+	)
+	root = 0
+}
+Write-SealedJson (Join-Path $assetRoot 'Assemblies\End Screen.lnassembly') $endScreenAssembly
+
+for ($level = 1; $level -le 5; $level++)
+{
+	$scenePath = Join-Path $assetRoot ("Scenes\Level{0:D2}.lnscene" -f $level)
+	$scene = Read-SealedJson $scenePath
+	$systemsIndex = -1
+	$hasHud = $false
+
+	for ($index = 0; $index -lt $scene.entities.Count; $index++)
+	{
+		$entity = $scene.entities[$index]
+
+		if ($entity.name -eq 'Systems')
+		{
+			$systemsIndex = $index
+		}
+
+		if ($entity.assembly -like 'Assemblies/Game Rules Level *.lnassembly')
+		{
+			$entity.assembly = 'Assemblies/Game Rules.lnassembly'
+		}
+
+		if ($entity.assembly -eq 'Assemblies/HUD.lnassembly')
+		{
+			$hasHud = $true
+		}
+	}
+
+	if (!$hasHud)
+	{
+		$scene.entities = @($scene.entities) + @((New-AssemblyInstance 'Assemblies/HUD.lnassembly' $systemsIndex))
+	}
+
+	Write-SealedJson $scenePath $scene
+}
+
+$mainMenuPath = Join-Path $assetRoot 'Scenes\MainMenu.lnscene'
+$mainMenuScene = Read-SealedJson $mainMenuPath
+$hasGameRules = $mainMenuScene.entities | Where-Object { $_.assembly -eq 'Assemblies/Game Rules.lnassembly' }
+
+if (!$hasGameRules)
+{
+	$mainMenuScene.entities = @($mainMenuScene.entities) + @((New-AssemblyInstance 'Assemblies/Game Rules.lnassembly'))
+}
+
+Write-SealedJson $mainMenuPath $mainMenuScene
+
+function New-EndScene
+{
+	return [ordered]@{
+		entities = @(
+			(New-AssemblyInstance 'Assemblies/End Screen.lnassembly')
+			(New-AssemblyInstance 'Assemblies/Game Rules.lnassembly')
+			[ordered]@{
+				components = @(
+					[ordered]@{
+						limit = $false
+						limitBottom = -360
+						limitLeft = -640
+						limitRight = 640
+						limitTop = 360
+						offsetX = 0
+						offsetY = 0
+						positionSmoothing = 5
+						rotationSmoothing = 5
+						smooth = $false
+						type = 'Camera2D'
+						zoom = 1
+					}
+				)
+				name = 'Camera'
+				parent = -1
+				transform = New-Transform
+			}
+		)
+		gravity = @(0, 0)
+	}
+}
+
+Write-SealedJson (Join-Path $assetRoot 'Scenes\Victory.lnscene') (New-EndScene)
+Write-SealedJson (Join-Path $assetRoot 'Scenes\Defeat.lnscene') (New-EndScene)
+
+$inputPath = Join-Path $assetRoot 'Config\Input.lninput'
+$inputMap = Read-SealedJson $inputPath
+$menuActions = @(
+	[ordered]@{ name='menu_up'; deadzone=0.2; bindings=@(
+		[ordered]@{ device='keyboard'; code=265; scale=1; gamepad=-1 },
+		[ordered]@{ device='gamepad_button'; code=11; scale=1; gamepad=-1 }) },
+	[ordered]@{ name='menu_down'; deadzone=0.2; bindings=@(
+		[ordered]@{ device='keyboard'; code=264; scale=1; gamepad=-1 },
+		[ordered]@{ device='gamepad_button'; code=13; scale=1; gamepad=-1 }) },
+	[ordered]@{ name='menu_left'; deadzone=0.2; bindings=@(
+		[ordered]@{ device='keyboard'; code=263; scale=1; gamepad=-1 },
+		[ordered]@{ device='gamepad_button'; code=14; scale=1; gamepad=-1 }) },
+	[ordered]@{ name='menu_right'; deadzone=0.2; bindings=@(
+		[ordered]@{ device='keyboard'; code=262; scale=1; gamepad=-1 },
+		[ordered]@{ device='gamepad_button'; code=12; scale=1; gamepad=-1 }) },
+	[ordered]@{ name='menu_confirm'; deadzone=0.2; bindings=@(
+		[ordered]@{ device='keyboard'; code=257; scale=1; gamepad=-1 },
+		[ordered]@{ device='keyboard'; code=32; scale=1; gamepad=-1 },
+		[ordered]@{ device='gamepad_button'; code=0; scale=1; gamepad=-1 }) },
+	[ordered]@{ name='menu_back'; deadzone=0.2; bindings=@(
+		[ordered]@{ device='keyboard'; code=256; scale=1; gamepad=-1 },
+		[ordered]@{ device='gamepad_button'; code=1; scale=1; gamepad=-1 }) }
+)
+
+$menuNames = @($menuActions | ForEach-Object { $_.name })
+$inputMap.actions = @($inputMap.actions | Where-Object { $_.name -notin $menuNames }) + $menuActions
+Write-SealedJson $inputPath $inputMap
+
+Write-Host 'Brickout scenes, assemblies and menu input actions are up to date.'

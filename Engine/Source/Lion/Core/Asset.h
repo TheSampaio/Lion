@@ -5,6 +5,8 @@
 
 namespace Lion
 {
+	class BitmapFont;
+
 	class Asset
 	{
 	public:
@@ -21,10 +23,12 @@ namespace Lion
 		static LION_API Reference<AudioClip> LoadAudio(const std::string& name);
 		static LION_API Reference<AudioClip> LoadAudio(const std::string& name, const std::string& filePath);
 
-		// TODO: GetShader(), LoadFont() etc.
+		static LION_API Reference<BitmapFont> LoadFont(const std::string& name);
+		static LION_API Reference<BitmapFont> LoadFont(const std::string& name, const std::string& filePath);
 
 	private:
 		static inline std::unordered_map<std::string, Reference<Texture>> sTextures;
 		static inline std::unordered_map<std::string, Reference<AudioClip>> sAudioClips;
+		static inline std::unordered_map<std::string, Reference<BitmapFont>> sFonts;
 	};
 }

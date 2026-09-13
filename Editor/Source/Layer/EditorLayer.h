@@ -283,6 +283,7 @@ private:
 	bool mShowAssetExtensions = false;         // Content Browser defaults to concise, extension-free labels.
 	bool mProjectFocused = false;               // Routes shared editing shortcuts to the Content Browser.
 	bool mHierarchyFocused = false;             // Routes folder creation to the Scene Hierarchy.
+	bool mViewportFocused = false;              // Routes contextual display shortcuts to the viewport.
 
 	// The project's named input actions. They live under Assets/Config so the same resource-relative file
 	// is copied into a standalone build and loaded by the engine before the first game layer is created.

@@ -232,18 +232,23 @@ namespace Lion
             return { x + offsetX * cosAngle - offsetY * sinAngle, y + offsetX * sinAngle + offsetY * cosAngle, z };
         };
 
-        constexpr glm::vec4 white = { 1.0f, 1.0f, 1.0f, 1.0f };
+        const glm::vec4 color = {
+            spriteInfo->color.x,
+            spriteInfo->color.y,
+            spriteInfo->color.z,
+            1.0f
+        };
 
         // Mirroring is the texture read backwards: the quad keeps its shape, its winding and its size,
         // and only the corner each texel is fetched from changes.
-        const float32 left = spriteInfo->flipX ? 1.0f : 0.0f;
-        const float32 right = spriteInfo->flipX ? 0.0f : 1.0f;
-        const float32 bottom = spriteInfo->flipY ? 1.0f : 0.0f;
-        const float32 top = spriteInfo->flipY ? 0.0f : 1.0f;
+        const float32 left = spriteInfo->flipX ? spriteInfo->uvMaximum.x : spriteInfo->uvMinimum.x;
+        const float32 right = spriteInfo->flipX ? spriteInfo->uvMinimum.x : spriteInfo->uvMaximum.x;
+        const float32 bottom = spriteInfo->flipY ? spriteInfo->uvMaximum.y : spriteInfo->uvMinimum.y;
+        const float32 top = spriteInfo->flipY ? spriteInfo->uvMinimum.y : spriteInfo->uvMaximum.y;
 
         // Top-Left
         target->position = corner(-halfWidth, halfHeight);
-        target->color = white;
+        target->color = color;
         target->textureCoord = { left, top };
         target->texture = slot;
         target->entityId = entityId;
@@ -251,7 +256,7 @@ namespace Lion
 
         // Bottom-Left
         target->position = corner(-halfWidth, -halfHeight);
-        target->color = white;
+        target->color = color;
         target->textureCoord = { left, bottom };
         target->texture = slot;
         target->entityId = entityId;
@@ -259,7 +264,7 @@ namespace Lion
 
         // Bottom-Right
         target->position = corner(halfWidth, -halfHeight);
-        target->color = white;
+        target->color = color;
         target->textureCoord = { right, bottom };
         target->texture = slot;
         target->entityId = entityId;
@@ -267,7 +272,7 @@ namespace Lion
 
         // Top-Right
         target->position = corner(halfWidth, halfHeight);
-        target->color = white;
+        target->color = color;
         target->textureCoord = { right, top };
         target->texture = slot;
         target->entityId = entityId;

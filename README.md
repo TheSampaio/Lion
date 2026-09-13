@@ -87,7 +87,7 @@
 ├── Sandbox                 # The game module (lion-game.dll)
 │   ├── Assets
 │   │   ├── Scenes          # Level01.lnscene ... Level05.lnscene: authored Brickout levels
-│   │   ├── Scripts         # The game's components: Ball, Paddle, Brick, BrickField...
+│   │   ├── Scripts         # The game's components: Ball, Paddle, Brick, GameRules...
 │   │   ├── Shaders         # Lion shader assets (.lnshader)
 │   │   ├── Sounds          # WAV audio clips
 │   │   └── Sprites

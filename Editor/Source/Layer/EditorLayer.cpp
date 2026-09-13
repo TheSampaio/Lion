@@ -1229,7 +1229,7 @@ void EditorLayer::DrawConsole()
 	ImGui::Checkbox("Auto-scroll", &mConsoleAutoScroll);
 
 	ImGui::SameLine();
-	ImGui::Checkbox("Group", &mConsoleCollapse);
+	ImGui::Checkbox("Group Messages", &mConsoleCollapse);
 
 	if (ImGui::IsItemHovered())
 		ImGui::SetTooltip("Show one line per distinct message, with how many times it was logged");
@@ -1461,7 +1461,7 @@ namespace
 	// construction arguments (a collider sizes itself to the sprite). Everything else in the registry
 	// comes from the game module and is added generically, by name.
 	constexpr const char8* kBuiltInComponents[] = {
-		"SpriteRenderer", "Camera2D", "AudioPlayer", "RigidBody2D", "BoxCollider2D", "CircleCollider2D",
+		"SpriteRenderer", "TextRenderer", "Camera2D", "AudioPlayer", "RigidBody2D", "BoxCollider2D", "CircleCollider2D",
 		"WidgetAnchor" };
 
 	bool IsBuiltInComponent(const std::string& name)
@@ -2156,7 +2156,7 @@ namespace
 	{
 		static const char8* extensions[] = {
 			".png", ".jpg", ".jpeg", ".bmp", ".wav", ".lnshader", ".lnscene", ".lnassembly",
-			".lninput", ".h", ".cpp"
+			".lninput", ".lnfont", ".h", ".cpp"
 		};
 
 		std::string extension = path.extension().string();
@@ -2397,6 +2397,9 @@ namespace
 
 		if (extension == ".lninput")
 			return ICON_MDI_GAMEPAD;
+
+		if (extension == ".lnfont")
+			return ICON_MDI_FORMAT_FONT;
 
 		if (extension == ".lnscene")
 			return ICON_MDI_SHAPE;
@@ -3956,7 +3959,7 @@ void EditorLayer::ResetShortcutsToDefault()
 	set(ShortcutAction::CutSelection, ImGuiKey_X, true);
 	set(ShortcutAction::NewFolder, ImGuiKey_N, true, true);
 	set(ShortcutAction::ViewLit, ImGuiKey_F1);
-	set(ShortcutAction::ViewUnlit, ImGuiKey_F2, false, true);
+	set(ShortcutAction::ViewUnlit, ImGuiKey_F2);
 	set(ShortcutAction::ViewWireframe, ImGuiKey_F3);
 }
 
@@ -4228,11 +4231,11 @@ void EditorLayer::LoadShortcuts()
 		migrated = true;
 	}
 
-	// F2 is the conventional rename key shared by the Content Browser and Scene Hierarchy. Move the
-	// former default Unlit binding one modifier away without replacing unrelated custom bindings.
-	if (unlit.key == ImGuiKey_F2 && !unlit.ctrl && !unlit.shift && !unlit.alt)
+	// Restore the former Unlit default moved by 0.29. F2 is contextual: it renames inside workspace
+	// panels and changes shading while the viewport owns the keyboard.
+	if (unlit.key == ImGuiKey_F2 && !unlit.ctrl && unlit.shift && !unlit.alt)
 	{
-		unlit = { ImGuiKey_F2, false, true, false };
+		unlit = { ImGuiKey_F2, false, false, false };
 		migrated = true;
 	}
 
@@ -4322,9 +4325,9 @@ void EditorLayer::HandleShortcuts()
 	if (IsShortcutPressed(ShortcutAction::OpenWindowSettings)) mOpenWindowSettingsPopup = true;
 	if (IsShortcutPressed(ShortcutAction::OpenProjectSettings)) mOpenProjectSettingsPopup = true;
 	if (IsShortcutPressed(ShortcutAction::ToggleColliders)) mShowColliders = !mShowColliders;
-	if (IsShortcutPressed(ShortcutAction::ViewLit)) mViewportMode = ViewportMode::Lit;
-	if (IsShortcutPressed(ShortcutAction::ViewUnlit)) mViewportMode = ViewportMode::Unlit;
-	if (IsShortcutPressed(ShortcutAction::ViewWireframe)) mViewportMode = ViewportMode::Wireframe;
+	if (mViewportFocused && IsShortcutPressed(ShortcutAction::ViewLit)) mViewportMode = ViewportMode::Lit;
+	if (mViewportFocused && IsShortcutPressed(ShortcutAction::ViewUnlit)) mViewportMode = ViewportMode::Unlit;
+	if (mViewportFocused && IsShortcutPressed(ShortcutAction::ViewWireframe)) mViewportMode = ViewportMode::Wireframe;
 	if (IsShortcutPressed(ShortcutAction::StepFrame)) StepOneFrame();
 	if (IsShortcutPressed(ShortcutAction::CompileModule)) CompileGameModule();
 	if (IsShortcutPressed(ShortcutAction::ReloadModule)) ReloadGameModule();
@@ -4403,7 +4406,7 @@ void EditorLayer::HandleShortcuts()
 	if (IsShortcutPressed(ShortcutAction::DuplicateEntity)) DuplicateEntity();
 	if (mHierarchyFocused && IsShortcutPressed(ShortcutAction::NewFolder)) CreateFolder();
 
-	if (mSelectedEntity && !IsLinkedAssemblyEntity(mSelectedEntity.get())
+	if (mHierarchyFocused && mSelectedEntity && !IsLinkedAssemblyEntity(mSelectedEntity.get())
 		&& IsShortcutPressed(ShortcutAction::RenameEntity))
 	{
 		mRenamingEntity = mSelectedEntity;
@@ -4436,6 +4439,7 @@ void EditorLayer::DrawViewport()
 	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
 	ImGui::Begin(kViewportWindow);
 	ImGui::PopStyleVar();
+	mViewportFocused = ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows);
 
 	const ImVec2 available = ImGui::GetContentRegionAvail();
 	mViewportSize = { available.x, available.y };
@@ -5433,7 +5437,7 @@ void EditorLayer::DrawEntityMenuItems(const Reference<Entity>& target, const Vec
 	const bool protectedEntity = (assemblyRoot && assemblyRoot != target.get())
 		|| (mEditingAssembly && target->GetParent() == nullptr);
 	ImGui::BeginDisabled(protectedEntity);
-	if (ImGui::MenuItem(ICON_MDI_DELETE_OUTLINE "  Delete", "Del"))
+	if (ImGui::MenuItem(ICON_MDI_DELETE_OUTLINE "  Delete", ShortcutText(ShortcutAction::DeleteEntity).c_str()))
 		mEntityToDelete = target;
 	ImGui::EndDisabled();
 }
@@ -6621,6 +6625,14 @@ void EditorLayer::DrawProperties()
 				ResetToDefaultButton("##resetflip", false);   // Keeps the slot, so the row lines up.
 			}
 		}
+		else if (TextRenderer* text = dynamic_cast<TextRenderer*>(component))
+		{
+			if (DrawComponentHeader(ICON_MDI_FORMAT_TEXT, "Text Renderer", i, remove, dragFrom, dragTo))
+			{
+				InspectorReflector reflector(*this, text->GetTypeName());
+				text->Reflect(reflector);
+			}
+		}
 		else if (Camera2D* camera = dynamic_cast<Camera2D*>(component))
 		{
 			if (DrawComponentHeader(ICON_MDI_VIDEO, "Camera 2D", i, remove, dragFrom, dragTo))
@@ -6870,6 +6882,15 @@ void EditorLayer::DrawProperties()
 					entity->AddComponent<Camera2D>();
 
 			FocusViewportOnSelection();
+		}
+
+		if (lacksBuiltIn.operator()<TextRenderer>() && ImGui::MenuItem("Text Renderer"))
+		{
+			RecordSnapshot();
+			for (const auto& entity : mSelection)
+				if (!entity->IsFolder() && !IsLinkedAssemblyEntity(entity.get())
+					&& !entity->HasComponent<TextRenderer>())
+					entity->AddComponent<TextRenderer>();
 		}
 
 		if (lacksBuiltIn.operator()<WidgetAnchor>() && ImGui::MenuItem("Widget Anchor"))

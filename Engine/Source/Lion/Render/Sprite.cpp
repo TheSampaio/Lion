@@ -13,6 +13,7 @@ namespace Lion
         mTexture(Texture::Create(filePath))
     {
         mSpriteInfo->texture = mTexture.get();
+        mSpriteInfo->size = mTexture->GetSize();
     }
 
     Sprite::Sprite(const Reference<Texture>& texture)
@@ -20,6 +21,7 @@ namespace Lion
         mTexture(texture)
     {
         mSpriteInfo->texture = mTexture.get();
+        mSpriteInfo->size = mTexture->GetSize();
     }
 
     void Sprite::Draw(const Reference<Transform>& transform, int32 entityId)
@@ -32,7 +34,6 @@ namespace Lion
         mSpriteInfo->position = position;
         mSpriteInfo->rotation = rotation;
         mSpriteInfo->scale = scale;
-        mSpriteInfo->size = mTexture->GetSize();
         mSpriteInfo->texture = mTexture.get();
         mSpriteInfo->entityId = entityId;
 
@@ -48,6 +49,18 @@ namespace Lion
     {
         mSpriteInfo->flipX = flipX;
         mSpriteInfo->flipY = flipY;
+    }
+
+    void Sprite::SetRegion(const Vector& uvMinimum, const Vector& uvMaximum, const Size& size)
+    {
+        mSpriteInfo->uvMinimum = uvMinimum;
+        mSpriteInfo->uvMaximum = uvMaximum;
+        mSpriteInfo->size = size;
+    }
+
+    void Sprite::SetColor(const Vector& color)
+    {
+        mSpriteInfo->color = color;
     }
 
     Size Sprite::GetSize()

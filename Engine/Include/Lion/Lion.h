@@ -56,11 +56,13 @@
 #include <Lion/Render/CameraOrthographic.h>
 #include <Lion/Render/Framebuffer.h>
 #include <Lion/Render/Camera2D.h>
+#include <Lion/Render/BitmapFont.h>
 #include <Lion/Render/Graphics.h>
 #include <Lion/Render/Renderer.h>
 #include <Lion/Render/Sprite.h>
 #include <Lion/Render/SpriteRenderer.h>
 #include <Lion/Render/Texture.h>
+#include <Lion/Render/TextRenderer.h>
 
 // UI
 #include <Lion/UI/WidgetAnchor.h>
