@@ -22,7 +22,8 @@ void Brick::OnCollision(Entity& other)
 
 	mRemainingHits = std::max(mRemainingHits - 1, 0);
 	const bool destroyed = mRemainingHits == 0;
-	GameRules::RegisterBrickDamage(GetOwner().GetWorldPosition(), destroyed, mPower);
+	GameRules::RegisterBrickDamage(GetOwner().GetWorldPosition(), destroyed, mPower,
+		other.GetComponent<Ball>());
 
 	if (!destroyed)
 	{

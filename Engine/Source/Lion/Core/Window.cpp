@@ -136,6 +136,7 @@ namespace Lion
     {
         sInstance->mData.width = width;
         sInstance->mData.height = height;
+        sInstance->mBackend->SetSize(width, height);
     }
 
     void Window::SetTitle(const std::string& title)

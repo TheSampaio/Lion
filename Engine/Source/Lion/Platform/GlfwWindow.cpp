@@ -650,6 +650,17 @@ namespace Lion
 			glfwSetWindowAttrib(mWindow, GLFW_RESIZABLE, enable ? GLFW_TRUE : GLFW_FALSE);
 	}
 
+	void GlfwWindow::SetSize(uint32 width, uint32 height)
+	{
+		if (!mWindow)
+			return;
+
+		if (mData && mData->maximized)
+			ApplyMaximized(false);
+
+		glfwSetWindowSize(mWindow, static_cast<int32>(width), static_cast<int32>(height));
+	}
+
 	void GlfwWindow::SetIcon(const std::string& filePath)
 	{
 		int32 width = 0, height = 0, channels = 0;

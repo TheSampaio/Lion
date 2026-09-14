@@ -1,5 +1,7 @@
 #include "EndScreen.h"
 #include "GameRules.h"
+#include "GameSettings.h"
+#include "ScreenTransition.h"
 
 #include <Lion/Logic/ComponentRegistry.h>
 
@@ -24,14 +26,18 @@ void EndScreen::InitializeForScene()
 	mPlayAgainButton = playAgainEntity ? playAgainEntity->GetComponent<Button>() : nullptr;
 	mMainMenuButton = mainMenuEntity ? mainMenuEntity->GetComponent<Button>() : nullptr;
 	mControllerPrompts = controllerPrompts.get();
+	if (TextRenderer* text = playAgainEntity ? playAgainEntity->GetComponent<TextRenderer>() : nullptr)
+		text->SetText(GameSettings::Text(GameText::PlayAgain));
+	if (TextRenderer* text = mainMenuEntity ? mainMenuEntity->GetComponent<TextRenderer>() : nullptr)
+		text->SetText(GameSettings::Text(GameText::MainMenu));
 	RefreshSelection();
 	UpdateControllerPrompts();
 
 	if (TextRenderer* title = titleEntity ? titleEntity->GetComponent<TextRenderer>() : nullptr)
-		title->SetText(victory ? "CIRCUIT CLEAR" : "SYSTEM FAILURE");
+		title->SetText(GameSettings::Text(victory ? GameText::CircuitClear : GameText::SystemFailure));
 
 	if (TextRenderer* score = scoreEntity ? scoreEntity->GetComponent<TextRenderer>() : nullptr)
-		score->SetText(LION_FORMAT_TEXT("TOTAL SCORE\n{:06}", GameRules::GetScore()));
+		score->SetText(LION_FORMAT_TEXT("{}\n{:06}", GameSettings::Text(GameText::TotalScore), GameRules::GetScore()));
 
 	Window::SetBackgroundColor(victory ? 0.015f : 0.08f, victory ? 0.08f : 0.015f, 0.035f);
 }
@@ -68,7 +74,7 @@ void EndScreen::OnUpdate()
 	if (mPlayAgainButton && mPlayAgainButton->WasClicked())
 		GameRules::StartNewGame();
 	else if ((mMainMenuButton && mMainMenuButton->WasClicked()) || Input::GetActionTap("menu_back"))
-		SceneManager::LoadScene("Scenes/MainMenu.lnscene");
+		ScreenTransition::LoadScene("Scenes/MainMenu.lnscene");
 	else if (Input::GetActionTap("menu_up") || Input::GetActionTap("menu_down"))
 	{
 		mSelection = 1 - mSelection;
@@ -103,7 +109,7 @@ void EndScreen::ActivateSelection()
 	if (mSelection == 0)
 		GameRules::StartNewGame();
 	else
-		SceneManager::LoadScene("Scenes/MainMenu.lnscene");
+		ScreenTransition::LoadScene("Scenes/MainMenu.lnscene");
 }
 
 LION_REGISTER_COMPONENT(EndScreen)

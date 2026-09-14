@@ -199,11 +199,12 @@ function New-TextEntity([string]$name, [string]$text, [float]$size, [float]$anch
 }
 
 function New-ButtonEntity([string]$name, [string]$label, [float]$anchorX, [float]$anchorY,
-	[float]$offsetX, [float]$offsetY, [int]$parent, [float]$width = 360, [float]$height = 56)
+	[float]$offsetX, [float]$offsetY, [int]$parent, [float]$width = 360, [float]$height = 56,
+	[float]$textSize = 28, [bool]$visible = $true)
 {
-	return [ordered]@{
+	$entity = [ordered]@{
 		components = @(
-			(New-TextComponent $label 28 100)
+			(New-TextComponent $label $textSize 100)
 			(New-AnchorComponent $anchorX $anchorY $offsetX $offsetY)
 			(New-ButtonComponent $width $height)
 		)
@@ -211,6 +212,8 @@ function New-ButtonEntity([string]$name, [string]$label, [float]$anchorX, [float
 		parent = $parent
 		transform = New-Transform
 	}
+	if (!$visible) { $entity.visible = $false }
+	return $entity
 }
 
 function New-AssemblyInstance([string]$path, [int]$parent = -1)
@@ -269,6 +272,10 @@ function New-PostProcessingComponent
 		'Vignette Strength' = 0.24
 		'Chromatic Aberration' = $true
 		'Chromatic Aberration Amount' = 0.0024
+		'Motion Blur' = $true
+		'Motion Blur Strength' = 0.2
+		'Color Vision Mode' = 0
+		Fade = 0
 		'Custom Shader' = ''
 		type = 'PostProcessingComponent'
 	}
@@ -330,6 +337,19 @@ $gameRulesAssembly = [ordered]@{
 }
 Write-SealedJson (Join-Path $assetRoot 'Assemblies\Game Rules.lnassembly') $gameRulesAssembly
 
+$screenTransitionAssembly = [ordered]@{
+	entities = @(
+		[ordered]@{
+			components = @([ordered]@{ type = 'ScreenTransition' })
+			name = 'Screen Transition'
+			parent = -1
+			transform = New-Transform
+		}
+	)
+	root = 0
+}
+Write-SealedJson (Join-Path $assetRoot 'Assemblies\Screen Transition.lnassembly') $screenTransitionAssembly
+
 $hudAssembly = [ordered]@{
 	entities = @(
 		[ordered]@{
@@ -383,10 +403,10 @@ $mainMenuAssembly = [ordered]@{
 			transform = New-Transform
 		}
 		$background
-		(New-PanelEntity 'Menu Panel' 520 590 0.5 0.5 0 0 0 70)
-		(New-TextEntity 'Menu Title' 'BRICKOUT' 64 0.5 0.5 0 230 0)
-		(New-TextEntity 'Menu Subtitle' 'NEON CIRCUIT' 22 0.5 0.5 0 175 0)
-		(New-TextEntity 'Menu Prompt' 'PRESS ANY KEY TO START' 24 0.5 0.5 0 -55 0)
+		(New-PanelEntity 'Menu Panel' 720 660 0.5 0.5 0 0 0 70)
+		(New-TextEntity 'Menu Title' 'BRICKOUT' 60 0.5 0.5 0 282 0)
+		(New-TextEntity 'Menu Subtitle' 'NEON CIRCUIT' 20 0.5 0.5 0 232 0)
+		(New-TextEntity 'Menu Prompt' 'PRESS ANY KEY TO START' 24 0.5 0.5 0 -40 0)
 		[ordered]@{
 			components = @()
 			name = 'Menu Options'
@@ -394,43 +414,53 @@ $mainMenuAssembly = [ordered]@{
 			transform = New-Transform
 			visible = $false
 		}
-		(New-ButtonEntity 'Play Button' 'PLAY' 0.5 0.5 0 85 6 360 54)
-		(New-ButtonEntity 'Credits Button' 'CREDITS' 0.5 0.5 0 20 6 360 54)
-		(New-ButtonEntity 'Settings Button' 'SETTINGS' 0.5 0.5 0 -45 6 360 54)
-		(New-ButtonEntity 'Quit Button' 'QUIT' 0.5 0.5 0 -110 6 360 54)
-		(New-TextEntity 'Menu Detail' 'CREDITS' 22 0.5 0.5 0 75 0 $false)
-		(New-SpriteEntity 'Credits Logo' 'Images/sampaio-games-logo.png' 0.5 0.5 0 -75 0.09 0.09 0 100 $false)
-		(New-ButtonEntity 'Sound Button' 'SOUND ON' 0.5 0.5 0 -35 11 360 54)
-		(New-ButtonEntity 'Back Button' 'BACK' 0.5 0.5 0 -175 11 360 54)
-		(New-TextEntity 'Menu Controls' "MOUSE TO SELECT`nARROWS + ENTER" 14 0.5 0.5 0 -238 0)
+		(New-ButtonEntity 'Play Button' 'PLAY' 0.5 0.5 0 110 6 440 56)
+		(New-ButtonEntity 'Credits Button' 'CREDITS' 0.5 0.5 0 42 6 440 56)
+		(New-ButtonEntity 'Settings Button' 'SETTINGS' 0.5 0.5 0 -26 6 440 56)
+		(New-ButtonEntity 'Quit Button' 'QUIT' 0.5 0.5 0 -94 6 440 56)
+		(New-TextEntity 'Menu Detail' 'CREDITS' 24 0.5 0.5 0 195 0 $false)
+		(New-SpriteEntity 'Credits Logo' 'Images/sampaio-games-logo.png' 0.5 0.5 0 -55 0.1 0.1 0 100 $false)
+		(New-GroupEntity 'Settings Options' 0)
+		(New-ButtonEntity 'Sound Button' 'SOUND' 0.5 0.5 0 145 13 580 36 17)
+		(New-ButtonEntity 'Resolution Button' 'RESOLUTION' 0.5 0.5 0 105 13 580 36 17)
+		(New-ButtonEntity 'VSync Button' 'V-SYNC' 0.5 0.5 0 65 13 580 36 17)
+		(New-ButtonEntity 'Quality Button' 'GRAPHICS' 0.5 0.5 0 25 13 580 36 17)
+		(New-ButtonEntity 'Bloom Button' 'BLOOM' 0.5 0.5 0 -15 13 580 36 17)
+		(New-ButtonEntity 'Vignette Button' 'VIGNETTE' 0.5 0.5 0 -55 13 580 36 17)
+		(New-ButtonEntity 'Motion Blur Button' 'MOTION BLUR' 0.5 0.5 0 -95 13 580 36 17)
+		(New-ButtonEntity 'Camera Shake Button' 'CAMERA SHAKE' 0.5 0.5 0 -135 13 580 36 17)
+		(New-ButtonEntity 'Color Mode Button' 'COLOR MODE' 0.5 0.5 0 -175 13 580 36 17)
+		(New-ButtonEntity 'Language Button' 'LANGUAGE' 0.5 0.5 0 -215 13 580 36 17)
+		(New-ButtonEntity 'Back Button' 'BACK' 0.5 0.5 0 -270 0 580 38 18 $false)
+		(New-TextEntity 'Menu Controls' "MOUSE TO SELECT`nARROWS + ENTER" 14 0.5 0.5 0 -310 0)
 	)
 	root = 0
 }
 $attractPromptIndex = $mainMenuAssembly.entities.Count
 $mainMenuAssembly.entities = @($mainMenuAssembly.entities) + @(
 	(New-GroupEntity 'Controller Attract Prompt' 0),
-	(New-SpriteEntity 'Controller Start Icon' 'Sprites/UI/controller-a.png' 0.5 0.5 -125 -55 1 1 $attractPromptIndex),
-	(New-TextEntity 'Controller Start Label' 'PRESS TO START' 22 0.5 0.5 25 -55 $attractPromptIndex)
+	(New-SpriteEntity 'Controller Start Icon' 'Sprites/UI/controller-a.png' 0.5 0.5 -125 -40 1 1 $attractPromptIndex),
+	(New-TextEntity 'Controller Start Label' 'PRESS TO START' 22 0.5 0.5 25 -40 $attractPromptIndex)
 )
 $menuPromptIndex = $mainMenuAssembly.entities.Count
 $mainMenuAssembly.entities = @($mainMenuAssembly.entities) + @(
 	(New-GroupEntity 'Controller Menu Prompts' 0),
-	(New-SpriteEntity 'Controller Navigate Icon' 'Sprites/UI/controller-dpad.png' 0.5 0.5 -180 -238 1 1 $menuPromptIndex),
-	(New-TextEntity 'Controller Navigate Label' 'NAVIGATE' 14 0.5 0.5 -120 -238 $menuPromptIndex),
-	(New-SpriteEntity 'Controller Select Icon' 'Sprites/UI/controller-a.png' 0.5 0.5 45 -238 1 1 $menuPromptIndex),
-	(New-TextEntity 'Controller Select Label' 'SELECT' 14 0.5 0.5 100 -238 $menuPromptIndex)
+	(New-SpriteEntity 'Controller Navigate Icon' 'Sprites/UI/controller-dpad.png' 0.5 0.5 -180 -310 1 1 $menuPromptIndex),
+	(New-TextEntity 'Controller Navigate Label' 'NAVIGATE' 14 0.5 0.5 -120 -310 $menuPromptIndex),
+	(New-SpriteEntity 'Controller Select Icon' 'Sprites/UI/controller-a.png' 0.5 0.5 45 -310 1 1 $menuPromptIndex),
+	(New-TextEntity 'Controller Select Label' 'SELECT' 14 0.5 0.5 100 -310 $menuPromptIndex)
 )
 $detailPromptIndex = $mainMenuAssembly.entities.Count
 $mainMenuAssembly.entities = @($mainMenuAssembly.entities) + @(
 	(New-GroupEntity 'Controller Detail Prompts' 0),
-	(New-SpriteEntity 'Controller Back Icon' 'Sprites/UI/controller-b.png' 0.5 0.5 70 -238 1 1 $detailPromptIndex),
-	(New-TextEntity 'Controller Back Label' 'BACK' 14 0.5 0.5 118 -238 $detailPromptIndex)
+	(New-SpriteEntity 'Controller Back Icon' 'Sprites/UI/controller-b.png' 0.5 0.5 70 -310 1 1 $detailPromptIndex),
+	(New-TextEntity 'Controller Back Label' 'BACK' 14 0.5 0.5 118 -310 $detailPromptIndex)
 )
 $settingsPromptIndex = $mainMenuAssembly.entities.Count
 $mainMenuAssembly.entities = @($mainMenuAssembly.entities) + @(
 	(New-GroupEntity 'Controller Settings Prompt' 0),
-	(New-SpriteEntity 'Controller Toggle Icon' 'Sprites/UI/controller-a.png' 0.5 0.5 -115 -238 1 1 $settingsPromptIndex),
-	(New-TextEntity 'Controller Toggle Label' 'TOGGLE' 14 0.5 0.5 -60 -238 $settingsPromptIndex)
+	(New-SpriteEntity 'Controller Toggle Icon' 'Sprites/UI/controller-a.png' 0.5 0.5 -115 -310 1 1 $settingsPromptIndex),
+	(New-TextEntity 'Controller Toggle Label' 'TOGGLE' 14 0.5 0.5 -60 -310 $settingsPromptIndex)
 )
 Write-SealedJson (Join-Path $assetRoot 'Assemblies\Main Menu.lnassembly') $mainMenuAssembly
 
@@ -450,11 +480,11 @@ $endScreenAssembly = [ordered]@{
 			transform = New-Transform
 		}
 		$endBackground
-		(New-PanelEntity 'Result Panel' 520 540 0.5 0.5 0 0 0 70)
-		(New-TextEntity 'Result Title' 'CIRCUIT CLEARED' 52 0.5 0.5 0 185 0)
+		(New-PanelEntity 'Result Panel' 700 590 0.5 0.5 0 0 0 70)
+		(New-TextEntity 'Result Title' 'CIRCUIT CLEARED' 48 0.5 0.5 0 205 0)
 		(New-TextEntity 'Result Score' "TOTAL SCORE`n000000" 34 0.5 0.5 0 55 0)
-		(New-ButtonEntity 'Play Again Button' 'PLAY AGAIN' 0.5 0.5 0 -85 0 360 54)
-		(New-ButtonEntity 'Main Menu Button' 'MAIN MENU' 0.5 0.5 0 -155 0 360 54)
+		(New-ButtonEntity 'Play Again Button' 'PLAY AGAIN' 0.5 0.5 0 -85 0 440 56)
+		(New-ButtonEntity 'Main Menu Button' 'MAIN MENU' 0.5 0.5 0 -155 0 440 56)
 	)
 	root = 0
 }
@@ -514,21 +544,21 @@ $pauseAssembly = [ordered]@{
 			parent = 1
 			transform = New-Transform
 		}
-		(New-PanelEntity 'Pause Panel' 500 380 0.5 0.5 0 0 1 85)
-		(New-TextEntity 'Pause Title' 'PAUSED' 52 0.5 0.5 0 115 1)
-		(New-TextEntity 'Pause Subtitle' 'CIRCUIT SUSPENDED' 20 0.5 0.5 0 65 1)
-		(New-ButtonEntity 'Resume Button' 'RESUME' 0.5 0.5 0 -15 1 340 54)
-		(New-ButtonEntity 'Pause Main Menu Button' 'MAIN MENU' 0.5 0.5 0 -85 1 340 54)
+		(New-PanelEntity 'Pause Panel' 660 460 0.5 0.5 0 0 1 85)
+		(New-TextEntity 'Pause Title' 'PAUSED' 48 0.5 0.5 0 145 1)
+		(New-TextEntity 'Pause Subtitle' 'CIRCUIT SUSPENDED' 20 0.5 0.5 0 88 1)
+		(New-ButtonEntity 'Resume Button' 'RESUME' 0.5 0.5 0 -5 1 440 56)
+		(New-ButtonEntity 'Pause Main Menu Button' 'MAIN MENU' 0.5 0.5 0 -78 1 440 56)
 	)
 	root = 0
 }
 $pausePromptIndex = $pauseAssembly.entities.Count
 $pauseAssembly.entities = @($pauseAssembly.entities) + @(
 	(New-GroupEntity 'Pause Controller Prompts' 1),
-	(New-SpriteEntity 'Pause Navigate Icon' 'Sprites/UI/controller-dpad.png' 0.5 0.5 -165 -145 1 1 $pausePromptIndex),
-	(New-TextEntity 'Pause Navigate Label' 'NAVIGATE' 14 0.5 0.5 -105 -145 $pausePromptIndex),
-	(New-SpriteEntity 'Pause Select Icon' 'Sprites/UI/controller-a.png' 0.5 0.5 60 -145 1 1 $pausePromptIndex),
-	(New-TextEntity 'Pause Select Label' 'SELECT' 14 0.5 0.5 112 -145 $pausePromptIndex)
+	(New-SpriteEntity 'Pause Navigate Icon' 'Sprites/UI/controller-dpad.png' 0.5 0.5 -165 -185 1 1 $pausePromptIndex),
+	(New-TextEntity 'Pause Navigate Label' 'NAVIGATE' 14 0.5 0.5 -105 -185 $pausePromptIndex),
+	(New-SpriteEntity 'Pause Select Icon' 'Sprites/UI/controller-a.png' 0.5 0.5 60 -185 1 1 $pausePromptIndex),
+	(New-TextEntity 'Pause Select Label' 'SELECT' 14 0.5 0.5 112 -185 $pausePromptIndex)
 )
 Write-SealedJson (Join-Path $assetRoot 'Assemblies\Pause Menu.lnassembly') $pauseAssembly
 
@@ -669,6 +699,7 @@ for ($level = 1; $level -le 5; $level++)
 	$systemsIndex = -1
 	$hasHud = $false
 	$hasPauseMenu = $false
+	$hasScreenTransition = $false
 	$brickIndices = [Collections.Generic.List[int]]::new()
 
 	for ($index = 0; $index -lt $scene.entities.Count; $index++)
@@ -694,6 +725,11 @@ for ($level = 1; $level -le 5; $level++)
 		if ($entity.assembly -eq 'Assemblies/Pause Menu.lnassembly')
 		{
 			$hasPauseMenu = $true
+		}
+
+		if ($entity.assembly -eq 'Assemblies/Screen Transition.lnassembly')
+		{
+			$hasScreenTransition = $true
 		}
 
 		if ($entity.name -eq 'Camera')
@@ -829,16 +865,27 @@ for ($level = 1; $level -le 5; $level++)
 		$scene.entities = @($scene.entities) + @((New-AssemblyInstance 'Assemblies/Pause Menu.lnassembly' $systemsIndex))
 	}
 
+	if (!$hasScreenTransition)
+	{
+		$scene.entities = @($scene.entities) + @((New-AssemblyInstance 'Assemblies/Screen Transition.lnassembly' $systemsIndex))
+	}
+
 	Write-SealedJson $scenePath $scene
 }
 
 $mainMenuPath = Join-Path $assetRoot 'Scenes\MainMenu.lnscene'
 $mainMenuScene = Read-SealedJson $mainMenuPath
 $hasGameRules = $mainMenuScene.entities | Where-Object { $_.assembly -eq 'Assemblies/Game Rules.lnassembly' }
+$hasScreenTransition = $mainMenuScene.entities | Where-Object { $_.assembly -eq 'Assemblies/Screen Transition.lnassembly' }
 
 if (!$hasGameRules)
 {
 	$mainMenuScene.entities = @($mainMenuScene.entities) + @((New-AssemblyInstance 'Assemblies/Game Rules.lnassembly'))
+}
+
+if (!$hasScreenTransition)
+{
+	$mainMenuScene.entities = @($mainMenuScene.entities) + @((New-AssemblyInstance 'Assemblies/Screen Transition.lnassembly'))
 }
 
 foreach ($entity in $mainMenuScene.entities)
@@ -857,6 +904,7 @@ function New-EndScene
 		entities = @(
 			(New-AssemblyInstance 'Assemblies/End Screen.lnassembly')
 			(New-AssemblyInstance 'Assemblies/Game Rules.lnassembly')
+			(New-AssemblyInstance 'Assemblies/Screen Transition.lnassembly')
 			[ordered]@{
 				components = @(
 					[ordered]@{
@@ -886,6 +934,43 @@ function New-EndScene
 
 Write-SealedJson (Join-Path $assetRoot 'Scenes\Victory.lnscene') (New-EndScene)
 Write-SealedJson (Join-Path $assetRoot 'Scenes\Defeat.lnscene') (New-EndScene)
+
+$splashScene = [ordered]@{
+	entities = @(
+		[ordered]@{
+			components = @([ordered]@{ type = 'SplashScreen' })
+			name = 'Splash'
+			parent = -1
+			transform = New-Transform
+		}
+		(New-SpriteEntity 'Lion Engine Logo' 'Images/lion-engine-banner.png' 0.5 0.5 0 0 0.62 0.62 -1 20)
+		(New-AssemblyInstance 'Assemblies/Screen Transition.lnassembly')
+		[ordered]@{
+			components = @(
+				[ordered]@{
+					limit = $false
+					limitBottom = -360
+					limitLeft = -640
+					limitRight = 640
+					limitTop = 360
+					offsetX = 0
+					offsetY = 0
+					positionSmoothing = 5
+					rotationSmoothing = 5
+					smooth = $false
+					type = 'Camera2D'
+					zoom = 1
+				}
+				(New-PostProcessingComponent)
+			)
+			name = 'Camera'
+			parent = -1
+			transform = New-Transform
+		}
+	)
+	gravity = @(0, 0)
+}
+Write-SealedJson (Join-Path $assetRoot 'Scenes\Splash.lnscene') $splashScene
 
 $inputPath = Join-Path $assetRoot 'Config\Input.lninput'
 $inputMap = Read-SealedJson $inputPath

@@ -28,7 +28,21 @@ namespace Lion
 		float32 GetVignetteStrength() const { return mVignetteStrength; }
 		bool HasChromaticAberration() const { return mChromaticAberration; }
 		float32 GetChromaticAberration() const { return mChromaticAberrationAmount; }
+		bool HasMotionBlur() const { return mMotionBlur; }
+		float32 GetMotionBlurStrength() const { return mMotionBlurStrength; }
+		int32 GetColorVisionMode() const { return mColorVisionMode; }
+		float32 GetFade() const { return mFade; }
 		const std::string& GetCustomShaderPath() const { return mCustomShaderPath; }
+
+		void SetBloom(bool enabled) { mBloom = enabled; }
+		void SetBloomStrength(float32 strength) { mBloomStrength = std::max(strength, 0.0f); }
+		void SetVignette(bool enabled) { mVignette = enabled; }
+		void SetVignetteStrength(float32 strength) { mVignetteStrength = std::clamp(strength, 0.0f, 1.0f); }
+		void SetChromaticAberration(bool enabled) { mChromaticAberration = enabled; }
+		void SetMotionBlur(bool enabled) { mMotionBlur = enabled; }
+		void SetMotionBlurStrength(float32 strength) { mMotionBlurStrength = std::clamp(strength, 0.0f, 1.0f); }
+		void SetColorVisionMode(int32 mode) { mColorVisionMode = std::clamp(mode, 0, 3); }
+		void SetFade(float32 fade) { mFade = std::clamp(fade, 0.0f, 1.0f); }
 
 		LION_API void Reflect(Reflector& reflector) override;
 
@@ -46,6 +60,10 @@ namespace Lion
 		float32 mVignetteStrength = 0.14f;
 		bool mChromaticAberration = false;
 		float32 mChromaticAberrationAmount = 0.0015f;
+		bool mMotionBlur = false;
+		float32 mMotionBlurStrength = 0.18f;
+		int32 mColorVisionMode = 0;
+		float32 mFade = 0.0f;
 		std::string mCustomShaderPath;
 	};
 }

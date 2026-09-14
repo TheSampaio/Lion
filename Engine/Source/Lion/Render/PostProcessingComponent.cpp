@@ -23,6 +23,10 @@ namespace Lion
 		reflector.Field("Vignette Strength", mVignetteStrength);
 		reflector.Field("Chromatic Aberration", mChromaticAberration);
 		reflector.Field("Chromatic Aberration Amount", mChromaticAberrationAmount);
+		reflector.Field("Motion Blur", mMotionBlur);
+		reflector.Field("Motion Blur Strength", mMotionBlurStrength);
+		reflector.Field("Color Vision Mode", mColorVisionMode);
+		reflector.Field("Fade", mFade);
 		reflector.FieldAsset("Custom Shader", mCustomShaderPath);
 	}
 

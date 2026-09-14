@@ -1,5 +1,6 @@
 #include "MainMenu.h"
 #include "GameRules.h"
+#include "GameSettings.h"
 
 #include <Lion/Logic/ComponentRegistry.h>
 
@@ -17,7 +18,7 @@ void MainMenu::Initialize()
 	const Reference<Entity> prompt = scene->FindEntity("Menu Prompt");
 	const Reference<Entity> options = scene->FindEntity("Menu Options");
 	const Reference<Entity> detail = scene->FindEntity("Menu Detail");
-	const Reference<Entity> soundButton = scene->FindEntity("Sound Button");
+	const Reference<Entity> settingsOptions = scene->FindEntity("Settings Options");
 	const Reference<Entity> backButton = scene->FindEntity("Back Button");
 	const Reference<Entity> creditsLogo = scene->FindEntity("Credits Logo");
 	const Reference<Entity> keyboardControls = scene->FindEntity("Menu Controls");
@@ -28,7 +29,8 @@ void MainMenu::Initialize()
 	mPrompt = prompt.get();
 	mOptions = options.get();
 	mDetail = detail.get();
-	mSoundButtonEntity = soundButton.get();
+	mSettingsOptions = settingsOptions.get();
+	mBackButtonEntity = backButton.get();
 	mCreditsLogo = creditsLogo.get();
 	mKeyboardControls = keyboardControls.get();
 	mControllerAttractPrompt = controllerAttractPrompt.get();
@@ -36,18 +38,30 @@ void MainMenu::Initialize()
 	mControllerDetailPrompts = controllerDetailPrompts.get();
 	mControllerSettingsPrompt = controllerSettingsPrompt.get();
 	mDetailText = mDetail ? mDetail->GetComponent<TextRenderer>() : nullptr;
-	mSoundButtonText = mSoundButtonEntity ? mSoundButtonEntity->GetComponent<TextRenderer>() : nullptr;
-	mSoundButton = mSoundButtonEntity ? mSoundButtonEntity->GetComponent<Button>() : nullptr;
+	mPromptText = mPrompt ? mPrompt->GetComponent<TextRenderer>() : nullptr;
 	mBackButton = backButton ? backButton->GetComponent<Button>() : nullptr;
+	mBackButtonText = backButton ? backButton->GetComponent<TextRenderer>() : nullptr;
 
 	static const char8* buttonNames[] = { "Play Button", "Credits Button", "Settings Button", "Quit Button" };
 	for (int32 index = 0; index < static_cast<int32>(mMenuButtons.size()); ++index)
 	{
 		const Reference<Entity> button = scene->FindEntity(buttonNames[index]);
 		mMenuButtons[index] = button ? button->GetComponent<Button>() : nullptr;
+		mMenuButtonTexts[index] = button ? button->GetComponent<TextRenderer>() : nullptr;
 	}
 
-	mSoundEnabled = Audio::GetBusVolume(AudioBus::Master) > 0.0f;
+	static const char8* settingNames[] = {
+		"Sound Button", "Resolution Button", "VSync Button", "Quality Button", "Bloom Button",
+		"Vignette Button", "Motion Blur Button", "Camera Shake Button", "Color Mode Button", "Language Button"
+	};
+	for (int32 index = 0; index < static_cast<int32>(mSettingsButtons.size()); ++index)
+	{
+		const Reference<Entity> button = scene->FindEntity(settingNames[index]);
+		mSettingsButtons[index] = button ? button->GetComponent<Button>() : nullptr;
+		mSettingsTexts[index] = button ? button->GetComponent<TextRenderer>() : nullptr;
+	}
+
+	RefreshLocalizedText();
 	ShowState(State::Attract);
 }
 
@@ -81,7 +95,7 @@ void MainMenu::OnUpdate()
 		return;
 	}
 
-	if (mState == State::Credits || mState == State::Settings)
+	if (mState == State::Credits)
 	{
 		if ((mBackButton && mBackButton->WasClicked()) || Input::GetActionTap("menu_back"))
 		{
@@ -89,16 +103,60 @@ void MainMenu::OnUpdate()
 			return;
 		}
 
-		if (mState == State::Settings
-			&& ((mSoundButton && mSoundButton->WasClicked())
-				|| Input::GetActionTap("menu_left") || Input::GetActionTap("menu_right")
-				|| Input::GetActionTap("menu_confirm")))
+		return;
+	}
+
+	if (mState == State::Settings)
+	{
+		if (Input::GetActionTap("menu_back"))
 		{
-			mSoundEnabled = !mSoundEnabled;
-			Audio::SetBusVolume(AudioBus::Master, mSoundEnabled ? 1.0f : 0.0f);
-			ShowState(State::Settings);
+			ShowState(State::Menu);
+			return;
 		}
 
+		for (int32 index = 0; index < static_cast<int32>(mSettingsButtons.size()); ++index)
+		{
+			Button* button = mSettingsButtons[index];
+			if (!button)
+				continue;
+			if (button->WasClicked())
+			{
+				mSettingsSelection = index;
+				ActivateSetting(1);
+				return;
+			}
+			if (button->IsHovered() && mSettingsSelection != index)
+			{
+				mSettingsSelection = index;
+				RefreshSettings();
+			}
+		}
+
+		if (mBackButton && mBackButton->WasClicked())
+		{
+			ShowState(State::Menu);
+			return;
+		}
+		if (mBackButton && mBackButton->IsHovered() && mSettingsSelection != GameSettings::kSettingCount)
+		{
+			mSettingsSelection = GameSettings::kSettingCount;
+			RefreshSettings();
+		}
+
+		if (Input::GetActionTap("menu_up"))
+		{
+			mSettingsSelection = (mSettingsSelection + GameSettings::kSettingCount) % (GameSettings::kSettingCount + 1);
+			RefreshSettings();
+		}
+		else if (Input::GetActionTap("menu_down"))
+		{
+			mSettingsSelection = (mSettingsSelection + 1) % (GameSettings::kSettingCount + 1);
+			RefreshSettings();
+		}
+		else if (Input::GetActionTap("menu_left"))
+			ActivateSetting(-1);
+		else if (Input::GetActionTap("menu_right") || Input::GetActionTap("menu_confirm"))
+			ActivateSetting(1);
 		return;
 	}
 
@@ -157,10 +215,16 @@ void MainMenu::ShowState(State state)
 		mDetail->SetVisible(showDetail);
 		mDetail->SetEnabled(showDetail);
 	}
-	if (mSoundButtonEntity)
+	if (mSettingsOptions)
 	{
-		mSoundButtonEntity->SetVisible(state == State::Settings);
-		mSoundButtonEntity->SetEnabled(state == State::Settings);
+		mSettingsOptions->SetVisible(state == State::Settings);
+		mSettingsOptions->SetEnabled(state == State::Settings);
+	}
+	if (mBackButtonEntity)
+	{
+		const bool showBack = state == State::Credits || state == State::Settings;
+		mBackButtonEntity->SetVisible(showBack);
+		mBackButtonEntity->SetEnabled(showBack);
 	}
 	if (mCreditsLogo)
 	{
@@ -171,14 +235,44 @@ void MainMenu::ShowState(State state)
 	if (state == State::Menu)
 		RefreshMenu();
 	else if (state == State::Credits && mDetailText)
-		mDetailText->SetText("CREDITS\n\nKELLVYN SAMPAIO\nSAMPAIO GAMES STUDIO\nPOWERED BY LION ENGINE");
+		mDetailText->SetText(LION_FORMAT_TEXT("{}\n\nKELLVYN SAMPAIO\nSAMPAIO GAMES STUDIO\nPOWERED BY LION ENGINE",
+			GameSettings::Text(GameText::Credits)));
 	else if (state == State::Settings && mDetailText)
-		mDetailText->SetText("SETTINGS");
-
-	if (state == State::Settings && mSoundButtonText)
-		mSoundButtonText->SetText(mSoundEnabled ? "SOUND ON" : "SOUND OFF");
+	{
+		mDetailText->SetText(GameSettings::Text(GameText::Settings));
+		mSettingsSelection = 0;
+		RefreshSettings();
+	}
 
 	UpdateInputPresentation(true);
+}
+
+void MainMenu::RefreshSettings()
+{
+	for (int32 index = 0; index < GameSettings::kSettingCount; ++index)
+	{
+		if (mSettingsTexts[index])
+			mSettingsTexts[index]->SetText(GameSettings::Label(index));
+		if (mSettingsButtons[index])
+			mSettingsButtons[index]->SetSelected(index == mSettingsSelection);
+	}
+	if (mBackButton)
+		mBackButton->SetSelected(mSettingsSelection == GameSettings::kSettingCount);
+}
+
+void MainMenu::RefreshLocalizedText()
+{
+	static const GameText menuText[] = { GameText::Play, GameText::Credits, GameText::Settings, GameText::Quit };
+	for (int32 index = 0; index < static_cast<int32>(mMenuButtonTexts.size()); ++index)
+		if (mMenuButtonTexts[index])
+			mMenuButtonTexts[index]->SetText(GameSettings::Text(menuText[index]));
+	if (mBackButtonText)
+		mBackButtonText->SetText(GameSettings::Text(GameText::Back));
+	if (mPromptText)
+		mPromptText->SetText(GameSettings::Text(GameText::PressAny));
+	if (mState == State::Settings && mDetailText)
+		mDetailText->SetText(GameSettings::Text(GameText::Settings));
+	RefreshSettings();
 }
 
 void MainMenu::RefreshMenu()
@@ -223,6 +317,25 @@ void MainMenu::ActivateSelection()
 		case 2: ShowState(State::Settings); break;
 		case 3: Application::RequestQuit(); break;
 	}
+}
+
+void MainMenu::ActivateSetting(int32 direction)
+{
+	if (mSettingsSelection == GameSettings::kSettingCount)
+	{
+		ShowState(State::Menu);
+		return;
+	}
+
+	GameSettings::Change(mSettingsSelection, direction);
+	if (mSettingsSelection == 9)
+		RefreshLocalizedText();
+	else
+		RefreshSettings();
+
+	const Reference<Scene> scene = GetOwner().GetScene();
+	if (PostProcessingComponent* postProcessing = scene ? scene->FindComponent<PostProcessingComponent>() : nullptr)
+		GameSettings::Apply(*postProcessing);
 }
 
 LION_REGISTER_COMPONENT(MainMenu)

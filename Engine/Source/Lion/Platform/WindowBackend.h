@@ -82,6 +82,9 @@ namespace Lion
 		// Allows or forbids the user to resize the window at runtime.
 		virtual void SetResizable(bool enable) = 0;
 
+		// Changes the live client size while preserving the current window mode.
+		virtual void SetSize(uint32 width, uint32 height) = 0;
+
 		// Loads and applies a window icon from an image file.
 		virtual void SetIcon(const std::string& filePath) = 0;
 

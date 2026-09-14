@@ -1,7 +1,9 @@
 #include "GameRules.h"
 #include "Ball.h"
 #include "Brick.h"
+#include "GameSettings.h"
 #include "Paddle.h"
+#include "ScreenTransition.h"
 
 #include <Lion/Logic/ComponentRegistry.h>
 #include <Lion/Logic/Reflector.h>
@@ -121,10 +123,11 @@ void GameRules::StartNewGame()
 	sScore = 0;
 	sAttempts = kStartingAttempts;
 	sSessionActive = true;
-	SceneManager::LoadScene(LevelScene(1));
+	ScreenTransition::LoadScene(LevelScene(1));
 }
 
-void GameRules::RegisterBrickDamage(const Vector2& position, bool destroyed, const std::string& power)
+void GameRules::RegisterBrickDamage(const Vector2& position, bool destroyed, const std::string& power,
+	Ball* sourceBall)
 {
 	if (!sSessionActive)
 		return;
@@ -135,13 +138,16 @@ void GameRules::RegisterBrickDamage(const Vector2& position, bool destroyed, con
 	if (!sActiveRules)
 		return;
 
-	sActiveRules->mShakeRemaining = sActiveRules->mShakeDuration;
-	sActiveRules->mShakeFrame = 0;
+	if (GameSettings::HasCameraShake())
+	{
+		sActiveRules->mShakeRemaining = sActiveRules->mShakeDuration;
+		sActiveRules->mShakeFrame = 0;
+	}
 	if (sActiveRules->mImpactParticles)
 		sActiveRules->mImpactParticles->EmitAt(position, destroyed ? 30 : 14);
 
 	if (destroyed && !power.empty())
-		sActiveRules->ActivatePower(power, position);
+		sActiveRules->ActivatePower(power, position, sourceBall);
 
 	sActiveRules->UpdateHud();
 }
@@ -149,17 +155,25 @@ void GameRules::RegisterBrickDamage(const Vector2& position, bool destroyed, con
 void GameRules::UpdateHud()
 {
 	if (mScoreText)
-		mScoreText->SetText(LION_FORMAT_TEXT("SCORE {:06}", sScore));
+		mScoreText->SetText(LION_FORMAT_TEXT("{} {:06}", GameSettings::Text(GameText::Score), sScore));
 
 	if (mAttemptsText)
-		mAttemptsText->SetText(LION_FORMAT_TEXT("BALLS {}", sAttempts));
+		mAttemptsText->SetText(LION_FORMAT_TEXT("{} {}", GameSettings::Text(GameText::Balls), sAttempts));
 
 	if (mLevelText && mLevel > 0)
-		mLevelText->SetText(LION_FORMAT_TEXT("LEVEL {:02}", mLevel));
+		mLevelText->SetText(LION_FORMAT_TEXT("{} {:02}", GameSettings::Text(GameText::Level), mLevel));
 }
 
 void GameRules::UpdateShake()
 {
+	if (!GameSettings::HasCameraShake())
+	{
+		mShakeRemaining = 0.0f;
+		if (mCamera)
+			mCamera->SetOffset(mCameraBaseOffset);
+		return;
+	}
+
 	if (!mCamera || mShakeRemaining <= 0.0f)
 		return;
 
@@ -205,11 +219,11 @@ void GameRules::HandleLevelFlow()
 		mTransitionQueued = true;
 
 		if (mLevel < kFinalLevel)
-			SceneManager::LoadScene(LevelScene(mLevel + 1));
+			ScreenTransition::LoadScene(LevelScene(mLevel + 1));
 		else
 		{
 			sSessionActive = false;
-			SceneManager::LoadScene("Scenes/Victory.lnscene");
+			ScreenTransition::LoadScene("Scenes/Victory.lnscene");
 		}
 	}
 	else
@@ -248,35 +262,35 @@ void GameRules::HandleLevelFlow()
 		{
 			mTransitionQueued = true;
 			sSessionActive = false;
-			SceneManager::LoadScene("Scenes/Defeat.lnscene");
+			ScreenTransition::LoadScene("Scenes/Defeat.lnscene");
 		}
 	}
 }
 
 void GameRules::RespawnBall()
 {
-	if (!mBall || !mPaddle)
+	if (!mBall)
 		return;
 
-	mPaddle->Reset();
 	mBall->GetOwner().SetEnabled(true);
 	mBall->SetVisible(true);
 	mBall->Reset();
 }
 
-void GameRules::ActivatePower(const std::string& power, const Vector2& position)
+void GameRules::ActivatePower(const std::string& power, const Vector2& position, Ball* sourceBall)
 {
 	std::string message;
 
 	if (power == "Extra Life")
 	{
 		sAttempts++;
-		message = "EXTRA BALL +1";
+		message = GameSettings::Text(GameText::ExtraBall);
 	}
 	else if (power == "Multiball")
 	{
-		SpawnExtraBalls();
-		message = "MULTIBALL x3";
+		if (sourceBall)
+			SpawnExtraBalls(*sourceBall);
+		message = GameSettings::Text(GameText::Multiball);
 	}
 	else
 		return;
@@ -295,31 +309,17 @@ void GameRules::ActivatePower(const std::string& power, const Vector2& position)
 	UpdateHud();
 }
 
-void GameRules::SpawnExtraBalls()
+void GameRules::SpawnExtraBalls(Ball& sourceBall)
 {
 	const Reference<Scene> scene = GetOwner().GetScene();
-	Ball* sourceBall = nullptr;
-
-	for (const Reference<Entity>& entity : scene->GetEntities())
-	{
-		if (entity->IsActive() && entity->HasComponent<Ball>())
-		{
-			sourceBall = entity->GetComponent<Ball>();
-			break;
-		}
-	}
-
-	if (!sourceBall)
-		return;
-
-	const Vector2 origin = sourceBall->GetOwner().GetWorldPosition();
+	const Vector2 origin = sourceBall.GetOwner().GetWorldPosition();
 
 	for (int32 index = 0; index < 2; ++index)
 	{
 		const float32 side = index == 0 ? -1.0f : 1.0f;
 		Reference<Entity> entity = MakeReference<Entity>();
 		entity->SetName(LION_FORMAT_TEXT("Power Ball {}", index + 1));
-		entity->GetTransform()->SetPosition(Vector2(origin.x + side * 10.0f, origin.y));
+		entity->GetTransform()->SetPosition(origin);
 		entity->GetTransform()->SetScale(Vector2(1.0f, 1.0f));
 		SpriteRenderer* renderer = entity->AddComponent<SpriteRenderer>("Sprites/Brickout/ball.png");
 		renderer->SetOrder(20);
@@ -338,9 +338,9 @@ void GameRules::HandleDebugLevelKeys()
 		return;
 
 	if (Input::GetKeyTap(KeyCode::Period) && mLevel < kFinalLevel)
-		SceneManager::LoadScene(LevelScene(mLevel + 1));
+		ScreenTransition::LoadScene(LevelScene(mLevel + 1));
 	else if (Input::GetKeyTap(KeyCode::Comma) && mLevel > 1)
-		SceneManager::LoadScene(LevelScene(mLevel - 1));
+		ScreenTransition::LoadScene(LevelScene(mLevel - 1));
 #endif
 }
 

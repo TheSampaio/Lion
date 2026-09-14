@@ -299,6 +299,11 @@ namespace Lion
 		shader->SetFloat("uVignetteStrength", effect.GetVignetteStrength());
 		shader->SetFloat("uChromaticAberrationEnabled", effect.HasChromaticAberration() ? 1.0f : 0.0f);
 		shader->SetFloat("uChromaticAberration", effect.GetChromaticAberration());
+		// These finishing controls stay in the shared pass so fades and accessibility also affect UI.
+		shader->SetFloat("uMotionBlurEnabled", effect.HasMotionBlur() ? 1.0f : 0.0f);
+		shader->SetFloat("uMotionBlurStrength", effect.GetMotionBlurStrength());
+		shader->SetInt("uColorVisionMode", effect.GetColorVisionMode());
+		shader->SetFloat("uFade", effect.GetFade());
 
 		self->mPostFramebuffer->BindColorAttachment(0);
 		self->mPostVertexArray->Bind();

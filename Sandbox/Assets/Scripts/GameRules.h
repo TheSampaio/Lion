@@ -18,7 +18,7 @@ public:
 
 	static void StartNewGame();
 	static void RegisterBrickDamage(const Lion::Vector2& position, bool destroyed,
-		const std::string& power);
+		const std::string& power, Ball* sourceBall);
 	static Lion::int32 GetScore() { return sScore; }
 	static Lion::int32 GetAttempts() { return sAttempts; }
 
@@ -59,8 +59,8 @@ private:
 	void UpdateControllerPrompts();
 	void HandleLevelFlow();
 	void RespawnBall();
-	void ActivatePower(const std::string& power, const Lion::Vector2& position);
-	void SpawnExtraBalls();
+	void ActivatePower(const std::string& power, const Lion::Vector2& position, Ball* sourceBall);
+	void SpawnExtraBalls(Ball& sourceBall);
 	void HandleDebugLevelKeys();
 	static Lion::int32 ActiveLevel();
 	static std::string LevelScene(Lion::int32 level);

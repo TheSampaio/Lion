@@ -27,6 +27,7 @@ namespace Lion
 
 		void SetDisplayTitle(const std::string& title) override;
 		void SetResizable(bool enable) override;
+		void SetSize(uint32 width, uint32 height) override;
 		void SetIcon(const std::string& filePath) override;
 
 		void Minimize() override;

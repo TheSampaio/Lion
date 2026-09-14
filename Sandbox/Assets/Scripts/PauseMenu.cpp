@@ -1,4 +1,6 @@
 #include "PauseMenu.h"
+#include "GameSettings.h"
+#include "ScreenTransition.h"
 
 #include <Lion/Logic/ComponentRegistry.h>
 
@@ -16,6 +18,16 @@ void PauseMenu::Initialize()
 	mControllerPrompts = controllerPrompts.get();
 	mResumeButton = resume ? resume->GetComponent<Button>() : nullptr;
 	mMainMenuButton = mainMenu ? mainMenu->GetComponent<Button>() : nullptr;
+	const Reference<Entity> title = scene->FindEntity("Pause Title");
+	const Reference<Entity> subtitle = scene->FindEntity("Pause Subtitle");
+	if (TextRenderer* text = title ? title->GetComponent<TextRenderer>() : nullptr)
+		text->SetText(GameSettings::Text(GameText::Paused));
+	if (TextRenderer* text = subtitle ? subtitle->GetComponent<TextRenderer>() : nullptr)
+		text->SetText(GameSettings::Text(GameText::CircuitSuspended));
+	if (TextRenderer* text = resume ? resume->GetComponent<TextRenderer>() : nullptr)
+		text->SetText(GameSettings::Text(GameText::Resume));
+	if (TextRenderer* text = mainMenu ? mainMenu->GetComponent<TextRenderer>() : nullptr)
+		text->SetText(GameSettings::Text(GameText::MainMenu));
 	Show(false);
 }
 
@@ -58,7 +70,7 @@ void PauseMenu::OnUpdate()
 	else if (mMainMenuButton && mMainMenuButton->WasClicked())
 	{
 		SceneManager::SetPaused(false);
-		SceneManager::LoadScene("Scenes/MainMenu.lnscene");
+		ScreenTransition::LoadScene("Scenes/MainMenu.lnscene");
 	}
 	else if (Input::GetActionTap("menu_up") || Input::GetActionTap("menu_down"))
 	{
@@ -121,7 +133,7 @@ void PauseMenu::ActivateSelection()
 	else
 	{
 		SceneManager::SetPaused(false);
-		SceneManager::LoadScene("Scenes/MainMenu.lnscene");
+		ScreenTransition::LoadScene("Scenes/MainMenu.lnscene");
 	}
 }
 

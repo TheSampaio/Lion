@@ -72,12 +72,12 @@ function Get-VisibleBounds([Drawing.Bitmap]$bitmap, [Drawing.Rectangle]$cell, [i
 }
 
 function Export-AtlasCell([Drawing.Bitmap]$atlas, [int]$column, [int]$row,
-	[int]$columns, [int]$rows, [int]$width, [int]$height, [string]$path)
+	[int]$columns, [int]$rows, [int]$width, [int]$height, [string]$path, [int]$alphaThreshold = 96)
 {
 	$cellWidth = [int]($atlas.Width / $columns)
 	$cellHeight = [int]($atlas.Height / $rows)
 	$cell = [Drawing.Rectangle]::new($column * $cellWidth, $row * $cellHeight, $cellWidth, $cellHeight)
-	$source = Get-VisibleBounds $atlas $cell
+	$source = Get-VisibleBounds $atlas $cell $alphaThreshold
 	$bitmap = New-Canvas $width $height ([Drawing.Color]::Transparent)
 	$graphics = New-QualityGraphics $bitmap
 	$graphics.DrawImage($atlas, [Drawing.Rectangle]::new(0, 0, $width, $height),
@@ -128,6 +128,35 @@ foreach ($spec in $spriteSpecs)
 {
 	Export-AtlasCell $gameplayAtlas $spec[1] $spec[2] 4 3 $spec[3] $spec[4] (Join-Path $assetRoot $spec[0])
 }
+
+# This atlas cell has a faint artifact at its lower edge. A stricter threshold keeps its visible
+# silhouette at the same proportions as the other durability tiers.
+Export-AtlasCell $gameplayAtlas 1 1 4 3 60 24 (Join-Path $assetRoot 'tile-4.png') 160
+
+# Blue remains the visual language of level geometry. The fourth durability tier is recolored gold so
+# gameplay targets cannot be mistaken for rails or colliders, while keeping the atlas silhouette intact.
+$tierFourPath = Join-Path $assetRoot 'tile-4.png'
+$tierFourSource = [Drawing.Bitmap]::FromFile($tierFourPath)
+$tierFourColored = New-Canvas $tierFourSource.Width $tierFourSource.Height ([Drawing.Color]::Transparent)
+for ($y = 0; $y -lt $tierFourSource.Height; $y++)
+{
+	for ($x = 0; $x -lt $tierFourSource.Width; $x++)
+	{
+		$pixel = $tierFourSource.GetPixel($x, $y)
+		if ($pixel.A -eq 0) { continue }
+		$energy = [Math]::Max($pixel.R, [Math]::Max($pixel.G, $pixel.B))
+		$tierFourColored.SetPixel($x, $y, [Drawing.Color]::FromArgb($pixel.A, $energy,
+			[int]($energy * 0.72), [int]($energy * 0.08)))
+	}
+}
+$tierFourSource.Dispose()
+$tierFour = New-Canvas 60 24 ([Drawing.Color]::Transparent)
+$tierFourGraphics = New-QualityGraphics $tierFour
+$tierFourGraphics.DrawImage($tierFourColored, 1, 1, 59, 22)
+$tierFourGraphics.Dispose()
+$tierFourColored.Dispose()
+$tierFour.Save($tierFourPath, [Drawing.Imaging.ImageFormat]::Png)
+$tierFour.Dispose()
 
 $horizontalWall = [Drawing.Bitmap]::FromFile((Join-Path $assetRoot 'wall-horizontal.png'))
 $horizontalWall.RotateFlip([Drawing.RotateFlipType]::Rotate90FlipNone)
