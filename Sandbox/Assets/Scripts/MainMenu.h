@@ -26,6 +26,11 @@ private:
 	Lion::Entity* mDetail = nullptr;
 	Lion::Entity* mSoundButtonEntity = nullptr;
 	Lion::Entity* mCreditsLogo = nullptr;
+	Lion::Entity* mKeyboardControls = nullptr;
+	Lion::Entity* mControllerAttractPrompt = nullptr;
+	Lion::Entity* mControllerMenuPrompts = nullptr;
+	Lion::Entity* mControllerDetailPrompts = nullptr;
+	Lion::Entity* mControllerSettingsPrompt = nullptr;
 	Lion::TextRenderer* mDetailText = nullptr;
 	Lion::TextRenderer* mSoundButtonText = nullptr;
 	std::array<Lion::Button*, 4> mMenuButtons{};
@@ -35,9 +40,11 @@ private:
 	bool mInitialized = false;
 	bool mInputArmed = false;
 	bool mSoundEnabled = true;
+	bool mUsingGamepad = false;
 
 	void Initialize();
 	void ShowState(State state);
 	void RefreshMenu();
+	void UpdateInputPresentation(bool force = false);
 	void ActivateSelection();
 };

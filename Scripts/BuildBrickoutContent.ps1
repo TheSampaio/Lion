@@ -255,23 +255,40 @@ function New-PostProcessingComponent
 {
 	return [ordered]@{
 		Bloom = $true
-		'Bloom Strength' = 0.34
-		'Bloom Threshold' = 0.52
+		'Bloom Strength' = 0.9
+		'Bloom Threshold' = 0.32
 		'Color Correction' = $true
-		Brightness = 0
-		Contrast = 1.04
-		Saturation = 1.08
+		Brightness = -0.01
+		Contrast = 1.1
+		Saturation = 1.2
 		Gamma = 1
 		'Tint.x' = 1
 		'Tint.y' = 1
 		'Tint.z' = 1
 		Vignette = $true
-		'Vignette Strength' = 0.14
-		'Chromatic Aberration' = $false
-		'Chromatic Aberration Amount' = 0.0015
+		'Vignette Strength' = 0.24
+		'Chromatic Aberration' = $true
+		'Chromatic Aberration Amount' = 0.0024
 		'Custom Shader' = ''
 		type = 'PostProcessingComponent'
 	}
+}
+
+function New-GroupEntity([string]$name, [int]$parent, [bool]$visible = $false)
+{
+	$entity = [ordered]@{
+		components = @()
+		name = $name
+		parent = $parent
+		transform = New-Transform
+	}
+
+	if (!$visible)
+	{
+		$entity.visible = $false
+	}
+
+	return $entity
 }
 
 $gameRulesAssembly = [ordered]@{
@@ -329,6 +346,16 @@ $hudAssembly = [ordered]@{
 	)
 	root = 0
 }
+$hudPromptIndex = $hudAssembly.entities.Count
+$hudAssembly.entities = @($hudAssembly.entities) + @(
+	(New-GroupEntity 'HUD Controller Prompts' 0),
+	(New-SpriteEntity 'HUD Move Icon' 'Sprites/UI/controller-stick.png' 0.5 0 -210 28 1 1 $hudPromptIndex),
+	(New-TextEntity 'HUD Move Label' 'MOVE' 14 0.5 0 -160 28 $hudPromptIndex),
+	(New-SpriteEntity 'HUD Launch Icon' 'Sprites/UI/controller-a.png' 0.5 0 -45 28 1 1 $hudPromptIndex),
+	(New-TextEntity 'HUD Launch Label' 'LAUNCH' 14 0.5 0 15 28 $hudPromptIndex),
+	(New-SpriteEntity 'HUD Pause Icon' 'Sprites/UI/controller-b.png' 0.5 0 135 28 1 1 $hudPromptIndex),
+	(New-TextEntity 'HUD Pause Label' 'PAUSE' 14 0.5 0 190 28 $hudPromptIndex)
+)
 Write-SealedJson (Join-Path $assetRoot 'Assemblies\HUD.lnassembly') $hudAssembly
 
 $background = [ordered]@{
@@ -344,7 +371,7 @@ $background = [ordered]@{
 	)
 	name = 'Background'
 	parent = 0
-	transform = New-Transform 0 0 4 4
+	transform = New-Transform
 }
 
 $mainMenuAssembly = [ordered]@{
@@ -375,10 +402,36 @@ $mainMenuAssembly = [ordered]@{
 		(New-SpriteEntity 'Credits Logo' 'Images/sampaio-games-logo.png' 0.5 0.5 0 -75 0.09 0.09 0 100 $false)
 		(New-ButtonEntity 'Sound Button' 'SOUND ON' 0.5 0.5 0 -35 11 360 54)
 		(New-ButtonEntity 'Back Button' 'BACK' 0.5 0.5 0 -175 11 360 54)
-		(New-TextEntity 'Menu Controls' "MOVE  A D OR ARROWS`nLAUNCH  SPACE    PAUSE  ESC" 14 0.5 0.5 0 -238 0)
+		(New-TextEntity 'Menu Controls' "MOUSE TO SELECT`nARROWS + ENTER" 14 0.5 0.5 0 -238 0)
 	)
 	root = 0
 }
+$attractPromptIndex = $mainMenuAssembly.entities.Count
+$mainMenuAssembly.entities = @($mainMenuAssembly.entities) + @(
+	(New-GroupEntity 'Controller Attract Prompt' 0),
+	(New-SpriteEntity 'Controller Start Icon' 'Sprites/UI/controller-a.png' 0.5 0.5 -125 -55 1 1 $attractPromptIndex),
+	(New-TextEntity 'Controller Start Label' 'PRESS TO START' 22 0.5 0.5 25 -55 $attractPromptIndex)
+)
+$menuPromptIndex = $mainMenuAssembly.entities.Count
+$mainMenuAssembly.entities = @($mainMenuAssembly.entities) + @(
+	(New-GroupEntity 'Controller Menu Prompts' 0),
+	(New-SpriteEntity 'Controller Navigate Icon' 'Sprites/UI/controller-dpad.png' 0.5 0.5 -180 -238 1 1 $menuPromptIndex),
+	(New-TextEntity 'Controller Navigate Label' 'NAVIGATE' 14 0.5 0.5 -120 -238 $menuPromptIndex),
+	(New-SpriteEntity 'Controller Select Icon' 'Sprites/UI/controller-a.png' 0.5 0.5 45 -238 1 1 $menuPromptIndex),
+	(New-TextEntity 'Controller Select Label' 'SELECT' 14 0.5 0.5 100 -238 $menuPromptIndex)
+)
+$detailPromptIndex = $mainMenuAssembly.entities.Count
+$mainMenuAssembly.entities = @($mainMenuAssembly.entities) + @(
+	(New-GroupEntity 'Controller Detail Prompts' 0),
+	(New-SpriteEntity 'Controller Back Icon' 'Sprites/UI/controller-b.png' 0.5 0.5 70 -238 1 1 $detailPromptIndex),
+	(New-TextEntity 'Controller Back Label' 'BACK' 14 0.5 0.5 118 -238 $detailPromptIndex)
+)
+$settingsPromptIndex = $mainMenuAssembly.entities.Count
+$mainMenuAssembly.entities = @($mainMenuAssembly.entities) + @(
+	(New-GroupEntity 'Controller Settings Prompt' 0),
+	(New-SpriteEntity 'Controller Toggle Icon' 'Sprites/UI/controller-a.png' 0.5 0.5 -115 -238 1 1 $settingsPromptIndex),
+	(New-TextEntity 'Controller Toggle Label' 'TOGGLE' 14 0.5 0.5 -60 -238 $settingsPromptIndex)
+)
 Write-SealedJson (Join-Path $assetRoot 'Assemblies\Main Menu.lnassembly') $mainMenuAssembly
 
 $endBackground = [ordered]@{}
@@ -405,6 +458,16 @@ $endScreenAssembly = [ordered]@{
 	)
 	root = 0
 }
+$endPromptIndex = $endScreenAssembly.entities.Count
+$endScreenAssembly.entities = @($endScreenAssembly.entities) + @(
+	(New-GroupEntity 'End Controller Prompts' 0),
+	(New-SpriteEntity 'End Navigate Icon' 'Sprites/UI/controller-dpad.png' 0.5 0.5 -180 -225 1 1 $endPromptIndex),
+	(New-TextEntity 'End Navigate Label' 'NAVIGATE' 14 0.5 0.5 -120 -225 $endPromptIndex),
+	(New-SpriteEntity 'End Select Icon' 'Sprites/UI/controller-a.png' 0.5 0.5 35 -225 1 1 $endPromptIndex),
+	(New-TextEntity 'End Select Label' 'SELECT' 14 0.5 0.5 88 -225 $endPromptIndex),
+	(New-SpriteEntity 'End Back Icon' 'Sprites/UI/controller-b.png' 0.5 0.5 165 -225 1 1 $endPromptIndex),
+	(New-TextEntity 'End Back Label' 'MENU' 14 0.5 0.5 210 -225 $endPromptIndex)
+)
 Write-SealedJson (Join-Path $assetRoot 'Assemblies\End Screen.lnassembly') $endScreenAssembly
 
 $pauseAssembly = [ordered]@{
@@ -459,6 +522,14 @@ $pauseAssembly = [ordered]@{
 	)
 	root = 0
 }
+$pausePromptIndex = $pauseAssembly.entities.Count
+$pauseAssembly.entities = @($pauseAssembly.entities) + @(
+	(New-GroupEntity 'Pause Controller Prompts' 1),
+	(New-SpriteEntity 'Pause Navigate Icon' 'Sprites/UI/controller-dpad.png' 0.5 0.5 -165 -145 1 1 $pausePromptIndex),
+	(New-TextEntity 'Pause Navigate Label' 'NAVIGATE' 14 0.5 0.5 -105 -145 $pausePromptIndex),
+	(New-SpriteEntity 'Pause Select Icon' 'Sprites/UI/controller-a.png' 0.5 0.5 60 -145 1 1 $pausePromptIndex),
+	(New-TextEntity 'Pause Select Label' 'SELECT' 14 0.5 0.5 112 -145 $pausePromptIndex)
+)
 Write-SealedJson (Join-Path $assetRoot 'Assemblies\Pause Menu.lnassembly') $pauseAssembly
 
 # Gameplay art is authored as detailed 32x32 neon sprites. Preserve the established world-space
@@ -466,20 +537,20 @@ Write-SealedJson (Join-Path $assetRoot 'Assemblies\Pause Menu.lnassembly') $paus
 $paddlePath = Join-Path $assetRoot 'Assemblies\Paddle.lnassembly'
 $paddleAssembly = Read-SealedJson $paddlePath
 $paddleRoot = $paddleAssembly.entities[$paddleAssembly.root]
-$paddleRoot.transform.scale = @(3.5, 0.625)
+$paddleRoot.transform.scale = @(1, 1)
 $paddleCollider = $paddleRoot.components | Where-Object { $_.type -eq 'BoxCollider2D' } | Select-Object -First 1
 
 if ($paddleCollider)
 {
-	$paddleCollider.width = 32
-	$paddleCollider.height = 32
+	$paddleCollider.width = 100
+	$paddleCollider.height = 20
 }
 
 $paddleBehavior = $paddleRoot.components | Where-Object { $_.type -eq 'Paddle' } | Select-Object -First 1
 if ($paddleBehavior)
 {
 	$paddleBehavior.Speed = 550
-	$paddleBehavior.'Horizontal Limit' = 334
+	$paddleBehavior.'Horizontal Limit' = 350
 }
 
 Write-SealedJson $paddlePath $paddleAssembly
@@ -570,20 +641,20 @@ function New-WorldSprite([string]$name, [string]$texture, [float]$x, [float]$y,
 
 function New-Bumper([string]$name, [float]$x, [float]$y)
 {
-	$entity = New-WorldSprite $name 'Sprites/Brickout/bumper.png' $x $y 1.25 1.25 0 -1 4
+	$entity = New-WorldSprite $name 'Sprites/Brickout/bumper.png' $x $y 1 1 0 -1 4
 	$entity.components = @($entity.components) + @(
 		[ordered]@{ bodyType='Static'; fixedRotation=$false; type='RigidBody2D' },
-		[ordered]@{ density=1; friction=0; radius=16; restitution=1; type='CircleCollider2D' }
+		[ordered]@{ density=1; friction=0; radius=20; restitution=1; type='CircleCollider2D' }
 	)
 	return $entity
 }
 
 function New-Rail([string]$name, [float]$x, [float]$y, [float]$rotation)
 {
-	$entity = New-WorldSprite $name 'Sprites/Brickout/rail.png' $x $y 3.75 0.375 $rotation -1 3
+	$entity = New-WorldSprite $name 'Sprites/Brickout/rail.png' $x $y 1 1 $rotation -1 3
 	$entity.components = @($entity.components) + @(
 		[ordered]@{ bodyType='Static'; fixedRotation=$false; type='RigidBody2D' },
-		[ordered]@{ density=1; friction=0; width=32; height=32; restitution=1; type='BoxCollider2D' }
+		[ordered]@{ density=1; friction=0; width=120; height=12; restitution=1; type='BoxCollider2D' }
 	)
 	return $entity
 }
@@ -625,24 +696,24 @@ for ($level = 1; $level -le 5; $level++)
 			$hasPauseMenu = $true
 		}
 
-		if ($entity.name -eq 'Camera' -and !($entity.components | Where-Object { $_.type -eq 'PostProcessingComponent' }))
+		if ($entity.name -eq 'Camera')
 		{
-			$entity.components = @($entity.components) + @((New-PostProcessingComponent))
+			$entity.components = @($entity.components | Where-Object { $_.type -ne 'PostProcessingComponent' }) + @((New-PostProcessingComponent))
 		}
 
-		if ($sprite -and $sprite.texture -eq 'Sprites/Brickout/background.jpg')
+		if ($sprite -and $sprite.texture -like 'Sprites/Brickout/background.*')
 		{
 			$sprite.texture = 'Sprites/Brickout/background.png'
-			$entity.transform.scale = @(4, 4)
+			$entity.transform.scale = @(1, 1)
 		}
 		elseif ($sprite -and $sprite.texture -eq 'Sprites/Brickout/ball.png')
 		{
-			$entity.transform.scale = @(0.375, 0.375)
+			$entity.transform.scale = @(1, 1)
 			$collider = $entity.components | Where-Object { $_.type -eq 'CircleCollider2D' } | Select-Object -First 1
 
 			if ($collider)
 			{
-				$collider.radius = 16
+				$collider.radius = 7
 			}
 
 			$ballBehavior = $entity.components | Where-Object { $_.type -eq 'Ball' } | Select-Object -First 1
@@ -662,20 +733,20 @@ for ($level = 1; $level -le 5; $level++)
 		elseif ($sprite -and $sprite.texture -like 'Sprites/Brickout/tile-*.png')
 		{
 			$brickIndices.Add($index)
-			$entity.transform.scale = @(1.875, 0.75)
+			$entity.transform.scale = @(1, 1)
 			$collider = $entity.components | Where-Object { $_.type -eq 'BoxCollider2D' } | Select-Object -First 1
 
 			if ($collider)
 			{
-				$collider.width = 32
-				$collider.height = 32
+				$collider.width = 60
+				$collider.height = 24
 			}
 		}
 		elseif ($entity.name -eq 'Top Wall')
 		{
-			$entity.transform.scale = @(25, 0.625)
+			$entity.transform.scale = @(1, 1)
 			$collider = $entity.components | Where-Object { $_.type -eq 'BoxCollider2D' } | Select-Object -First 1
-			if ($collider) { $collider.width = 32; $collider.height = 32 }
+			if ($collider) { $collider.width = 800; $collider.height = 20 }
 			if (!$sprite)
 			{
 				$entity.components = @([ordered]@{ flipX=$false; flipY=$false; order=2; texture='Sprites/Brickout/wall-horizontal.png'; type='SpriteRenderer' }) + @($entity.components)
@@ -683,9 +754,9 @@ for ($level = 1; $level -le 5; $level++)
 		}
 		elseif ($entity.name -eq 'Left Wall' -or $entity.name -eq 'Right Wall')
 		{
-			$entity.transform.scale = @(0.625, 18.75)
+			$entity.transform.scale = @(1, 1)
 			$collider = $entity.components | Where-Object { $_.type -eq 'BoxCollider2D' } | Select-Object -First 1
-			if ($collider) { $collider.width = 32; $collider.height = 32 }
+			if ($collider) { $collider.width = 20; $collider.height = 600 }
 			if (!$sprite)
 			{
 				$entity.components = @([ordered]@{ flipX=$false; flipY=$false; order=2; texture='Sprites/Brickout/wall-vertical.png'; type='SpriteRenderer' }) + @($entity.components)
@@ -727,7 +798,7 @@ for ($level = 1; $level -le 5; $level++)
 			$behavior.Power = $power
 			$iconTexture = if ($power -eq 'Extra Life') { 'Sprites/Brickout/power-life.png' }
 				else { 'Sprites/Brickout/power-multiball.png' }
-			$icon = New-WorldSprite ("Power Icon {0:D2}" -f ($brickNumber + 1)) $iconTexture 0 0 0.22 0.55 0 $entityIndex 8
+			$icon = New-WorldSprite ("Power Icon {0:D2}" -f ($brickNumber + 1)) $iconTexture 0 0 1 1 0 $entityIndex 8
 			$scene.entities = @($scene.entities) + @($icon)
 		}
 	}
@@ -772,9 +843,9 @@ if (!$hasGameRules)
 
 foreach ($entity in $mainMenuScene.entities)
 {
-	if ($entity.name -eq 'Camera' -and !($entity.components | Where-Object { $_.type -eq 'PostProcessingComponent' }))
+	if ($entity.name -eq 'Camera')
 	{
-		$entity.components = @($entity.components) + @((New-PostProcessingComponent))
+		$entity.components = @($entity.components | Where-Object { $_.type -ne 'PostProcessingComponent' }) + @((New-PostProcessingComponent))
 	}
 }
 
@@ -821,16 +892,20 @@ $inputMap = Read-SealedJson $inputPath
 $menuActions = @(
 	[ordered]@{ name='menu_up'; deadzone=0.2; bindings=@(
 		[ordered]@{ device='keyboard'; code=265; scale=1; gamepad=-1 },
-		[ordered]@{ device='gamepad_button'; code=11; scale=1; gamepad=-1 }) },
+		[ordered]@{ device='gamepad_button'; code=11; scale=1; gamepad=-1 },
+		[ordered]@{ device='gamepad_axis'; code=1; scale=-1; gamepad=-1 }) },
 	[ordered]@{ name='menu_down'; deadzone=0.2; bindings=@(
 		[ordered]@{ device='keyboard'; code=264; scale=1; gamepad=-1 },
-		[ordered]@{ device='gamepad_button'; code=13; scale=1; gamepad=-1 }) },
+		[ordered]@{ device='gamepad_button'; code=13; scale=1; gamepad=-1 },
+		[ordered]@{ device='gamepad_axis'; code=1; scale=1; gamepad=-1 }) },
 	[ordered]@{ name='menu_left'; deadzone=0.2; bindings=@(
 		[ordered]@{ device='keyboard'; code=263; scale=1; gamepad=-1 },
-		[ordered]@{ device='gamepad_button'; code=14; scale=1; gamepad=-1 }) },
+		[ordered]@{ device='gamepad_button'; code=14; scale=1; gamepad=-1 },
+		[ordered]@{ device='gamepad_axis'; code=0; scale=-1; gamepad=-1 }) },
 	[ordered]@{ name='menu_right'; deadzone=0.2; bindings=@(
 		[ordered]@{ device='keyboard'; code=262; scale=1; gamepad=-1 },
-		[ordered]@{ device='gamepad_button'; code=12; scale=1; gamepad=-1 }) },
+		[ordered]@{ device='gamepad_button'; code=12; scale=1; gamepad=-1 },
+		[ordered]@{ device='gamepad_axis'; code=0; scale=1; gamepad=-1 }) },
 	[ordered]@{ name='menu_confirm'; deadzone=0.2; bindings=@(
 		[ordered]@{ device='keyboard'; code=257; scale=1; gamepad=-1 },
 		[ordered]@{ device='keyboard'; code=32; scale=1; gamepad=-1 },

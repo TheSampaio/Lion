@@ -19,9 +19,13 @@ void EndScreen::InitializeForScene()
 	const Reference<Entity> scoreEntity = scene->FindEntity("Result Score");
 	const Reference<Entity> playAgainEntity = scene->FindEntity("Play Again Button");
 	const Reference<Entity> mainMenuEntity = scene->FindEntity("Main Menu Button");
+	const Reference<Entity> controllerPrompts = scene->FindEntity("End Controller Prompts");
 	const bool victory = SceneManager::GetActivePath().find("Victory") != std::string::npos;
 	mPlayAgainButton = playAgainEntity ? playAgainEntity->GetComponent<Button>() : nullptr;
 	mMainMenuButton = mainMenuEntity ? mainMenuEntity->GetComponent<Button>() : nullptr;
+	mControllerPrompts = controllerPrompts.get();
+	RefreshSelection();
+	UpdateControllerPrompts();
 
 	if (TextRenderer* title = titleEntity ? titleEntity->GetComponent<TextRenderer>() : nullptr)
 		title->SetText(victory ? "CIRCUIT CLEAR" : "SYSTEM FAILURE");
@@ -48,9 +52,57 @@ void EndScreen::OnUpdate()
 		return;
 	}
 
-	if ((mPlayAgainButton && mPlayAgainButton->WasClicked()) || Input::GetActionTap("menu_confirm"))
+	UpdateControllerPrompts();
+
+	if (mPlayAgainButton && mPlayAgainButton->IsHovered() && mSelection != 0)
+	{
+		mSelection = 0;
+		RefreshSelection();
+	}
+	else if (mMainMenuButton && mMainMenuButton->IsHovered() && mSelection != 1)
+	{
+		mSelection = 1;
+		RefreshSelection();
+	}
+
+	if (mPlayAgainButton && mPlayAgainButton->WasClicked())
 		GameRules::StartNewGame();
 	else if ((mMainMenuButton && mMainMenuButton->WasClicked()) || Input::GetActionTap("menu_back"))
+		SceneManager::LoadScene("Scenes/MainMenu.lnscene");
+	else if (Input::GetActionTap("menu_up") || Input::GetActionTap("menu_down"))
+	{
+		mSelection = 1 - mSelection;
+		RefreshSelection();
+	}
+	else if (Input::GetActionTap("menu_confirm"))
+		ActivateSelection();
+}
+
+void EndScreen::RefreshSelection()
+{
+	if (mPlayAgainButton)
+		mPlayAgainButton->SetSelected(mSelection == 0);
+	if (mMainMenuButton)
+		mMainMenuButton->SetSelected(mSelection == 1);
+}
+
+void EndScreen::UpdateControllerPrompts()
+{
+	const bool show = Input::GetLastInputMethod() == InputMethod::Gamepad;
+
+	if (!mControllerPrompts || show == mShowingControllerPrompts)
+		return;
+
+	mShowingControllerPrompts = show;
+	mControllerPrompts->SetVisible(show);
+	mControllerPrompts->SetEnabled(show);
+}
+
+void EndScreen::ActivateSelection()
+{
+	if (mSelection == 0)
+		GameRules::StartNewGame();
+	else
 		SceneManager::LoadScene("Scenes/MainMenu.lnscene");
 }
 

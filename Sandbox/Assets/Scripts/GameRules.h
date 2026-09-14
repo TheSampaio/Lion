@@ -40,6 +40,7 @@ private:
 	Lion::TextRenderer* mAttemptsText = nullptr;
 	Lion::TextRenderer* mLevelText = nullptr;
 	Lion::TextRenderer* mPowerText = nullptr;
+	Lion::Entity* mControllerPrompts = nullptr;
 	Lion::Vector2 mCameraBaseOffset;
 	Lion::float32 mLoseHeight = -310.0f;
 	Lion::float32 mShakeDuration = 0.06f;
@@ -50,11 +51,14 @@ private:
 	Lion::int32 mLevel = 0;
 	bool mInitialized = false;
 	bool mTransitionQueued = false;
+	bool mShowingControllerPrompts = false;
 
 	void InitializeForScene();
 	void UpdateHud();
 	void UpdateShake();
+	void UpdateControllerPrompts();
 	void HandleLevelFlow();
+	void RespawnBall();
 	void ActivatePower(const std::string& power, const Lion::Vector2& position);
 	void SpawnExtraBalls();
 	void HandleDebugLevelKeys();

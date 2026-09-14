@@ -47,6 +47,15 @@ vec3 sampleScene(vec2 uv)
 		texture(uScreenTexture, uv - offset).b);
 }
 
+vec3 sampleBloom(vec2 uv)
+{
+	vec3 sampled = texture(uScreenTexture, clamp(uv, vec2(0.0), vec2(1.0))).rgb;
+	float brightness = max(max(sampled.r, sampled.g), sampled.b);
+	float threshold = max(uBloomThreshold, 0.001);
+	float contribution = smoothstep(threshold * 0.55, threshold, brightness);
+	return sampled * contribution;
+}
+
 void main()
 {
 	vec3 color = sampleScene(vTexCoord);
@@ -56,20 +65,18 @@ void main()
 		vec2 texel = 1.0 / max(uResolution, vec2(1.0));
 		vec3 glow = vec3(0.0);
 		float weight = 0.0;
-
-		for (int y = -2; y <= 2; ++y)
+		for (int y = -3; y <= 3; ++y)
 		{
-			for (int x = -2; x <= 2; ++x)
+			for (int x = -3; x <= 3; ++x)
 			{
-				float kernel = 1.0 / (1.0 + float(x * x + y * y));
-				vec3 sampleColor = texture(uScreenTexture, vTexCoord + vec2(x, y) * texel * 2.0).rgb;
-				float brightness = max(max(sampleColor.r, sampleColor.g), sampleColor.b);
-				glow += sampleColor * smoothstep(uBloomThreshold, 1.0, brightness) * kernel;
+				float distanceSquared = float(x * x + y * y);
+				float kernel = 1.0 / (1.0 + distanceSquared * 0.45);
+				glow += sampleBloom(vTexCoord + vec2(x, y) * texel * 3.0) * kernel;
 				weight += kernel;
 			}
 		}
 
-		color += glow / max(weight, 0.001) * uBloomStrength;
+		color += glow / max(weight, 0.001) * uBloomStrength * 1.65;
 	}
 
 	if (uColorCorrectionEnabled > 0.5)

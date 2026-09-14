@@ -13,8 +13,14 @@ public:
 private:
 	bool mInitialized = false;
 	bool mInputArmed = false;
+	bool mShowingControllerPrompts = false;
 	Lion::Button* mPlayAgainButton = nullptr;
 	Lion::Button* mMainMenuButton = nullptr;
+	Lion::Entity* mControllerPrompts = nullptr;
+	Lion::int32 mSelection = 0;
 
 	void InitializeForScene();
+	void RefreshSelection();
+	void UpdateControllerPrompts();
+	void ActivateSelection();
 };

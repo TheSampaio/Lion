@@ -25,6 +25,8 @@ namespace Lion
 	std::vector<InputAction> Input::sActions;
 	std::unordered_map<std::string, float32> Input::sActionStrengths;
 	std::unordered_map<std::string, float32> Input::sPreviousActionStrengths;
+	InputMethod Input::sLastInputMethod = InputMethod::KeyboardMouse;
+	bool Input::sGamepadInputActive = false;
 
 	namespace
 	{
@@ -173,6 +175,37 @@ namespace Lion
 		return Window::GetGamepadAxis(gamepad, static_cast<int32>(axis));
 	}
 
+	InputMethod Input::GetLastInputMethod()
+	{
+		return sLastInputMethod;
+	}
+
+	bool Input::HasGamepadInput()
+	{
+		constexpr float32 kStickDeadzone = 0.25f;
+
+		for (int32 gamepad = 0; gamepad <= GLFW_JOYSTICK_LAST; ++gamepad)
+		{
+			if (!Window::IsGamepadConnected(gamepad))
+				continue;
+
+			for (int32 button = GLFW_GAMEPAD_BUTTON_A; button <= GLFW_GAMEPAD_BUTTON_LAST; ++button)
+				if (Window::IsGamepadButtonPressed(gamepad, button))
+					return true;
+
+			for (int32 axis = GLFW_GAMEPAD_AXIS_LEFT_X; axis <= GLFW_GAMEPAD_AXIS_RIGHT_Y; ++axis)
+				if (std::abs(Window::GetGamepadAxis(gamepad, axis)) >= kStickDeadzone)
+					return true;
+
+			for (int32 axis = GLFW_GAMEPAD_AXIS_LEFT_TRIGGER;
+				axis <= GLFW_GAMEPAD_AXIS_RIGHT_TRIGGER; ++axis)
+				if (Window::GetGamepadAxis(gamepad, axis) >= -1.0f + kStickDeadzone * 2.0f)
+					return true;
+		}
+
+		return false;
+	}
+
 	float32 Input::EvaluateAction(const InputAction& action)
 	{
 		float32 strength = 0.0f;
@@ -238,6 +271,12 @@ namespace Lion
 
 	void Input::Update()
 	{
+		const bool gamepadInputActive = HasGamepadInput();
+
+		if (gamepadInputActive && !sGamepadInputActive)
+			sLastInputMethod = InputMethod::Gamepad;
+
+		sGamepadInputActive = gamepadInputActive;
 		sAnyKeyPressedPrevious = sAnyKeyPressed;
 		sAnyKeyPressed = IsAnyKeyPressed();
 		sAnyKeyTapped = sAnyKeyEventPending || (sAnyKeyPressed && !sAnyKeyPressedPrevious);
@@ -254,12 +293,24 @@ namespace Lion
 		EventDispatcher dispatcher(event);
 		dispatcher.Bind<EventInputKeyboardPress>([](const EventInputKeyboardPress&)
 		{
+			sLastInputMethod = InputMethod::KeyboardMouse;
 			sAnyKeyEventPending = true;
+			return false;
+		});
+		dispatcher.Bind<EventInputMouseMove>([](const EventInputMouseMove&)
+		{
+			sLastInputMethod = InputMethod::KeyboardMouse;
 			return false;
 		});
 		dispatcher.Bind<EventInputMousePress>([](const EventInputMousePress&)
 		{
+			sLastInputMethod = InputMethod::KeyboardMouse;
 			sAnyKeyEventPending = true;
+			return false;
+		});
+		dispatcher.Bind<EventInputMouseScroll>([](const EventInputMouseScroll&)
+		{
+			sLastInputMethod = InputMethod::KeyboardMouse;
 			return false;
 		});
 	}

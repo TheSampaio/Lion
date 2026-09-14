@@ -16,6 +16,14 @@ namespace Lion
 		GamepadAxis,
 	};
 
+	// The presentation-level input family most recently used by the player. Bindings keep their exact
+	// device above; UI prompts only need to choose between desktop and controller conventions.
+	enum class InputMethod
+	{
+		KeyboardMouse,
+		Gamepad,
+	};
+
 	enum class GamepadButton
 	{
 		A = GLFW_GAMEPAD_BUTTON_A,
@@ -198,6 +206,7 @@ namespace Lion
 		static LION_API std::string GetGamepadName(int32 gamepad = 0);
 		static LION_API bool GetGamepadButtonPress(GamepadButton button, int32 gamepad = 0);
 		static LION_API float32 GetGamepadAxis(GamepadAxis axis, int32 gamepad = 0);
+		static LION_API InputMethod GetLastInputMethod();
 
 		// Named project actions combine keyboard, mouse and normalized GLFW gamepad bindings. A game asks
 		// for the action and stays independent of whether the player uses an Xbox, PlayStation or generic
@@ -237,8 +246,11 @@ namespace Lion
 		static std::vector<InputAction> sActions;
 		static std::unordered_map<std::string, float32> sActionStrengths;
 		static std::unordered_map<std::string, float32> sPreviousActionStrengths;
+		static InputMethod sLastInputMethod;
+		static bool sGamepadInputActive;
 
 		static float32 EvaluateAction(const InputAction& action);
 		static bool IsAnyKeyPressed();
+		static bool HasGamepadInput();
 	};
 }

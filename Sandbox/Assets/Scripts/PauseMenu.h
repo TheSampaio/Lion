@@ -13,9 +13,15 @@ public:
 private:
 	bool mInitialized = false;
 	Lion::Entity* mOverlay = nullptr;
+	Lion::Entity* mControllerPrompts = nullptr;
 	Lion::Button* mResumeButton = nullptr;
 	Lion::Button* mMainMenuButton = nullptr;
+	Lion::int32 mSelection = 0;
+	bool mShowingControllerPrompts = false;
 
 	void Initialize();
 	void Show(bool visible);
+	void RefreshSelection();
+	void UpdateControllerPrompts();
+	void ActivateSelection();
 };

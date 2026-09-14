@@ -20,11 +20,21 @@ void MainMenu::Initialize()
 	const Reference<Entity> soundButton = scene->FindEntity("Sound Button");
 	const Reference<Entity> backButton = scene->FindEntity("Back Button");
 	const Reference<Entity> creditsLogo = scene->FindEntity("Credits Logo");
+	const Reference<Entity> keyboardControls = scene->FindEntity("Menu Controls");
+	const Reference<Entity> controllerAttractPrompt = scene->FindEntity("Controller Attract Prompt");
+	const Reference<Entity> controllerMenuPrompts = scene->FindEntity("Controller Menu Prompts");
+	const Reference<Entity> controllerDetailPrompts = scene->FindEntity("Controller Detail Prompts");
+	const Reference<Entity> controllerSettingsPrompt = scene->FindEntity("Controller Settings Prompt");
 	mPrompt = prompt.get();
 	mOptions = options.get();
 	mDetail = detail.get();
 	mSoundButtonEntity = soundButton.get();
 	mCreditsLogo = creditsLogo.get();
+	mKeyboardControls = keyboardControls.get();
+	mControllerAttractPrompt = controllerAttractPrompt.get();
+	mControllerMenuPrompts = controllerMenuPrompts.get();
+	mControllerDetailPrompts = controllerDetailPrompts.get();
+	mControllerSettingsPrompt = controllerSettingsPrompt.get();
 	mDetailText = mDetail ? mDetail->GetComponent<TextRenderer>() : nullptr;
 	mSoundButtonText = mSoundButtonEntity ? mSoundButtonEntity->GetComponent<TextRenderer>() : nullptr;
 	mSoundButton = mSoundButtonEntity ? mSoundButtonEntity->GetComponent<Button>() : nullptr;
@@ -60,6 +70,8 @@ void MainMenu::OnUpdate()
 
 		return;
 	}
+
+	UpdateInputPresentation();
 
 	if (mState == State::Attract)
 	{
@@ -102,6 +114,12 @@ void MainMenu::OnUpdate()
 			mSelection = index;
 			ActivateSelection();
 			return;
+		}
+
+		if (button->IsHovered() && mSelection != index)
+		{
+			mSelection = index;
+			RefreshMenu();
 		}
 	}
 
@@ -159,6 +177,8 @@ void MainMenu::ShowState(State state)
 
 	if (state == State::Settings && mSoundButtonText)
 		mSoundButtonText->SetText(mSoundEnabled ? "SOUND ON" : "SOUND OFF");
+
+	UpdateInputPresentation(true);
 }
 
 void MainMenu::RefreshMenu()
@@ -166,6 +186,32 @@ void MainMenu::RefreshMenu()
 	for (int32 index = 0; index < static_cast<int32>(mMenuButtons.size()); ++index)
 		if (mMenuButtons[index])
 			mMenuButtons[index]->SetSelected(index == mSelection);
+}
+
+void MainMenu::UpdateInputPresentation(bool force)
+{
+	const bool usingGamepad = Input::GetLastInputMethod() == InputMethod::Gamepad;
+
+	if (!force && usingGamepad == mUsingGamepad)
+		return;
+
+	mUsingGamepad = usingGamepad;
+	const auto show = [](Entity* entity, bool visible)
+	{
+		if (!entity)
+			return;
+
+		entity->SetVisible(visible);
+		entity->SetEnabled(visible);
+	};
+
+	show(mPrompt, mState == State::Attract && !usingGamepad);
+	show(mKeyboardControls, mState == State::Menu && !usingGamepad);
+	show(mControllerAttractPrompt, mState == State::Attract && usingGamepad);
+	show(mControllerMenuPrompts, mState == State::Menu && usingGamepad);
+	show(mControllerDetailPrompts,
+		(mState == State::Credits || mState == State::Settings) && usingGamepad);
+	show(mControllerSettingsPrompt, mState == State::Settings && usingGamepad);
 }
 
 void MainMenu::ActivateSelection()

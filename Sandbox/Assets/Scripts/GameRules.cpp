@@ -23,10 +23,12 @@ void GameRules::InitializeForScene()
 	const Reference<Entity> attemptsEntity = scene->FindEntity("Attempts Text");
 	const Reference<Entity> levelEntity = scene->FindEntity("Level Text");
 	const Reference<Entity> powerEntity = scene->FindEntity("Power Text");
+	const Reference<Entity> controllerPrompts = scene->FindEntity("HUD Controller Prompts");
 	mScoreText = scoreEntity ? scoreEntity->GetComponent<TextRenderer>() : nullptr;
 	mAttemptsText = attemptsEntity ? attemptsEntity->GetComponent<TextRenderer>() : nullptr;
 	mLevelText = levelEntity ? levelEntity->GetComponent<TextRenderer>() : nullptr;
 	mPowerText = powerEntity ? powerEntity->GetComponent<TextRenderer>() : nullptr;
+	mControllerPrompts = controllerPrompts.get();
 
 	if (powerEntity)
 	{
@@ -34,6 +36,7 @@ void GameRules::InitializeForScene()
 		powerEntity->SetEnabled(false);
 	}
 	UpdateHud();
+	UpdateControllerPrompts();
 
 	if (mLevel == 0)
 		return;
@@ -78,6 +81,7 @@ void GameRules::OnUpdate()
 	}
 
 	UpdateShake();
+	UpdateControllerPrompts();
 
 	if (mPowerMessageRemaining > 0.0f)
 	{
@@ -180,6 +184,18 @@ void GameRules::UpdateShake()
 		mCameraBaseOffset.y + direction.y * mShakeStrength));
 }
 
+void GameRules::UpdateControllerPrompts()
+{
+	const bool show = Input::GetLastInputMethod() == InputMethod::Gamepad;
+
+	if (!mControllerPrompts || show == mShowingControllerPrompts)
+		return;
+
+	mShowingControllerPrompts = show;
+	mControllerPrompts->SetVisible(show);
+	mControllerPrompts->SetEnabled(show);
+}
+
 void GameRules::HandleLevelFlow()
 {
 	const Reference<Scene> scene = GetOwner().GetScene();
@@ -223,18 +239,29 @@ void GameRules::HandleLevelFlow()
 		if (!lostBall || hasBallInPlay)
 			return;
 
-		mTransitionQueued = true;
 		sAttempts = std::max(sAttempts - 1, 0);
 		UpdateHud();
 
 		if (sAttempts > 0)
-			SceneManager::ReloadScene();
+			RespawnBall();
 		else
 		{
+			mTransitionQueued = true;
 			sSessionActive = false;
 			SceneManager::LoadScene("Scenes/Defeat.lnscene");
 		}
 	}
+}
+
+void GameRules::RespawnBall()
+{
+	if (!mBall || !mPaddle)
+		return;
+
+	mPaddle->Reset();
+	mBall->GetOwner().SetEnabled(true);
+	mBall->SetVisible(true);
+	mBall->Reset();
 }
 
 void GameRules::ActivatePower(const std::string& power, const Vector2& position)
@@ -293,11 +320,11 @@ void GameRules::SpawnExtraBalls()
 		Reference<Entity> entity = MakeReference<Entity>();
 		entity->SetName(LION_FORMAT_TEXT("Power Ball {}", index + 1));
 		entity->GetTransform()->SetPosition(Vector2(origin.x + side * 10.0f, origin.y));
-		entity->GetTransform()->SetScale(Vector2(0.375f, 0.375f));
+		entity->GetTransform()->SetScale(Vector2(1.0f, 1.0f));
 		SpriteRenderer* renderer = entity->AddComponent<SpriteRenderer>("Sprites/Brickout/ball.png");
 		renderer->SetOrder(20);
 		entity->AddComponent<RigidBody2D>(BodyType::Dynamic, true);
-		entity->AddComponent<CircleCollider2D>(16.0f, 1.0f, 0.0f, 1.0f);
+		entity->AddComponent<CircleCollider2D>(7.0f, 1.0f, 0.0f, 1.0f);
 		Ball* ball = entity->AddComponent<Ball>();
 		scene->Add(entity);
 		ball->Launch(glm::vec2(side * 0.65f, 1.0f));
