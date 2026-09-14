@@ -62,6 +62,39 @@ namespace
 	void SetActiveProjectDirectory(const std::filesystem::path& project);
 	void DrawIcon(const ImVec2& origin, const ImVec2& box, const char8* icon, ImU32 color, float32 pixels);
 	bool DrawSectionHeader(const char8* id, const char8* icon, const char8* name, ImGuiTreeNodeFlags flags);
+
+	std::string ComponentDisplayName(std::string_view typeName)
+	{
+		constexpr std::string_view suffix = "Component";
+
+		if (typeName.size() > suffix.size() && typeName.ends_with(suffix))
+			typeName.remove_suffix(suffix.size());
+
+		if (typeName.empty())
+			return "Component";
+
+		std::string displayName;
+		displayName.reserve(typeName.size() + 4);
+
+		for (size_t index = 0; index < typeName.size(); ++index)
+		{
+			const unsigned char current = static_cast<unsigned char>(typeName[index]);
+			const unsigned char previous = index > 0
+				? static_cast<unsigned char>(typeName[index - 1]) : 0;
+			const unsigned char next = index + 1 < typeName.size()
+				? static_cast<unsigned char>(typeName[index + 1]) : 0;
+			const bool startsWord = index > 0 && std::isupper(current)
+				&& (std::islower(previous) || (std::isupper(previous) && std::islower(next)));
+			const bool startsNumber = index > 0 && std::isdigit(current) && !std::isdigit(previous);
+
+			if (startsWord || startsNumber)
+				displayName.push_back(' ');
+
+			displayName.push_back(static_cast<char8>(current));
+		}
+
+		return displayName;
+	}
 }
 
 // Every panel's window name: the icon it wears on its tab, the name it goes by, and the id a saved layout
@@ -6840,9 +6873,9 @@ void EditorLayer::DrawProperties()
 			// against it and has no idea what it holds, so it asks: the component describes its fields, and
 			// the Inspector draws exactly what it was told about, no more.
 			const std::string& typeName = component->GetTypeName();
-			const char8* componentName = typeName.empty() ? "Component" : typeName.c_str();
+			const std::string componentName = ComponentDisplayName(typeName);
 
-			if (DrawComponentHeader(ICON_MDI_PUZZLE, componentName, i, remove, dragFrom, dragTo))
+			if (DrawComponentHeader(ICON_MDI_PUZZLE, componentName.c_str(), i, remove, dragFrom, dragTo))
 			{
 				InspectorReflector reflector(*this, typeName);
 				component->Reflect(reflector);
@@ -6943,7 +6976,7 @@ void EditorLayer::DrawProperties()
 					entity->AddComponent<WidgetAnchor>();
 		}
 
-		if (lacksBuiltIn.operator()<ParticleComponent>() && ImGui::MenuItem("Particle Component"))
+		if (lacksBuiltIn.operator()<ParticleComponent>() && ImGui::MenuItem("Particle"))
 		{
 			RecordSnapshot();
 			for (const auto& entity : mSelection)
@@ -6952,7 +6985,7 @@ void EditorLayer::DrawProperties()
 					entity->AddComponent<ParticleComponent>();
 		}
 
-		if (lacksBuiltIn.operator()<PostProcessingComponent>() && ImGui::MenuItem("Post Processing Component"))
+		if (lacksBuiltIn.operator()<PostProcessingComponent>() && ImGui::MenuItem("Post Processing"))
 		{
 			RecordSnapshot();
 			for (const auto& entity : mSelection)

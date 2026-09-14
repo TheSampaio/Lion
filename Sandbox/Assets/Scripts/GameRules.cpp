@@ -21,8 +21,18 @@ void GameRules::InitializeForScene()
 	const Reference<Scene> scene = GetOwner().GetScene();
 	const Reference<Entity> scoreEntity = scene->FindEntity("Score Text");
 	const Reference<Entity> attemptsEntity = scene->FindEntity("Attempts Text");
+	const Reference<Entity> levelEntity = scene->FindEntity("Level Text");
+	const Reference<Entity> powerEntity = scene->FindEntity("Power Text");
 	mScoreText = scoreEntity ? scoreEntity->GetComponent<TextRenderer>() : nullptr;
 	mAttemptsText = attemptsEntity ? attemptsEntity->GetComponent<TextRenderer>() : nullptr;
+	mLevelText = levelEntity ? levelEntity->GetComponent<TextRenderer>() : nullptr;
+	mPowerText = powerEntity ? powerEntity->GetComponent<TextRenderer>() : nullptr;
+
+	if (powerEntity)
+	{
+		powerEntity->SetVisible(false);
+		powerEntity->SetEnabled(false);
+	}
 	UpdateHud();
 
 	if (mLevel == 0)
@@ -68,6 +78,18 @@ void GameRules::OnUpdate()
 	}
 
 	UpdateShake();
+
+	if (mPowerMessageRemaining > 0.0f)
+	{
+		mPowerMessageRemaining = std::max(0.0f, mPowerMessageRemaining - Clock::GetDeltaTime());
+
+		if (mPowerMessageRemaining <= 0.0f && mPowerText)
+		{
+			mPowerText->GetOwner().SetVisible(false);
+			mPowerText->GetOwner().SetEnabled(false);
+		}
+	}
+
 	HandleDebugLevelKeys();
 
 	if (mLevel > 0 && !mTransitionQueued)
@@ -98,12 +120,13 @@ void GameRules::StartNewGame()
 	SceneManager::LoadScene(LevelScene(1));
 }
 
-void GameRules::RegisterBrickHit(const Vector2& position)
+void GameRules::RegisterBrickDamage(const Vector2& position, bool destroyed, const std::string& power)
 {
 	if (!sSessionActive)
 		return;
 
-	sScore += kBrickScore;
+	if (destroyed)
+		sScore += kBrickScore;
 
 	if (!sActiveRules)
 		return;
@@ -111,7 +134,11 @@ void GameRules::RegisterBrickHit(const Vector2& position)
 	sActiveRules->mShakeRemaining = sActiveRules->mShakeDuration;
 	sActiveRules->mShakeFrame = 0;
 	if (sActiveRules->mImpactParticles)
-		sActiveRules->mImpactParticles->EmitAt(position, 12);
+		sActiveRules->mImpactParticles->EmitAt(position, destroyed ? 30 : 14);
+
+	if (destroyed && !power.empty())
+		sActiveRules->ActivatePower(power, position);
+
 	sActiveRules->UpdateHud();
 }
 
@@ -122,6 +149,9 @@ void GameRules::UpdateHud()
 
 	if (mAttemptsText)
 		mAttemptsText->SetText(LION_FORMAT_TEXT("BALLS {}", sAttempts));
+
+	if (mLevelText && mLevel > 0)
+		mLevelText->SetText(LION_FORMAT_TEXT("LEVEL {:02}", mLevel));
 }
 
 void GameRules::UpdateShake()
@@ -166,11 +196,34 @@ void GameRules::HandleLevelFlow()
 			SceneManager::LoadScene("Scenes/Victory.lnscene");
 		}
 	}
-	else if (mBall && mBall->GetOwner().GetWorldPosition().y < mLoseHeight)
+	else
 	{
+		bool hasBallInPlay = false;
+		bool lostBall = false;
+
+		for (const Reference<Entity>& entity : scene->GetEntities())
+		{
+			Ball* ball = entity->GetComponent<Ball>();
+
+			if (!ball || !entity->IsActive())
+				continue;
+
+			if (entity->GetWorldPosition().y >= mLoseHeight)
+			{
+				hasBallInPlay = true;
+				continue;
+			}
+
+			lostBall = true;
+			ball->Stop();
+			ball->SetVisible(false);
+			entity->SetEnabled(false);
+		}
+
+		if (!lostBall || hasBallInPlay)
+			return;
+
 		mTransitionQueued = true;
-		mBall->Stop();
-		mBall->SetVisible(false);
 		sAttempts = std::max(sAttempts - 1, 0);
 		UpdateHud();
 
@@ -181,6 +234,73 @@ void GameRules::HandleLevelFlow()
 			sSessionActive = false;
 			SceneManager::LoadScene("Scenes/Defeat.lnscene");
 		}
+	}
+}
+
+void GameRules::ActivatePower(const std::string& power, const Vector2& position)
+{
+	std::string message;
+
+	if (power == "Extra Life")
+	{
+		sAttempts++;
+		message = "EXTRA BALL +1";
+	}
+	else if (power == "Multiball")
+	{
+		SpawnExtraBalls();
+		message = "MULTIBALL x3";
+	}
+	else
+		return;
+
+	if (mImpactParticles)
+		mImpactParticles->EmitAt(position, 48);
+
+	if (mPowerText)
+	{
+		mPowerText->SetText(message);
+		mPowerText->GetOwner().SetVisible(true);
+		mPowerText->GetOwner().SetEnabled(true);
+		mPowerMessageRemaining = 1.4f;
+	}
+
+	UpdateHud();
+}
+
+void GameRules::SpawnExtraBalls()
+{
+	const Reference<Scene> scene = GetOwner().GetScene();
+	Ball* sourceBall = nullptr;
+
+	for (const Reference<Entity>& entity : scene->GetEntities())
+	{
+		if (entity->IsActive() && entity->HasComponent<Ball>())
+		{
+			sourceBall = entity->GetComponent<Ball>();
+			break;
+		}
+	}
+
+	if (!sourceBall)
+		return;
+
+	const Vector2 origin = sourceBall->GetOwner().GetWorldPosition();
+
+	for (int32 index = 0; index < 2; ++index)
+	{
+		const float32 side = index == 0 ? -1.0f : 1.0f;
+		Reference<Entity> entity = MakeReference<Entity>();
+		entity->SetName(LION_FORMAT_TEXT("Power Ball {}", index + 1));
+		entity->GetTransform()->SetPosition(Vector2(origin.x + side * 10.0f, origin.y));
+		entity->GetTransform()->SetScale(Vector2(0.375f, 0.375f));
+		SpriteRenderer* renderer = entity->AddComponent<SpriteRenderer>("Sprites/Brickout/ball.png");
+		renderer->SetOrder(20);
+		entity->AddComponent<RigidBody2D>(BodyType::Dynamic, true);
+		entity->AddComponent<CircleCollider2D>(16.0f, 1.0f, 0.0f, 1.0f);
+		Ball* ball = entity->AddComponent<Ball>();
+		scene->Add(entity);
+		ball->Launch(glm::vec2(side * 0.65f, 1.0f));
 	}
 }
 

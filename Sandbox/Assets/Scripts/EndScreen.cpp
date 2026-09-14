@@ -24,7 +24,7 @@ void EndScreen::InitializeForScene()
 	mMainMenuButton = mainMenuEntity ? mainMenuEntity->GetComponent<Button>() : nullptr;
 
 	if (TextRenderer* title = titleEntity ? titleEntity->GetComponent<TextRenderer>() : nullptr)
-		title->SetText(victory ? "YOU WIN!" : "GAME OVER");
+		title->SetText(victory ? "CIRCUIT CLEAR" : "SYSTEM FAILURE");
 
 	if (TextRenderer* score = scoreEntity ? scoreEntity->GetComponent<TextRenderer>() : nullptr)
 		score->SetText(LION_FORMAT_TEXT("TOTAL SCORE\n{:06}", GameRules::GetScore()));

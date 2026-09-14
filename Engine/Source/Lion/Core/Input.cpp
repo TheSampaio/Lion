@@ -3,6 +3,8 @@
 
 #include <Lion/Core/Vault.h>
 #include <Lion/Core/Window.h>
+#include <Lion/Signal/EventDispatcher.h>
+#include <Lion/Signal/EventInput.h>
 
 #include <nlohmann/json.hpp>
 
@@ -14,7 +16,10 @@ namespace Lion
 {
 	Input* Input::sInstance = nullptr;
 	bool Input::sControlKeys[GLFW_KEY_LAST + 1] = { false };
-	bool Input::sAnyKeyControl = false;
+	bool Input::sAnyKeyPressed = false;
+	bool Input::sAnyKeyPressedPrevious = false;
+	bool Input::sAnyKeyTapped = false;
+	bool Input::sAnyKeyEventPending = false;
 	Vector2 Input::sPointerViewportPosition;
 	Size Input::sPointerViewportSize;
 	std::vector<InputAction> Input::sActions;
@@ -59,7 +64,7 @@ namespace Lion
 	bool Input::GetKeyPress(KeyCode keyCode)
 	{
 		if (keyCode == KeyCode::AnyKey)
-			return IsAnyKeyPressed();
+			return sAnyKeyPressed;
 
 		return Window::IsKeyPressed(static_cast<int32>(keyCode));
 	}
@@ -67,7 +72,7 @@ namespace Lion
 	bool Input::GetKeyRelease(KeyCode keyCode)
 	{
 		if (keyCode == KeyCode::AnyKey)
-			return !IsAnyKeyPressed();
+			return !sAnyKeyPressed;
 
 		return Window::IsKeyReleased(static_cast<int32>(keyCode));
 	}
@@ -75,20 +80,7 @@ namespace Lion
 	bool Input::GetKeyTap(KeyCode keyCode)
 	{
 		if (keyCode == KeyCode::AnyKey)
-		{
-			const bool pressed = IsAnyKeyPressed();
-
-			if (pressed)
-				sAnyKeyControl = true;
-
-			if (!pressed && sAnyKeyControl)
-			{
-				sAnyKeyControl = false;
-				return true;
-			}
-
-			return false;
-		}
+			return sAnyKeyTapped;
 
 		const int32 keyCodeId = static_cast<int32>(keyCode);
 
@@ -246,11 +238,30 @@ namespace Lion
 
 	void Input::Update()
 	{
+		sAnyKeyPressedPrevious = sAnyKeyPressed;
+		sAnyKeyPressed = IsAnyKeyPressed();
+		sAnyKeyTapped = sAnyKeyEventPending || (sAnyKeyPressed && !sAnyKeyPressedPrevious);
+		sAnyKeyEventPending = false;
 		sPreviousActionStrengths = sActionStrengths;
 		sActionStrengths.clear();
 
 		for (const InputAction& action : sActions)
 			sActionStrengths[action.name] = EvaluateAction(action);
+	}
+
+	void Input::OnEvent(Event& event)
+	{
+		EventDispatcher dispatcher(event);
+		dispatcher.Bind<EventInputKeyboardPress>([](const EventInputKeyboardPress&)
+		{
+			sAnyKeyEventPending = true;
+			return false;
+		});
+		dispatcher.Bind<EventInputMousePress>([](const EventInputMousePress&)
+		{
+			sAnyKeyEventPending = true;
+			return false;
+		});
 	}
 
 	float32 Input::GetActionStrength(const std::string& action)

@@ -53,6 +53,7 @@ namespace Lion
 
 	void Application::OnEvent(Event& event)
 	{
+		Input::OnEvent(event);
 		EventDispatcher dispatcher(event);
 
 		// Event window resize

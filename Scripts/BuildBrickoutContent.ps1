@@ -123,22 +123,58 @@ function New-ButtonComponent([float]$width = 360, [float]$height = 56)
 		'Size.x' = $width
 		'Size.y' = $height
 		'Size.z' = 0
-		'Normal Color.x' = 0.86
-		'Normal Color.y' = 0.86
-		'Normal Color.z' = 0.86
+		'Normal Color.x' = 0.12
+		'Normal Color.y' = 0.82
+		'Normal Color.z' = 1
 		'Selected Color.x' = 1
-		'Selected Color.y' = 1
-		'Selected Color.z' = 1
+		'Selected Color.y' = 0.22
+		'Selected Color.z' = 0.72
 		'Hovered Color.x' = 1
-		'Hovered Color.y' = 1
-		'Hovered Color.z' = 1
-		'Pressed Color.x' = 0.65
-		'Pressed Color.y' = 0.65
-		'Pressed Color.z' = 0.65
+		'Hovered Color.y' = 0.22
+		'Hovered Color.z' = 0.72
+		'Pressed Color.x' = 1
+		'Pressed Color.y' = 1
+		'Pressed Color.z' = 1
 		Order = 90
 		Interactable = $true
 		type = 'Button'
 	}
+}
+
+function New-PanelEntity([string]$name, [float]$width, [float]$height, [float]$anchorX,
+	[float]$anchorY, [float]$offsetX, [float]$offsetY, [int]$parent, [int]$order = 80,
+	[bool]$visible = $true, [string]$texture = 'Sprites/UI/neon-panel.png')
+{
+	$panel = New-ButtonComponent $width $height
+	$panel.Background = $texture
+	$panel.'Normal Color.x' = 1
+	$panel.'Normal Color.y' = 1
+	$panel.'Normal Color.z' = 1
+	$panel.'Selected Color.x' = 1
+	$panel.'Selected Color.y' = 1
+	$panel.'Selected Color.z' = 1
+	$panel.'Hovered Color.x' = 1
+	$panel.'Hovered Color.y' = 1
+	$panel.'Hovered Color.z' = 1
+	$panel.'Pressed Color.x' = 1
+	$panel.'Pressed Color.y' = 1
+	$panel.'Pressed Color.z' = 1
+	$panel.Order = $order
+	$panel.Interactable = $false
+
+	$entity = [ordered]@{
+		components = @($panel, (New-AnchorComponent $anchorX $anchorY $offsetX $offsetY))
+		name = $name
+		parent = $parent
+		transform = New-Transform
+	}
+
+	if (!$visible)
+	{
+		$entity.visible = $false
+	}
+
+	return $entity
 }
 
 function New-TextEntity([string]$name, [string]$text, [float]$size, [float]$anchorX,
@@ -219,8 +255,8 @@ function New-PostProcessingComponent
 {
 	return [ordered]@{
 		Bloom = $true
-		'Bloom Strength' = 0.18
-		'Bloom Threshold' = 0.72
+		'Bloom Strength' = 0.34
+		'Bloom Threshold' = 0.52
 		'Color Correction' = $true
 		Brightness = 0
 		Contrast = 1.04
@@ -245,19 +281,19 @@ $gameRulesAssembly = [ordered]@{
 				[ordered]@{
 					'Lose Height' = -310
 					'Shake Duration' = 0.06
-					'Shake Strength' = 0.72
+					'Shake Strength' = 0.5
 					type = 'GameRules'
 				}
 				[ordered]@{
 					Texture = 'Sprites/Brickout/particle.png'
-					'Max Particles' = 160
+					'Max Particles' = 320
 					'Emission Rate' = 0
-					Lifetime = 0.28
-					Speed = 125
+					Lifetime = 0.34
+					Speed = 155
 					Direction = 90
 					Spread = 360
-					'Start Size' = 15
-					'End Size' = 2
+					'Start Size' = 10
+					'End Size' = 1
 					'Start Color.x' = 1
 					'Start Color.y' = 1
 					'Start Color.z' = 1
@@ -285,8 +321,11 @@ $hudAssembly = [ordered]@{
 			parent = -1
 			transform = New-Transform
 		}
-		(New-TextEntity 'Score Text' 'SCORE 000000' 24 0 1 150 -32 0)
-		(New-TextEntity 'Attempts Text' 'BALLS 3' 24 1 1 -110 -32 0)
+		(New-PanelEntity 'HUD Bar' 1280 72 0.5 1 0 -36 0 85 $true 'Sprites/UI/top-bar.png')
+		(New-TextEntity 'Score Text' 'SCORE 000000' 22 0 1 145 -34 0)
+		(New-TextEntity 'Level Text' 'LEVEL 01' 22 0.5 1 0 -34 0)
+		(New-TextEntity 'Attempts Text' 'BALLS 3' 22 1 1 -110 -34 0)
+		(New-TextEntity 'Power Text' 'MULTIBALL x3' 22 0.5 1 0 -92 0 $false)
 	)
 	root = 0
 }
@@ -317,8 +356,10 @@ $mainMenuAssembly = [ordered]@{
 			transform = New-Transform
 		}
 		$background
-		(New-TextEntity 'Menu Title' 'BRICKOUT' 72 0.5 0.5 0 190 0)
-		(New-TextEntity 'Menu Prompt' 'PRESS ANY KEY TO START' 28 0.5 0.5 0 -100 0)
+		(New-PanelEntity 'Menu Panel' 520 590 0.5 0.5 0 0 0 70)
+		(New-TextEntity 'Menu Title' 'BRICKOUT' 64 0.5 0.5 0 230 0)
+		(New-TextEntity 'Menu Subtitle' 'NEON CIRCUIT' 22 0.5 0.5 0 175 0)
+		(New-TextEntity 'Menu Prompt' 'PRESS ANY KEY TO START' 24 0.5 0.5 0 -55 0)
 		[ordered]@{
 			components = @()
 			name = 'Menu Options'
@@ -326,14 +367,15 @@ $mainMenuAssembly = [ordered]@{
 			transform = New-Transform
 			visible = $false
 		}
-		(New-ButtonEntity 'Play Button' 'PLAY' 0.5 0.5 0 70 4)
-		(New-ButtonEntity 'Credits Button' 'CREDITS' 0.5 0.5 0 0 4)
-		(New-ButtonEntity 'Settings Button' 'SETTINGS' 0.5 0.5 0 -70 4)
-		(New-ButtonEntity 'Quit Button' 'QUIT' 0.5 0.5 0 -140 4)
-		(New-TextEntity 'Menu Detail' 'CREDITS' 24 0.5 0.5 0 105 0 $false)
-		(New-SpriteEntity 'Credits Logo' 'Images/sampaio-games-logo.png' 0.5 0.5 0 -50 0.105 0.105 0 100 $false)
-		(New-ButtonEntity 'Sound Button' 'SOUND ON' 0.5 0.5 0 -20 9)
-		(New-ButtonEntity 'Back Button' 'BACK' 0.5 0.5 0 -190 9)
+		(New-ButtonEntity 'Play Button' 'PLAY' 0.5 0.5 0 85 6 360 54)
+		(New-ButtonEntity 'Credits Button' 'CREDITS' 0.5 0.5 0 20 6 360 54)
+		(New-ButtonEntity 'Settings Button' 'SETTINGS' 0.5 0.5 0 -45 6 360 54)
+		(New-ButtonEntity 'Quit Button' 'QUIT' 0.5 0.5 0 -110 6 360 54)
+		(New-TextEntity 'Menu Detail' 'CREDITS' 22 0.5 0.5 0 75 0 $false)
+		(New-SpriteEntity 'Credits Logo' 'Images/sampaio-games-logo.png' 0.5 0.5 0 -75 0.09 0.09 0 100 $false)
+		(New-ButtonEntity 'Sound Button' 'SOUND ON' 0.5 0.5 0 -35 11 360 54)
+		(New-ButtonEntity 'Back Button' 'BACK' 0.5 0.5 0 -175 11 360 54)
+		(New-TextEntity 'Menu Controls' "MOVE  A D OR ARROWS`nLAUNCH  SPACE    PAUSE  ESC" 14 0.5 0.5 0 -238 0)
 	)
 	root = 0
 }
@@ -355,10 +397,11 @@ $endScreenAssembly = [ordered]@{
 			transform = New-Transform
 		}
 		$endBackground
-		(New-TextEntity 'Result Title' 'YOU WIN!' 58 0.5 0.5 0 170 0)
-		(New-TextEntity 'Result Score' "TOTAL SCORE`n000000" 38 0.5 0.5 0 40 0)
-		(New-ButtonEntity 'Play Again Button' 'PLAY AGAIN' 0.5 0.5 0 -105 0)
-		(New-ButtonEntity 'Main Menu Button' 'MAIN MENU' 0.5 0.5 0 -180 0)
+		(New-PanelEntity 'Result Panel' 520 540 0.5 0.5 0 0 0 70)
+		(New-TextEntity 'Result Title' 'CIRCUIT CLEARED' 52 0.5 0.5 0 185 0)
+		(New-TextEntity 'Result Score' "TOTAL SCORE`n000000" 34 0.5 0.5 0 55 0)
+		(New-ButtonEntity 'Play Again Button' 'PLAY AGAIN' 0.5 0.5 0 -85 0 360 54)
+		(New-ButtonEntity 'Main Menu Button' 'MAIN MENU' 0.5 0.5 0 -155 0 360 54)
 	)
 	root = 0
 }
@@ -408,37 +451,154 @@ $pauseAssembly = [ordered]@{
 			parent = 1
 			transform = New-Transform
 		}
-		(New-TextEntity 'Pause Title' 'PAUSE' 58 0.5 0.5 0 115 1)
-		(New-ButtonEntity 'Resume Button' 'RESUME' 0.5 0.5 0 10 1)
-		(New-ButtonEntity 'Pause Main Menu Button' 'MAIN MENU' 0.5 0.5 0 -70 1)
+		(New-PanelEntity 'Pause Panel' 500 380 0.5 0.5 0 0 1 85)
+		(New-TextEntity 'Pause Title' 'PAUSED' 52 0.5 0.5 0 115 1)
+		(New-TextEntity 'Pause Subtitle' 'CIRCUIT SUSPENDED' 20 0.5 0.5 0 65 1)
+		(New-ButtonEntity 'Resume Button' 'RESUME' 0.5 0.5 0 -15 1 340 54)
+		(New-ButtonEntity 'Pause Main Menu Button' 'MAIN MENU' 0.5 0.5 0 -85 1 340 54)
 	)
 	root = 0
 }
 Write-SealedJson (Join-Path $assetRoot 'Assemblies\Pause Menu.lnassembly') $pauseAssembly
 
-# Gameplay art is authored as compact 16x16 pixel sprites. Preserve the established world-space
+# Gameplay art is authored as detailed 32x32 neon sprites. Preserve the established world-space
 # dimensions through entity scale and matching unscaled collider dimensions.
 $paddlePath = Join-Path $assetRoot 'Assemblies\Paddle.lnassembly'
 $paddleAssembly = Read-SealedJson $paddlePath
 $paddleRoot = $paddleAssembly.entities[$paddleAssembly.root]
-$paddleRoot.transform.scale = @(6.25, 1.25)
+$paddleRoot.transform.scale = @(3.5, 0.625)
 $paddleCollider = $paddleRoot.components | Where-Object { $_.type -eq 'BoxCollider2D' } | Select-Object -First 1
 
 if ($paddleCollider)
 {
-	$paddleCollider.width = 16
-	$paddleCollider.height = 16
+	$paddleCollider.width = 32
+	$paddleCollider.height = 32
+}
+
+$paddleBehavior = $paddleRoot.components | Where-Object { $_.type -eq 'Paddle' } | Select-Object -First 1
+if ($paddleBehavior)
+{
+	$paddleBehavior.Speed = 550
+	$paddleBehavior.'Horizontal Limit' = 334
 }
 
 Write-SealedJson $paddlePath $paddleAssembly
+
+function Get-LevelLayout([int]$level, [int]$count)
+{
+	$layout = [Collections.Generic.List[object]]::new()
+
+	if ($level -eq 1)
+	{
+		for ($index = 0; $index -lt $count; $index++)
+		{
+			$x = -280 + $index * 80
+			$layout.Add([pscustomobject]@{ x=$x; y=(145 + [Math]::Abs($x) * 0.32); rotation=0 })
+		}
+	}
+	elseif ($level -eq 2)
+	{
+		for ($index = 0; $index -lt $count; $index++)
+		{
+			$angle = -[Math]::PI * 0.5 + 2 * [Math]::PI * $index / $count
+			$layout.Add([pscustomobject]@{
+				x=[Math]::Round([Math]::Cos($angle) * 285, 1)
+				y=[Math]::Round(145 + [Math]::Sin($angle) * 105, 1)
+				rotation=0
+			})
+		}
+	}
+	elseif ($level -eq 3)
+	{
+		$heart = @(
+			@(-210, 220), @(-140, 220), @(-70, 220), @(70, 220), @(140, 220), @(210, 220),
+			@(-280, 175), @(-210, 175), @(-140, 175), @(-70, 175), @(0, 175),
+			@(70, 175), @(140, 175), @(210, 175), @(280, 175),
+			@(-245, 120), @(245, 120), @(-190, 65), @(190, 65),
+			@(-130, 10), @(130, 10), @(-65, -45), @(65, -45), @(0, -100)
+		)
+		for ($index = 0; $index -lt $count; $index++)
+		{
+			$point = $heart[$index % $heart.Count]
+			$layout.Add([pscustomobject]@{ x=$point[0]; y=$point[1]; rotation=0 })
+		}
+	}
+	elseif ($level -eq 4)
+	{
+		$star = @(
+			@(0, 235),
+			@(-280, 170), @(-210, 170), @(-140, 170), @(-70, 170), @(0, 170),
+			@(70, 170), @(140, 170), @(210, 170), @(280, 170),
+			@(-210, 125), @(-140, 125), @(-70, 125), @(0, 125), @(70, 125), @(140, 125), @(210, 125),
+			@(-140, 80), @(-70, 80), @(0, 80), @(70, 80), @(140, 80),
+			@(-140, 35), @(-70, 35), @(70, 35), @(140, 35),
+			@(-210, -10), @(-140, -10), @(140, -10), @(210, -10),
+			@(-210, -55), @(210, -55)
+		)
+		for ($index = 0; $index -lt $count; $index++)
+		{
+			$point = $star[$index % $star.Count]
+			$layout.Add([pscustomobject]@{ x=$point[0]; y=$point[1]; rotation=0 })
+		}
+	}
+	else
+	{
+		for ($index = 0; $index -lt $count; $index++)
+		{
+			$row = [Math]::Floor($index / 10)
+			$column = $index % 10
+			$x = -315 + $column * 70
+			$ridge = @(-15, 45, -5, 70, 5, 70, -5, 45, -15, 20)[$column]
+			$y = 190 - $row * 42 + $ridge * (1.0 - $row / 4.0)
+			$layout.Add([pscustomobject]@{ x=$x; y=[Math]::Round($y, 1); rotation=0 })
+		}
+	}
+
+	return @($layout)
+}
+
+function New-WorldSprite([string]$name, [string]$texture, [float]$x, [float]$y,
+	[float]$scaleX, [float]$scaleY, [float]$rotation, [int]$parent = -1, [int]$order = 5)
+{
+	return [ordered]@{
+		components = @([ordered]@{ flipX=$false; flipY=$false; order=$order; texture=$texture; type='SpriteRenderer' })
+		name = $name
+		parent = $parent
+		transform = [ordered]@{ position=@($x, $y); rotation=$rotation; scale=@($scaleX, $scaleY) }
+	}
+}
+
+function New-Bumper([string]$name, [float]$x, [float]$y)
+{
+	$entity = New-WorldSprite $name 'Sprites/Brickout/bumper.png' $x $y 1.25 1.25 0 -1 4
+	$entity.components = @($entity.components) + @(
+		[ordered]@{ bodyType='Static'; fixedRotation=$false; type='RigidBody2D' },
+		[ordered]@{ density=1; friction=0; radius=16; restitution=1; type='CircleCollider2D' }
+	)
+	return $entity
+}
+
+function New-Rail([string]$name, [float]$x, [float]$y, [float]$rotation)
+{
+	$entity = New-WorldSprite $name 'Sprites/Brickout/rail.png' $x $y 3.75 0.375 $rotation -1 3
+	$entity.components = @($entity.components) + @(
+		[ordered]@{ bodyType='Static'; fixedRotation=$false; type='RigidBody2D' },
+		[ordered]@{ density=1; friction=0; width=32; height=32; restitution=1; type='BoxCollider2D' }
+	)
+	return $entity
+}
 
 for ($level = 1; $level -le 5; $level++)
 {
 	$scenePath = Join-Path $assetRoot ("Scenes\Level{0:D2}.lnscene" -f $level)
 	$scene = Read-SealedJson $scenePath
+	$scene.entities = @($scene.entities | Where-Object {
+		$_.name -notlike 'Power Icon *' -and $_.name -notlike 'Arena Bumper *' -and $_.name -notlike 'Arena Rail *'
+	})
 	$systemsIndex = -1
 	$hasHud = $false
 	$hasPauseMenu = $false
+	$brickIndices = [Collections.Generic.List[int]]::new()
 
 	for ($index = 0; $index -lt $scene.entities.Count; $index++)
 	{
@@ -477,25 +637,115 @@ for ($level = 1; $level -le 5; $level++)
 		}
 		elseif ($sprite -and $sprite.texture -eq 'Sprites/Brickout/ball.png')
 		{
-			$entity.transform.scale = @(0.75, 0.75)
+			$entity.transform.scale = @(0.375, 0.375)
 			$collider = $entity.components | Where-Object { $_.type -eq 'CircleCollider2D' } | Select-Object -First 1
 
 			if ($collider)
 			{
-				$collider.radius = 8
+				$collider.radius = 16
+			}
+
+			$ballBehavior = $entity.components | Where-Object { $_.type -eq 'Ball' } | Select-Object -First 1
+			if ($ballBehavior) { $ballBehavior.Speed = 390 }
+
+			if (!($entity.components | Where-Object { $_.type -eq 'ParticleComponent' }))
+			{
+				$entity.components = @($entity.components) + @([ordered]@{
+					Texture='Sprites/Brickout/particle.png'; 'Max Particles'=96; 'Emission Rate'=48
+					Lifetime=0.2; Speed=26; Direction=180; Spread=34; 'Start Size'=7; 'End Size'=1
+					'Start Color.x'=1; 'Start Color.y'=1; 'Start Color.z'=1
+					'End Color.x'=0.1; 'End Color.y'=0.75; 'End Color.z'=1; Order=12
+					type='ParticleComponent'
+				})
 			}
 		}
 		elseif ($sprite -and $sprite.texture -like 'Sprites/Brickout/tile-*.png')
 		{
-			$entity.transform.scale = @(3.75, 1.5)
+			$brickIndices.Add($index)
+			$entity.transform.scale = @(1.875, 0.75)
 			$collider = $entity.components | Where-Object { $_.type -eq 'BoxCollider2D' } | Select-Object -First 1
 
 			if ($collider)
 			{
-				$collider.width = 16
-				$collider.height = 16
+				$collider.width = 32
+				$collider.height = 32
 			}
 		}
+		elseif ($entity.name -eq 'Top Wall')
+		{
+			$entity.transform.scale = @(25, 0.625)
+			$collider = $entity.components | Where-Object { $_.type -eq 'BoxCollider2D' } | Select-Object -First 1
+			if ($collider) { $collider.width = 32; $collider.height = 32 }
+			if (!$sprite)
+			{
+				$entity.components = @([ordered]@{ flipX=$false; flipY=$false; order=2; texture='Sprites/Brickout/wall-horizontal.png'; type='SpriteRenderer' }) + @($entity.components)
+			}
+		}
+		elseif ($entity.name -eq 'Left Wall' -or $entity.name -eq 'Right Wall')
+		{
+			$entity.transform.scale = @(0.625, 18.75)
+			$collider = $entity.components | Where-Object { $_.type -eq 'BoxCollider2D' } | Select-Object -First 1
+			if ($collider) { $collider.width = 32; $collider.height = 32 }
+			if (!$sprite)
+			{
+				$entity.components = @([ordered]@{ flipX=$false; flipY=$false; order=2; texture='Sprites/Brickout/wall-vertical.png'; type='SpriteRenderer' }) + @($entity.components)
+			}
+		}
+	}
+
+	$layout = Get-LevelLayout $level $brickIndices.Count
+	for ($brickNumber = 0; $brickNumber -lt $brickIndices.Count; $brickNumber++)
+	{
+		$entityIndex = $brickIndices[$brickNumber]
+		$brick = $scene.entities[$entityIndex]
+		$point = $layout[$brickNumber]
+		$brick.transform.position = @([float]$point.x, [float]$point.y)
+		$brick.transform.rotation = 0
+		$maximumDurability = switch ($level)
+		{
+			1 { 2 }
+			2 { 2 }
+			3 { 3 }
+			4 { 3 }
+			default { 4 }
+		}
+		$durability = 1 + (($brickNumber + $level - 1) % $maximumDurability)
+		if ($level -eq 5 -and ($brickNumber % 11) -eq 4)
+		{
+			$durability = 5
+		}
+		$behavior = $brick.components | Where-Object { $_.type -eq 'Brick' } | Select-Object -First 1
+		$behavior | Add-Member -NotePropertyName 'Hit Points' -NotePropertyValue $durability -Force
+		$behavior | Add-Member -NotePropertyName 'Power' -NotePropertyValue '' -Force
+
+		$power = ''
+		if ($brickNumber -eq [Math]::Floor($brickIndices.Count / 3)) { $power = 'Extra Life' }
+		elseif ($level -ge 2 -and $brickNumber -eq [Math]::Floor($brickIndices.Count * 2 / 3)) { $power = 'Multiball' }
+
+		if ($power)
+		{
+			$behavior.Power = $power
+			$iconTexture = if ($power -eq 'Extra Life') { 'Sprites/Brickout/power-life.png' }
+				else { 'Sprites/Brickout/power-multiball.png' }
+			$icon = New-WorldSprite ("Power Icon {0:D2}" -f ($brickNumber + 1)) $iconTexture 0 0 0.22 0.55 0 $entityIndex 8
+			$scene.entities = @($scene.entities) + @($icon)
+		}
+	}
+
+	if ($level -ge 3)
+	{
+		$scene.entities = @($scene.entities) + @(
+			(New-Bumper 'Arena Bumper Left' -315 -35),
+			(New-Bumper 'Arena Bumper Right' 315 -35)
+		)
+	}
+
+	if ($level -ge 4)
+	{
+		$scene.entities = @($scene.entities) + @(
+			(New-Rail 'Arena Rail Left' -280 -125 28),
+			(New-Rail 'Arena Rail Right' 280 -125 -28)
+		)
 	}
 
 	if (!$hasHud)

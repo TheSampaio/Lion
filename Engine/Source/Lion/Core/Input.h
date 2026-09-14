@@ -6,6 +6,7 @@
 namespace Lion
 {
 	class Application;
+	class Event;
 
 	enum class InputDevice
 	{
@@ -218,6 +219,7 @@ namespace Lion
 		static void New();
 		static void Delete();
 		static void Update();
+		static void OnEvent(Event& event);
 
 		Input(const Input&) = delete;
 		Input& operator=(const Input&) = delete;
@@ -226,7 +228,10 @@ namespace Lion
         Input() = default;
 
 		static bool sControlKeys[GLFW_KEY_LAST + 1];
-		static bool sAnyKeyControl;
+		static bool sAnyKeyPressed;
+		static bool sAnyKeyPressedPrevious;
+		static bool sAnyKeyTapped;
+		static bool sAnyKeyEventPending;
 		static Vector2 sPointerViewportPosition;
 		static Size sPointerViewportSize;
 		static std::vector<InputAction> sActions;

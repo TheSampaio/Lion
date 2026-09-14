@@ -50,12 +50,12 @@ void Paddle::Reset()
 
 float32 Paddle::GetHalfWidth() const
 {
-	return mRenderer->GetSize().width * 0.5f;
+	return mRenderer->GetSize().width * GetOwner().GetWorldScale().x * 0.5f;
 }
 
 float32 Paddle::GetHalfHeight() const
 {
-	return mRenderer->GetSize().height * 0.5f;
+	return mRenderer->GetSize().height * GetOwner().GetWorldScale().y * 0.5f;
 }
 
 LION_REGISTER_COMPONENT(Paddle)

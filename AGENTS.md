@@ -127,6 +127,9 @@ Apply these to every change:
   authored override, so Play-mode scene transitions never read a stale build copy.
 - Keep UI harmonious across panels, tabs, and modals. Reuse established spacing, alignment, breathing
   room, control order, colors, typography, and interaction patterns before adding a new visual rule.
+- Editor-facing component labels never expose the implementation suffix `Component`. Split registered
+  identifiers into natural words and numerals (`PostProcessingComponent` becomes `Post Processing`,
+  `Camera2D` becomes `Camera 2D`) while keeping registration and serialization names unchanged.
 - Editor icons come from Material Design Icons. `EditorGui::LoadIconFont` loads the font twice: merged at
   16 px for an icon inline with a label, and standalone at 32 px atlas resolution for positioned icons.
 - Inline icons use one string and one draw call, such as `ICON_MDI_x "  Label"`. Positioned icons go

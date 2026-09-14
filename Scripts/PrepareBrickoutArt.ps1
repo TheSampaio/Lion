@@ -4,182 +4,234 @@ Add-Type -AssemblyName System.Drawing
 
 $assetRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\Sandbox\Assets\Sprites\Brickout'))
 $uiRoot = [IO.Path]::GetFullPath((Join-Path $assetRoot '..\UI'))
-$spriteSourcePath = Join-Path $PSScriptRoot 'GeneratedArt\brickout-pixel-source.png'
-$buttonSourcePath = Join-Path $PSScriptRoot 'GeneratedArt\button-panel-pixel-source.png'
-$backgroundSourcePath = Join-Path $PSScriptRoot 'GeneratedArt\background-pixel-source.png'
-$atlasPath = Join-Path $assetRoot 'brickout-spritesheet.png'
-$buttonPath = Join-Path $uiRoot 'button-panel.png'
-$backgroundPath = Join-Path $assetRoot 'background.png'
-$spriteSize = 16
-$alphaThreshold = 32
+$spriteSize = 32
 
-function Get-AlphaBounds([Drawing.Bitmap]$bitmap, [Drawing.Rectangle]$region)
+function New-Canvas([int]$width, [int]$height, [Drawing.Color]$color)
 {
-	$minimumX = $region.Right
-	$minimumY = $region.Bottom
-	$maximumX = -1
-	$maximumY = -1
-
-	for ($y = $region.Top; $y -lt $region.Bottom; $y++)
-	{
-		for ($x = $region.Left; $x -lt $region.Right; $x++)
-		{
-			if ($bitmap.GetPixel($x, $y).A -lt $alphaThreshold)
-			{
-				continue
-			}
-
-			$minimumX = [Math]::Min($minimumX, $x)
-			$minimumY = [Math]::Min($minimumY, $y)
-			$maximumX = [Math]::Max($maximumX, $x)
-			$maximumY = [Math]::Max($maximumY, $y)
-		}
-	}
-
-	if ($maximumX -lt $minimumX -or $maximumY -lt $minimumY)
-	{
-		throw "No visible sprite was found in cell $region."
-	}
-
-	return [Drawing.Rectangle]::new(
-		$minimumX,
-		$minimumY,
-		$maximumX - $minimumX + 1,
-		$maximumY - $minimumY + 1)
-}
-
-function New-PixelSprite([Drawing.Bitmap]$source, [Drawing.Rectangle]$region)
-{
-	$bounds = Get-AlphaBounds $source $region
-	$bitmap = [Drawing.Bitmap]::new($spriteSize, $spriteSize, [Drawing.Imaging.PixelFormat]::Format32bppArgb)
+	$bitmap = [Drawing.Bitmap]::new($width, $height, [Drawing.Imaging.PixelFormat]::Format32bppArgb)
 	$graphics = [Drawing.Graphics]::FromImage($bitmap)
-	$graphics.Clear([Drawing.Color]::Transparent)
-	$graphics.CompositingMode = [Drawing.Drawing2D.CompositingMode]::SourceCopy
-	$graphics.CompositingQuality = [Drawing.Drawing2D.CompositingQuality]::HighSpeed
-	$graphics.InterpolationMode = [Drawing.Drawing2D.InterpolationMode]::NearestNeighbor
-	$graphics.PixelOffsetMode = [Drawing.Drawing2D.PixelOffsetMode]::Half
-	$graphics.SmoothingMode = [Drawing.Drawing2D.SmoothingMode]::None
-	$graphics.DrawImage($source, [Drawing.Rectangle]::new(0, 0, $spriteSize, $spriteSize),
-		$bounds, [Drawing.GraphicsUnit]::Pixel)
+	$graphics.Clear($color)
 	$graphics.Dispose()
-
-	for ($y = 0; $y -lt $spriteSize; $y++)
-	{
-		for ($x = 0; $x -lt $spriteSize; $x++)
-		{
-			$color = $bitmap.GetPixel($x, $y)
-			$cleanColor = if ($color.A -lt $alphaThreshold)
-			{
-				[Drawing.Color]::Transparent
-			}
-			else
-			{
-				[Drawing.Color]::FromArgb(255, $color.R, $color.G, $color.B)
-			}
-			$bitmap.SetPixel($x, $y, $cleanColor)
-		}
-	}
-
 	return $bitmap
 }
 
-function New-CenteredPixelSprite([Drawing.Bitmap]$source)
+function Set-Pixel([Drawing.Bitmap]$bitmap, [int]$x, [int]$y, [Drawing.Color]$color)
 {
-	return New-PixelSprite $source ([Drawing.Rectangle]::new(0, 0, $source.Width, $source.Height))
+	if ($x -ge 0 -and $x -lt $bitmap.Width -and $y -ge 0 -and $y -lt $bitmap.Height)
+	{
+		$bitmap.SetPixel($x, $y, $color)
+	}
 }
 
-function Save-PixelSprite([Drawing.Bitmap]$sprite, [string]$path)
+function Draw-Rectangle([Drawing.Bitmap]$bitmap, [Drawing.Color]$color,
+	[int]$x, [int]$y, [int]$width, [int]$height, [bool]$filled = $false)
 {
-	$sprite.Save($path, [Drawing.Imaging.ImageFormat]::Png)
+	for ($row = $y; $row -lt $y + $height; $row++)
+	{
+		for ($column = $x; $column -lt $x + $width; $column++)
+		{
+			if ($filled -or $row -eq $y -or $row -eq $y + $height - 1 -or $column -eq $x -or $column -eq $x + $width - 1)
+			{
+				Set-Pixel $bitmap $column $row $color
+			}
+		}
+	}
+}
+
+function Save-Sprite([Drawing.Bitmap]$bitmap, [string]$name)
+{
+	$bitmap.Save((Join-Path $assetRoot $name), [Drawing.Imaging.ImageFormat]::Png)
+	$bitmap.Dispose()
+}
+
+function New-NeonTile([Drawing.Color]$color)
+{
+	$bitmap = New-Canvas $spriteSize $spriteSize ([Drawing.Color]::Transparent)
+	Draw-Rectangle $bitmap ([Drawing.Color]::FromArgb(255, 2, 8, 18)) 0 5 32 22 $true
+	Draw-Rectangle $bitmap $color 0 5 32 22
+	Draw-Rectangle $bitmap ([Drawing.Color]::FromArgb(255, $color.R / 2, $color.G / 2, $color.B / 2)) 2 7 28 18
+	Draw-Rectangle $bitmap ([Drawing.Color]::White) 3 7 9 2 $true
+	Draw-Rectangle $bitmap $color 6 11 20 1 $true
+	Set-Pixel $bitmap 28 24 ([Drawing.Color]::White)
+	Set-Pixel $bitmap 29 23 ([Drawing.Color]::White)
+	return $bitmap
 }
 
 New-Item -ItemType Directory -Path $assetRoot -Force | Out-Null
 New-Item -ItemType Directory -Path $uiRoot -Force | Out-Null
 
-$source = [Drawing.Bitmap]::FromFile($spriteSourcePath)
-$cellWidth = [Math]::Floor($source.Width / 4)
-$cellHeight = [Math]::Floor($source.Height / 2)
-$spriteNames = @(
-	'ball.png',
-	'player.png',
-	'tile-1.png',
-	'tile-2.png',
-	'tile-3.png',
-	'tile-4.png',
-	'tile-5.png',
-	'particle.png'
-)
-$sprites = [Collections.Generic.List[Drawing.Bitmap]]::new()
-
-for ($index = 0; $index -lt $spriteNames.Count; $index++)
+$ball = New-Canvas $spriteSize $spriteSize ([Drawing.Color]::Transparent)
+for ($y = 4; $y -le 27; $y++)
 {
-	$column = $index % 4
-	$row = [Math]::Floor($index / 4)
-	$left = $column * $cellWidth
-	$top = $row * $cellHeight
-	$width = if ($column -eq 3) { $source.Width - $left } else { $cellWidth }
-	$height = if ($row -eq 1) { $source.Height - $top } else { $cellHeight }
-	$sprite = New-PixelSprite $source ([Drawing.Rectangle]::new($left, $top, $width, $height))
-	Save-PixelSprite $sprite (Join-Path $assetRoot $spriteNames[$index])
-	$sprites.Add($sprite)
+	for ($x = 4; $x -le 27; $x++)
+	{
+		$dx = $x - 15.5
+		$dy = $y - 15.5
+		$distanceSquared = $dx * $dx + $dy * $dy
+		if ($distanceSquared -le 118)
+		{
+			Set-Pixel $ball $x $y ([Drawing.Color]::White)
+		}
+	}
 }
+Draw-Rectangle $ball ([Drawing.Color]::White) 10 8 6 2 $true
+Save-Sprite $ball 'ball.png'
 
-$atlas = [Drawing.Bitmap]::new($spriteSize * 4, $spriteSize * 2, [Drawing.Imaging.PixelFormat]::Format32bppArgb)
-$atlasGraphics = [Drawing.Graphics]::FromImage($atlas)
-$atlasGraphics.Clear([Drawing.Color]::Transparent)
-$atlasGraphics.CompositingMode = [Drawing.Drawing2D.CompositingMode]::SourceCopy
-$atlasGraphics.InterpolationMode = [Drawing.Drawing2D.InterpolationMode]::NearestNeighbor
-$atlasGraphics.PixelOffsetMode = [Drawing.Drawing2D.PixelOffsetMode]::Half
+$player = New-Canvas $spriteSize $spriteSize ([Drawing.Color]::Transparent)
+Draw-Rectangle $player ([Drawing.Color]::White) 2 10 28 12 $true
+Draw-Rectangle $player ([Drawing.Color]::FromArgb(255, 220, 220, 225)) 4 12 24 3 $true
+Draw-Rectangle $player ([Drawing.Color]::FromArgb(255, 20, 55, 75)) 7 16 18 3 $true
+Draw-Rectangle $player ([Drawing.Color]::White) 0 13 3 6 $true
+Draw-Rectangle $player ([Drawing.Color]::White) 29 13 3 6 $true
+Save-Sprite $player 'player.png'
+
+$durabilityColors = @(
+	[Drawing.Color]::FromArgb(255, 255, 45, 70),
+	[Drawing.Color]::FromArgb(255, 255, 224, 55),
+	[Drawing.Color]::FromArgb(255, 60, 255, 120),
+	[Drawing.Color]::FromArgb(255, 40, 225, 255),
+	[Drawing.Color]::FromArgb(255, 225, 65, 255)
+)
+
+$sprites = [Collections.Generic.List[Drawing.Bitmap]]::new()
+$sprites.Add((New-NeonTile $durabilityColors[0]))
+$sprites.Add((New-NeonTile $durabilityColors[1]))
+$sprites.Add((New-NeonTile $durabilityColors[2]))
+$sprites.Add((New-NeonTile $durabilityColors[3]))
+$sprites.Add((New-NeonTile $durabilityColors[4]))
 
 for ($index = 0; $index -lt $sprites.Count; $index++)
 {
-	$atlasGraphics.DrawImageUnscaled($sprites[$index], ($index % 4) * $spriteSize,
-		[Math]::Floor($index / 4) * $spriteSize)
-	$sprites[$index].Dispose()
+	$sprites[$index].Save((Join-Path $assetRoot ("tile-{0}.png" -f ($index + 1))),
+		[Drawing.Imaging.ImageFormat]::Png)
 }
 
+$particle = New-Canvas $spriteSize $spriteSize ([Drawing.Color]::Transparent)
+for ($y = 8; $y -le 23; $y++)
+{
+	$halfWidth = 8 - [Math]::Abs(15.5 - $y)
+	for ($x = [Math]::Ceiling(15.5 - $halfWidth); $x -le [Math]::Floor(15.5 + $halfWidth); $x++)
+	{
+		Set-Pixel $particle $x $y ([Drawing.Color]::White)
+	}
+}
+Save-Sprite $particle 'particle.png'
+
+$bumper = New-Canvas $spriteSize $spriteSize ([Drawing.Color]::Transparent)
+for ($y = 1; $y -le 30; $y++)
+{
+	for ($x = 1; $x -le 30; $x++)
+	{
+		$distance = [Math]::Sqrt(($x - 15.5) * ($x - 15.5) + ($y - 15.5) * ($y - 15.5))
+		if (($distance -ge 12.0 -and $distance -le 14.0) -or ($distance -ge 5.0 -and $distance -le 7.0))
+		{
+			Set-Pixel $bumper $x $y ([Drawing.Color]::FromArgb(255, 40, 225, 255))
+		}
+	}
+}
+Draw-Rectangle $bumper ([Drawing.Color]::White) 14 1 4 3 $true
+Draw-Rectangle $bumper ([Drawing.Color]::White) 14 28 4 3 $true
+Save-Sprite $bumper 'bumper.png'
+
+$life = New-Canvas $spriteSize $spriteSize ([Drawing.Color]::Transparent)
+$heartRows = @('  ## ##  ', ' ####### ', '#########', '#########', ' ####### ', '  #####  ', '   ###   ', '    #    ')
+for ($y = 0; $y -lt $heartRows.Count; $y++)
+{
+	for ($x = 0; $x -lt $heartRows[$y].Length; $x++)
+	{
+		if ($heartRows[$y][$x] -eq '#')
+		{
+			Draw-Rectangle $life ([Drawing.Color]::White) ($x * 2 + 6) ($y * 2 + 8) 2 2 $true
+		}
+	}
+}
+Save-Sprite $life 'power-life.png'
+
+$multiball = New-Canvas $spriteSize $spriteSize ([Drawing.Color]::Transparent)
+foreach ($center in @(@(10,16), @(21,10), @(21,22)))
+{
+	Draw-Rectangle $multiball ([Drawing.Color]::White) ($center[0] - 3) ($center[1] - 3) 7 7 $true
+	Draw-Rectangle $multiball ([Drawing.Color]::FromArgb(255, 150, 235, 255)) ($center[0] - 1) ($center[1] - 1) 3 3 $true
+}
+Save-Sprite $multiball 'power-multiball.png'
+
+$rail = New-Canvas $spriteSize $spriteSize ([Drawing.Color]::Transparent)
+Draw-Rectangle $rail ([Drawing.Color]::FromArgb(255, 2, 8, 18)) 0 10 32 12 $true
+Draw-Rectangle $rail ([Drawing.Color]::FromArgb(255, 40, 225, 255)) 0 10 32 12
+Draw-Rectangle $rail ([Drawing.Color]::FromArgb(255, 15, 85, 110)) 2 12 28 8
+Draw-Rectangle $rail ([Drawing.Color]::White) 4 12 8 2 $true
+Save-Sprite $rail 'rail.png'
+
+$wallHorizontal = New-Canvas $spriteSize $spriteSize ([Drawing.Color]::Transparent)
+Draw-Rectangle $wallHorizontal ([Drawing.Color]::FromArgb(255, 2, 8, 18)) 0 12 32 8 $true
+Draw-Rectangle $wallHorizontal ([Drawing.Color]::FromArgb(255, 40, 225, 255)) 0 12 32 8
+Draw-Rectangle $wallHorizontal ([Drawing.Color]::White) 5 14 10 1 $true
+Save-Sprite $wallHorizontal 'wall-horizontal.png'
+
+$wallVertical = New-Canvas $spriteSize $spriteSize ([Drawing.Color]::Transparent)
+Draw-Rectangle $wallVertical ([Drawing.Color]::FromArgb(255, 2, 8, 18)) 12 0 8 32 $true
+Draw-Rectangle $wallVertical ([Drawing.Color]::FromArgb(255, 40, 225, 255)) 12 0 8 32
+Draw-Rectangle $wallVertical ([Drawing.Color]::White) 14 5 1 10 $true
+Save-Sprite $wallVertical 'wall-vertical.png'
+
+$atlas = New-Canvas ($spriteSize * 4) ($spriteSize * 3) ([Drawing.Color]::Transparent)
+$atlasGraphics = [Drawing.Graphics]::FromImage($atlas)
+$atlasItems = @(
+	(Join-Path $assetRoot 'ball.png'), (Join-Path $assetRoot 'player.png'),
+	(Join-Path $assetRoot 'tile-1.png'), (Join-Path $assetRoot 'tile-2.png'),
+	(Join-Path $assetRoot 'tile-3.png'), (Join-Path $assetRoot 'tile-4.png'),
+	(Join-Path $assetRoot 'tile-5.png'), (Join-Path $assetRoot 'particle.png'),
+	(Join-Path $assetRoot 'bumper.png'), (Join-Path $assetRoot 'power-life.png'),
+	(Join-Path $assetRoot 'power-multiball.png'), (Join-Path $assetRoot 'rail.png')
+)
+for ($index = 0; $index -lt $atlasItems.Count; $index++)
+{
+	$item = [Drawing.Bitmap]::FromFile($atlasItems[$index])
+	$atlasGraphics.DrawImageUnscaled($item, ($index % 4) * $spriteSize, [Math]::Floor($index / 4) * $spriteSize)
+	$item.Dispose()
+}
 $atlasGraphics.Dispose()
-$atlas.Save($atlasPath, [Drawing.Imaging.ImageFormat]::Png)
+$atlas.Save((Join-Path $assetRoot 'brickout-spritesheet.png'), [Drawing.Imaging.ImageFormat]::Png)
 $atlas.Dispose()
-$source.Dispose()
+foreach ($sprite in $sprites) { $sprite.Dispose() }
 
-$buttonSource = [Drawing.Bitmap]::FromFile($buttonSourcePath)
-$button = New-CenteredPixelSprite $buttonSource
-Save-PixelSprite $button $buttonPath
+$button = New-Canvas 64 32 ([Drawing.Color]::FromArgb(255, 3, 9, 19))
+Draw-Rectangle $button ([Drawing.Color]::White) 0 0 64 32
+Draw-Rectangle $button ([Drawing.Color]::FromArgb(255, 115, 150, 170)) 1 1 62 30
+$button.Save((Join-Path $uiRoot 'button-panel.png'), [Drawing.Imaging.ImageFormat]::Png)
 $button.Dispose()
-$buttonSource.Dispose()
 
-$backgroundSource = [Drawing.Bitmap]::FromFile($backgroundSourcePath)
-$sourceRatio = $backgroundSource.Width / $backgroundSource.Height
-$targetRatio = 16.0 / 9.0
+$panel = New-Canvas 64 64 ([Drawing.Color]::FromArgb(245, 2, 8, 18))
+Draw-Rectangle $panel ([Drawing.Color]::FromArgb(255, 40, 225, 255)) 0 0 64 64
+$panel.Save((Join-Path $uiRoot 'neon-panel.png'), [Drawing.Imaging.ImageFormat]::Png)
+$panel.Dispose()
 
-if ($sourceRatio -gt $targetRatio)
+$topBar = New-Canvas 16 16 ([Drawing.Color]::FromArgb(255, 1, 3, 8))
+Draw-Rectangle $topBar ([Drawing.Color]::FromArgb(255, 40, 225, 255)) 0 14 16 2 $true
+$topBar.Save((Join-Path $uiRoot 'top-bar.png'), [Drawing.Imaging.ImageFormat]::Png)
+$topBar.Dispose()
+
+$background = New-Canvas 320 180 ([Drawing.Color]::FromArgb(255, 2, 8, 24))
+for ($x = 0; $x -lt 320; $x += 4)
 {
-	$cropHeight = $backgroundSource.Height
-	$cropWidth = [Math]::Floor($cropHeight * $targetRatio)
-	$cropX = [Math]::Floor(($backgroundSource.Width - $cropWidth) * 0.5)
-	$cropY = 0
+	$color = if (($x % 20) -eq 0) { [Drawing.Color]::FromArgb(255, 9, 50, 88) }
+		else { [Drawing.Color]::FromArgb(255, 4, 19, 39) }
+	for ($y = 0; $y -lt 180; $y++) { Set-Pixel $background $x $y $color }
 }
-else
+for ($y = 0; $y -lt 180; $y += 4)
 {
-	$cropWidth = $backgroundSource.Width
-	$cropHeight = [Math]::Floor($cropWidth / $targetRatio)
-	$cropX = 0
-	$cropY = [Math]::Floor(($backgroundSource.Height - $cropHeight) * 0.5)
+	$color = if (($y % 20) -eq 0) { [Drawing.Color]::FromArgb(255, 9, 50, 88) }
+		else { [Drawing.Color]::FromArgb(255, 4, 19, 39) }
+	for ($x = 0; $x -lt 320; $x++) { Set-Pixel $background $x $y $color }
 }
-
-$background = [Drawing.Bitmap]::new(320, 180, [Drawing.Imaging.PixelFormat]::Format32bppArgb)
-$backgroundGraphics = [Drawing.Graphics]::FromImage($background)
-$backgroundGraphics.CompositingMode = [Drawing.Drawing2D.CompositingMode]::SourceCopy
-$backgroundGraphics.CompositingQuality = [Drawing.Drawing2D.CompositingQuality]::HighSpeed
-$backgroundGraphics.InterpolationMode = [Drawing.Drawing2D.InterpolationMode]::NearestNeighbor
-$backgroundGraphics.PixelOffsetMode = [Drawing.Drawing2D.PixelOffsetMode]::Half
-$backgroundGraphics.SmoothingMode = [Drawing.Drawing2D.SmoothingMode]::None
-$backgroundGraphics.DrawImage($backgroundSource, [Drawing.Rectangle]::new(0, 0, 320, 180),
-	[Drawing.Rectangle]::new($cropX, $cropY, $cropWidth, $cropHeight), [Drawing.GraphicsUnit]::Pixel)
-$backgroundGraphics.Dispose()
-$backgroundSource.Dispose()
-$background.Save($backgroundPath, [Drawing.Imaging.ImageFormat]::Png)
+for ($x = 10; $x -lt 320; $x += 20)
+{
+	for ($y = 10; $y -lt 180; $y += 20)
+	{
+		Set-Pixel $background $x $y ([Drawing.Color]::FromArgb(255, 30, 100, 145))
+	}
+}
+$background.Save((Join-Path $assetRoot 'background.png'), [Drawing.Imaging.ImageFormat]::Png)
 $background.Dispose()
 
-Write-Host 'Brickout pixel-art sprites are ready: eight 16x16 sprites, a 64x32 atlas, a 16x16 UI panel and a 320x180 background.'
+Write-Host 'Brickout neon blueprint art is ready: original 32x32 gameplay sprites, UI panels and a 320x180 arena.'

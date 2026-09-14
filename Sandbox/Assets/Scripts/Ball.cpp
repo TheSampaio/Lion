@@ -21,7 +21,8 @@ void Ball::OnAwake()
 		return;
 	}
 
-	const float32 ballRadius = mRenderer->GetSize().height * 0.5f;
+	const float32 ballRadius = mRenderer->GetSize().height
+		* GetOwner().GetWorldScale().y * 0.5f;
 	mAttachOffsetY = mPaddle->GetHalfHeight() + ballRadius + mAttachGap;
 	FindAudioPlayers();
 
@@ -36,10 +37,7 @@ void Ball::OnUpdate()
 
 		// Launch through the project action so keyboard and gamepad remain interchangeable.
 		if (Input::GetActionTap("player_launch"))
-		{
-			mState = State::Launched;
-			mBody->SetLinearVelocity(glm::normalize(glm::vec2(1.0f, 2.0f)) * mSpeed);
-		}
+			Launch(glm::vec2(1.0f, 2.0f));
 
 		return;
 	}
@@ -127,6 +125,15 @@ void Ball::SetSpeed(float32 speed)
 
 	if (glm::dot(velocity, velocity) > 0.0f)
 		mBody->SetLinearVelocity(glm::normalize(velocity) * mSpeed);
+}
+
+void Ball::Launch(const glm::vec2& direction)
+{
+	if (!mBody || glm::dot(direction, direction) <= 0.0f)
+		return;
+
+	mState = State::Launched;
+	mBody->SetLinearVelocity(glm::normalize(direction) * mSpeed);
 }
 
 void Ball::FollowPaddle()

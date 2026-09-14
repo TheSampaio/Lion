@@ -17,7 +17,8 @@ public:
 	void Reflect(Lion::Reflector& reflector) override;
 
 	static void StartNewGame();
-	static void RegisterBrickHit(const Lion::Vector2& position);
+	static void RegisterBrickDamage(const Lion::Vector2& position, bool destroyed,
+		const std::string& power);
 	static Lion::int32 GetScore() { return sScore; }
 	static Lion::int32 GetAttempts() { return sAttempts; }
 
@@ -37,11 +38,14 @@ private:
 	Lion::ParticleComponent* mImpactParticles = nullptr;
 	Lion::TextRenderer* mScoreText = nullptr;
 	Lion::TextRenderer* mAttemptsText = nullptr;
+	Lion::TextRenderer* mLevelText = nullptr;
+	Lion::TextRenderer* mPowerText = nullptr;
 	Lion::Vector2 mCameraBaseOffset;
 	Lion::float32 mLoseHeight = -310.0f;
 	Lion::float32 mShakeDuration = 0.06f;
 	Lion::float32 mShakeStrength = 0.72f;
 	Lion::float32 mShakeRemaining = 0.0f;
+	Lion::float32 mPowerMessageRemaining = 0.0f;
 	Lion::int32 mShakeFrame = 0;
 	Lion::int32 mLevel = 0;
 	bool mInitialized = false;
@@ -51,6 +55,8 @@ private:
 	void UpdateHud();
 	void UpdateShake();
 	void HandleLevelFlow();
+	void ActivatePower(const std::string& power, const Lion::Vector2& position);
+	void SpawnExtraBalls();
 	void HandleDebugLevelKeys();
 	static Lion::int32 ActiveLevel();
 	static std::string LevelScene(Lion::int32 level);

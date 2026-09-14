@@ -26,6 +26,7 @@ public:
 	void Stop();
 	void SetVisible(bool visible);
 	void SetSpeed(Lion::float32 speed);
+	void Launch(const glm::vec2& direction);
 
 private:
 	enum class State
@@ -34,7 +35,7 @@ private:
 		Launched,  // In play.
 	};
 
-	Lion::float32 mSpeed = 430.0f;            // Constant travel speed (pixels/s).
+	Lion::float32 mSpeed = 390.0f;            // Constant travel speed (pixels/s).
 	Lion::float32 mMinVerticalRatio = 0.35f;  // Keeps the ball from going flat.
 	Lion::float32 mMaxBounceDegrees = 60.0f;  // Paddle steering range from vertical.
 	Lion::float32 mAttachGap = 2.0f;          // Small gap above the paddle.
