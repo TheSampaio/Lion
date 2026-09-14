@@ -258,22 +258,22 @@ function New-PostProcessingComponent
 {
 	return [ordered]@{
 		Bloom = $true
-		'Bloom Strength' = 0.9
-		'Bloom Threshold' = 0.32
+		'Bloom Strength' = 0.46
+		'Bloom Threshold' = 0.5
 		'Color Correction' = $true
 		Brightness = -0.01
-		Contrast = 1.1
-		Saturation = 1.2
+		Contrast = 1.05
+		Saturation = 1.1
 		Gamma = 1
 		'Tint.x' = 1
 		'Tint.y' = 1
 		'Tint.z' = 1
 		Vignette = $true
-		'Vignette Strength' = 0.24
+		'Vignette Strength' = 0.12
 		'Chromatic Aberration' = $true
-		'Chromatic Aberration Amount' = 0.0024
+		'Chromatic Aberration Amount' = 0.001
 		'Motion Blur' = $true
-		'Motion Blur Strength' = 0.2
+		'Motion Blur Strength' = 0.075
 		'Color Vision Mode' = 0
 		Fade = 0
 		'Custom Shader' = ''

@@ -120,9 +120,9 @@ void GameSettings::Apply(PostProcessingComponent& postProcessing)
 	postProcessing.SetVignette(sVignette);
 	postProcessing.SetMotionBlur(sMotionBlur);
 	postProcessing.SetColorVisionMode(sColorMode);
-	postProcessing.SetBloomStrength(sQuality == 0 ? 0.45f : sQuality == 1 ? 0.68f : 0.9f);
-	postProcessing.SetVignetteStrength(sQuality == 0 ? 0.12f : sQuality == 1 ? 0.18f : 0.24f);
-	postProcessing.SetMotionBlurStrength(sQuality == 0 ? 0.08f : sQuality == 1 ? 0.14f : 0.2f);
+	postProcessing.SetBloomStrength(sQuality == 0 ? 0.24f : sQuality == 1 ? 0.34f : 0.46f);
+	postProcessing.SetVignetteStrength(sQuality == 0 ? 0.06f : sQuality == 1 ? 0.09f : 0.12f);
+	postProcessing.SetMotionBlurStrength(sQuality == 0 ? 0.035f : sQuality == 1 ? 0.055f : 0.075f);
 	postProcessing.SetChromaticAberration(sQuality > 0);
 }
 

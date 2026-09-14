@@ -59,9 +59,9 @@ namespace Lion
 		bool mVignette = true;
 		float32 mVignetteStrength = 0.14f;
 		bool mChromaticAberration = false;
-		float32 mChromaticAberrationAmount = 0.0015f;
+		float32 mChromaticAberrationAmount = 0.001f;
 		bool mMotionBlur = false;
-		float32 mMotionBlurStrength = 0.18f;
+		float32 mMotionBlurStrength = 0.075f;
 		int32 mColorVisionMode = 0;
 		float32 mFade = 0.0f;
 		std::string mCustomShaderPath;
