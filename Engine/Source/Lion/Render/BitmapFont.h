@@ -21,13 +21,13 @@ namespace Lion
 		static LION_API Reference<BitmapFont> Create(const std::string& filePath);
 
 		LION_API const Reference<Texture>& GetTexture() const { return mTexture; }
-		LION_API bool GetGlyph(char8 character, BitmapGlyph& glyph) const;
+		LION_API bool GetGlyph(uint32 codepoint, BitmapGlyph& glyph) const;
 		LION_API float32 GetAdvance() const { return mAdvance; }
 		LION_API float32 GetLineHeight() const { return mLineHeight; }
 
 	private:
 		Reference<Texture> mTexture;
-		std::string mCharacters;
+		std::vector<uint32> mCodepoints;
 		int32 mColumns = 1;
 		int32 mRows = 1;
 		float32 mGlyphWidth = 1.0f;

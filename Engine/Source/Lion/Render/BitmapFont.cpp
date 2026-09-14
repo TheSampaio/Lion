@@ -4,6 +4,7 @@
 #include <Lion/Core/Asset.h>
 #include <Lion/Core/Filesystem.h>
 #include <Lion/Core/Log.h>
+#include <Lion/Core/Utf8.h>
 #include <Lion/Core/Vault.h>
 #include <Lion/Render/Texture.h>
 
@@ -28,7 +29,7 @@ namespace Lion
 		{
 			const nlohmann::json descriptor = nlohmann::json::parse(Vault::Unseal(content.str()));
 			auto font = MakeReference<BitmapFont>();
-			font->mCharacters = descriptor.value("characters", std::string());
+			font->mCodepoints = Utf8::Decode(descriptor.value("characters", std::string()));
 			font->mColumns = std::max(descriptor.value("columns", 1), 1);
 			font->mRows = std::max(descriptor.value("rows", 1), 1);
 			font->mGlyphWidth = std::max(descriptor.value("glyphWidth", 1.0f), 1.0f);
@@ -39,7 +40,7 @@ namespace Lion
 			const std::string texturePath = descriptor.value("texture", std::string());
 			font->mTexture = texturePath.empty() ? nullptr : Asset::LoadTexture(texturePath, texturePath);
 
-			if (!font->mTexture || font->mCharacters.empty())
+			if (!font->mTexture || font->mCodepoints.empty())
 			{
 				Log::Console(LogLevel::Error,
 					LION_FORMAT_TEXT("[BitmapFont] '{}' has no texture or glyphs.", filePath));
@@ -56,12 +57,13 @@ namespace Lion
 		}
 	}
 
-	bool BitmapFont::GetGlyph(char8 character, BitmapGlyph& glyph) const
+	bool BitmapFont::GetGlyph(uint32 codepoint, BitmapGlyph& glyph) const
 	{
-		const size_t index = mCharacters.find(character);
+		const auto found = std::find(mCodepoints.begin(), mCodepoints.end(), codepoint);
 
-		if (index == std::string::npos)
+		if (found == mCodepoints.end())
 			return false;
+		const size_t index = static_cast<size_t>(std::distance(mCodepoints.begin(), found));
 
 		const int32 column = static_cast<int32>(index) % mColumns;
 		const int32 row = static_cast<int32>(index) / mColumns;

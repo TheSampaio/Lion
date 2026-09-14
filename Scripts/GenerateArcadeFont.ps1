@@ -5,7 +5,12 @@ param(
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Drawing
 
-$characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789:!?-+.</> '
+$latin = -join (@(0x00C1,0x00C0,0x00C2,0x00C3,0x00C4,0x00C9,0x00C8,0x00CA,0x00CB,
+	0x00CD,0x00CC,0x00CE,0x00CF,0x00D3,0x00D2,0x00D4,0x00D5,0x00D6,0x00DA,0x00D9,
+	0x00DB,0x00DC,0x00C7,0x00D1,0x0178) | ForEach-Object { [char]$_ })
+$cyrillic = [string][char]0x0401 + (-join (0x0410..0x042F | ForEach-Object { [char]$_ }))
+$greek = -join (@(0x0391..0x03A1; 0x03A3..0x03A9) | ForEach-Object { [char]$_ })
+$characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789:!?-+.</> ' + $latin + $cyrillic + $greek
 $patterns = @{
 	'A'='01110','10001','10001','11111','10001','10001','10001'
 	'B'='11110','10001','10001','11110','10001','10001','11110'
@@ -55,12 +60,20 @@ $patterns = @{
 	' '='00000','00000','00000','00000','00000','00000','00000'
 }
 
-$columns = 8
-$rows = 6
-$cellSize = 8
+$columns = 16
+$rows = [int][Math]::Ceiling($characters.Length / [float]$columns)
+$cellSize = 16
 $bitmap = [System.Drawing.Bitmap]::new($columns * $cellSize, $rows * $cellSize,
 	[System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
 $white = [System.Drawing.Color]::FromArgb(255, 255, 255, 255)
+$graphics = [System.Drawing.Graphics]::FromImage($bitmap)
+$graphics.TextRenderingHint = [Drawing.Text.TextRenderingHint]::SingleBitPerPixelGridFit
+$fallbackFont = [Drawing.Font]::new('Consolas', 13, [Drawing.FontStyle]::Bold, [Drawing.GraphicsUnit]::Pixel)
+$fallbackBrush = [Drawing.SolidBrush]::new($white)
+$fallbackFormat = [Drawing.StringFormat]::new()
+$fallbackFormat.Alignment = [Drawing.StringAlignment]::Center
+$fallbackFormat.LineAlignment = [Drawing.StringAlignment]::Center
+$fallbackFormat.FormatFlags = [Drawing.StringFormatFlags]::NoWrap
 
 for ($index = 0; $index -lt $characters.Length; $index++)
 {
@@ -68,6 +81,12 @@ for ($index = 0; $index -lt $characters.Length; $index++)
 	$cellX = ($index % $columns) * $cellSize
 	$cellY = [Math]::Floor($index / $columns) * $cellSize
 	$rowsPattern = $patterns[$character]
+	if (!$rowsPattern)
+	{
+		$graphics.DrawString($character, $fallbackFont, $fallbackBrush,
+			[Drawing.RectangleF]::new($cellX, $cellY - 1, $cellSize, $cellSize), $fallbackFormat)
+		continue
+	}
 
 	for ($y = 0; $y -lt 7; $y++)
 	{
@@ -75,11 +94,23 @@ for ($index = 0; $index -lt $characters.Length; $index++)
 		{
 			if ($rowsPattern[$y][$x] -eq '1')
 			{
-				$bitmap.SetPixel($cellX + $x + 1, $cellY + $y, $white)
+				for ($pixelY = 0; $pixelY -lt 2; $pixelY++)
+				{
+					for ($pixelX = 0; $pixelX -lt 2; $pixelX++)
+					{
+						$bitmap.SetPixel($cellX + $x * 2 + $pixelX + 3,
+							$cellY + $y * 2 + $pixelY + 1, $white)
+					}
+				}
 			}
 		}
 	}
 }
+
+$fallbackFormat.Dispose()
+$fallbackBrush.Dispose()
+$fallbackFont.Dispose()
+$graphics.Dispose()
 
 New-Item -ItemType Directory -Force -Path $OutputDirectory | Out-Null
 $atlasPath = Join-Path $OutputDirectory 'Arcade.png'
@@ -93,8 +124,8 @@ $descriptor = [ordered]@{
 	rows = $rows
 	glyphWidth = $cellSize
 	glyphHeight = $cellSize
-	advance = 8
-	lineHeight = 9
+	advance = 16
+	lineHeight = 18
 } | ConvertTo-Json
 
 $alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_'

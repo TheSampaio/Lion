@@ -35,6 +35,7 @@ namespace Lion
 
 		Reference<BitmapFont> mFont;
 		std::vector<Scope<Sprite>> mGlyphs;
+		std::vector<uint32> mCodepoints;
 		std::string mBuiltText;
 		std::string mBuiltFontPath;
 

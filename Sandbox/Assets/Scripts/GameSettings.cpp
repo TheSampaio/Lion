@@ -7,8 +7,8 @@ namespace
 	constexpr uint32 kWidths[] = { 960, 1280, 1600, 1920 };
 	constexpr uint32 kHeights[] = { 540, 720, 900, 1080 };
 	constexpr const char8* kLanguageNames[] = {
-		"ENGLISH", "PORTUGUES", "ESPANOL", "ITALIANO",
-		"FRANCAIS", "DEUTSCH", "RUSSKIY", "ELLINIKA"
+		"ENGLISH", "PORTUGUÊS", "ESPAÑOL", "ITALIANO",
+		"FRANÇAIS", "DEUTSCH", "РУССКИЙ", "ΕΛΛΗΝΙΚΑ"
 	};
 
 	using Translation = std::array<const char8*, static_cast<size_t>(GameText::Count)>;
@@ -22,60 +22,60 @@ namespace
 		"PRESS ANY KEY TO START"
 	};
 	constexpr Translation kPortuguese = {
-		"JOGAR", "CREDITOS", "CONFIGURACOES", "SAIR", "VOLTAR", "SOM", "RESOLUCAO", "V-SYNC",
-		"GRAFICOS", "BLOOM", "VINHETA", "RASTRO DE MOVIMENTO", "TREMER CAMERA", "MODO DE COR", "IDIOMA",
-		"LIGADO", "DESLIGADO", "BAIXA", "MEDIA", "ALTA", "NENHUM", "PROTANOPIA", "DEUTERANOPIA", "TRITANOPIA",
-		"PAUSADO", "CONTINUAR", "MENU PRINCIPAL", "CIRCUITO SUSPENSO", "JOGAR DE NOVO", "PONTUACAO TOTAL",
+		"JOGAR", "CRÉDITOS", "CONFIGURAÇÕES", "SAIR", "VOLTAR", "SOM", "RESOLUÇÃO", "V-SYNC",
+		"GRÁFICOS", "BLOOM", "VINHETA", "RASTRO DE MOVIMENTO", "TREMER CÂMERA", "MODO DE COR", "IDIOMA",
+		"LIGADO", "DESLIGADO", "BAIXA", "MÉDIA", "ALTA", "NENHUM", "PROTANOPIA", "DEUTERANOPIA", "TRITANOPIA",
+		"PAUSADO", "CONTINUAR", "MENU PRINCIPAL", "CIRCUITO SUSPENSO", "JOGAR DE NOVO", "PONTUAÇÃO TOTAL",
 		"CIRCUITO COMPLETO", "FALHA DO SISTEMA", "PONTOS", "BOLAS", "FASE", "BOLA EXTRA +1", "MULTIBOLA X3",
 		"PRESSIONE UMA TECLA"
 	};
 	constexpr Translation kSpanish = {
-		"JUGAR", "CREDITOS", "AJUSTES", "SALIR", "VOLVER", "SONIDO", "RESOLUCION", "V-SYNC",
-		"GRAFICOS", "BLOOM", "VINETA", "DESENFOQUE", "SACUDIDA", "MODO DE COLOR", "IDIOMA",
-		"SI", "NO", "BAJA", "MEDIA", "ALTA", "NINGUNO", "PROTANOPIA", "DEUTERANOPIA", "TRITANOPIA",
+		"JUGAR", "CRÉDITOS", "AJUSTES", "SALIR", "VOLVER", "SONIDO", "RESOLUCIÓN", "V-SYNC",
+		"GRÁFICOS", "BLOOM", "VIÑETA", "DESENFOQUE", "SACUDIDA", "MODO DE COLOR", "IDIOMA",
+		"SÍ", "NO", "BAJA", "MEDIA", "ALTA", "NINGUNO", "PROTANOPIA", "DEUTERANOPIA", "TRITANOPIA",
 		"PAUSA", "CONTINUAR", "MENU PRINCIPAL", "CIRCUITO PAUSADO", "JUGAR DE NUEVO", "PUNTOS TOTALES",
 		"CIRCUITO COMPLETO", "FALLO DEL SISTEMA", "PUNTOS", "BOLAS", "NIVEL", "BOLA EXTRA +1", "MULTIBOLA X3",
 		"PULSA UNA TECLA"
 	};
 	constexpr Translation kItalian = {
 		"GIOCA", "CREDITI", "IMPOSTAZIONI", "ESCI", "INDIETRO", "SUONO", "RISOLUZIONE", "V-SYNC",
-		"GRAFICA", "BLOOM", "VIGNETTA", "MOSSO", "SCOSSA CAMERA", "MODALITA COLORE", "LINGUA",
+		"GRAFICA", "BLOOM", "VIGNETTA", "MOSSO", "SCOSSA CAMERA", "MODALITÀ COLORE", "LINGUA",
 		"SI", "NO", "BASSA", "MEDIA", "ALTA", "NESSUNO", "PROTANOPIA", "DEUTERANOPIA", "TRITANOPIA",
 		"PAUSA", "RIPRENDI", "MENU PRINCIPALE", "CIRCUITO SOSPESO", "GIOCA ANCORA", "PUNTEGGIO TOTALE",
 		"CIRCUITO COMPLETO", "ERRORE DI SISTEMA", "PUNTI", "PALLE", "LIVELLO", "PALLA EXTRA +1", "MULTIPALLA X3",
 		"PREMI UN TASTO"
 	};
 	constexpr Translation kFrench = {
-		"JOUER", "CREDITS", "PARAMETRES", "QUITTER", "RETOUR", "SON", "RESOLUTION", "V-SYNC",
-		"GRAPHISMES", "BLOOM", "VIGNETTE", "FLOU DE MOUVEMENT", "SECOUSSE CAMERA", "MODE COULEUR", "LANGUE",
-		"OUI", "NON", "FAIBLE", "MOYEN", "ELEVE", "AUCUN", "PROTANOPIE", "DEUTERANOPIE", "TRITANOPIE",
+		"JOUER", "CRÉDITS", "PARAMÈTRES", "QUITTER", "RETOUR", "SON", "RÉSOLUTION", "V-SYNC",
+		"GRAPHISMES", "BLOOM", "VIGNETTE", "FLOU DE MOUVEMENT", "SECOUSSE CAMÉRA", "MODE COULEUR", "LANGUE",
+		"OUI", "NON", "FAIBLE", "MOYEN", "ÉLEVÉ", "AUCUN", "PROTANOPIE", "DEUTERANOPIE", "TRITANOPIE",
 		"PAUSE", "REPRENDRE", "MENU PRINCIPAL", "CIRCUIT SUSPENDU", "REJOUER", "SCORE TOTAL",
 		"CIRCUIT TERMINE", "PANNE SYSTEME", "SCORE", "BALLES", "NIVEAU", "BALLE BONUS +1", "MULTIBALLE X3",
 		"APPUYEZ SUR UNE TOUCHE"
 	};
 	constexpr Translation kGerman = {
-		"SPIELEN", "CREDITS", "EINSTELLUNGEN", "BEENDEN", "ZURUCK", "TON", "AUFLOSUNG", "V-SYNC",
-		"GRAFIK", "BLOOM", "VIGNETTE", "BEWEGUNGSUNSCHARFE", "KAMERAWACKELN", "FARBMODUS", "SPRACHE",
+		"SPIELEN", "CREDITS", "EINSTELLUNGEN", "BEENDEN", "ZURÜCK", "TON", "AUFLÖSUNG", "V-SYNC",
+		"GRAFIK", "BLOOM", "VIGNETTE", "BEWEGUNGSUNSCHÄRFE", "KAMERAWACKELN", "FARBMODUS", "SPRACHE",
 		"AN", "AUS", "NIEDRIG", "MITTEL", "HOCH", "KEIN", "PROTANOPIE", "DEUTERANOPIE", "TRITANOPIE",
 		"PAUSE", "FORTSETZEN", "HAUPTMENU", "KREISLAUF PAUSIERT", "NOCHMAL SPIELEN", "GESAMTPUNKTE",
 		"KREISLAUF FREI", "SYSTEMFEHLER", "PUNKTE", "BALLE", "LEVEL", "EXTRA BALL +1", "MULTIBALL X3",
 		"TASTE DRUCKEN"
 	};
 	constexpr Translation kRussian = {
-		"IGRAT", "AVTORY", "NASTROYKI", "VYHOD", "NAZAD", "ZVUK", "RAZRESHENIE", "V-SYNC",
-		"GRAFIKA", "BLOOM", "VINETKA", "RAZMytIE", "TRYASKA KAMERY", "REZHIM CVETA", "YAZYK",
-		"VKL", "VYKL", "NIZKO", "SREDNE", "VYSOKO", "NET", "PROTANOPIA", "DEUTERANOPIA", "TRITANOPIA",
-		"PAUZA", "PRODOLZHIT", "GLAVNOE MENU", "CEPI PRIostanovleny", "SNOVA IGRAT", "OBSHIY SCHET",
-		"CEPI OCHISHENY", "SBOY SISTEMY", "SCHET", "MYACHI", "UROVEN", "DOP MYACH +1", "MULTIMYACH X3",
-		"NAZHMITE KLAVISHU"
+		"ИГРАТЬ", "АВТОРЫ", "НАСТРОЙКИ", "ВЫХОД", "НАЗАД", "ЗВУК", "РАЗРЕШЕНИЕ", "V-SYNC",
+		"ГРАФИКА", "BLOOM", "ВИНЬЕТКА", "РАЗМЫТИЕ", "ТРЯСКА КАМЕРЫ", "РЕЖИМ ЦВЕТА", "ЯЗЫК",
+		"ВКЛ", "ВЫКЛ", "НИЗКО", "СРЕДНЕ", "ВЫСОКО", "НЕТ", "ПРОТАНОПИЯ", "ДЕЙТЕРАНОПИЯ", "ТРИТАНОПИЯ",
+		"ПАУЗА", "ПРОДОЛЖИТЬ", "ГЛАВНОЕ МЕНЮ", "ЦЕПЬ ПРИОСТАНОВЛЕНА", "СНОВА ИГРАТЬ", "ОБЩИЙ СЧЁТ",
+		"ЦЕПЬ ОЧИЩЕНА", "СБОЙ СИСТЕМЫ", "СЧЁТ", "МЯЧИ", "УРОВЕНЬ", "ДОП МЯЧ +1", "МУЛЬТИМЯЧ X3",
+		"НАЖМИТЕ КЛАВИШУ"
 	};
 	constexpr Translation kGreek = {
-		"PAIXE", "SYNTELESTES", "RYTHMISEIS", "EXODOS", "PISO", "HXOS", "ANALYSI", "V-SYNC",
-		"GRAFIKA", "BLOOM", "VIGNETTA", "THOLWMA KINISIS", "KOUNIMA KAMERAS", "LEITOURGIA XROMATOS", "GLOSSA",
-		"NAI", "OXI", "XAMILA", "MESAIA", "YPSILA", "KANENA", "PROTANOPIA", "DEUTERANOPIA", "TRITANOPIA",
-		"PAUSI", "SYNEXEIA", "KYRIO MENOY", "KYKLOMA SE PAUSI", "PAIXE XANA", "SYNOLO PONTON",
-		"KYKLOMA KATHARO", "SFALMA SYSTIMATOS", "PONTOI", "BALES", "EPIPEDO", "EXTRA BALA +1", "POLYBALO X3",
-		"PATISE ENA PLIKTRO"
+		"ΠΑΙΞΕ", "ΣΥΝΤΕΛΕΣΤΕΣ", "ΡΥΘΜΙΣΕΙΣ", "ΕΞΟΔΟΣ", "ΠΙΣΩ", "ΗΧΟΣ", "ΑΝΑΛΥΣΗ", "V-SYNC",
+		"ΓΡΑΦΙΚΑ", "BLOOM", "ΒΙΝΙΕΤΑ", "ΘΟΛΩΜΑ ΚΙΝΗΣΗΣ", "ΚΟΥΝΗΜΑ ΚΑΜΕΡΑΣ", "ΛΕΙΤΟΥΡΓΙΑ ΧΡΩΜΑΤΟΣ", "ΓΛΩΣΣΑ",
+		"ΝΑΙ", "ΟΧΙ", "ΧΑΜΗΛΑ", "ΜΕΣΑΙΑ", "ΥΨΗΛΑ", "ΚΑΝΕΝΑ", "ΠΡΩΤΑΝΟΠΙΑ", "ΔΕΥΤΕΡΑΝΟΠΙΑ", "ΤΡΙΤΑΝΟΠΙΑ",
+		"ΠΑΥΣΗ", "ΣΥΝΕΧΕΙΑ", "ΚΥΡΙΟ ΜΕΝΟΥ", "ΚΥΚΛΩΜΑ ΣΕ ΠΑΥΣΗ", "ΠΑΙΞΕ ΞΑΝΑ", "ΣΥΝΟΛΟ ΠΟΝΤΩΝ",
+		"ΚΥΚΛΩΜΑ ΚΑΘΑΡΟ", "ΣΦΑΛΜΑ ΣΥΣΤΗΜΑΤΟΣ", "ΠΟΝΤΟΙ", "ΜΠΑΛΕΣ", "ΕΠΙΠΕΔΟ", "ΕΞΤΡΑ ΜΠΑΛΑ +1", "ΠΟΛΛΑΠΛΗ ΜΠΑΛΑ X3",
+		"ΠΑΤΗΣΕ ΕΝΑ ΠΛΗΚΤΡΟ"
 	};
 
 	constexpr const Translation* kTranslations[] = {
@@ -115,7 +115,7 @@ void GameSettings::ApplyWindow()
 
 void GameSettings::Apply(PostProcessingComponent& postProcessing)
 {
-	// Quality scales effect cost and intensity without overriding the player's individual toggles.
+	// Quality scales effect cost and intensity without overriding individual or localized UI choices.
 	postProcessing.SetBloom(sBloom);
 	postProcessing.SetVignette(sVignette);
 	postProcessing.SetMotionBlur(sMotionBlur);

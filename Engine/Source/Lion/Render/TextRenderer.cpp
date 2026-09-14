@@ -2,6 +2,7 @@
 #include "TextRenderer.h"
 
 #include <Lion/Core/Asset.h>
+#include <Lion/Core/Utf8.h>
 #include <Lion/Logic/ComponentRegistry.h>
 #include <Lion/Logic/Entity.h>
 #include <Lion/Logic/Reflector.h>
@@ -50,21 +51,27 @@ namespace Lion
 		size_t lineStart = 0;
 		float32 lineY = origin.y;
 
-		while (lineStart <= mText.size())
+		while (lineStart <= mCodepoints.size())
 		{
-			const size_t lineEnd = mText.find('\n', lineStart);
-			const size_t length = (lineEnd == std::string::npos ? mText.size() : lineEnd) - lineStart;
+			const auto lineFound = std::find(mCodepoints.begin() + lineStart, mCodepoints.end(), '\n');
+			const size_t lineEnd = static_cast<size_t>(std::distance(mCodepoints.begin(), lineFound));
+			const size_t length = lineEnd - lineStart;
 			const float32 width = length > 0 ? advance * static_cast<float32>(length - 1) : 0.0f;
 			float32 x = origin.x - (mCentered ? width * 0.5f : 0.0f);
 
 			for (size_t index = lineStart; index < lineStart + length; ++index)
 			{
-				if (mText[index] != ' ' && glyphIndex < mGlyphs.size())
+				if (mCodepoints[index] != ' ' && glyphIndex < mGlyphs.size())
 				{
-					Sprite& glyph = *mGlyphs[glyphIndex++];
-					glyph.SetOrder(mOrder);
-					glyph.SetColor(mColor);
-					glyph.Draw(
+					Sprite* glyph = mGlyphs[glyphIndex++].get();
+					if (!glyph)
+					{
+						x += advance;
+						continue;
+					}
+					glyph->SetOrder(mOrder);
+					glyph->SetColor(mColor);
+					glyph->Draw(
 						Vector(x, lineY, 0.0f),
 						Vector(0.0f, 0.0f, owner.GetWorldRotation()),
 						Vector(glyphScale * ownerScale.x, glyphScale * ownerScale.y, 1.0f),
@@ -74,7 +81,7 @@ namespace Lion
 				x += advance;
 			}
 
-			if (lineEnd == std::string::npos)
+			if (lineFound == mCodepoints.end())
 				break;
 
 			lineStart = lineEnd + 1;
@@ -96,6 +103,7 @@ namespace Lion
 	void TextRenderer::Rebuild()
 	{
 		mGlyphs.clear();
+		mCodepoints = Utf8::Decode(mText);
 		mBuiltText = mText;
 		mBuiltFontPath = mFontPath;
 		mFont = mFontPath.empty() ? nullptr : Asset::LoadFont(mFontPath, mFontPath);
@@ -103,17 +111,20 @@ namespace Lion
 		if (!mFont)
 			return;
 
-		mGlyphs.reserve(mText.size());
+		mGlyphs.reserve(mCodepoints.size());
 
-		for (const char8 character : mText)
+		for (const uint32 codepoint : mCodepoints)
 		{
-			if (character == ' ' || character == '\n')
+			if (codepoint == ' ' || codepoint == '\n')
 				continue;
 
 			BitmapGlyph glyphInfo;
 
-			if (!mFont->GetGlyph(static_cast<char8>(std::toupper(static_cast<unsigned char>(character))), glyphInfo))
+			if (!mFont->GetGlyph(Utf8::ToUpper(codepoint), glyphInfo))
+			{
+				mGlyphs.push_back(nullptr);
 				continue;
+			}
 
 			auto glyph = MakeScope<Sprite>(mFont->GetTexture());
 			glyph->SetRegion(glyphInfo.uvMinimum, glyphInfo.uvMaximum, glyphInfo.size);
