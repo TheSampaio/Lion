@@ -19,6 +19,8 @@ public:
 	// The paddle's half extents: the ball bounces off its width and rests on top of its height.
 	Lion::float32 GetHalfWidth() const;
 	Lion::float32 GetHalfHeight() const;
+	Lion::float32 GetMoveDirection() const { return mMoveDirection; }
+	void SetWide(bool wide);
 
 private:
 	Lion::float32 mSpeed = 500.0f;
@@ -26,5 +28,9 @@ private:
 
 	Lion::RigidBody2D* mBody = nullptr;
 	Lion::SpriteRenderer* mRenderer = nullptr;
+	Lion::BoxCollider2D* mCollider = nullptr;
 	Lion::Vector2 mStartPosition;
+	Lion::Vector2 mBaseScale;
+	Lion::float32 mMoveDirection = 0.0f;
+	bool mWide = false;
 };

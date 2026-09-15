@@ -10,7 +10,7 @@ $latin = -join (@(0x00C1,0x00C0,0x00C2,0x00C3,0x00C4,0x00C9,0x00C8,0x00CA,0x00CB
 	0x00DB,0x00DC,0x00C7,0x00D1,0x0178) | ForEach-Object { [char]$_ })
 $cyrillic = [string][char]0x0401 + (-join (0x0410..0x042F | ForEach-Object { [char]$_ }))
 $greek = -join (@(0x0391..0x03A1; 0x03A3..0x03A9) | ForEach-Object { [char]$_ })
-$characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789:!?-+.</> ' + $latin + $cyrillic + $greek
+$characters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789:!?-+.</>'* " + $latin + $cyrillic + $greek
 $patterns = @{
 	'A'='01110','10001','10001','11111','10001','10001','10001'
 	'B'='11110','10001','10001','11110','10001','10001','11110'
@@ -57,6 +57,8 @@ $patterns = @{
 	'<'='00010','00100','01000','10000','01000','00100','00010'
 	'/'='00001','00010','00100','00100','01000','10000','10000'
 	'>'='01000','00100','00010','00001','00010','00100','01000'
+	"'"='00100','00100','00010','00000','00000','00000','00000'
+	'*'='00000','10101','01110','11111','01110','10101','00000'
 	' '='00000','00000','00000','00000','00000','00000','00000'
 }
 
@@ -68,12 +70,12 @@ $bitmap = [System.Drawing.Bitmap]::new($columns * $cellSize, $rows * $cellSize,
 $white = [System.Drawing.Color]::FromArgb(255, 255, 255, 255)
 $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
 $graphics.TextRenderingHint = [Drawing.Text.TextRenderingHint]::SingleBitPerPixelGridFit
-$fallbackFont = [Drawing.Font]::new('Consolas', 13, [Drawing.FontStyle]::Bold, [Drawing.GraphicsUnit]::Pixel)
+$fallbackFont = [Drawing.Font]::new('Consolas', 22, [Drawing.FontStyle]::Bold, [Drawing.GraphicsUnit]::Pixel)
 $fallbackBrush = [Drawing.SolidBrush]::new($white)
-$fallbackFormat = [Drawing.StringFormat]::new()
+$fallbackFormat = [Drawing.StringFormat]::GenericTypographic.Clone()
 $fallbackFormat.Alignment = [Drawing.StringAlignment]::Center
 $fallbackFormat.LineAlignment = [Drawing.StringAlignment]::Center
-$fallbackFormat.FormatFlags = [Drawing.StringFormatFlags]::NoWrap
+$fallbackFormat.FormatFlags = [Drawing.StringFormatFlags]::NoWrap -bor [Drawing.StringFormatFlags]::NoClip
 
 for ($index = 0; $index -lt $characters.Length; $index++)
 {
@@ -84,7 +86,7 @@ for ($index = 0; $index -lt $characters.Length; $index++)
 	if (!$rowsPattern)
 	{
 		$graphics.DrawString($character, $fallbackFont, $fallbackBrush,
-			[Drawing.RectangleF]::new($cellX, $cellY - 1, $cellSize, $cellSize), $fallbackFormat)
+			[Drawing.RectangleF]::new($cellX, $cellY - 5, $cellSize, $cellSize + 8), $fallbackFormat)
 		continue
 	}
 

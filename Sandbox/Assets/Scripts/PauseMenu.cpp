@@ -1,4 +1,5 @@
 #include "PauseMenu.h"
+#include "GameRules.h"
 #include "GameSettings.h"
 #include "ScreenTransition.h"
 
@@ -14,8 +15,10 @@ void PauseMenu::Initialize()
 	const Reference<Entity> resume = scene->FindEntity("Resume Button");
 	const Reference<Entity> mainMenu = scene->FindEntity("Pause Main Menu Button");
 	const Reference<Entity> controllerPrompts = scene->FindEntity("Pause Controller Prompts");
+	const Reference<Entity> keyboardPrompts = scene->FindEntity("Pause Keyboard Prompts");
 	mOverlay = overlay.get();
 	mControllerPrompts = controllerPrompts.get();
+	mKeyboardPrompts = keyboardPrompts.get();
 	mResumeButton = resume ? resume->GetComponent<Button>() : nullptr;
 	mMainMenuButton = mainMenu ? mainMenu->GetComponent<Button>() : nullptr;
 	const Reference<Entity> title = scene->FindEntity("Pause Title");
@@ -41,7 +44,7 @@ void PauseMenu::OnUpdate()
 
 	if (!SceneManager::IsPaused())
 	{
-		if (Input::GetActionTap("menu_back"))
+		if (Input::GetActionTap("player_pause"))
 		{
 			Show(true);
 			SceneManager::SetPaused(true);
@@ -49,7 +52,7 @@ void PauseMenu::OnUpdate()
 		return;
 	}
 
-	UpdateControllerPrompts();
+	UpdateInputPrompts();
 
 	if (mResumeButton && mResumeButton->IsHovered() && mSelection != 0)
 	{
@@ -62,7 +65,8 @@ void PauseMenu::OnUpdate()
 		RefreshSelection();
 	}
 
-	if ((mResumeButton && mResumeButton->WasClicked()) || Input::GetActionTap("menu_back"))
+	if ((mResumeButton && mResumeButton->WasClicked()) || Input::GetActionTap("menu_back")
+		|| Input::GetActionTap("player_pause"))
 	{
 		Show(false);
 		SceneManager::SetPaused(false);
@@ -70,6 +74,7 @@ void PauseMenu::OnUpdate()
 	else if (mMainMenuButton && mMainMenuButton->WasClicked())
 	{
 		SceneManager::SetPaused(false);
+		GameRules::AbandonSession();
 		ScreenTransition::LoadScene("Scenes/MainMenu.lnscene");
 	}
 	else if (Input::GetActionTap("menu_up") || Input::GetActionTap("menu_down"))
@@ -98,7 +103,7 @@ void PauseMenu::Show(bool visible)
 	{
 		mSelection = 0;
 		RefreshSelection();
-		UpdateControllerPrompts();
+		UpdateInputPrompts();
 	}
 }
 
@@ -110,17 +115,25 @@ void PauseMenu::RefreshSelection()
 		mMainMenuButton->SetSelected(mSelection == 1);
 }
 
-void PauseMenu::UpdateControllerPrompts()
+void PauseMenu::UpdateInputPrompts()
 {
-	const bool show = SceneManager::IsPaused()
-		&& Input::GetLastInputMethod() == InputMethod::Gamepad;
+	const bool hints = SceneManager::IsPaused() && GameSettings::HasControlHints();
+	const bool gamepad = hints && Input::GetLastInputMethod() == InputMethod::Gamepad;
+	const bool keyboard = hints && !gamepad;
 
-	if (!mControllerPrompts || show == mShowingControllerPrompts)
-		return;
+	if (mControllerPrompts && gamepad != mShowingGamepadPrompts)
+	{
+		mShowingGamepadPrompts = gamepad;
+		mControllerPrompts->SetVisible(gamepad);
+		mControllerPrompts->SetEnabled(gamepad);
+	}
 
-	mShowingControllerPrompts = show;
-	mControllerPrompts->SetVisible(show);
-	mControllerPrompts->SetEnabled(show);
+	if (mKeyboardPrompts && keyboard != mShowingKeyboardPrompts)
+	{
+		mShowingKeyboardPrompts = keyboard;
+		mKeyboardPrompts->SetVisible(keyboard);
+		mKeyboardPrompts->SetEnabled(keyboard);
+	}
 }
 
 void PauseMenu::ActivateSelection()
@@ -133,6 +146,7 @@ void PauseMenu::ActivateSelection()
 	else
 	{
 		SceneManager::SetPaused(false);
+		GameRules::AbandonSession();
 		ScreenTransition::LoadScene("Scenes/MainMenu.lnscene");
 	}
 }

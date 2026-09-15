@@ -37,7 +37,7 @@ void Ball::OnUpdate()
 
 		// Launch through the project action so keyboard and gamepad remain interchangeable.
 		if (Input::GetActionTap("player_launch"))
-			Launch(glm::vec2(1.0f, 2.0f));
+			Launch(glm::vec2(0.0f, 1.0f));
 
 		return;
 	}
@@ -81,9 +81,18 @@ void Ball::OnCollision(Entity& other)
 	const float32 ballX = GetOwner().GetWorldPosition().x;
 	const float32 paddleX = paddle->GetOwner().GetWorldPosition().x;
 
-	// Offset of the hit from the paddle's center, in [-1, 1]; the edges deflect the ball the most.
+	// A broad center lane returns the ball vertically. The outer lanes progressively steer left or
+	// right, while the paddle's current movement adds a small, deliberate nudge. This keeps aiming
+	// predictable without demanding pixel-perfect contact.
 	const float32 offset = glm::clamp((ballX - paddleX) / paddle->GetHalfWidth(), -1.0f, 1.0f);
-	const float32 angle = glm::radians(offset * mMaxBounceDegrees);
+	const float32 absoluteOffset = std::abs(offset);
+	float32 steering = absoluteOffset <= 0.22f
+		? 0.0f
+		: std::copysign((absoluteOffset - 0.22f) / 0.78f, offset);
+	steering = glm::clamp(steering + paddle->GetMoveDirection() * 0.24f, -1.0f, 1.0f);
+	if (std::abs(steering) < 0.12f)
+		steering = 0.0f;
+	const float32 angle = glm::radians(steering * mMaxBounceDegrees);
 
 	// Always send the ball upward, angled by where it landed on the paddle.
 	mBody->SetLinearVelocity(glm::vec2(mSpeed * std::sin(angle), mSpeed * std::cos(angle)));
@@ -134,6 +143,28 @@ void Ball::Launch(const glm::vec2& direction)
 
 	mState = State::Launched;
 	mBody->SetLinearVelocity(glm::normalize(direction) * mSpeed);
+}
+
+void Ball::LaunchFrom(const Vector2& position, const glm::vec2& direction)
+{
+	if (!mBody)
+		return;
+
+	GetOwner().SetWorldPosition(position);
+	mBody->SetPosition(glm::vec2(position.x, position.y));
+	SetVisible(true);
+	Launch(direction);
+}
+
+glm::vec2 Ball::GetDirection() const
+{
+	if (!mBody)
+		return glm::vec2(0.0f, 1.0f);
+
+	const glm::vec2 velocity = mBody->GetLinearVelocity();
+	return glm::dot(velocity, velocity) > 0.0f
+		? glm::normalize(velocity)
+		: glm::vec2(0.0f, 1.0f);
 }
 
 void Ball::FollowPaddle()

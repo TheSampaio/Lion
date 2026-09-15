@@ -22,16 +22,18 @@ void EndScreen::InitializeForScene()
 	const Reference<Entity> playAgainEntity = scene->FindEntity("Play Again Button");
 	const Reference<Entity> mainMenuEntity = scene->FindEntity("Main Menu Button");
 	const Reference<Entity> controllerPrompts = scene->FindEntity("End Controller Prompts");
+	const Reference<Entity> keyboardPrompts = scene->FindEntity("End Keyboard Prompts");
 	const bool victory = SceneManager::GetActivePath().find("Victory") != std::string::npos;
 	mPlayAgainButton = playAgainEntity ? playAgainEntity->GetComponent<Button>() : nullptr;
 	mMainMenuButton = mainMenuEntity ? mainMenuEntity->GetComponent<Button>() : nullptr;
 	mControllerPrompts = controllerPrompts.get();
+	mKeyboardPrompts = keyboardPrompts.get();
 	if (TextRenderer* text = playAgainEntity ? playAgainEntity->GetComponent<TextRenderer>() : nullptr)
 		text->SetText(GameSettings::Text(GameText::PlayAgain));
 	if (TextRenderer* text = mainMenuEntity ? mainMenuEntity->GetComponent<TextRenderer>() : nullptr)
 		text->SetText(GameSettings::Text(GameText::MainMenu));
 	RefreshSelection();
-	UpdateControllerPrompts();
+	UpdateInputPrompts();
 
 	if (TextRenderer* title = titleEntity ? titleEntity->GetComponent<TextRenderer>() : nullptr)
 		title->SetText(GameSettings::Text(victory ? GameText::CircuitClear : GameText::SystemFailure));
@@ -52,13 +54,15 @@ void EndScreen::OnUpdate()
 
 	if (!mInputArmed)
 	{
-		if (Input::GetKeyRelease(KeyCode::AnyKey))
+		if (!Input::GetKeyPress(KeyCode::AnyKey) && !Input::GetMouseButtonPress(0)
+			&& Input::GetActionStrength("menu_confirm") <= 0.0f
+			&& Input::GetActionStrength("menu_back") <= 0.0f)
 			mInputArmed = true;
 
 		return;
 	}
 
-	UpdateControllerPrompts();
+	UpdateInputPrompts();
 
 	if (mPlayAgainButton && mPlayAgainButton->IsHovered() && mSelection != 0)
 	{
@@ -92,16 +96,25 @@ void EndScreen::RefreshSelection()
 		mMainMenuButton->SetSelected(mSelection == 1);
 }
 
-void EndScreen::UpdateControllerPrompts()
+void EndScreen::UpdateInputPrompts()
 {
-	const bool show = Input::GetLastInputMethod() == InputMethod::Gamepad;
+	const bool hints = GameSettings::HasControlHints();
+	const bool gamepad = hints && Input::GetLastInputMethod() == InputMethod::Gamepad;
+	const bool keyboard = hints && !gamepad;
 
-	if (!mControllerPrompts || show == mShowingControllerPrompts)
-		return;
+	if (mControllerPrompts && gamepad != mShowingGamepadPrompts)
+	{
+		mShowingGamepadPrompts = gamepad;
+		mControllerPrompts->SetVisible(gamepad);
+		mControllerPrompts->SetEnabled(gamepad);
+	}
 
-	mShowingControllerPrompts = show;
-	mControllerPrompts->SetVisible(show);
-	mControllerPrompts->SetEnabled(show);
+	if (mKeyboardPrompts && keyboard != mShowingKeyboardPrompts)
+	{
+		mShowingKeyboardPrompts = keyboard;
+		mKeyboardPrompts->SetVisible(keyboard);
+		mKeyboardPrompts->SetEnabled(keyboard);
+	}
 }
 
 void EndScreen::ActivateSelection()

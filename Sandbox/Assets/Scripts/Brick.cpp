@@ -20,10 +20,18 @@ void Brick::OnCollision(Entity& other)
 	if (!GetOwner().IsEnabled() || !other.HasComponent<Ball>())
 		return;
 
-	mRemainingHits = std::max(mRemainingHits - 1, 0);
+	Damage(1, other.GetComponent<Ball>());
+}
+
+void Brick::Damage(int32 amount, Ball* sourceBall, bool triggerPower)
+{
+	if (!GetOwner().IsEnabled() || mRemainingHits <= 0 || amount <= 0)
+		return;
+
+	mRemainingHits = std::max(mRemainingHits - amount, 0);
 	const bool destroyed = mRemainingHits == 0;
-	GameRules::RegisterBrickDamage(GetOwner().GetWorldPosition(), destroyed, mPower,
-		other.GetComponent<Ball>());
+	GameRules::RegisterBrickDamage(GetOwner().GetWorldPosition(), destroyed,
+		triggerPower ? mPower : std::string(), sourceBall);
 
 	if (!destroyed)
 	{

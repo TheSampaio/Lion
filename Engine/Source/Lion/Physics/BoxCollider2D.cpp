@@ -21,6 +21,11 @@ namespace Lion
 
 	void BoxCollider2D::OnAwake()
 	{
+		RefreshShape();
+	}
+
+	void BoxCollider2D::RefreshShape()
+	{
 		RigidBody2D* body = GetOwner().GetComponent<RigidBody2D>();
 
 		if (!body)
@@ -28,6 +33,9 @@ namespace Lion
 			Log::Console(LogLevel::Error, "[BoxCollider2D] Requires a RigidBody2D on the same entity.");
 			return;
 		}
+
+		if (b2Shape_IsValid(mShapeId))
+			b2DestroyShape(mShapeId, true);
 
 		// The collider size is expressed in unscaled pixels, like the sprite: the owner's world scale
 		// (including any inherited from a parent) is applied on top, so the hitbox follows the entity.

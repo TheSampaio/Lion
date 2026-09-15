@@ -19,7 +19,10 @@ namespace
 		"ON", "OFF", "LOW", "MEDIUM", "HIGH", "NONE", "PROTANOPIA", "DEUTERANOPIA", "TRITANOPIA",
 		"PAUSED", "RESUME", "MAIN MENU", "CIRCUIT SUSPENDED", "PLAY AGAIN", "TOTAL SCORE",
 		"CIRCUIT CLEAR", "SYSTEM FAILURE", "SCORE", "BALLS", "LEVEL", "EXTRA BALL +1", "MULTIBALL X3",
-		"PRESS ANY KEY TO START"
+		"PRESS TO START", "CONTINUE", "LEVEL SELECT", "STATISTICS", "CONTROL HINTS", "LOCKED",
+		"COMPLETED", "HIGH SCORE", "COMBO", "SHOCKWAVE", "SHOCKWAVE READY", "SHOCKWAVE FIRED",
+		"BOMB", "WIDE PADDLE", "DOUBLE PADDLE", "SESSIONS", "LEVELS CLEARED", "BRICKS DESTROYED",
+		"BALLS LOST", "POWERS COLLECTED", "HIGHEST COMBO", "SHOCKWAVES", "PLAY TIME"
 	};
 	constexpr Translation kPortuguese = {
 		"JOGAR", "CRÉDITOS", "CONFIGURAÇÕES", "SAIR", "VOLTAR", "SOM", "RESOLUÇÃO", "V-SYNC",
@@ -27,7 +30,10 @@ namespace
 		"LIGADO", "DESLIGADO", "BAIXA", "MÉDIA", "ALTA", "NENHUM", "PROTANOPIA", "DEUTERANOPIA", "TRITANOPIA",
 		"PAUSADO", "CONTINUAR", "MENU PRINCIPAL", "CIRCUITO SUSPENSO", "JOGAR DE NOVO", "PONTUAÇÃO TOTAL",
 		"CIRCUITO COMPLETO", "FALHA DO SISTEMA", "PONTOS", "BOLAS", "FASE", "BOLA EXTRA +1", "MULTIBOLA X3",
-		"PRESSIONE UMA TECLA"
+		"PRESSIONE PARA INICIAR", "CONTINUAR", "SELECIONAR FASE", "ESTATÍSTICAS", "DICAS DE CONTROLE", "BLOQUEADA",
+		"CONCLUÍDA", "RECORDE", "COMBO", "ONDA DE CHOQUE", "ONDA PRONTA", "ONDA DISPARADA",
+		"BOMBA", "PADDLE MAIOR", "PADDLE DUPLO", "SESSÕES", "FASES CONCLUÍDAS", "BLOCOS DESTRUÍDOS",
+		"BOLAS PERDIDAS", "PODERES COLETADOS", "MAIOR COMBO", "ONDAS DE CHOQUE", "TEMPO DE JOGO"
 	};
 	constexpr Translation kSpanish = {
 		"JUGAR", "CRÉDITOS", "AJUSTES", "SALIR", "VOLVER", "SONIDO", "RESOLUCIÓN", "V-SYNC",
@@ -35,7 +41,10 @@ namespace
 		"SÍ", "NO", "BAJA", "MEDIA", "ALTA", "NINGUNO", "PROTANOPIA", "DEUTERANOPIA", "TRITANOPIA",
 		"PAUSA", "CONTINUAR", "MENU PRINCIPAL", "CIRCUITO PAUSADO", "JUGAR DE NUEVO", "PUNTOS TOTALES",
 		"CIRCUITO COMPLETO", "FALLO DEL SISTEMA", "PUNTOS", "BOLAS", "NIVEL", "BOLA EXTRA +1", "MULTIBOLA X3",
-		"PULSA UNA TECLA"
+		"PULSA PARA EMPEZAR", "CONTINUAR", "SELECCIONAR NIVEL", "ESTADÍSTICAS", "AYUDAS DE CONTROL", "BLOQUEADO",
+		"COMPLETADO", "RÉCORD", "COMBO", "ONDA DE CHOQUE", "ONDA LISTA", "ONDA LANZADA",
+		"BOMBA", "PALA GRANDE", "PALA DOBLE", "SESIONES", "NIVELES SUPERADOS", "BLOQUES DESTRUIDOS",
+		"BOLAS PERDIDAS", "PODERES RECOGIDOS", "MAYOR COMBO", "ONDAS DE CHOQUE", "TIEMPO DE JUEGO"
 	};
 	constexpr Translation kItalian = {
 		"GIOCA", "CREDITI", "IMPOSTAZIONI", "ESCI", "INDIETRO", "SUONO", "RISOLUZIONE", "V-SYNC",
@@ -43,7 +52,10 @@ namespace
 		"SI", "NO", "BASSA", "MEDIA", "ALTA", "NESSUNO", "PROTANOPIA", "DEUTERANOPIA", "TRITANOPIA",
 		"PAUSA", "RIPRENDI", "MENU PRINCIPALE", "CIRCUITO SOSPESO", "GIOCA ANCORA", "PUNTEGGIO TOTALE",
 		"CIRCUITO COMPLETO", "ERRORE DI SISTEMA", "PUNTI", "PALLE", "LIVELLO", "PALLA EXTRA +1", "MULTIPALLA X3",
-		"PREMI UN TASTO"
+		"PREMI PER INIZIARE", "CONTINUA", "SELEZIONA LIVELLO", "STATISTICHE", "SUGGERIMENTI", "BLOCCATO",
+		"COMPLETATO", "RECORD", "COMBO", "ONDA D'URTO", "ONDA PRONTA", "ONDA LANCIATA",
+		"BOMBA", "RACCHETTA LARGA", "DOPPIA RACCHETTA", "SESSIONI", "LIVELLI COMPLETATI", "MATTONI DISTRUTTI",
+		"PALLE PERSE", "POTERI RACCOLTI", "COMBO MASSIMA", "ONDE D'URTO", "TEMPO DI GIOCO"
 	};
 	constexpr Translation kFrench = {
 		"JOUER", "CRÉDITS", "PARAMÈTRES", "QUITTER", "RETOUR", "SON", "RÉSOLUTION", "V-SYNC",
@@ -51,7 +63,10 @@ namespace
 		"OUI", "NON", "FAIBLE", "MOYEN", "ÉLEVÉ", "AUCUN", "PROTANOPIE", "DEUTERANOPIE", "TRITANOPIE",
 		"PAUSE", "REPRENDRE", "MENU PRINCIPAL", "CIRCUIT SUSPENDU", "REJOUER", "SCORE TOTAL",
 		"CIRCUIT TERMINE", "PANNE SYSTEME", "SCORE", "BALLES", "NIVEAU", "BALLE BONUS +1", "MULTIBALLE X3",
-		"APPUYEZ SUR UNE TOUCHE"
+		"APPUYEZ POUR JOUER", "CONTINUER", "CHOIX DU NIVEAU", "STATISTIQUES", "AIDES DE CONTRÔLE", "VERROUILLÉ",
+		"TERMINÉ", "MEILLEUR SCORE", "COMBO", "ONDE DE CHOC", "ONDE PRÊTE", "ONDE LANCÉE",
+		"BOMBE", "RAQUETTE LARGE", "DOUBLE RAQUETTE", "SESSIONS", "NIVEAUX TERMINÉS", "BRIQUES DÉTRUITES",
+		"BALLES PERDUES", "BONUS COLLECTÉS", "MEILLEUR COMBO", "ONDES DE CHOC", "TEMPS DE JEU"
 	};
 	constexpr Translation kGerman = {
 		"SPIELEN", "CREDITS", "EINSTELLUNGEN", "BEENDEN", "ZURÜCK", "TON", "AUFLÖSUNG", "V-SYNC",
@@ -59,7 +74,10 @@ namespace
 		"AN", "AUS", "NIEDRIG", "MITTEL", "HOCH", "KEIN", "PROTANOPIE", "DEUTERANOPIE", "TRITANOPIE",
 		"PAUSE", "FORTSETZEN", "HAUPTMENU", "KREISLAUF PAUSIERT", "NOCHMAL SPIELEN", "GESAMTPUNKTE",
 		"KREISLAUF FREI", "SYSTEMFEHLER", "PUNKTE", "BALLE", "LEVEL", "EXTRA BALL +1", "MULTIBALL X3",
-		"TASTE DRUCKEN"
+		"DRÜCKEN ZUM START", "FORTSETZEN", "LEVELAUSWAHL", "STATISTIK", "STEUERUNGSHILFEN", "GESPERRT",
+		"ABGESCHLOSSEN", "BESTWERT", "COMBO", "SCHOCKWELLE", "WELLE BEREIT", "WELLE AUSGELÖST",
+		"BOMBE", "BREITES PADDLE", "DOPPELPADDLE", "SITZUNGEN", "LEVEL BEENDET", "STEINE ZERSTÖRT",
+		"BÄLLE VERLOREN", "POWERUPS", "HÖCHSTER COMBO", "SCHOCKWELLEN", "SPIELZEIT"
 	};
 	constexpr Translation kRussian = {
 		"ИГРАТЬ", "АВТОРЫ", "НАСТРОЙКИ", "ВЫХОД", "НАЗАД", "ЗВУК", "РАЗРЕШЕНИЕ", "V-SYNC",
@@ -67,7 +85,10 @@ namespace
 		"ВКЛ", "ВЫКЛ", "НИЗКО", "СРЕДНЕ", "ВЫСОКО", "НЕТ", "ПРОТАНОПИЯ", "ДЕЙТЕРАНОПИЯ", "ТРИТАНОПИЯ",
 		"ПАУЗА", "ПРОДОЛЖИТЬ", "ГЛАВНОЕ МЕНЮ", "ЦЕПЬ ПРИОСТАНОВЛЕНА", "СНОВА ИГРАТЬ", "ОБЩИЙ СЧЁТ",
 		"ЦЕПЬ ОЧИЩЕНА", "СБОЙ СИСТЕМЫ", "СЧЁТ", "МЯЧИ", "УРОВЕНЬ", "ДОП МЯЧ +1", "МУЛЬТИМЯЧ X3",
-		"НАЖМИТЕ КЛАВИШУ"
+		"НАЖМИТЕ ДЛЯ СТАРТА", "ПРОДОЛЖИТЬ", "ВЫБОР УРОВНЯ", "СТАТИСТИКА", "ПОДСКАЗКИ", "ЗАКРЫТО",
+		"ПРОЙДЕНО", "РЕКОРД", "КОМБО", "УДАРНАЯ ВОЛНА", "ВОЛНА ГОТОВА", "ВОЛНА ЗАПУЩЕНА",
+		"БОМБА", "ШИРОКАЯ ПЛАТФОРМА", "ДВОЙНАЯ ПЛАТФОРМА", "СЕАНСЫ", "УРОВНИ ПРОЙДЕНЫ", "БЛОКИ РАЗБИТЫ",
+		"МЯЧИ ПОТЕРЯНЫ", "БОНУСЫ СОБРАНЫ", "ЛУЧШИЙ КОМБО", "УДАРНЫЕ ВОЛНЫ", "ВРЕМЯ ИГРЫ"
 	};
 	constexpr Translation kGreek = {
 		"ΠΑΙΞΕ", "ΣΥΝΤΕΛΕΣΤΕΣ", "ΡΥΘΜΙΣΕΙΣ", "ΕΞΟΔΟΣ", "ΠΙΣΩ", "ΗΧΟΣ", "ΑΝΑΛΥΣΗ", "V-SYNC",
@@ -75,7 +96,10 @@ namespace
 		"ΝΑΙ", "ΟΧΙ", "ΧΑΜΗΛΑ", "ΜΕΣΑΙΑ", "ΥΨΗΛΑ", "ΚΑΝΕΝΑ", "ΠΡΩΤΑΝΟΠΙΑ", "ΔΕΥΤΕΡΑΝΟΠΙΑ", "ΤΡΙΤΑΝΟΠΙΑ",
 		"ΠΑΥΣΗ", "ΣΥΝΕΧΕΙΑ", "ΚΥΡΙΟ ΜΕΝΟΥ", "ΚΥΚΛΩΜΑ ΣΕ ΠΑΥΣΗ", "ΠΑΙΞΕ ΞΑΝΑ", "ΣΥΝΟΛΟ ΠΟΝΤΩΝ",
 		"ΚΥΚΛΩΜΑ ΚΑΘΑΡΟ", "ΣΦΑΛΜΑ ΣΥΣΤΗΜΑΤΟΣ", "ΠΟΝΤΟΙ", "ΜΠΑΛΕΣ", "ΕΠΙΠΕΔΟ", "ΕΞΤΡΑ ΜΠΑΛΑ +1", "ΠΟΛΛΑΠΛΗ ΜΠΑΛΑ X3",
-		"ΠΑΤΗΣΕ ΕΝΑ ΠΛΗΚΤΡΟ"
+		"ΠΑΤΗΣΕ ΓΙΑ ΕΝΑΡΞΗ", "ΣΥΝΕΧΕΙΑ", "ΕΠΙΛΟΓΗ ΕΠΙΠΕΔΟΥ", "ΣΤΑΤΙΣΤΙΚΑ", "ΥΠΟΔΕΙΞΕΙΣ", "ΚΛΕΙΔΩΜΕΝΟ",
+		"ΟΛΟΚΛΗΡΩΘΗΚΕ", "ΡΕΚΟΡ", "COMBO", "ΚΡΟΥΣΤΙΚΟ ΚΥΜΑ", "ΚΥΜΑ ΕΤΟΙΜΟ", "ΚΥΜΑ ΕΝΕΡΓΟ",
+		"ΒΟΜΒΑ", "ΠΛΑΤΙΑ ΡΑΚΕΤΑ", "ΔΙΠΛΗ ΡΑΚΕΤΑ", "ΣΥΝΕΔΡΙΕΣ", "ΕΠΙΠΕΔΑ ΤΕΛΟΣ", "ΤΟΥΒΛΑ ΣΠΑΣΜΕΝΑ",
+		"ΜΠΑΛΕΣ ΧΑΜΕΝΕΣ", "ΔΥΝΑΜΕΙΣ", "ΜΕΓΙΣΤΟ COMBO", "ΚΡΟΥΣΤΙΚΑ ΚΥΜΑΤΑ", "ΧΡΟΝΟΣ ΠΑΙΧΝΙΔΙΟΥ"
 	};
 
 	constexpr const Translation* kTranslations[] = {
@@ -104,6 +128,7 @@ void GameSettings::Change(int32 setting, int32 direction)
 		case 7: sCameraShake = !sCameraShake; break;
 		case 8: sColorMode = Wrap(sColorMode + direction, 4); break;
 		case 9: sLanguage = Wrap(sLanguage + direction, static_cast<int32>(std::size(kLanguageNames))); break;
+		case 10: sControlHints = !sControlHints; break;
 	}
 }
 
@@ -151,6 +176,7 @@ std::string GameSettings::Label(int32 setting)
 				: sColorMode == 2 ? GameText::Deuteranopia : GameText::Tritanopia);
 			return LION_FORMAT_TEXT("{}  < {} >", Text(GameText::ColorMode), state);
 		case 9: return LION_FORMAT_TEXT("{}  < {} >", Text(GameText::Language), kLanguageNames[sLanguage]);
+		case 10: return LION_FORMAT_TEXT("{}  < {} >", Text(GameText::ControlHints), Text(sControlHints ? GameText::On : GameText::Off));
 	}
 	return {};
 }

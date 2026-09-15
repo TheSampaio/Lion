@@ -1,6 +1,7 @@
 #include "GameRules.h"
 #include "Ball.h"
 #include "Brick.h"
+#include "GameProgress.h"
 #include "GameSettings.h"
 #include "Paddle.h"
 #include "ScreenTransition.h"
@@ -24,13 +25,19 @@ void GameRules::InitializeForScene()
 	const Reference<Entity> scoreEntity = scene->FindEntity("Score Text");
 	const Reference<Entity> attemptsEntity = scene->FindEntity("Attempts Text");
 	const Reference<Entity> levelEntity = scene->FindEntity("Level Text");
+	const Reference<Entity> comboEntity = scene->FindEntity("Combo Text");
+	const Reference<Entity> shockwaveEntity = scene->FindEntity("Shockwave Text");
 	const Reference<Entity> powerEntity = scene->FindEntity("Power Text");
 	const Reference<Entity> controllerPrompts = scene->FindEntity("HUD Controller Prompts");
+	const Reference<Entity> keyboardPrompts = scene->FindEntity("HUD Keyboard Prompts");
 	mScoreText = scoreEntity ? scoreEntity->GetComponent<TextRenderer>() : nullptr;
 	mAttemptsText = attemptsEntity ? attemptsEntity->GetComponent<TextRenderer>() : nullptr;
 	mLevelText = levelEntity ? levelEntity->GetComponent<TextRenderer>() : nullptr;
+	mComboText = comboEntity ? comboEntity->GetComponent<TextRenderer>() : nullptr;
+	mShockwaveText = shockwaveEntity ? shockwaveEntity->GetComponent<TextRenderer>() : nullptr;
 	mPowerText = powerEntity ? powerEntity->GetComponent<TextRenderer>() : nullptr;
 	mControllerPrompts = controllerPrompts.get();
+	mKeyboardPrompts = keyboardPrompts.get();
 
 	if (powerEntity)
 	{
@@ -38,7 +45,7 @@ void GameRules::InitializeForScene()
 		powerEntity->SetEnabled(false);
 	}
 	UpdateHud();
-	UpdateControllerPrompts();
+	UpdateInputPrompts();
 
 	if (mLevel == 0)
 		return;
@@ -47,7 +54,12 @@ void GameRules::InitializeForScene()
 	{
 		sScore = 0;
 		sAttempts = kStartingAttempts;
+		sCombo = 1;
+		sShockwaveCharge = 0;
+		sLevelScore = 0;
+		sSessionSeconds = 0.0f;
 		sSessionActive = true;
+		GameProgress::StartSession();
 		UpdateHud();
 	}
 
@@ -83,7 +95,15 @@ void GameRules::OnUpdate()
 	}
 
 	UpdateShake();
-	UpdateControllerPrompts();
+	UpdateInputPrompts();
+	UpdateTemporaryPowers();
+
+	if (mLevel > 0 && sSessionActive)
+	{
+		sSessionSeconds += Clock::GetDeltaTime();
+		if (sShockwaveCharge >= kShockwaveHitsRequired && Input::GetActionTap("player_power"))
+			ActivateShockwave();
+	}
 
 	if (mPowerMessageRemaining > 0.0f)
 	{
@@ -106,6 +126,8 @@ void GameRules::OnDestroy()
 {
 	if (mCamera)
 		mCamera->SetOffset(mCameraBaseOffset);
+	if (mPaddle)
+		mPaddle->SetWide(false);
 
 	if (sActiveRules == this)
 		sActiveRules = nullptr;
@@ -120,10 +142,40 @@ void GameRules::Reflect(Reflector& reflector)
 
 void GameRules::StartNewGame()
 {
+	StartAtLevel(1);
+}
+
+void GameRules::ContinueGame()
+{
+	StartAtLevel(GameProgress::GetHighestUnlockedLevel());
+}
+
+void GameRules::StartAtLevel(int32 level)
+{
+	GameProgress::Load();
+	if (!GameProgress::IsLevelUnlocked(level))
+		return;
+
 	sScore = 0;
 	sAttempts = kStartingAttempts;
+	sCombo = 1;
+	sShockwaveCharge = 0;
+	sLevelScore = 0;
+	sSessionSeconds = 0.0f;
 	sSessionActive = true;
-	ScreenTransition::LoadScene(LevelScene(1));
+	GameProgress::StartSession();
+	ScreenTransition::LoadScene(LevelScene(level));
+}
+
+void GameRules::AbandonSession()
+{
+	if (!sSessionActive)
+		return;
+
+	GameProgress::EndAttempt(ActiveLevel(), sLevelScore, sSessionSeconds);
+	sLevelScore = 0;
+	sSessionSeconds = 0.0f;
+	sSessionActive = false;
 }
 
 void GameRules::RegisterBrickDamage(const Vector2& position, bool destroyed, const std::string& power,
@@ -132,8 +184,18 @@ void GameRules::RegisterBrickDamage(const Vector2& position, bool destroyed, con
 	if (!sSessionActive)
 		return;
 
+	if (sourceBall)
+		sShockwaveCharge = std::min(sShockwaveCharge + 1, kShockwaveHitsRequired);
+
 	if (destroyed)
-		sScore += kBrickScore;
+	{
+		sCombo = std::min(sCombo + 1, 16);
+		const int32 points = kBrickScore * sCombo;
+		sScore += points;
+		sLevelScore += points;
+		GameProgress::RegisterBrickDestroyed();
+		GameProgress::RegisterCombo(sCombo);
+	}
 
 	if (!sActiveRules)
 		return;
@@ -162,6 +224,22 @@ void GameRules::UpdateHud()
 
 	if (mLevelText && mLevel > 0)
 		mLevelText->SetText(LION_FORMAT_TEXT("{} {:02}", GameSettings::Text(GameText::Level), mLevel));
+
+	if (mComboText)
+	{
+		mComboText->SetText(sCombo >= 2
+			? LION_FORMAT_TEXT("{} X{}", GameSettings::Text(GameText::Combo), sCombo)
+			: std::string());
+		mComboText->GetOwner().SetVisible(sCombo >= 2);
+	}
+
+	if (mShockwaveText)
+	{
+		mShockwaveText->SetText(sShockwaveCharge >= kShockwaveHitsRequired
+			? GameSettings::Text(GameText::ShockwaveReady)
+			: LION_FORMAT_TEXT("{} {}/{}", GameSettings::Text(GameText::Shockwave),
+				sShockwaveCharge, kShockwaveHitsRequired));
+	}
 }
 
 void GameRules::UpdateShake()
@@ -198,16 +276,46 @@ void GameRules::UpdateShake()
 		mCameraBaseOffset.y + direction.y * mShakeStrength));
 }
 
-void GameRules::UpdateControllerPrompts()
+void GameRules::UpdateInputPrompts()
 {
-	const bool show = Input::GetLastInputMethod() == InputMethod::Gamepad;
+	const bool hints = GameSettings::HasControlHints();
+	const bool gamepad = hints && Input::GetLastInputMethod() == InputMethod::Gamepad;
+	const bool keyboard = hints && !gamepad;
 
-	if (!mControllerPrompts || show == mShowingControllerPrompts)
-		return;
+	if (mControllerPrompts && gamepad != mShowingGamepadPrompts)
+	{
+		mShowingGamepadPrompts = gamepad;
+		mControllerPrompts->SetVisible(gamepad);
+		mControllerPrompts->SetEnabled(gamepad);
+	}
 
-	mShowingControllerPrompts = show;
-	mControllerPrompts->SetVisible(show);
-	mControllerPrompts->SetEnabled(show);
+	if (mKeyboardPrompts && keyboard != mShowingKeyboardPrompts)
+	{
+		mShowingKeyboardPrompts = keyboard;
+		mKeyboardPrompts->SetVisible(keyboard);
+		mKeyboardPrompts->SetEnabled(keyboard);
+	}
+}
+
+void GameRules::UpdateTemporaryPowers()
+{
+	const float32 deltaTime = Clock::GetDeltaTime();
+	if (mWidePaddleRemaining > 0.0f)
+	{
+		mWidePaddleRemaining = std::max(0.0f, mWidePaddleRemaining - deltaTime);
+		if (mWidePaddleRemaining <= 0.0f && mPaddle)
+			mPaddle->SetWide(false);
+	}
+
+	if (mDuplicatePaddleRemaining > 0.0f)
+	{
+		mDuplicatePaddleRemaining = std::max(0.0f, mDuplicatePaddleRemaining - deltaTime);
+		if (mDuplicatePaddleRemaining <= 0.0f && mDuplicatePaddle)
+		{
+			mDuplicatePaddle->RemoveFromScene();
+			mDuplicatePaddle = nullptr;
+		}
+	}
 }
 
 void GameRules::HandleLevelFlow()
@@ -217,6 +325,7 @@ void GameRules::HandleLevelFlow()
 	if (scene->CountActiveComponents<Brick>() == 0)
 	{
 		mTransitionQueued = true;
+		FinishAttempt(true);
 
 		if (mLevel < kFinalLevel)
 			ScreenTransition::LoadScene(LevelScene(mLevel + 1));
@@ -254,6 +363,8 @@ void GameRules::HandleLevelFlow()
 			return;
 
 		sAttempts = std::max(sAttempts - 1, 0);
+		sCombo = 1;
+		GameProgress::RegisterBallLost();
 		UpdateHud();
 
 		if (sAttempts > 0)
@@ -261,6 +372,7 @@ void GameRules::HandleLevelFlow()
 		else
 		{
 			mTransitionQueued = true;
+			FinishAttempt(false);
 			sSessionActive = false;
 			ScreenTransition::LoadScene("Scenes/Defeat.lnscene");
 		}
@@ -292,19 +404,30 @@ void GameRules::ActivatePower(const std::string& power, const Vector2& position,
 			SpawnExtraBalls(*sourceBall);
 		message = GameSettings::Text(GameText::Multiball);
 	}
+	else if (power == "Bomb")
+	{
+		ExplodeBomb(position);
+		message = GameSettings::Text(GameText::Bomb);
+	}
+	else if (power == "Wide Paddle")
+	{
+		ActivateWidePaddle();
+		message = GameSettings::Text(GameText::WidePaddle);
+	}
+	else if (power == "Duplicate Paddle")
+	{
+		ActivateDuplicatePaddle();
+		message = GameSettings::Text(GameText::DuplicatePaddle);
+	}
 	else
 		return;
+
+	GameProgress::RegisterPowerCollected();
 
 	if (mImpactParticles)
 		mImpactParticles->EmitAt(position, 48);
 
-	if (mPowerText)
-	{
-		mPowerText->SetText(message);
-		mPowerText->GetOwner().SetVisible(true);
-		mPowerText->GetOwner().SetEnabled(true);
-		mPowerMessageRemaining = 1.4f;
-	}
+	ShowPowerMessage(message);
 
 	UpdateHud();
 }
@@ -313,6 +436,7 @@ void GameRules::SpawnExtraBalls(Ball& sourceBall)
 {
 	const Reference<Scene> scene = GetOwner().GetScene();
 	const Vector2 origin = sourceBall.GetOwner().GetWorldPosition();
+	const glm::vec2 sourceDirection = sourceBall.GetDirection();
 
 	for (int32 index = 0; index < 2; ++index)
 	{
@@ -327,8 +451,121 @@ void GameRules::SpawnExtraBalls(Ball& sourceBall)
 		entity->AddComponent<CircleCollider2D>(7.0f, 1.0f, 0.0f, 1.0f);
 		Ball* ball = entity->AddComponent<Ball>();
 		scene->Add(entity);
-		ball->Launch(glm::vec2(side * 0.65f, 1.0f));
+		const glm::vec2 direction = glm::normalize(glm::vec2(
+			sourceDirection.x + side * 0.55f, std::max(std::abs(sourceDirection.y), 0.65f)));
+		ball->LaunchFrom(origin, direction);
 	}
+}
+
+void GameRules::ExplodeBomb(const Vector2& origin)
+{
+	const Reference<Scene> scene = GetOwner().GetScene();
+	if (!scene)
+		return;
+
+	constexpr float32 kBlastRadius = 135.0f;
+	for (const Reference<Entity>& entity : scene->GetEntities())
+	{
+		Brick* brick = entity->GetComponent<Brick>();
+		if (!brick || !entity->IsActive())
+			continue;
+
+		const Vector2 offset = entity->GetWorldPosition() - origin;
+		if (offset.x * offset.x + offset.y * offset.y <= kBlastRadius * kBlastRadius)
+			brick->Damage(99, nullptr, false);
+	}
+
+	if (mImpactParticles)
+		mImpactParticles->EmitAt(origin, 110);
+}
+
+void GameRules::ActivateWidePaddle()
+{
+	mWidePaddleRemaining = 12.0f;
+	if (mPaddle)
+		mPaddle->SetWide(true);
+	if (mDuplicatePaddle)
+		if (Paddle* paddle = mDuplicatePaddle->GetComponent<Paddle>())
+			paddle->SetWide(true);
+}
+
+void GameRules::ActivateDuplicatePaddle()
+{
+	mDuplicatePaddleRemaining = 12.0f;
+	if (mDuplicatePaddle || !mPaddle)
+		return;
+
+	const Reference<Scene> scene = GetOwner().GetScene();
+	if (!scene)
+		return;
+
+	Reference<Entity> entity = MakeReference<Entity>();
+	entity->SetName("Duplicate Paddle");
+	const Vector2 source = mPaddle->GetOwner().GetWorldPosition();
+	entity->GetTransform()->SetPosition(Vector2(source.x, source.y + 42.0f));
+	SpriteRenderer* renderer = entity->AddComponent<SpriteRenderer>("Sprites/Brickout/player.png");
+	renderer->SetOrder(11);
+	entity->AddComponent<RigidBody2D>(BodyType::Kinematic, true);
+	entity->AddComponent<BoxCollider2D>(100.0f, 20.0f, 1.0f, 0.0f, 1.0f);
+	Paddle* duplicate = entity->AddComponent<Paddle>();
+	scene->Add(entity);
+	mDuplicatePaddle = entity.get();
+	if (mWidePaddleRemaining > 0.0f)
+		duplicate->SetWide(true);
+}
+
+void GameRules::ActivateShockwave()
+{
+	if (!mPaddle || sShockwaveCharge < kShockwaveHitsRequired)
+		return;
+
+	const Vector2 origin = mPaddle->GetOwner().GetWorldPosition();
+	const Reference<Scene> scene = GetOwner().GetScene();
+	if (!scene)
+		return;
+
+	for (const Reference<Entity>& entity : scene->GetEntities())
+	{
+		Brick* brick = entity->GetComponent<Brick>();
+		if (!brick || !entity->IsActive())
+			continue;
+
+		const Vector2 offset = entity->GetWorldPosition() - origin;
+		if (offset.y >= 0.0f && offset.y <= 470.0f
+			&& std::abs(offset.x) <= 38.0f + offset.y * 0.58f)
+			brick->Damage(1, nullptr, false);
+	}
+
+	if (mImpactParticles)
+		for (int32 step = 1; step <= 6; ++step)
+			mImpactParticles->EmitAt(Vector2(origin.x, origin.y + step * 62.0f), 24);
+
+	sShockwaveCharge = 0;
+	GameProgress::RegisterShockwave();
+	ShowPowerMessage(GameSettings::Text(GameText::ShockwaveFired));
+	UpdateHud();
+}
+
+void GameRules::ShowPowerMessage(const std::string& message)
+{
+	if (!mPowerText)
+		return;
+
+	mPowerText->SetText(message);
+	mPowerText->GetOwner().SetVisible(true);
+	mPowerText->GetOwner().SetEnabled(true);
+	mPowerMessageRemaining = 1.4f;
+}
+
+void GameRules::FinishAttempt(bool completed)
+{
+	if (completed)
+		GameProgress::CompleteLevel(mLevel, sLevelScore, sSessionSeconds);
+	else
+		GameProgress::EndAttempt(mLevel, sLevelScore, sSessionSeconds);
+
+	sLevelScore = 0;
+	sSessionSeconds = 0.0f;
 }
 
 void GameRules::HandleDebugLevelKeys()
