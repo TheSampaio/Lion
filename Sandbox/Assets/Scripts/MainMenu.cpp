@@ -1,15 +1,32 @@
 #include "MainMenu.h"
+#include "GameAudio.h"
 #include "GameProgress.h"
 #include "GameRules.h"
-#include "GameSettings.h"
 
 #include <Lion/Logic/ComponentRegistry.h>
+#include <Lion/Render/Sprite.h>
 
 using namespace Lion;
+
+namespace
+{
+	constexpr int32 kLevelButtonsPerPage = 10;
+	constexpr int32 kAchievementsPerPage = 5;
+
+	void SetShown(Entity* entity, bool visible)
+	{
+		if (!entity)
+			return;
+
+		entity->SetVisible(visible);
+		entity->SetEnabled(visible);
+	}
+}
 
 void MainMenu::OnAwake()
 {
 	Window::SetBackgroundColor(0.015f, 0.02f, 0.045f);
+	GameSettings::ApplyAudio();
 	GameProgress::Load();
 }
 
@@ -20,20 +37,17 @@ void MainMenu::Initialize()
 	const Reference<Entity> prompt = scene->FindEntity("Menu Prompt");
 	const Reference<Entity> options = scene->FindEntity("Menu Options");
 	const Reference<Entity> detail = scene->FindEntity("Menu Detail");
-	const Reference<Entity> settingsOptions = scene->FindEntity("Settings Options");
-	const Reference<Entity> levelOptions = scene->FindEntity("Level Options");
-	const Reference<Entity> statisticsPanel = scene->FindEntity("Statistics Panel");
-	const Reference<Entity> statisticsText = scene->FindEntity("Statistics Text");
 	const Reference<Entity> backButton = scene->FindEntity("Back Button");
-	const Reference<Entity> creditsLogo = scene->FindEntity("Credits Logo");
 	mPrompt = prompt.get();
 	mOptions = options.get();
 	mDetail = detail.get();
-	mSettingsOptions = settingsOptions.get();
-	mLevelOptions = levelOptions.get();
-	mStatisticsPanel = statisticsPanel.get();
+	mSettingsOptions = scene->FindEntity("Settings Options").get();
+	mLevelOptions = scene->FindEntity("Level Options").get();
+	mStatisticsPanel = scene->FindEntity("Statistics Panel").get();
+	mAchievementsPanel = scene->FindEntity("Achievements Panel").get();
+	mBackground = scene->FindEntity("Background").get();
 	mBackButtonEntity = backButton.get();
-	mCreditsLogo = creditsLogo.get();
+	mCreditsLogo = scene->FindEntity("Credits Panel").get();
 	mKeyboardControls = scene->FindEntity("Keyboard Menu Prompts").get();
 	mKeyboardAttractPrompt = scene->FindEntity("Keyboard Attract Prompt").get();
 	mKeyboardDetailPrompts = scene->FindEntity("Keyboard Detail Prompts").get();
@@ -44,12 +58,19 @@ void MainMenu::Initialize()
 	mControllerSettingsPrompt = scene->FindEntity("Controller Settings Prompt").get();
 	mDetailText = detail ? detail->GetComponent<TextRenderer>() : nullptr;
 	mPromptText = prompt ? prompt->GetComponent<TextRenderer>() : nullptr;
+	const Reference<Entity> statisticsText = scene->FindEntity("Statistics Text");
+	const Reference<Entity> settingsPage = scene->FindEntity("Settings Page");
+	const Reference<Entity> levelPage = scene->FindEntity("Level Page");
+	const Reference<Entity> achievementProgress = scene->FindEntity("Achievement Progress");
 	mStatisticsText = statisticsText ? statisticsText->GetComponent<TextRenderer>() : nullptr;
+	mSettingsPageText = settingsPage ? settingsPage->GetComponent<TextRenderer>() : nullptr;
+	mLevelPageText = levelPage ? levelPage->GetComponent<TextRenderer>() : nullptr;
+	mAchievementProgressText = achievementProgress ? achievementProgress->GetComponent<TextRenderer>() : nullptr;
 	mBackButton = backButton ? backButton->GetComponent<Button>() : nullptr;
 	mBackButtonText = backButton ? backButton->GetComponent<TextRenderer>() : nullptr;
 
 	static const char8* buttonNames[] = {
-		"Continue Button", "Level Select Button", "Statistics Button",
+		"Continue Button", "Level Select Button", "Achievements Button", "Statistics Button",
 		"Credits Button", "Settings Button", "Quit Button"
 	};
 	for (int32 index = 0; index < static_cast<int32>(mMenuButtons.size()); ++index)
@@ -60,22 +81,41 @@ void MainMenu::Initialize()
 	}
 
 	static const char8* settingNames[] = {
-		"Sound Button", "Resolution Button", "VSync Button", "Quality Button", "Bloom Button",
-		"Vignette Button", "Motion Blur Button", "Camera Shake Button", "Color Mode Button",
-		"Language Button", "Control Hints Button"
+		"Resolution Button", "VSync Button", "Quality Button", "Bloom Button", "Vignette Button",
+		"Motion Blur Button", "SFX Volume Button", "Music Volume Button", "Camera Shake Button",
+		"Color Mode Button", "Language Button", "Control Hints Button"
 	};
-	for (int32 index = 0; index < static_cast<int32>(mSettingsButtons.size()); ++index)
+	for (int32 index = 0; index < GameSettings::kSettingCount; ++index)
 	{
 		const Reference<Entity> button = scene->FindEntity(settingNames[index]);
 		mSettingsButtons[index] = button ? button->GetComponent<Button>() : nullptr;
 		mSettingsTexts[index] = button ? button->GetComponent<TextRenderer>() : nullptr;
 	}
 
-	for (int32 index = 0; index < static_cast<int32>(mLevelButtons.size()); ++index)
+	static const char8* groupNames[] = {
+		"Graphics Settings", "Sound Settings", "Accessibility Settings", "Controls Settings"
+	};
+	for (int32 index = 0; index < static_cast<int32>(mSettingsGroups.size()); ++index)
 	{
-		const Reference<Entity> button = scene->FindEntity(LION_FORMAT_TEXT("Level {} Button", index + 1));
+		mSettingsGroups[index] = scene->FindEntity(groupNames[index]).get();
+		const Reference<Entity> tab = scene->FindEntity(LION_FORMAT_TEXT("Settings Tab {}", index + 1));
+		mSettingsTabs[index] = tab ? tab->GetComponent<TextRenderer>() : nullptr;
+	}
+
+	for (int32 index = 0; index < kLevelButtonsPerPage; ++index)
+	{
+		const Reference<Entity> button = scene->FindEntity(LION_FORMAT_TEXT("Level Slot {} Button", index + 1));
 		mLevelButtons[index] = button ? button->GetComponent<Button>() : nullptr;
 		mLevelTexts[index] = button ? button->GetComponent<TextRenderer>() : nullptr;
+	}
+
+	for (int32 index = 0; index < kAchievementsPerPage; ++index)
+	{
+		mAchievementRows[index] = scene->FindEntity(LION_FORMAT_TEXT("Achievement Row {}", index + 1)).get();
+		const Reference<Entity> icon = scene->FindEntity(LION_FORMAT_TEXT("Achievement Icon {}", index + 1));
+		const Reference<Entity> text = scene->FindEntity(LION_FORMAT_TEXT("Achievement Text {}", index + 1));
+		mAchievementIcons[index] = icon ? icon->GetComponent<SpriteRenderer>() : nullptr;
+		mAchievementTexts[index] = text ? text->GetComponent<TextRenderer>() : nullptr;
 	}
 
 	RefreshLocalizedText();
@@ -90,10 +130,10 @@ void MainMenu::OnUpdate()
 		return;
 	}
 
+	UpdateAmbientMotion();
+
 	if (!mInputArmed)
 	{
-		// Do not consume the input that dismissed the splash screen. Once every confirm source has
-		// been released, keyboard, pointer and controller may all enter the menu on the next press.
 		if (!Input::GetKeyPress(KeyCode::AnyKey) && !Input::GetMouseButtonPress(0)
 			&& Input::GetActionStrength("menu_confirm") <= 0.0f)
 			mInputArmed = true;
@@ -107,6 +147,7 @@ void MainMenu::OnUpdate()
 		if (Input::GetKeyTap(KeyCode::AnyKey) || Input::GetMouseButtonPress(0)
 			|| Input::GetActionTap("menu_confirm"))
 		{
+			GameAudio::PlayUiSelect();
 			ShowState(State::Menu);
 			mInputArmed = false;
 		}
@@ -116,7 +157,22 @@ void MainMenu::OnUpdate()
 	if (mState == State::Credits || mState == State::Statistics)
 	{
 		if ((mBackButton && mBackButton->WasClicked()) || Input::GetActionTap("menu_back"))
+		{
+			GameAudio::PlayUiSelect();
 			ShowState(State::Menu);
+		}
+		return;
+	}
+
+	if (mState == State::Achievements)
+	{
+		if (Input::GetActionTap("menu_tab_left")) ChangeAchievementPage(-1);
+		else if (Input::GetActionTap("menu_tab_right")) ChangeAchievementPage(1);
+		else if ((mBackButton && mBackButton->WasClicked()) || Input::GetActionTap("menu_back"))
+		{
+			GameAudio::PlayUiSelect();
+			ShowState(State::Menu);
+		}
 		return;
 	}
 
@@ -124,12 +180,17 @@ void MainMenu::OnUpdate()
 	{
 		if (Input::GetActionTap("menu_back"))
 		{
+			GameAudio::PlayUiSelect();
 			ShowState(State::Menu);
 			return;
 		}
+		if (Input::GetActionTap("menu_tab_left")) { ChangeSettingsPage(-1); return; }
+		if (Input::GetActionTap("menu_tab_right")) { ChangeSettingsPage(1); return; }
 
-		for (int32 index = 0; index < static_cast<int32>(mSettingsButtons.size()); ++index)
+		for (int32 index = 0; index < GameSettings::kSettingCount; ++index)
 		{
+			if (static_cast<int32>(GameSettings::GetCategory(index)) != mSettingsPage)
+				continue;
 			Button* button = mSettingsButtons[index];
 			if (!button)
 				continue;
@@ -142,30 +203,42 @@ void MainMenu::OnUpdate()
 			if (button->IsHovered() && mSettingsSelection != index)
 			{
 				mSettingsSelection = index;
+				GameAudio::PlayUiHover();
 				RefreshSettings();
 			}
 		}
 
 		if (mBackButton && mBackButton->WasClicked())
 		{
+			GameAudio::PlayUiSelect();
 			ShowState(State::Menu);
 			return;
 		}
 		if (mBackButton && mBackButton->IsHovered() && mSettingsSelection != GameSettings::kSettingCount)
 		{
 			mSettingsSelection = GameSettings::kSettingCount;
+			GameAudio::PlayUiHover();
 			RefreshSettings();
 		}
 
-		if (Input::GetActionTap("menu_up"))
+		std::vector<int32> pageSettings;
+		for (int32 index = 0; index < GameSettings::kSettingCount; ++index)
+			if (static_cast<int32>(GameSettings::GetCategory(index)) == mSettingsPage)
+				pageSettings.push_back(index);
+		if (Input::GetActionTap("menu_up") || Input::GetActionTap("menu_down"))
 		{
-			mSettingsSelection = (mSettingsSelection + GameSettings::kSettingCount)
-				% (GameSettings::kSettingCount + 1);
-			RefreshSettings();
-		}
-		else if (Input::GetActionTap("menu_down"))
-		{
-			mSettingsSelection = (mSettingsSelection + 1) % (GameSettings::kSettingCount + 1);
+			const int32 direction = Input::GetActionTap("menu_up") ? -1 : 1;
+			auto found = std::find(pageSettings.begin(), pageSettings.end(), mSettingsSelection);
+			if (mSettingsSelection == GameSettings::kSettingCount)
+				mSettingsSelection = direction < 0 ? pageSettings.back() : pageSettings.front();
+			else if (found != pageSettings.end())
+			{
+				const int32 position = static_cast<int32>(std::distance(pageSettings.begin(), found));
+				const int32 next = position + direction;
+				mSettingsSelection = next < 0 || next >= static_cast<int32>(pageSettings.size())
+					? GameSettings::kSettingCount : pageSettings[next];
+			}
+			GameAudio::PlayUiHover();
 			RefreshSettings();
 		}
 		else if (Input::GetActionTap("menu_left")) ActivateSetting(-1);
@@ -177,49 +250,49 @@ void MainMenu::OnUpdate()
 	{
 		if (Input::GetActionTap("menu_back"))
 		{
+			GameAudio::PlayUiSelect();
 			ShowState(State::Menu);
 			return;
 		}
+		if (Input::GetActionTap("menu_tab_left")) { ChangeLevelPage(-1); return; }
+		if (Input::GetActionTap("menu_tab_right")) { ChangeLevelPage(1); return; }
 
-		for (int32 index = 0; index < static_cast<int32>(mLevelButtons.size()); ++index)
+		for (int32 index = 0; index < kLevelButtonsPerPage; ++index)
 		{
+			const int32 level = mLevelPage * kLevelButtonsPerPage + index + 1;
 			Button* button = mLevelButtons[index];
-			if (!button || !GameProgress::IsLevelUnlocked(index + 1))
+			if (!button || !GameProgress::IsLevelUnlocked(level))
 				continue;
 			if (button->WasClicked())
 			{
-				GameRules::StartAtLevel(index + 1);
+				GameAudio::PlayUiSelect();
+				GameRules::StartAtLevel(level);
 				return;
 			}
 			if (button->IsHovered() && mLevelSelection != index)
 			{
 				mLevelSelection = index;
+				GameAudio::PlayUiHover();
 				RefreshLevels();
 			}
 		}
 
 		if (mBackButton && mBackButton->WasClicked())
 		{
+			GameAudio::PlayUiSelect();
 			ShowState(State::Menu);
 			return;
 		}
-		if (mBackButton && mBackButton->IsHovered() && mLevelSelection != GameProgress::kLevelCount)
-		{
-			mLevelSelection = GameProgress::kLevelCount;
-			RefreshLevels();
-		}
-
-		const int32 lastUnlocked = GameProgress::GetHighestUnlockedLevel() - 1;
-		if (Input::GetActionTap("menu_up"))
-			mLevelSelection = mLevelSelection == GameProgress::kLevelCount
-				? lastUnlocked : (mLevelSelection > 0 ? mLevelSelection - 1 : GameProgress::kLevelCount);
-		else if (Input::GetActionTap("menu_down"))
-			mLevelSelection = mLevelSelection == GameProgress::kLevelCount
-				? 0 : (mLevelSelection < lastUnlocked ? mLevelSelection + 1 : GameProgress::kLevelCount);
+		if (Input::GetActionTap("menu_up")) mLevelSelection = std::max(mLevelSelection - 1, 0);
+		else if (Input::GetActionTap("menu_down")) mLevelSelection = std::min(mLevelSelection + 1, kLevelButtonsPerPage - 1);
 		else if (Input::GetActionTap("menu_confirm"))
 		{
-			if (mLevelSelection == GameProgress::kLevelCount) ShowState(State::Menu);
-			else GameRules::StartAtLevel(mLevelSelection + 1);
+			const int32 level = mLevelPage * kLevelButtonsPerPage + mLevelSelection + 1;
+			if (GameProgress::IsLevelUnlocked(level))
+			{
+				GameAudio::PlayUiSelect();
+				GameRules::StartAtLevel(level);
+			}
 			return;
 		}
 		RefreshLevels();
@@ -234,12 +307,14 @@ void MainMenu::OnUpdate()
 		if (button->WasClicked())
 		{
 			mSelection = index;
+			GameAudio::PlayUiSelect();
 			ActivateSelection();
 			return;
 		}
 		if (button->IsHovered() && mSelection != index)
 		{
 			mSelection = index;
+			GameAudio::PlayUiHover();
 			RefreshMenu();
 		}
 	}
@@ -248,35 +323,33 @@ void MainMenu::OnUpdate()
 	{
 		mSelection = (mSelection + static_cast<int32>(mMenuButtons.size()) - 1)
 			% static_cast<int32>(mMenuButtons.size());
+		GameAudio::PlayUiHover();
 		RefreshMenu();
 	}
 	else if (Input::GetActionTap("menu_down"))
 	{
 		mSelection = (mSelection + 1) % static_cast<int32>(mMenuButtons.size());
+		GameAudio::PlayUiHover();
 		RefreshMenu();
 	}
-	else if (Input::GetActionTap("menu_confirm")) ActivateSelection();
+	else if (Input::GetActionTap("menu_confirm"))
+	{
+		GameAudio::PlayUiSelect();
+		ActivateSelection();
+	}
 }
 
 void MainMenu::ShowState(State state)
 {
 	mState = state;
-	const auto show = [](Entity* entity, bool visible)
-	{
-		if (!entity) return;
-		entity->SetVisible(visible);
-		entity->SetEnabled(visible);
-	};
-
-	show(mOptions, state == State::Menu);
-	show(mSettingsOptions, state == State::Settings);
-	show(mLevelOptions, state == State::LevelSelect);
-	show(mStatisticsPanel, state == State::Statistics);
-	show(mBackButtonEntity, state == State::Credits || state == State::Settings
-		|| state == State::LevelSelect || state == State::Statistics);
-	show(mCreditsLogo, state == State::Credits);
-	show(mDetail, state == State::Credits || state == State::Settings
-		|| state == State::LevelSelect || state == State::Statistics);
+	SetShown(mOptions, state == State::Menu);
+	SetShown(mSettingsOptions, state == State::Settings);
+	SetShown(mLevelOptions, state == State::LevelSelect);
+	SetShown(mStatisticsPanel, state == State::Statistics);
+	SetShown(mAchievementsPanel, state == State::Achievements);
+	SetShown(mBackButtonEntity, state != State::Attract && state != State::Menu);
+	SetShown(mCreditsLogo, state == State::Credits);
+	SetShown(mDetail, state != State::Attract && state != State::Menu);
 
 	if (state == State::Menu)
 		RefreshMenu();
@@ -285,13 +358,16 @@ void MainMenu::ShowState(State state)
 	else if (state == State::Settings)
 	{
 		if (mDetailText) mDetailText->SetText(GameSettings::Text(GameText::Settings));
+		mSettingsPage = 0;
 		mSettingsSelection = 0;
 		RefreshSettings();
 	}
 	else if (state == State::LevelSelect)
 	{
 		if (mDetailText) mDetailText->SetText(GameSettings::Text(GameText::LevelSelect));
-		mLevelSelection = std::max(GameProgress::GetHighestUnlockedLevel() - 1, 0);
+		const int32 highest = std::max(GameProgress::GetHighestUnlockedLevel() - 1, 0);
+		mLevelPage = highest / kLevelButtonsPerPage;
+		mLevelSelection = highest % kLevelButtonsPerPage;
 		RefreshLevels();
 	}
 	else if (state == State::Statistics)
@@ -299,25 +375,41 @@ void MainMenu::ShowState(State state)
 		if (mDetailText) mDetailText->SetText(GameSettings::Text(GameText::Statistics));
 		RefreshStatistics();
 	}
+	else if (state == State::Achievements)
+	{
+		if (mDetailText) mDetailText->SetText("ACHIEVEMENTS");
+		mAchievementPage = 0;
+		RefreshAchievements();
+	}
 
 	UpdateInputPresentation(true);
 }
 
 void MainMenu::RefreshSettings()
 {
+	for (int32 category = 0; category < static_cast<int32>(mSettingsGroups.size()); ++category)
+	{
+		SetShown(mSettingsGroups[category], category == mSettingsPage);
+		if (mSettingsTabs[category])
+			mSettingsTabs[category]->SetText(category == mSettingsPage
+				? LION_FORMAT_TEXT("[ {} ]", GameSettings::CategoryName(static_cast<GameSettings::Category>(category)))
+				: GameSettings::CategoryName(static_cast<GameSettings::Category>(category)));
+	}
 	for (int32 index = 0; index < GameSettings::kSettingCount; ++index)
 	{
 		if (mSettingsTexts[index]) mSettingsTexts[index]->SetText(GameSettings::Label(index));
 		if (mSettingsButtons[index]) mSettingsButtons[index]->SetSelected(index == mSettingsSelection);
 	}
+	if (mSettingsPageText)
+		mSettingsPageText->SetText("Q / LB                                      E / RB");
 	if (mBackButton) mBackButton->SetSelected(mSettingsSelection == GameSettings::kSettingCount);
 }
 
 void MainMenu::RefreshLevels()
 {
-	for (int32 index = 0; index < static_cast<int32>(mLevelButtons.size()); ++index)
+	for (int32 index = 0; index < kLevelButtonsPerPage; ++index)
 	{
-		const int32 level = index + 1;
+		const int32 level = mLevelPage * kLevelButtonsPerPage + index + 1;
 		const bool unlocked = GameProgress::IsLevelUnlocked(level);
 		if (mLevelButtons[index])
 		{
@@ -327,14 +419,16 @@ void MainMenu::RefreshLevels()
 		if (!mLevelTexts[index])
 			continue;
 		if (!unlocked)
-			mLevelTexts[index]->SetText(LION_FORMAT_TEXT("{} {:02}  {}", GameSettings::Text(GameText::Level),
+			mLevelTexts[index]->SetText(LION_FORMAT_TEXT("{} {:03}   {}", GameSettings::Text(GameText::Level),
 				level, GameSettings::Text(GameText::Locked)));
 		else
-			mLevelTexts[index]->SetText(LION_FORMAT_TEXT("{} {:02}  {} {:06}{}", GameSettings::Text(GameText::Level),
+			mLevelTexts[index]->SetText(LION_FORMAT_TEXT("{} {:03}   {} {:06}{}", GameSettings::Text(GameText::Level),
 				level, GameSettings::Text(GameText::HighScore), GameProgress::GetLevelHighScore(level),
-				GameProgress::IsLevelCompleted(level) ? "  *" : ""));
+				GameProgress::IsLevelCompleted(level) ? "   [X]" : ""));
 	}
-	if (mBackButton) mBackButton->SetSelected(mLevelSelection == GameProgress::kLevelCount);
+	if (mLevelPageText)
+		mLevelPageText->SetText(LION_FORMAT_TEXT("Q / LB     PAGE {:02}/10     E / RB", mLevelPage + 1));
+	if (mBackButton) mBackButton->SetSelected(false);
 }
 
 void MainMenu::RefreshStatistics()
@@ -355,21 +449,46 @@ void MainMenu::RefreshStatistics()
 		GameSettings::Text(GameText::PlayTime), seconds / 3600, seconds / 60 % 60, seconds % 60));
 }
 
+void MainMenu::RefreshAchievements()
+{
+	for (int32 row = 0; row < kAchievementsPerPage; ++row)
+	{
+		const int32 achievementIndex = mAchievementPage * kAchievementsPerPage + row;
+		const GameProgress::Achievement& achievement = GameProgress::GetAchievement(achievementIndex);
+		const bool unlocked = GameProgress::IsAchievementUnlocked(achievementIndex);
+		SetShown(mAchievementRows[row], true);
+		if (mAchievementIcons[row])
+		{
+			mAchievementIcons[row]->SetTexturePath(achievement.icon);
+			mAchievementIcons[row]->GetSprite().SetColor(unlocked
+				? Vector(1.0f, 1.0f, 1.0f) : Vector(0.22f, 0.28f, 0.38f));
+		}
+		if (mAchievementTexts[row])
+			mAchievementTexts[row]->SetText(LION_FORMAT_TEXT("{}  {}\n{}", unlocked ? "[X]" : "[ ]",
+				achievement.title, achievement.description));
+	}
+	if (mAchievementProgressText)
+		mAchievementProgressText->SetText(LION_FORMAT_TEXT("Q / LB   {}/{} UNLOCKED   PAGE {}/2   E / RB",
+			GameProgress::GetUnlockedAchievementCount(), GameProgress::kAchievementCount, mAchievementPage + 1));
+}
+
 void MainMenu::RefreshLocalizedText()
 {
 	static const GameText menuText[] = {
-		GameText::Continue, GameText::LevelSelect, GameText::Statistics,
+		GameText::Continue, GameText::LevelSelect, GameText::Count, GameText::Statistics,
 		GameText::Credits, GameText::Settings, GameText::Quit
 	};
 	for (int32 index = 0; index < static_cast<int32>(mMenuButtonTexts.size()); ++index)
 		if (mMenuButtonTexts[index])
 			mMenuButtonTexts[index]->SetText(index == 0 && GameProgress::GetCompletedLevelCount() == 0
-				? GameSettings::Text(GameText::Play) : GameSettings::Text(menuText[index]));
+				? GameSettings::Text(GameText::Play)
+				: index == 2 ? "ACHIEVEMENTS" : GameSettings::Text(menuText[index]));
 	if (mBackButtonText) mBackButtonText->SetText(GameSettings::Text(GameText::Back));
 	if (mPromptText) mPromptText->SetText(GameSettings::Text(GameText::PressAny));
 	RefreshSettings();
 	RefreshLevels();
 	if (mState == State::Statistics) RefreshStatistics();
+	if (mState == State::Achievements) RefreshAchievements();
 }
 
 void MainMenu::RefreshMenu()
@@ -386,24 +505,29 @@ void MainMenu::UpdateInputPresentation(bool force)
 
 	mUsingGamepad = usingGamepad;
 	const bool hints = GameSettings::HasControlHints();
-	const bool detail = mState == State::Credits || mState == State::Settings
-		|| mState == State::LevelSelect || mState == State::Statistics;
-	const auto show = [](Entity* entity, bool visible)
-	{
-		if (!entity) return;
-		entity->SetVisible(visible);
-		entity->SetEnabled(visible);
-	};
+	const bool simpleDetail = mState == State::Credits || mState == State::Statistics;
+	const bool pagedDetail = mState == State::Settings || mState == State::LevelSelect
+		|| mState == State::Achievements;
+	SetShown(mPrompt, mState == State::Attract && !hints);
+	SetShown(mKeyboardAttractPrompt, hints && mState == State::Attract && !usingGamepad);
+	SetShown(mControllerAttractPrompt, hints && mState == State::Attract && usingGamepad);
+	SetShown(mKeyboardControls, hints && mState == State::Menu && !usingGamepad);
+	SetShown(mControllerMenuPrompts, hints && mState == State::Menu && usingGamepad);
+	SetShown(mKeyboardDetailPrompts, hints && simpleDetail && !usingGamepad);
+	SetShown(mControllerDetailPrompts, hints && simpleDetail && usingGamepad);
+	SetShown(mKeyboardSettingsPrompt, hints && pagedDetail && !usingGamepad);
+	SetShown(mControllerSettingsPrompt, hints && pagedDetail && usingGamepad);
+}
 
-	show(mPrompt, mState == State::Attract && !hints);
-	show(mKeyboardAttractPrompt, hints && mState == State::Attract && !usingGamepad);
-	show(mControllerAttractPrompt, hints && mState == State::Attract && usingGamepad);
-	show(mKeyboardControls, hints && mState == State::Menu && !usingGamepad);
-	show(mControllerMenuPrompts, hints && mState == State::Menu && usingGamepad);
-	show(mKeyboardDetailPrompts, hints && detail && !usingGamepad);
-	show(mControllerDetailPrompts, hints && detail && usingGamepad);
-	show(mKeyboardSettingsPrompt, hints && mState == State::Settings && !usingGamepad);
-	show(mControllerSettingsPrompt, hints && mState == State::Settings && usingGamepad);
+void MainMenu::UpdateAmbientMotion()
+{
+	if (!mBackground)
+		return;
+
+	mAmbientTime += Clock::GetDeltaTime();
+	const float32 pulse = 1.02f + std::sin(mAmbientTime * 0.23f) * 0.012f;
+	mBackground->GetTransform()->SetScale(Vector2(pulse, pulse));
+	mBackground->GetTransform()->SetRotation(std::sin(mAmbientTime * 0.13f) * 0.18f);
 }
 
 void MainMenu::ActivateSelection()
@@ -412,10 +536,11 @@ void MainMenu::ActivateSelection()
 	{
 		case 0: GameRules::ContinueGame(); break;
 		case 1: ShowState(State::LevelSelect); break;
-		case 2: ShowState(State::Statistics); break;
-		case 3: ShowState(State::Credits); break;
-		case 4: ShowState(State::Settings); break;
-		case 5: Application::RequestQuit(); break;
+		case 2: ShowState(State::Achievements); break;
+		case 3: ShowState(State::Statistics); break;
+		case 4: ShowState(State::Credits); break;
+		case 5: ShowState(State::Settings); break;
+		case 6: Application::RequestQuit(); break;
 	}
 }
 
@@ -427,8 +552,9 @@ void MainMenu::ActivateSetting(int32 direction)
 		return;
 	}
 
+	GameAudio::PlayUiSelect();
 	GameSettings::Change(mSettingsSelection, direction);
-	if (mSettingsSelection == 9)
+	if (mSettingsSelection == 10)
 		RefreshLocalizedText();
 	else
 		RefreshSettings();
@@ -437,6 +563,35 @@ void MainMenu::ActivateSetting(int32 direction)
 	const Reference<Scene> scene = GetOwner().GetScene();
 	if (PostProcessingComponent* postProcessing = scene ? scene->FindComponent<PostProcessingComponent>() : nullptr)
 		GameSettings::Apply(*postProcessing);
+}
+
+void MainMenu::ChangeSettingsPage(int32 direction)
+{
+	const int32 count = static_cast<int32>(GameSettings::Category::Count);
+	mSettingsPage = (mSettingsPage + direction + count) % count;
+	for (int32 index = 0; index < GameSettings::kSettingCount; ++index)
+		if (static_cast<int32>(GameSettings::GetCategory(index)) == mSettingsPage)
+		{
+			mSettingsSelection = index;
+			break;
+		}
+	GameAudio::PlayUiHover();
+	RefreshSettings();
+}
+
+void MainMenu::ChangeLevelPage(int32 direction)
+{
+	mLevelPage = (mLevelPage + direction + 10) % 10;
+	mLevelSelection = 0;
+	GameAudio::PlayUiHover();
+	RefreshLevels();
+}
+
+void MainMenu::ChangeAchievementPage(int32 direction)
+{
+	mAchievementPage = (mAchievementPage + direction + 2) % 2;
+	GameAudio::PlayUiHover();
+	RefreshAchievements();
 }
 
 LION_REGISTER_COMPONENT(MainMenu)

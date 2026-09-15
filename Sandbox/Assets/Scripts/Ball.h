@@ -4,11 +4,6 @@
 
 class Paddle;
 
-namespace Lion
-{
-	class AudioPlayer;
-}
-
 // The ball: rests on the paddle until launched, then travels at a constant speed and takes its
 // direction from wherever it lands on the paddle.
 class Ball : public Lion::Component
@@ -39,7 +34,8 @@ private:
 	};
 
 	Lion::float32 mSpeed = 390.0f;            // Constant travel speed (pixels/s).
-	Lion::float32 mMinVerticalRatio = 0.35f;  // Keeps the ball from going flat.
+	Lion::float32 mMinVerticalRatio = 0.35f;  // Keeps the ball from travelling nearly horizontally.
+	Lion::float32 mMinHorizontalRatio = 0.20f; // Keeps the ball from repeating a vertical lane forever.
 	Lion::float32 mMaxBounceDegrees = 55.0f;  // Paddle steering range from vertical.
 	Lion::float32 mAttachGap = 2.0f;          // Small gap above the paddle.
 
@@ -48,9 +44,8 @@ private:
 	Lion::RigidBody2D* mBody = nullptr;
 	Lion::SpriteRenderer* mRenderer = nullptr;
 	Lion::float32 mAttachOffsetY = 0.0f;
-	Lion::AudioPlayer* mImpactGeneral = nullptr;
-	Lion::AudioPlayer* mImpactPoint = nullptr;
+	Lion::float32 mLastHorizontalSign = 1.0f;
 
 	void FollowPaddle();
-	void FindAudioPlayers();
+	glm::vec2 CorrectDirection(const glm::vec2& direction);
 };

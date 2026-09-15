@@ -1,4 +1,5 @@
 #include "PauseMenu.h"
+#include "GameAudio.h"
 #include "GameRules.h"
 #include "GameSettings.h"
 #include "ScreenTransition.h"
@@ -57,22 +58,26 @@ void PauseMenu::OnUpdate()
 	if (mResumeButton && mResumeButton->IsHovered() && mSelection != 0)
 	{
 		mSelection = 0;
+		GameAudio::PlayUiHover();
 		RefreshSelection();
 	}
 	else if (mMainMenuButton && mMainMenuButton->IsHovered() && mSelection != 1)
 	{
 		mSelection = 1;
+		GameAudio::PlayUiHover();
 		RefreshSelection();
 	}
 
 	if ((mResumeButton && mResumeButton->WasClicked()) || Input::GetActionTap("menu_back")
 		|| Input::GetActionTap("player_pause"))
 	{
+		GameAudio::PlayUiSelect();
 		Show(false);
 		SceneManager::SetPaused(false);
 	}
 	else if (mMainMenuButton && mMainMenuButton->WasClicked())
 	{
+		GameAudio::PlayUiSelect();
 		SceneManager::SetPaused(false);
 		GameRules::AbandonSession();
 		ScreenTransition::LoadScene("Scenes/MainMenu.lnscene");
@@ -80,6 +85,7 @@ void PauseMenu::OnUpdate()
 	else if (Input::GetActionTap("menu_up") || Input::GetActionTap("menu_down"))
 	{
 		mSelection = 1 - mSelection;
+		GameAudio::PlayUiHover();
 		RefreshSelection();
 	}
 	else if (Input::GetActionTap("menu_confirm"))
@@ -138,6 +144,7 @@ void PauseMenu::UpdateInputPrompts()
 
 void PauseMenu::ActivateSelection()
 {
+	GameAudio::PlayUiSelect();
 	if (mSelection == 0)
 	{
 		Show(false);

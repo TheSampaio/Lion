@@ -305,19 +305,19 @@ $gameRulesAssembly = [ordered]@{
 				[ordered]@{
 					'Lose Height' = -310
 					'Shake Duration' = 0.06
-					'Shake Strength' = 0.5
+					'Shake Strength' = 0.42
 					type = 'GameRules'
 				}
 				[ordered]@{
 					Texture = 'Sprites/Brickout/particle.png'
-					'Max Particles' = 320
+					'Max Particles' = 720
 					'Emission Rate' = 0
-					Lifetime = 0.34
-					Speed = 155
+					Lifetime = 0.52
+					Speed = 215
 					Direction = 90
 					Spread = 360
-					'Start Size' = 10
-					'End Size' = 1
+					'Start Size' = 15
+					'End Size' = 2
 					'Start Color.x' = 1
 					'Start Color.y' = 1
 					'Start Color.z' = 1
@@ -362,9 +362,13 @@ $hudAssembly = [ordered]@{
 		(New-TextEntity 'Score Text' 'SCORE 000000' 20 0 1 125 -34 0)
 		(New-TextEntity 'Combo Text' 'COMBO X2' 17 0.5 1 -275 -34 0 $false)
 		(New-TextEntity 'Level Text' 'LEVEL 01' 20 0.5 1 0 -34 0)
-		(New-TextEntity 'Shockwave Text' 'SHOCKWAVE 0/8' 15 0.5 1 270 -34 0)
+		(New-TextEntity 'Shockwave Text' 'SHOCKWAVE 0/8' 15 0.5 1 248 -34 0)
 		(New-TextEntity 'Attempts Text' 'BALLS 3' 20 1 1 -88 -34 0)
 		(New-TextEntity 'Power Text' 'MULTIBALL x3' 22 0.5 1 0 -92 0 $false)
+		(New-GroupEntity 'Power Timer' 0)
+		(New-SpriteEntity 'Power Timer Ring' 'Sprites/Brickout/power-timer-11.png' 1 1 -72 -104 0.72 0.72 8 96)
+		(New-SpriteEntity 'Power Timer Icon' 'Sprites/Brickout/power-wide.png' 1 1 -72 -104 0.46 0.46 8 97)
+		(New-TextEntity 'Power Timer Text' '12.0s' 11 1 1 -72 -151 8)
 	)
 	root = 0
 }
@@ -372,25 +376,25 @@ $hudPromptIndex = $hudAssembly.entities.Count
 $hudAssembly.entities = @($hudAssembly.entities) + @(
 	(New-GroupEntity 'HUD Controller Prompts' 0),
 	(New-SpriteEntity 'HUD Move Icon' 'Sprites/UI/controller-stick.png' 0.5 0 -285 28 1 1 $hudPromptIndex),
-	(New-TextEntity 'HUD Move Label' 'MOVE' 12 0.5 0 -235 27 $hudPromptIndex),
+	(New-TextEntity 'HUD Move Label' 'MOVE' 12 0.5 0 -214 27 $hudPromptIndex),
 	(New-SpriteEntity 'HUD Launch Icon' 'Sprites/UI/controller-a.png' 0.5 0 -130 28 1 1 $hudPromptIndex),
-	(New-TextEntity 'HUD Launch Label' 'LAUNCH' 12 0.5 0 -74 27 $hudPromptIndex),
+	(New-TextEntity 'HUD Launch Label' 'LAUNCH' 12 0.5 0 -54 27 $hudPromptIndex),
 	(New-SpriteEntity 'HUD Power Icon' 'Sprites/UI/controller-x.png' 0.5 0 50 28 1 1 $hudPromptIndex),
-	(New-TextEntity 'HUD Power Label' 'WAVE' 12 0.5 0 100 27 $hudPromptIndex),
+	(New-TextEntity 'HUD Power Label' 'WAVE' 12 0.5 0 118 27 $hudPromptIndex),
 	(New-SpriteEntity 'HUD Pause Icon' 'Sprites/UI/controller-start.png' 0.5 0 215 28 1 1 $hudPromptIndex),
-	(New-TextEntity 'HUD Pause Label' 'PAUSE' 12 0.5 0 280 27 $hudPromptIndex)
+	(New-TextEntity 'HUD Pause Label' 'PAUSE' 12 0.5 0 302 27 $hudPromptIndex)
 )
 $hudKeyboardPromptIndex = $hudAssembly.entities.Count
 $hudAssembly.entities = @($hudAssembly.entities) + @(
 	(New-GroupEntity 'HUD Keyboard Prompts' 0),
 	(New-SpriteEntity 'HUD Keyboard Move Icon' 'Sprites/UI/key-arrows.png' 0.5 0 -292 28 1 1 $hudKeyboardPromptIndex),
-	(New-TextEntity 'HUD Keyboard Move Label' 'MOVE' 12 0.5 0 -220 27 $hudKeyboardPromptIndex),
+	(New-TextEntity 'HUD Keyboard Move Label' 'MOVE' 12 0.5 0 -198 27 $hudKeyboardPromptIndex),
 	(New-SpriteEntity 'HUD Keyboard Launch Icon' 'Sprites/UI/key-space.png' 0.5 0 -105 28 1 1 $hudKeyboardPromptIndex),
-	(New-TextEntity 'HUD Keyboard Launch Label' 'LAUNCH' 12 0.5 0 -34 27 $hudKeyboardPromptIndex),
+	(New-TextEntity 'HUD Keyboard Launch Label' 'LAUNCH' 12 0.5 0 -12 27 $hudKeyboardPromptIndex),
 	(New-SpriteEntity 'HUD Keyboard Power Icon' 'Sprites/UI/key-e.png' 0.5 0 82 28 1 1 $hudKeyboardPromptIndex),
-	(New-TextEntity 'HUD Keyboard Power Label' 'WAVE' 12 0.5 0 130 27 $hudKeyboardPromptIndex),
+	(New-TextEntity 'HUD Keyboard Power Label' 'WAVE' 12 0.5 0 150 27 $hudKeyboardPromptIndex),
 	(New-SpriteEntity 'HUD Keyboard Pause Icon' 'Sprites/UI/key-esc.png' 0.5 0 230 28 1 1 $hudKeyboardPromptIndex),
-	(New-TextEntity 'HUD Keyboard Pause Label' 'PAUSE' 12 0.5 0 285 27 $hudKeyboardPromptIndex)
+	(New-TextEntity 'HUD Keyboard Pause Label' 'PAUSE' 12 0.5 0 306 27 $hudKeyboardPromptIndex)
 )
 Write-SealedJson (Join-Path $assetRoot 'Assemblies\HUD.lnassembly') $hudAssembly
 
@@ -419,100 +423,156 @@ $mainMenuAssembly = [ordered]@{
 			transform = New-Transform
 		}
 		$background
-		(New-PanelEntity 'Menu Panel' 760 690 0.5 0.5 0 0 0 70)
-		(New-TextEntity 'Menu Title' 'BRICKOUT' 58 0.5 0.5 0 286 0)
-		(New-TextEntity 'Menu Subtitle' 'NEON CIRCUIT' 19 0.5 0.5 0 232 0)
+		(New-PanelEntity 'Menu Panel' 860 690 0.5 0.5 0 0 0 70)
+		(New-TextEntity 'Menu Title' 'BRICKOUT' 58 0.5 0.5 0 292 0)
+		(New-TextEntity 'Menu Subtitle' 'NEON CIRCUIT' 19 0.5 0.5 0 238 0)
 		(New-TextEntity 'Menu Prompt' 'PRESS TO START' 22 0.5 0.5 0 -20 0)
-		[ordered]@{
-			components = @()
-			name = 'Menu Options'
-			parent = 0
-			transform = New-Transform
-			visible = $false
-		}
-		(New-ButtonEntity 'Continue Button' 'CONTINUE' 0.5 0.5 0 132 6 500 46 22)
-		(New-ButtonEntity 'Level Select Button' 'LEVEL SELECT' 0.5 0.5 0 78 6 500 46 22)
-		(New-ButtonEntity 'Statistics Button' 'STATISTICS' 0.5 0.5 0 24 6 500 46 22)
-		(New-ButtonEntity 'Credits Button' 'CREDITS' 0.5 0.5 0 -30 6 500 46 22)
-		(New-ButtonEntity 'Settings Button' 'SETTINGS' 0.5 0.5 0 -84 6 500 46 22)
-		(New-ButtonEntity 'Quit Button' 'QUIT' 0.5 0.5 0 -138 6 500 46 22)
+		(New-GroupEntity 'Menu Options' 0)
+		(New-ButtonEntity 'Continue Button' 'CONTINUE' 0.5 0.5 0 145 6 540 42 20)
+		(New-ButtonEntity 'Level Select Button' 'LEVEL SELECT' 0.5 0.5 0 97 6 540 42 20)
+		(New-ButtonEntity 'Achievements Button' 'ACHIEVEMENTS' 0.5 0.5 0 49 6 540 42 20)
+		(New-ButtonEntity 'Statistics Button' 'STATISTICS' 0.5 0.5 0 1 6 540 42 20)
+		(New-ButtonEntity 'Credits Button' 'CREDITS' 0.5 0.5 0 -47 6 540 42 20)
+		(New-ButtonEntity 'Settings Button' 'SETTINGS' 0.5 0.5 0 -95 6 540 42 20)
+		(New-ButtonEntity 'Quit Button' 'QUIT' 0.5 0.5 0 -143 6 540 42 20)
 		(New-TextEntity 'Menu Detail' 'CREDITS' 23 0.5 0.5 0 186 0 $false)
-		(New-SpriteEntity 'Credits Logo' 'Images/sampaio-games-logo.png' 0.5 0.5 0 -35 0.1 0.1 0 100 $false)
 		(New-GroupEntity 'Settings Options' 0)
-		(New-ButtonEntity 'Sound Button' 'SOUND' 0.5 0.5 0 142 15 600 30 15)
-		(New-ButtonEntity 'Resolution Button' 'RESOLUTION' 0.5 0.5 0 108 15 600 30 15)
-		(New-ButtonEntity 'VSync Button' 'V-SYNC' 0.5 0.5 0 74 15 600 30 15)
-		(New-ButtonEntity 'Quality Button' 'GRAPHICS' 0.5 0.5 0 40 15 600 30 15)
-		(New-ButtonEntity 'Bloom Button' 'BLOOM' 0.5 0.5 0 6 15 600 30 15)
-		(New-ButtonEntity 'Vignette Button' 'VIGNETTE' 0.5 0.5 0 -28 15 600 30 15)
-		(New-ButtonEntity 'Motion Blur Button' 'MOTION BLUR' 0.5 0.5 0 -62 15 600 30 15)
-		(New-ButtonEntity 'Camera Shake Button' 'CAMERA SHAKE' 0.5 0.5 0 -96 15 600 30 15)
-		(New-ButtonEntity 'Color Mode Button' 'COLOR MODE' 0.5 0.5 0 -130 15 600 30 15)
-		(New-ButtonEntity 'Language Button' 'LANGUAGE' 0.5 0.5 0 -164 15 600 30 15)
-		(New-ButtonEntity 'Control Hints Button' 'CONTROL HINTS' 0.5 0.5 0 -198 15 600 30 15)
 		(New-GroupEntity 'Level Options' 0)
-		(New-ButtonEntity 'Level 1 Button' 'LEVEL 01' 0.5 0.5 0 126 27 560 46 18)
-		(New-ButtonEntity 'Level 2 Button' 'LEVEL 02' 0.5 0.5 0 70 27 560 46 18)
-		(New-ButtonEntity 'Level 3 Button' 'LEVEL 03' 0.5 0.5 0 14 27 560 46 18)
-		(New-ButtonEntity 'Level 4 Button' 'LEVEL 04' 0.5 0.5 0 -42 27 560 46 18)
-		(New-ButtonEntity 'Level 5 Button' 'LEVEL 05' 0.5 0.5 0 -98 27 560 46 18)
 		(New-GroupEntity 'Statistics Panel' 0)
-		(New-TextEntity 'Statistics Text' 'STATISTICS' 21 0.5 0.5 0 118 33)
-		(New-ButtonEntity 'Back Button' 'BACK' 0.5 0.5 0 -252 0 600 36 17 $false)
+		(New-GroupEntity 'Achievements Panel' 0)
+		(New-GroupEntity 'Credits Panel' 0)
+		(New-ButtonEntity 'Back Button' 'BACK' 0.5 0.5 0 -256 0 660 40 18 $false)
 	)
 	root = 0
+}
+$settingsOptionsIndex = 15
+$levelOptionsIndex = 16
+$statisticsIndex = 17
+$achievementsIndex = 18
+$creditsIndex = 19
+
+$mainMenuAssembly.entities = @($mainMenuAssembly.entities) + @(
+	(New-TextEntity 'Settings Tab 1' 'GRAPHICS' 14 0.5 0.5 -270 142 $settingsOptionsIndex),
+	(New-TextEntity 'Settings Tab 2' 'SOUND' 14 0.5 0.5 -90 142 $settingsOptionsIndex),
+	(New-TextEntity 'Settings Tab 3' 'ACCESSIBILITY' 14 0.5 0.5 105 142 $settingsOptionsIndex),
+	(New-TextEntity 'Settings Tab 4' 'CONTROLS' 14 0.5 0.5 285 142 $settingsOptionsIndex),
+	(New-TextEntity 'Settings Page' 'Q / LB                                      E / RB' 11 0.5 0.5 0 105 $settingsOptionsIndex)
+)
+
+$graphicsIndex = $mainMenuAssembly.entities.Count
+$mainMenuAssembly.entities = @($mainMenuAssembly.entities) + @(
+	(New-GroupEntity 'Graphics Settings' $settingsOptionsIndex),
+	(New-ButtonEntity 'Resolution Button' 'RESOLUTION' 0.5 0.5 0 64 $graphicsIndex 660 38 16),
+	(New-ButtonEntity 'VSync Button' 'V-SYNC' 0.5 0.5 0 18 $graphicsIndex 660 38 16),
+	(New-ButtonEntity 'Quality Button' 'GRAPHICS' 0.5 0.5 0 -28 $graphicsIndex 660 38 16),
+	(New-ButtonEntity 'Bloom Button' 'BLOOM' 0.5 0.5 0 -74 $graphicsIndex 660 38 16),
+	(New-ButtonEntity 'Vignette Button' 'VIGNETTE' 0.5 0.5 0 -120 $graphicsIndex 660 38 16),
+	(New-ButtonEntity 'Motion Blur Button' 'MOTION BLUR' 0.5 0.5 0 -166 $graphicsIndex 660 38 16)
+)
+$soundIndex = $mainMenuAssembly.entities.Count
+$mainMenuAssembly.entities = @($mainMenuAssembly.entities) + @(
+	(New-GroupEntity 'Sound Settings' $settingsOptionsIndex),
+	(New-ButtonEntity 'SFX Volume Button' 'SFX' 0.5 0.5 0 42 $soundIndex 660 52 18),
+	(New-ButtonEntity 'Music Volume Button' 'MUSIC' 0.5 0.5 0 -28 $soundIndex 660 52 18)
+)
+$accessibilityIndex = $mainMenuAssembly.entities.Count
+$mainMenuAssembly.entities = @($mainMenuAssembly.entities) + @(
+	(New-GroupEntity 'Accessibility Settings' $settingsOptionsIndex),
+	(New-ButtonEntity 'Camera Shake Button' 'CAMERA SHAKE' 0.5 0.5 0 48 $accessibilityIndex 660 46 17),
+	(New-ButtonEntity 'Color Mode Button' 'COLOR MODE' 0.5 0.5 0 -10 $accessibilityIndex 660 46 17),
+	(New-ButtonEntity 'Language Button' 'LANGUAGE' 0.5 0.5 0 -68 $accessibilityIndex 660 46 17)
+)
+$controlsIndex = $mainMenuAssembly.entities.Count
+$mainMenuAssembly.entities = @($mainMenuAssembly.entities) + @(
+	(New-GroupEntity 'Controls Settings' $settingsOptionsIndex),
+	(New-ButtonEntity 'Control Hints Button' 'CONTROL HINTS' 0.5 0.5 0 34 $controlsIndex 660 52 18),
+	(New-TextEntity 'Controls Help' "ARROWS / STICK    MOVE`nSPACE / A         LAUNCH`nE / X             SHOCKWAVE`nESC / START       PAUSE" 14 0.5 0.5 0 -80 $controlsIndex)
+)
+
+for ($slot = 0; $slot -lt 10; $slot++)
+{
+	$column = $slot % 2
+	$row = [Math]::Floor($slot / 2)
+	$x = if ($column -eq 0) { -178 } else { 178 }
+	$y = 96 - $row * 55
+	$slotName = "Level Slot {0} Button" -f ($slot + 1)
+	$slotLabel = "LEVEL {0:D3}" -f ($slot + 1)
+	$mainMenuAssembly.entities = @($mainMenuAssembly.entities) + @(
+		(New-ButtonEntity $slotName $slotLabel 0.5 0.5 $x $y $levelOptionsIndex 320 44 15)
+	)
+}
+$mainMenuAssembly.entities = @($mainMenuAssembly.entities) + @(
+	(New-TextEntity 'Level Page' 'Q / LB     PAGE 01/10     E / RB' 13 0.5 0.5 0 -194 $levelOptionsIndex),
+	(New-TextEntity 'Statistics Text' 'STATISTICS' 19 0.5 0.5 0 82 $statisticsIndex),
+	(New-TextEntity 'Achievement Progress' '0/10 UNLOCKED' 13 0.5 0.5 0 -190 $achievementsIndex),
+	(New-SpriteEntity 'Credits Logo' 'Images/sampaio-games-logo.png' 0.5 0.5 0 78 0.085 0.085 $creditsIndex 100),
+	(New-TextEntity 'Credits Creator' "CREATED BY`nKELLVYN SAMPAIO" 21 0.5 0.5 0 -50 $creditsIndex),
+	(New-TextEntity 'Credits Technology' "POWERED BY LION ENGINE`nA SAMPAIO GAMES PRODUCTION" 14 0.5 0.5 0 -142 $creditsIndex)
+)
+for ($row = 0; $row -lt 5; $row++)
+{
+	$rowIndex = $mainMenuAssembly.entities.Count
+	$y = 94 - $row * 60
+	$rowName = "Achievement Row {0}" -f ($row + 1)
+	$iconName = "Achievement Icon {0}" -f ($row + 1)
+	$textName = "Achievement Text {0}" -f ($row + 1)
+	$mainMenuAssembly.entities = @($mainMenuAssembly.entities) + @(
+		(New-GroupEntity $rowName $achievementsIndex $true),
+		(New-SpriteEntity $iconName 'Sprites/Brickout/achievement-first.png' 0.5 0.5 -285 $y 0.58 0.58 $rowIndex 100),
+		(New-TextEntity $textName 'ACHIEVEMENT' 13 0.5 0.5 28 $y $rowIndex)
+	)
 }
 $attractPromptIndex = $mainMenuAssembly.entities.Count
 $mainMenuAssembly.entities = @($mainMenuAssembly.entities) + @(
 	(New-GroupEntity 'Controller Attract Prompt' 0),
 	(New-SpriteEntity 'Controller Start Icon' 'Sprites/UI/controller-a.png' 0.5 0.5 -125 -20 1 1 $attractPromptIndex),
-	(New-TextEntity 'Controller Start Label' 'PRESS TO START' 20 0.5 0.5 25 -21 $attractPromptIndex)
+	(New-TextEntity 'Controller Start Label' 'PRESS TO START' 20 0.5 0.5 50 -21 $attractPromptIndex)
 )
 $keyboardAttractIndex = $mainMenuAssembly.entities.Count
 $mainMenuAssembly.entities = @($mainMenuAssembly.entities) + @(
 	(New-GroupEntity 'Keyboard Attract Prompt' 0),
 	(New-SpriteEntity 'Keyboard Start Icon' 'Sprites/UI/key-enter.png' 0.5 0.5 -125 -20 1 1 $keyboardAttractIndex),
-	(New-TextEntity 'Keyboard Start Label' 'PRESS TO START' 20 0.5 0.5 25 -21 $keyboardAttractIndex)
+	(New-TextEntity 'Keyboard Start Label' 'PRESS TO START' 20 0.5 0.5 50 -21 $keyboardAttractIndex)
 )
 $menuPromptIndex = $mainMenuAssembly.entities.Count
 $mainMenuAssembly.entities = @($mainMenuAssembly.entities) + @(
 	(New-GroupEntity 'Controller Menu Prompts' 0),
 	(New-SpriteEntity 'Controller Navigate Icon' 'Sprites/UI/controller-dpad.png' 0.5 0.5 -180 -300 1 1 $menuPromptIndex),
-	(New-TextEntity 'Controller Navigate Label' 'NAVIGATE' 13 0.5 0.5 -120 -301 $menuPromptIndex),
+	(New-TextEntity 'Controller Navigate Label' 'NAVIGATE' 13 0.5 0.5 -98 -301 $menuPromptIndex),
 	(New-SpriteEntity 'Controller Select Icon' 'Sprites/UI/controller-a.png' 0.5 0.5 45 -300 1 1 $menuPromptIndex),
-	(New-TextEntity 'Controller Select Label' 'SELECT' 13 0.5 0.5 100 -301 $menuPromptIndex)
+	(New-TextEntity 'Controller Select Label' 'SELECT' 13 0.5 0.5 122 -301 $menuPromptIndex)
 )
 $keyboardMenuIndex = $mainMenuAssembly.entities.Count
 $mainMenuAssembly.entities = @($mainMenuAssembly.entities) + @(
 	(New-GroupEntity 'Keyboard Menu Prompts' 0),
 	(New-SpriteEntity 'Keyboard Navigate Icon' 'Sprites/UI/key-arrows.png' 0.5 0.5 -180 -300 1 1 $keyboardMenuIndex),
-	(New-TextEntity 'Keyboard Navigate Label' 'NAVIGATE' 13 0.5 0.5 -108 -301 $keyboardMenuIndex),
+	(New-TextEntity 'Keyboard Navigate Label' 'NAVIGATE' 13 0.5 0.5 -88 -301 $keyboardMenuIndex),
 	(New-SpriteEntity 'Keyboard Select Icon' 'Sprites/UI/key-enter.png' 0.5 0.5 52 -300 1 1 $keyboardMenuIndex),
-	(New-TextEntity 'Keyboard Select Label' 'SELECT' 13 0.5 0.5 110 -301 $keyboardMenuIndex)
+	(New-TextEntity 'Keyboard Select Label' 'SELECT' 13 0.5 0.5 132 -301 $keyboardMenuIndex)
 )
 $detailPromptIndex = $mainMenuAssembly.entities.Count
 $mainMenuAssembly.entities = @($mainMenuAssembly.entities) + @(
 	(New-GroupEntity 'Controller Detail Prompts' 0),
 	(New-SpriteEntity 'Controller Back Icon' 'Sprites/UI/controller-b.png' 0.5 0.5 70 -300 1 1 $detailPromptIndex),
-	(New-TextEntity 'Controller Back Label' 'BACK' 13 0.5 0.5 118 -301 $detailPromptIndex)
+	(New-TextEntity 'Controller Back Label' 'BACK' 13 0.5 0.5 140 -301 $detailPromptIndex)
 )
 $keyboardDetailIndex = $mainMenuAssembly.entities.Count
 $mainMenuAssembly.entities = @($mainMenuAssembly.entities) + @(
 	(New-GroupEntity 'Keyboard Detail Prompts' 0),
 	(New-SpriteEntity 'Keyboard Back Icon' 'Sprites/UI/key-esc.png' 0.5 0.5 62 -300 1 1 $keyboardDetailIndex),
-	(New-TextEntity 'Keyboard Back Label' 'BACK' 13 0.5 0.5 116 -301 $keyboardDetailIndex)
+	(New-TextEntity 'Keyboard Back Label' 'BACK' 13 0.5 0.5 138 -301 $keyboardDetailIndex)
 )
 $settingsPromptIndex = $mainMenuAssembly.entities.Count
 $mainMenuAssembly.entities = @($mainMenuAssembly.entities) + @(
 	(New-GroupEntity 'Controller Settings Prompt' 0),
 	(New-SpriteEntity 'Controller Toggle Icon' 'Sprites/UI/controller-a.png' 0.5 0.5 -115 -300 1 1 $settingsPromptIndex),
-	(New-TextEntity 'Controller Toggle Label' 'TOGGLE' 13 0.5 0.5 -60 -301 $settingsPromptIndex)
+	(New-TextEntity 'Controller Toggle Label' 'TOGGLE    LB / RB  TABS' 13 0.5 0.5 -32 -301 $settingsPromptIndex)
 )
 $keyboardSettingsIndex = $mainMenuAssembly.entities.Count
 $mainMenuAssembly.entities = @($mainMenuAssembly.entities) + @(
 	(New-GroupEntity 'Keyboard Settings Prompt' 0),
 	(New-SpriteEntity 'Keyboard Toggle Icon' 'Sprites/UI/key-enter.png' 0.5 0.5 -125 -300 1 1 $keyboardSettingsIndex),
-	(New-TextEntity 'Keyboard Toggle Label' 'TOGGLE' 13 0.5 0.5 -65 -301 $keyboardSettingsIndex)
+	(New-TextEntity 'Keyboard Toggle Label' 'TOGGLE    Q / E  TABS' 13 0.5 0.5 -35 -301 $keyboardSettingsIndex)
 )
 Write-SealedJson (Join-Path $assetRoot 'Assemblies\Main Menu.lnassembly') $mainMenuAssembly
 
@@ -544,21 +604,21 @@ $endPromptIndex = $endScreenAssembly.entities.Count
 $endScreenAssembly.entities = @($endScreenAssembly.entities) + @(
 	(New-GroupEntity 'End Controller Prompts' 0),
 	(New-SpriteEntity 'End Navigate Icon' 'Sprites/UI/controller-dpad.png' 0.5 0.5 -180 -236 1 1 $endPromptIndex),
-	(New-TextEntity 'End Navigate Label' 'NAVIGATE' 13 0.5 0.5 -120 -237 $endPromptIndex),
+	(New-TextEntity 'End Navigate Label' 'NAVIGATE' 13 0.5 0.5 -98 -237 $endPromptIndex),
 	(New-SpriteEntity 'End Select Icon' 'Sprites/UI/controller-a.png' 0.5 0.5 35 -236 1 1 $endPromptIndex),
-	(New-TextEntity 'End Select Label' 'SELECT' 13 0.5 0.5 88 -237 $endPromptIndex),
+	(New-TextEntity 'End Select Label' 'SELECT' 13 0.5 0.5 110 -237 $endPromptIndex),
 	(New-SpriteEntity 'End Back Icon' 'Sprites/UI/controller-b.png' 0.5 0.5 165 -236 1 1 $endPromptIndex),
-	(New-TextEntity 'End Back Label' 'MENU' 13 0.5 0.5 210 -237 $endPromptIndex)
+	(New-TextEntity 'End Back Label' 'MENU' 13 0.5 0.5 232 -237 $endPromptIndex)
 )
 $endKeyboardPromptIndex = $endScreenAssembly.entities.Count
 $endScreenAssembly.entities = @($endScreenAssembly.entities) + @(
 	(New-GroupEntity 'End Keyboard Prompts' 0),
 	(New-SpriteEntity 'End Keyboard Navigate Icon' 'Sprites/UI/key-arrows.png' 0.5 0.5 -180 -236 1 1 $endKeyboardPromptIndex),
-	(New-TextEntity 'End Keyboard Navigate Label' 'NAVIGATE' 13 0.5 0.5 -108 -237 $endKeyboardPromptIndex),
+	(New-TextEntity 'End Keyboard Navigate Label' 'NAVIGATE' 13 0.5 0.5 -86 -237 $endKeyboardPromptIndex),
 	(New-SpriteEntity 'End Keyboard Select Icon' 'Sprites/UI/key-enter.png' 0.5 0.5 55 -236 1 1 $endKeyboardPromptIndex),
-	(New-TextEntity 'End Keyboard Select Label' 'SELECT' 13 0.5 0.5 112 -237 $endKeyboardPromptIndex),
+	(New-TextEntity 'End Keyboard Select Label' 'SELECT' 13 0.5 0.5 134 -237 $endKeyboardPromptIndex),
 	(New-SpriteEntity 'End Keyboard Back Icon' 'Sprites/UI/key-esc.png' 0.5 0.5 195 -236 1 1 $endKeyboardPromptIndex),
-	(New-TextEntity 'End Keyboard Back Label' 'MENU' 13 0.5 0.5 242 -237 $endKeyboardPromptIndex)
+	(New-TextEntity 'End Keyboard Back Label' 'MENU' 13 0.5 0.5 264 -237 $endKeyboardPromptIndex)
 )
 Write-SealedJson (Join-Path $assetRoot 'Assemblies\End Screen.lnassembly') $endScreenAssembly
 
@@ -618,17 +678,17 @@ $pausePromptIndex = $pauseAssembly.entities.Count
 $pauseAssembly.entities = @($pauseAssembly.entities) + @(
 	(New-GroupEntity 'Pause Controller Prompts' 1),
 	(New-SpriteEntity 'Pause Navigate Icon' 'Sprites/UI/controller-dpad.png' 0.5 0.5 -165 -178 1 1 $pausePromptIndex),
-	(New-TextEntity 'Pause Navigate Label' 'NAVIGATE' 13 0.5 0.5 -105 -179 $pausePromptIndex),
+	(New-TextEntity 'Pause Navigate Label' 'NAVIGATE' 13 0.5 0.5 -83 -179 $pausePromptIndex),
 	(New-SpriteEntity 'Pause Select Icon' 'Sprites/UI/controller-a.png' 0.5 0.5 60 -178 1 1 $pausePromptIndex),
-	(New-TextEntity 'Pause Select Label' 'SELECT' 13 0.5 0.5 112 -179 $pausePromptIndex)
+	(New-TextEntity 'Pause Select Label' 'SELECT' 13 0.5 0.5 134 -179 $pausePromptIndex)
 )
 $pauseKeyboardPromptIndex = $pauseAssembly.entities.Count
 $pauseAssembly.entities = @($pauseAssembly.entities) + @(
 	(New-GroupEntity 'Pause Keyboard Prompts' 1),
 	(New-SpriteEntity 'Pause Keyboard Navigate Icon' 'Sprites/UI/key-arrows.png' 0.5 0.5 -175 -178 1 1 $pauseKeyboardPromptIndex),
-	(New-TextEntity 'Pause Keyboard Navigate Label' 'NAVIGATE' 13 0.5 0.5 -103 -179 $pauseKeyboardPromptIndex),
+	(New-TextEntity 'Pause Keyboard Navigate Label' 'NAVIGATE' 13 0.5 0.5 -81 -179 $pauseKeyboardPromptIndex),
 	(New-SpriteEntity 'Pause Keyboard Select Icon' 'Sprites/UI/key-enter.png' 0.5 0.5 68 -178 1 1 $pauseKeyboardPromptIndex),
-	(New-TextEntity 'Pause Keyboard Select Label' 'SELECT' 13 0.5 0.5 126 -179 $pauseKeyboardPromptIndex)
+	(New-TextEntity 'Pause Keyboard Select Label' 'SELECT' 13 0.5 0.5 148 -179 $pauseKeyboardPromptIndex)
 )
 Write-SealedJson (Join-Path $assetRoot 'Assemblies\Pause Menu.lnassembly') $pauseAssembly
 
@@ -714,13 +774,26 @@ function Get-LevelLayout([int]$level, [int]$count)
 	}
 	else
 	{
+		$family = ($level - 1) % 10
 		for ($index = 0; $index -lt $count; $index++)
 		{
 			$row = [Math]::Floor($index / 10)
 			$column = $index % 10
 			$x = -315 + $column * 70
-			$ridge = @(-15, 45, -5, 70, 5, 70, -5, 45, -15, 20)[$column]
-			$y = 190 - $row * 42 + $ridge * (1.0 - $row / 4.0)
+			$y = 220 - $row * 48
+			switch ($family)
+			{
+				0 { $y += [Math]::Sin(($column + $level * 0.3) * 0.85) * 42 }
+				1 { $y -= [Math]::Abs($column - 4.5) * 14; $x += ($row % 2) * 18 }
+				2 { $y += [Math]::Abs($column - 4.5) * 13 - 38 }
+				3 { $x += [Math]::Sin($row * 1.4) * 34; $y += [Math]::Cos($column * 0.8) * 22 }
+				4 { $y += (($column + $row) % 2) * 25 - 12 }
+				5 { if (($row % 2) -eq 0) { $x -= 24 } else { $x += 24 }; $y += ($column % 3) * 10 }
+				6 { $x *= (0.62 + $row * 0.12); $y += [Math]::Abs($column - 4.5) * 5 }
+				7 { $y += [Math]::Sin($column * 1.2) * 25; $x += [Math]::Cos($row * 1.8) * 22 }
+				8 { $y += [Math]::Sin(($column + $row) * 0.72) * 36 }
+				9 { $x *= (0.78 + [Math]::Abs($row - 1.5) * 0.08); $y -= [Math]::Abs($column - 4.5) * 4 }
+			}
 			$layout.Add([pscustomobject]@{ x=$x; y=[Math]::Round($y, 1); rotation=0 })
 		}
 	}
@@ -769,10 +842,22 @@ function New-Post([string]$name, [float]$x, [float]$y)
 	return $entity
 }
 
-for ($level = 1; $level -le 5; $level++)
+$baseScenes = @(1..5 | ForEach-Object {
+	Read-SealedJson (Join-Path $assetRoot ("Scenes\Level{0:D2}.lnscene" -f $_))
+})
+
+for ($level = 1; $level -le 100; $level++)
 {
 	$scenePath = Join-Path $assetRoot ("Scenes\Level{0:D2}.lnscene" -f $level)
-	$scene = Read-SealedJson $scenePath
+	if ($level -le 5)
+	{
+		$scene = $baseScenes[$level - 1]
+	}
+	else
+	{
+		$template = $baseScenes[($level - 1) % $baseScenes.Count]
+		$scene = ($template | ConvertTo-Json -Depth 100) | ConvertFrom-Json
+	}
 	$scene.entities = @($scene.entities | Where-Object {
 		$_.name -notlike 'Power Icon *' -and $_.name -notlike 'Arena *'
 	})
@@ -837,13 +922,14 @@ for ($level = 1; $level -le 5; $level++)
 			{
 				$ballBehavior.Speed = 390
 				$ballBehavior.'Maximum Bounce Angle' = 55
+				$ballBehavior | Add-Member -NotePropertyName 'Minimum Horizontal Ratio' -NotePropertyValue 0.2 -Force
 			}
 
 			if (!($entity.components | Where-Object { $_.type -eq 'ParticleComponent' }))
 			{
 				$entity.components = @($entity.components) + @([ordered]@{
-					Texture='Sprites/Brickout/particle.png'; 'Max Particles'=96; 'Emission Rate'=48
-					Lifetime=0.2; Speed=26; Direction=180; Spread=34; 'Start Size'=7; 'End Size'=1
+					Texture='Sprites/Brickout/particle.png'; 'Max Particles'=180; 'Emission Rate'=72
+					Lifetime=0.28; Speed=38; Direction=180; Spread=42; 'Start Size'=9; 'End Size'=2
 					'Start Color.x'=1; 'Start Color.y'=1; 'Start Color.z'=1
 					'End Color.x'=0.1; 'End Color.y'=0.75; 'End Color.z'=1; Order=12
 					type='ParticleComponent'
@@ -887,12 +973,12 @@ for ($level = 1; $level -le 5; $level++)
 	}
 
 	$layout = Get-LevelLayout $level $brickIndices.Count
-	$powerPlan = switch ($level)
+	$powerPlan = switch (($level - 1) % 5)
 	{
-		1 { @('Extra Life', 'Wide Paddle') }
-		2 { @('Bomb', 'Multiball') }
-		3 { @('Extra Life', 'Duplicate Paddle', 'Bomb') }
-		4 { @('Multiball', 'Wide Paddle', 'Bomb') }
+		0 { @('Extra Life', 'Wide Paddle') }
+		1 { @('Bomb', 'Multiball') }
+		2 { @('Extra Life', 'Duplicate Paddle', 'Bomb') }
+		3 { @('Multiball', 'Wide Paddle', 'Bomb') }
 		default { @('Extra Life', 'Multiball', 'Bomb', 'Wide Paddle', 'Duplicate Paddle') }
 	}
 	for ($brickNumber = 0; $brickNumber -lt $brickIndices.Count; $brickNumber++)
@@ -902,16 +988,9 @@ for ($level = 1; $level -le 5; $level++)
 		$point = $layout[$brickNumber]
 		$brick.transform.position = @([float]$point.x, [float]$point.y)
 		$brick.transform.rotation = 0
-		$maximumDurability = switch ($level)
-		{
-			1 { 2 }
-			2 { 2 }
-			3 { 3 }
-			4 { 3 }
-			default { 4 }
-		}
+		$maximumDurability = [Math]::Min(2 + [Math]::Floor(($level - 1) / 20), 5)
 		$durability = 1 + (($brickNumber + $level - 1) % $maximumDurability)
-		if ($level -eq 5 -and ($brickNumber % 11) -eq 4)
+		if ($level -ge 60 -and ($brickNumber % 11) -eq 4)
 		{
 			$durability = 5
 		}
@@ -937,39 +1016,58 @@ for ($level = 1; $level -le 5; $level++)
 				'Wide Paddle' { 'Sprites/Brickout/power-wide.png' }
 				'Duplicate Paddle' { 'Sprites/Brickout/power-duplicate.png' }
 			}
-			$icon = New-WorldSprite ("Power Icon {0:D2}" -f ($brickNumber + 1)) $iconTexture 0 0 1 1 0 $entityIndex 8
+			$icon = New-WorldSprite ("Power Icon {0:D2}" -f ($brickNumber + 1)) $iconTexture 0 0 0.42 0.42 0 $entityIndex 8
 			$scene.entities = @($scene.entities) + @($icon)
 		}
 	}
 
-	$arenaElements = switch ($level)
+	$arenaElements = switch (($level - 1) % 10)
 	{
+		0 { @(
+			(New-Rail 'Arena Rail Left' -285 25 28),
+			(New-Rail 'Arena Rail Right' 285 25 -28)
+		) }
 		1 { @(
-			(New-Rail 'Arena Rail Left' -250 -80 22),
-			(New-Rail 'Arena Rail Right' 250 -80 -22)
+			(New-Bumper 'Arena Bumper Left' -250 40),
+			(New-Bumper 'Arena Bumper Right' 250 40)
 		) }
 		2 { @(
-			(New-Bumper 'Arena Bumper Center' 0 -35),
-			(New-Post 'Arena Post Left' -245 -105),
-			(New-Post 'Arena Post Right' 245 -105)
+			(New-Post 'Arena Post Left' -300 85),
+			(New-Post 'Arena Post Right' 300 85),
+			(New-Bumper 'Arena Bumper Center' 0 55)
 		) }
 		3 { @(
-			(New-Bumper 'Arena Bumper Left' -275 -30),
-			(New-Bumper 'Arena Bumper Right' 275 -30),
-			(New-Rail 'Arena Rail Center' 0 -135 0)
+			(New-Rail 'Arena Slingshot Left' -260 50 34),
+			(New-Rail 'Arena Slingshot Right' 260 50 -34)
 		) }
 		4 { @(
-			(New-Rail 'Arena Slingshot Left' -245 -105 32),
-			(New-Rail 'Arena Slingshot Right' 245 -105 -32),
-			(New-Post 'Arena Post Center Left' -90 -10),
-			(New-Post 'Arena Post Center Right' 90 -10)
+			(New-Bumper 'Arena Bumper Left' -285 95),
+			(New-Bumper 'Arena Bumper Center' 0 35),
+			(New-Bumper 'Arena Bumper Right' 285 95)
+		) }
+		5 { @(
+			(New-Post 'Arena Post Left' -220 35),
+			(New-Post 'Arena Post Right' 220 35)
+		) }
+		6 { @(
+			(New-Rail 'Arena Rail Left' -285 90 -24),
+			(New-Rail 'Arena Rail Right' 285 90 24),
+			(New-Bumper 'Arena Bumper Center' 0 25)
+		) }
+		7 { @(
+			(New-Bumper 'Arena Bumper Left' -310 35),
+			(New-Bumper 'Arena Bumper Right' 310 35),
+			(New-Post 'Arena Post Center' 0 105)
+		) }
+		8 { @(
+			(New-Rail 'Arena Rail Left' -230 25 18),
+			(New-Rail 'Arena Rail Right' 230 25 -18),
+			(New-Post 'Arena Post Left' -80 85),
+			(New-Post 'Arena Post Right' 80 85)
 		) }
 		default { @(
-			(New-Bumper 'Arena Bumper Left' -300 -15),
-			(New-Bumper 'Arena Bumper Center' 0 -75),
-			(New-Bumper 'Arena Bumper Right' 300 -15),
-			(New-Rail 'Arena Rail Left' -245 -155 -24),
-			(New-Rail 'Arena Rail Right' 245 -155 24)
+			(New-Bumper 'Arena Bumper Left' -300 75),
+			(New-Bumper 'Arena Bumper Right' 300 75)
 		) }
 	}
 	$scene.entities = @($scene.entities) + $arenaElements
@@ -1117,6 +1215,12 @@ $menuActions = @(
 	[ordered]@{ name='menu_back'; deadzone=0.2; bindings=@(
 		[ordered]@{ device='keyboard'; code=256; scale=1; gamepad=-1 },
 		[ordered]@{ device='gamepad_button'; code=1; scale=1; gamepad=-1 }) },
+	[ordered]@{ name='menu_tab_left'; deadzone=0.2; bindings=@(
+		[ordered]@{ device='keyboard'; code=81; scale=1; gamepad=-1 },
+		[ordered]@{ device='gamepad_button'; code=4; scale=1; gamepad=-1 }) },
+	[ordered]@{ name='menu_tab_right'; deadzone=0.2; bindings=@(
+		[ordered]@{ device='keyboard'; code=69; scale=1; gamepad=-1 },
+		[ordered]@{ device='gamepad_button'; code=5; scale=1; gamepad=-1 }) },
 	[ordered]@{ name='player_launch'; deadzone=0.2; bindings=@(
 		[ordered]@{ device='keyboard'; code=32; scale=1; gamepad=-1 },
 		[ordered]@{ device='gamepad_button'; code=0; scale=1; gamepad=-1 }) },
@@ -1131,5 +1235,29 @@ $menuActions = @(
 $menuNames = @($menuActions | ForEach-Object { $_.name })
 $inputMap.actions = @($inputMap.actions | Where-Object { $_.name -notin $menuNames }) + $menuActions
 Write-SealedJson $inputPath $inputMap
+
+for ($level = 1; $level -le 100; $level++)
+{
+	$scenePath = Join-Path $assetRoot ("Scenes\Level{0:D2}.lnscene" -f $level)
+	if (!(Test-Path -LiteralPath $scenePath))
+	{
+		throw "Missing generated Brickout level: $scenePath"
+	}
+
+	$scene = Read-SealedJson $scenePath
+	$bricks = @($scene.entities | Where-Object { $_.components | Where-Object { $_.type -eq 'Brick' } })
+	if ($bricks.Count -eq 0)
+	{
+		throw "Brickout level $level has no gameplay bricks."
+	}
+
+	$unsafeObstacles = @($scene.entities | Where-Object {
+		$_.name -like 'Arena *' -and $_.transform.position[1] -lt 0
+	})
+	if ($unsafeObstacles.Count -gt 0)
+	{
+		throw "Brickout level $level places a pinball obstacle in the paddle approach lane."
+	}
+}
 
 Write-Host 'Brickout scenes, assemblies and menu input actions are up to date.'

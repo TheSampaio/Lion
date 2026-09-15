@@ -1,5 +1,6 @@
 #include "GameLayer.h"
 
+#include <Lion/Core/Asset.h>
 #include <Lion/Core/Filesystem.h>
 
 using namespace Lion;
@@ -15,6 +16,7 @@ void GameLayer::OnCreate()
 void GameLayer::OnUpdate()
 {
 	SceneManager::Update();
+	UpdateMusic();
 }
 
 void GameLayer::OnRender()
@@ -48,7 +50,43 @@ void GameLayer::OnRender()
 
 void GameLayer::OnDetach()
 {
+	Audio::Stop(mMusicVoice);
+	mMusicVoice = kInvalidAudioVoice;
 	SceneManager::Clear();
+}
+
+void GameLayer::UpdateMusic()
+{
+	const std::string& path = SceneManager::GetActivePath();
+	const bool gameplay = path.find("Scenes/Level") != std::string::npos;
+	const bool menu = path.find("Scenes/MainMenu") != std::string::npos;
+
+	if (!gameplay && !menu)
+	{
+		if (mMusicVoice != kInvalidAudioVoice)
+		{
+			Audio::Stop(mMusicVoice);
+			mMusicVoice = kInvalidAudioVoice;
+		}
+		return;
+	}
+
+	if (mMusicVoice != kInvalidAudioVoice && Audio::IsPlaying(mMusicVoice)
+		&& gameplay == mPlayingGameMusic)
+		return;
+
+	Audio::Stop(mMusicVoice);
+	mPlayingGameMusic = gameplay;
+	Reference<AudioClip>& clip = gameplay ? mGameMusic : mMenuMusic;
+	const std::string clipPath = gameplay ? "Sounds/music-game.wav" : "Sounds/music-menu.wav";
+	if (!clip)
+		clip = Asset::LoadAudio(clipPath, clipPath);
+
+	AudioPlayback playback;
+	playback.volume = gameplay ? 0.42f : 0.36f;
+	playback.loop = true;
+	playback.bus = AudioBus::Music;
+	mMusicVoice = Audio::Play(clip, playback, "brickout-music");
 }
 
 void GameLayer::OnEvent(Event& event)

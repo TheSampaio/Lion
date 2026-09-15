@@ -35,7 +35,7 @@ enum class GameText
 	PlayAgain,
 	TotalScore,
 	CircuitClear,
-	SystemFailure,
+	GameOver,
 	Score,
 	Balls,
 	Level,
@@ -71,11 +71,23 @@ enum class GameText
 class GameSettings final
 {
 public:
-	static constexpr Lion::int32 kSettingCount = 11;
+	enum class Category
+	{
+		Graphics,
+		Sound,
+		Accessibility,
+		Controls,
+		Count,
+	};
+
+	static constexpr Lion::int32 kSettingCount = 12;
 
 	static void Change(Lion::int32 setting, Lion::int32 direction);
 	static void Apply(Lion::PostProcessingComponent& postProcessing);
+	static void ApplyAudio();
 	static std::string Label(Lion::int32 setting);
+	static Category GetCategory(Lion::int32 setting);
+	static const char* CategoryName(Category category);
 	static const char* Text(GameText text);
 	static bool HasCameraShake() { return sCameraShake; }
 	static bool HasControlHints() { return sControlHints; }
@@ -85,7 +97,8 @@ private:
 	static inline Lion::int32 sQuality = 2;
 	static inline Lion::int32 sColorMode = 0;
 	static inline Lion::int32 sLanguage = 0;
-	static inline bool sSound = true;
+	static inline Lion::int32 sSfxVolume = 8;
+	static inline Lion::int32 sMusicVolume = 6;
 	static inline bool sVSync = false;
 	static inline bool sBloom = true;
 	static inline bool sVignette = true;

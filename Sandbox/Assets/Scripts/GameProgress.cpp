@@ -9,6 +9,19 @@ using namespace Lion;
 
 namespace
 {
+	constexpr std::array<GameProgress::Achievement, GameProgress::kAchievementCount> kAchievements = {{
+		{ "FIRST_CONTACT", "FIRST CONTACT", "Destroy your first brick.", "Sprites/Brickout/achievement-first.png" },
+		{ "CENTURY", "CENTURY", "Destroy 100 bricks.", "Sprites/Brickout/achievement-century.png" },
+		{ "CHAIN_REACTION", "CHAIN REACTION", "Reach an 8x combo.", "Sprites/Brickout/achievement-combo.png" },
+		{ "POWER_ON", "POWER ON", "Collect your first power-up.", "Sprites/Brickout/power-life.png" },
+		{ "WAVE_RIDER", "WAVE RIDER", "Fire a shockwave.", "Sprites/Brickout/power-shockwave.png" },
+		{ "CIRCUIT_BREAKER", "CIRCUIT BREAKER", "Clear your first level.", "Sprites/Brickout/achievement-clear.png" },
+		{ "HIGH_VOLTAGE", "HIGH VOLTAGE", "Earn 100,000 total points.", "Sprites/Brickout/achievement-score.png" },
+		{ "DEEP_RUN", "DEEP RUN", "Clear 25 unique levels.", "Sprites/Brickout/achievement-depth.png" },
+		{ "STAYING_POWER", "STAYING POWER", "Play for one hour.", "Sprites/Brickout/achievement-time.png" },
+		{ "MASTER_CIRCUIT", "MASTER CIRCUIT", "Clear all 100 levels.", "Sprites/Brickout/achievement-master.png" },
+	}};
+
 	std::string EnvironmentValue(const char8* name)
 	{
 #ifdef LN_PLATFORM_WIN
@@ -56,6 +69,18 @@ namespace
 			return fallback;
 		}
 	}
+
+	uint64 ParseUnsigned(const std::string& value, uint64 fallback)
+	{
+		try
+		{
+			return std::stoull(value);
+		}
+		catch (const std::exception&)
+		{
+			return fallback;
+		}
+	}
 }
 
 void GameProgress::Load()
@@ -79,7 +104,18 @@ void GameProgress::Load()
 		const std::string key = line.substr(0, separator);
 		const std::string value = line.substr(separator + 1);
 		if (key == "highestUnlocked") sHighestUnlockedLevel = ParseValue(value, 1);
-		else if (key == "completedMask") sCompletedMask = ParseValue(value, 0);
+		else if (key == "completedMask")
+		{
+			const uint32 legacyMask = static_cast<uint32>(ParseValue(value, 0));
+			for (int32 index = 0; index < 32 && index < kLevelCount; ++index)
+				sCompletedLevels.set(index, (legacyMask & (1u << index)) != 0);
+		}
+		else if (key == "completedLevels")
+		{
+			for (int32 index = 0; index < kLevelCount && index < static_cast<int32>(value.size()); ++index)
+				sCompletedLevels.set(index, value[value.size() - 1 - index] == '1');
+		}
+		else if (key == "achievements") sAchievementMask = ParseUnsigned(value, 0);
 		else if (key == "totalScore") sTotalScore = ParseValue(value, 0);
 		else if (key == "sessionsPlayed") sSessionsPlayed = ParseValue(value, 0);
 		else if (key == "levelsCompleted") sLevelsCompleted = ParseValue(value, 0);
@@ -96,10 +132,11 @@ void GameProgress::Load()
 				sLevelHighScores[level - 1] = ParseValue(value, 0);
 		}
 	}
+	stream.close();
 
 	sHighestUnlockedLevel = std::clamp(sHighestUnlockedLevel, 1, kLevelCount);
-	sCompletedMask &= (1 << kLevelCount) - 1;
 	sHighestCombo = std::clamp(sHighestCombo, 1, 16);
+	EvaluateAchievements();
 }
 
 void GameProgress::StartSession()
@@ -113,12 +150,13 @@ void GameProgress::CompleteLevel(int32 level, int32 score, float32 playedSeconds
 {
 	EnsureLoaded();
 	level = std::clamp(level, 1, kLevelCount);
-	sCompletedMask |= 1 << (level - 1);
+	sCompletedLevels.set(level - 1);
 	sHighestUnlockedLevel = std::max(sHighestUnlockedLevel, std::min(level + 1, kLevelCount));
 	sLevelsCompleted++;
 	sTotalScore += std::max(score, 0);
 	sLevelHighScores[level - 1] = std::max(sLevelHighScores[level - 1], score);
 	sPlayedSeconds += std::max(static_cast<int32>(std::round(playedSeconds)), 0);
+	EvaluateAchievements();
 	Save();
 }
 
@@ -129,6 +167,7 @@ void GameProgress::EndAttempt(int32 level, int32 score, float32 playedSeconds)
 	sTotalScore += std::max(score, 0);
 	sLevelHighScores[level - 1] = std::max(sLevelHighScores[level - 1], score);
 	sPlayedSeconds += std::max(static_cast<int32>(std::round(playedSeconds)), 0);
+	EvaluateAchievements();
 	Save();
 }
 
@@ -136,6 +175,7 @@ void GameProgress::RegisterBrickDestroyed()
 {
 	EnsureLoaded();
 	sBricksDestroyed++;
+	EvaluateAchievements();
 }
 
 void GameProgress::RegisterBallLost()
@@ -148,24 +188,27 @@ void GameProgress::RegisterPowerCollected()
 {
 	EnsureLoaded();
 	sPowersCollected++;
+	EvaluateAchievements();
 }
 
 void GameProgress::RegisterCombo(int32 combo)
 {
 	EnsureLoaded();
 	sHighestCombo = std::max(sHighestCombo, std::clamp(combo, 1, 16));
+	EvaluateAchievements();
 }
 
 void GameProgress::RegisterShockwave()
 {
 	EnsureLoaded();
 	sShockwavesFired++;
+	EvaluateAchievements();
 }
 
 int32 GameProgress::GetHighestUnlockedLevel() { EnsureLoaded(); return sHighestUnlockedLevel; }
-int32 GameProgress::GetCompletedLevelCount() { EnsureLoaded(); return std::popcount(static_cast<uint32>(sCompletedMask)); }
+int32 GameProgress::GetCompletedLevelCount() { EnsureLoaded(); return static_cast<int32>(sCompletedLevels.count()); }
 bool GameProgress::IsLevelUnlocked(int32 level) { EnsureLoaded(); return level >= 1 && level <= sHighestUnlockedLevel; }
-bool GameProgress::IsLevelCompleted(int32 level) { EnsureLoaded(); return level >= 1 && level <= kLevelCount && (sCompletedMask & (1 << (level - 1))) != 0; }
+bool GameProgress::IsLevelCompleted(int32 level) { EnsureLoaded(); return level >= 1 && level <= kLevelCount && sCompletedLevels.test(level - 1); }
 int32 GameProgress::GetLevelHighScore(int32 level) { EnsureLoaded(); return level >= 1 && level <= kLevelCount ? sLevelHighScores[level - 1] : 0; }
 int32 GameProgress::GetTotalScore() { EnsureLoaded(); return sTotalScore; }
 int32 GameProgress::GetSessionsPlayed() { EnsureLoaded(); return sSessionsPlayed; }
@@ -177,10 +220,66 @@ int32 GameProgress::GetHighestCombo() { EnsureLoaded(); return sHighestCombo; }
 int32 GameProgress::GetShockwavesFired() { EnsureLoaded(); return sShockwavesFired; }
 int32 GameProgress::GetPlayedSeconds() { EnsureLoaded(); return sPlayedSeconds; }
 
+const GameProgress::Achievement& GameProgress::GetAchievement(int32 index)
+{
+	return kAchievements[std::clamp(index, 0, kAchievementCount - 1)];
+}
+
+bool GameProgress::IsAchievementUnlocked(int32 index)
+{
+	EnsureLoaded();
+	return index >= 0 && index < kAchievementCount && (sAchievementMask & (uint64{ 1 } << index)) != 0;
+}
+
+int32 GameProgress::GetUnlockedAchievementCount()
+{
+	EnsureLoaded();
+	return static_cast<int32>(std::popcount(sAchievementMask));
+}
+
+int32 GameProgress::ConsumeRecentlyUnlockedAchievement()
+{
+	EnsureLoaded();
+	if (sRecentlyUnlockedAchievements.empty())
+		return -1;
+
+	const int32 index = sRecentlyUnlockedAchievements.front();
+	sRecentlyUnlockedAchievements.pop_front();
+	return index;
+}
+
 void GameProgress::EnsureLoaded()
 {
 	if (!sLoaded)
 		Load();
+}
+
+void GameProgress::EvaluateAchievements()
+{
+	if (sBricksDestroyed >= 1) UnlockAchievement(0);
+	if (sBricksDestroyed >= 100) UnlockAchievement(1);
+	if (sHighestCombo >= 8) UnlockAchievement(2);
+	if (sPowersCollected >= 1) UnlockAchievement(3);
+	if (sShockwavesFired >= 1) UnlockAchievement(4);
+	if (sCompletedLevels.count() >= 1) UnlockAchievement(5);
+	if (sTotalScore >= 100000) UnlockAchievement(6);
+	if (sCompletedLevels.count() >= 25) UnlockAchievement(7);
+	if (sPlayedSeconds >= 3600) UnlockAchievement(8);
+	if (sCompletedLevels.count() >= kLevelCount) UnlockAchievement(9);
+}
+
+void GameProgress::UnlockAchievement(int32 index)
+{
+	if (index < 0 || index >= kAchievementCount)
+		return;
+
+	const uint64 bit = uint64{ 1 } << index;
+	if ((sAchievementMask & bit) != 0)
+		return;
+
+	sAchievementMask |= bit;
+	sRecentlyUnlockedAchievements.push_back(index);
+	Save();
 }
 
 void GameProgress::Save()
@@ -196,9 +295,10 @@ void GameProgress::Save()
 		return;
 	}
 
-	stream << "version=1\n";
+	stream << "version=2\n";
 	stream << "highestUnlocked=" << sHighestUnlockedLevel << '\n';
-	stream << "completedMask=" << sCompletedMask << '\n';
+	stream << "completedLevels=" << sCompletedLevels.to_string() << '\n';
+	stream << "achievements=" << sAchievementMask << '\n';
 	stream << "totalScore=" << sTotalScore << '\n';
 	for (int32 index = 0; index < kLevelCount; ++index)
 		stream << "levelScore" << index + 1 << '=' << sLevelHighScores[index] << '\n';

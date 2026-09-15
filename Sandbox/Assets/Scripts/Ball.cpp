@@ -1,5 +1,6 @@
 #include "Ball.h"
 #include "Brick.h"
+#include "GameAudio.h"
 #include "Paddle.h"
 
 #include <Lion/Logic/ComponentRegistry.h>
@@ -24,8 +25,6 @@ void Ball::OnAwake()
 	const float32 ballRadius = mRenderer->GetSize().height
 		* GetOwner().GetWorldScale().y * 0.5f;
 	mAttachOffsetY = mPaddle->GetHalfHeight() + ballRadius + mAttachGap;
-	FindAudioPlayers();
-
 	Reset();
 }
 
@@ -48,14 +47,9 @@ void Ball::OnUpdate()
 	if (velocity.x * velocity.x + velocity.y * velocity.y < 1.0f)
 		return;
 
-	// Keep a minimum vertical component so the ball never gets stuck bouncing horizontally.
-	const float32 minVerticalSpeed = mSpeed * mMinVerticalRatio;
-
-	if (std::abs(velocity.y) < minVerticalSpeed)
-		velocity.y = (velocity.y >= 0.0f) ? minVerticalSpeed : -minVerticalSpeed;
-
-	// Hold a constant speed so collisions only change direction, never energy (no runaway ball).
-	mBody->SetLinearVelocity(glm::normalize(velocity) * mSpeed);
+	// Modern brick breakers constrain both axes: shallow angles stall progression, while a nearly
+	// vertical lane can repeat forever. Correct the direction gently and then restore constant speed.
+	mBody->SetLinearVelocity(CorrectDirection(velocity) * mSpeed);
 }
 
 void Ball::OnCollision(Entity& other)
@@ -64,13 +58,10 @@ void Ball::OnCollision(Entity& other)
 	if (mState != State::Launched)
 		return;
 
-	if (!mImpactGeneral || !mImpactPoint)
-		FindAudioPlayers();
-
-	AudioPlayer* impact = other.HasComponent<Brick>() ? mImpactPoint : mImpactGeneral;
-
-	if (impact)
-		impact->Play();
+	if (other.HasComponent<Brick>()) GameAudio::PlaySfx("Sounds/ball-brick.wav", 0.52f);
+	else if (other.HasComponent<Paddle>()) GameAudio::PlaySfx("Sounds/ball-paddle.wav", 0.62f);
+	else if (other.GetName().find("Arena") != std::string::npos) GameAudio::PlaySfx("Sounds/ball-bumper.wav", 0.58f);
+	else GameAudio::PlaySfx("Sounds/ball-wall.wav", 0.36f);
 
 	// Steering only happens on the paddle; walls and bricks bounce through the physics solver.
 	Paddle* paddle = other.GetComponent<Paddle>();
@@ -81,17 +72,14 @@ void Ball::OnCollision(Entity& other)
 	const float32 ballX = GetOwner().GetWorldPosition().x;
 	const float32 paddleX = paddle->GetOwner().GetWorldPosition().x;
 
-	// A broad center lane returns the ball vertically. The outer lanes progressively steer left or
-	// right, while the paddle's current movement adds a small, deliberate nudge. This keeps aiming
-	// predictable without demanding pixel-perfect contact.
+	// Map the hit position to a controlled angle and add paddle movement. The center still aims nearly
+	// straight, but never perfectly vertical, so one safe lane cannot repeat forever.
 	const float32 offset = glm::clamp((ballX - paddleX) / paddle->GetHalfWidth(), -1.0f, 1.0f);
-	const float32 absoluteOffset = std::abs(offset);
-	float32 steering = absoluteOffset <= 0.22f
-		? 0.0f
-		: std::copysign((absoluteOffset - 0.22f) / 0.78f, offset);
+	float32 steering = offset;
 	steering = glm::clamp(steering + paddle->GetMoveDirection() * 0.24f, -1.0f, 1.0f);
-	if (std::abs(steering) < 0.12f)
-		steering = 0.0f;
+	if (std::abs(steering) < mMinHorizontalRatio)
+		steering = std::copysign(mMinHorizontalRatio,
+			std::abs(paddle->GetMoveDirection()) > 0.05f ? paddle->GetMoveDirection() : mLastHorizontalSign);
 	const float32 angle = glm::radians(steering * mMaxBounceDegrees);
 
 	// Always send the ball upward, angled by where it landed on the paddle.
@@ -102,6 +90,7 @@ void Ball::Reflect(Reflector& reflector)
 {
 	reflector.Field("Speed", mSpeed);
 	reflector.Field("Minimum Vertical Ratio", mMinVerticalRatio);
+	reflector.Field("Minimum Horizontal Ratio", mMinHorizontalRatio);
 	reflector.Field("Maximum Bounce Angle", mMaxBounceDegrees);
 	reflector.Field("Attach Gap", mAttachGap);
 }
@@ -109,6 +98,7 @@ void Ball::Reflect(Reflector& reflector)
 void Ball::Reset()
 {
 	mState = State::Attached;
+	mLastHorizontalSign = -mLastHorizontalSign;
 	FollowPaddle();
 	SetVisible(true);
 }
@@ -142,7 +132,7 @@ void Ball::Launch(const glm::vec2& direction)
 		return;
 
 	mState = State::Launched;
-	mBody->SetLinearVelocity(glm::normalize(direction) * mSpeed);
+	mBody->SetLinearVelocity(CorrectDirection(direction) * mSpeed);
 }
 
 void Ball::LaunchFrom(const Vector2& position, const glm::vec2& direction)
@@ -176,13 +166,22 @@ void Ball::FollowPaddle()
 	mBody->SetPosition(glm::vec2(paddlePosition.x, paddlePosition.y + mAttachOffsetY));
 }
 
-void Ball::FindAudioPlayers()
+glm::vec2 Ball::CorrectDirection(const glm::vec2& direction)
 {
-	const Reference<Scene> scene = GetOwner().GetScene();
-	const Reference<Entity> general = scene ? scene->FindEntity("Impact General Audio") : nullptr;
-	const Reference<Entity> point = scene ? scene->FindEntity("Impact Point Audio") : nullptr;
-	mImpactGeneral = general ? general->GetComponent<AudioPlayer>() : nullptr;
-	mImpactPoint = point ? point->GetComponent<AudioPlayer>() : nullptr;
+	if (glm::dot(direction, direction) <= 0.0f)
+		return glm::vec2(mMinHorizontalRatio * mLastHorizontalSign, 1.0f);
+
+	glm::vec2 corrected = glm::normalize(direction);
+	if (std::abs(corrected.x) < mMinHorizontalRatio)
+		corrected.x = std::copysign(mMinHorizontalRatio,
+			std::abs(corrected.x) > 0.001f ? corrected.x : mLastHorizontalSign);
+	if (std::abs(corrected.y) < mMinVerticalRatio)
+		corrected.y = std::copysign(mMinVerticalRatio,
+			std::abs(corrected.y) > 0.001f ? corrected.y : 1.0f);
+
+	corrected = glm::normalize(corrected);
+	mLastHorizontalSign = corrected.x >= 0.0f ? 1.0f : -1.0f;
+	return corrected;
 }
 
 LION_REGISTER_COMPONENT(Ball)

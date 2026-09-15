@@ -28,7 +28,7 @@ public:
 private:
 	static constexpr Lion::int32 kStartingAttempts = 3;
 	static constexpr Lion::int32 kBrickScore = 100;
-	static constexpr Lion::int32 kFinalLevel = 5;
+	static constexpr Lion::int32 kFinalLevel = 100;
 	static constexpr Lion::int32 kShockwaveHitsRequired = 8;
 
 	static inline GameRules* sActiveRules = nullptr;
@@ -50,37 +50,70 @@ private:
 	Lion::TextRenderer* mComboText = nullptr;
 	Lion::TextRenderer* mShockwaveText = nullptr;
 	Lion::TextRenderer* mPowerText = nullptr;
+	Lion::TextRenderer* mPowerTimerText = nullptr;
+	Lion::SpriteRenderer* mPowerTimerIcon = nullptr;
+	Lion::SpriteRenderer* mPowerTimerRing = nullptr;
+	Lion::Entity* mPowerTimer = nullptr;
 	Lion::Entity* mControllerPrompts = nullptr;
 	Lion::Entity* mKeyboardPrompts = nullptr;
 	Lion::Entity* mDuplicatePaddle = nullptr;
+	Lion::Entity* mBackground = nullptr;
 	Lion::Vector2 mCameraBaseOffset;
+	Lion::Vector2 mBackgroundBasePosition;
+	Lion::Vector2 mBackgroundBaseScale{ 1.0f, 1.0f };
 	Lion::float32 mLoseHeight = -310.0f;
 	Lion::float32 mShakeDuration = 0.06f;
 	Lion::float32 mShakeStrength = 0.72f;
 	Lion::float32 mShakeRemaining = 0.0f;
+	Lion::float32 mActiveShakeStrength = 0.0f;
 	Lion::float32 mPowerMessageRemaining = 0.0f;
 	Lion::float32 mWidePaddleRemaining = 0.0f;
 	Lion::float32 mDuplicatePaddleRemaining = 0.0f;
 	Lion::int32 mShakeFrame = 0;
 	Lion::int32 mLevel = 0;
+	Lion::float32 mAmbientTime = 0.0f;
 	bool mInitialized = false;
 	bool mTransitionQueued = false;
 	bool mShowingGamepadPrompts = false;
 	bool mShowingKeyboardPrompts = false;
+
+	struct PowerDrop
+	{
+		Lion::Reference<Lion::Entity> entity;
+		std::string power;
+		Lion::float32 phase = 0.0f;
+	};
+
+	struct TransientEffect
+	{
+		Lion::Reference<Lion::Entity> entity;
+		Lion::SpriteRenderer* renderer = nullptr;
+		Lion::float32 age = 0.0f;
+		Lion::float32 lifetime = 0.36f;
+	};
+
+	std::vector<PowerDrop> mPowerDrops;
+	std::vector<TransientEffect> mTransientEffects;
 
 	void InitializeForScene();
 	void UpdateHud();
 	void UpdateShake();
 	void UpdateInputPrompts();
 	void UpdateTemporaryPowers();
+	void UpdatePowerDrops();
+	void UpdateTransientEffects();
+	void UpdateAmbientMotion();
+	void UpdateAchievementNotifications();
 	void HandleLevelFlow();
 	void RespawnBall();
-	void ActivatePower(const std::string& power, const Lion::Vector2& position, Ball* sourceBall);
+	void SpawnPowerDrop(const std::string& power, const Lion::Vector2& position);
+	void ActivatePower(const std::string& power, const Lion::Vector2& position);
 	void SpawnExtraBalls(Ball& sourceBall);
 	void ExplodeBomb(const Lion::Vector2& origin);
 	void ActivateWidePaddle();
 	void ActivateDuplicatePaddle();
 	void ActivateShockwave();
+	void SpawnShockwaveEffect(const Lion::Vector2& origin);
 	void ShowPowerMessage(const std::string& message);
 	void FinishAttempt(bool completed);
 	void HandleDebugLevelKeys();

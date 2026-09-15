@@ -1,6 +1,7 @@
 #include "GameRules.h"
 #include "Ball.h"
 #include "Brick.h"
+#include "GameAudio.h"
 #include "GameProgress.h"
 #include "GameSettings.h"
 #include "Paddle.h"
@@ -8,6 +9,7 @@
 
 #include <Lion/Logic/ComponentRegistry.h>
 #include <Lion/Logic/Reflector.h>
+#include <Lion/Render/Sprite.h>
 
 using namespace Lion;
 
@@ -28,6 +30,10 @@ void GameRules::InitializeForScene()
 	const Reference<Entity> comboEntity = scene->FindEntity("Combo Text");
 	const Reference<Entity> shockwaveEntity = scene->FindEntity("Shockwave Text");
 	const Reference<Entity> powerEntity = scene->FindEntity("Power Text");
+	const Reference<Entity> powerTimer = scene->FindEntity("Power Timer");
+	const Reference<Entity> powerTimerIcon = scene->FindEntity("Power Timer Icon");
+	const Reference<Entity> powerTimerRing = scene->FindEntity("Power Timer Ring");
+	const Reference<Entity> powerTimerText = scene->FindEntity("Power Timer Text");
 	const Reference<Entity> controllerPrompts = scene->FindEntity("HUD Controller Prompts");
 	const Reference<Entity> keyboardPrompts = scene->FindEntity("HUD Keyboard Prompts");
 	mScoreText = scoreEntity ? scoreEntity->GetComponent<TextRenderer>() : nullptr;
@@ -36,6 +42,10 @@ void GameRules::InitializeForScene()
 	mComboText = comboEntity ? comboEntity->GetComponent<TextRenderer>() : nullptr;
 	mShockwaveText = shockwaveEntity ? shockwaveEntity->GetComponent<TextRenderer>() : nullptr;
 	mPowerText = powerEntity ? powerEntity->GetComponent<TextRenderer>() : nullptr;
+	mPowerTimer = powerTimer.get();
+	mPowerTimerIcon = powerTimerIcon ? powerTimerIcon->GetComponent<SpriteRenderer>() : nullptr;
+	mPowerTimerRing = powerTimerRing ? powerTimerRing->GetComponent<SpriteRenderer>() : nullptr;
+	mPowerTimerText = powerTimerText ? powerTimerText->GetComponent<TextRenderer>() : nullptr;
 	mControllerPrompts = controllerPrompts.get();
 	mKeyboardPrompts = keyboardPrompts.get();
 
@@ -43,6 +53,11 @@ void GameRules::InitializeForScene()
 	{
 		powerEntity->SetVisible(false);
 		powerEntity->SetEnabled(false);
+	}
+	if (mPowerTimer)
+	{
+		mPowerTimer->SetVisible(false);
+		mPowerTimer->SetEnabled(false);
 	}
 	UpdateHud();
 	UpdateInputPrompts();
@@ -67,6 +82,12 @@ void GameRules::InitializeForScene()
 	mPaddle = scene->FindComponent<Paddle>();
 	mCamera = scene->FindComponent<Camera2D>();
 	mImpactParticles = GetOwner().GetComponent<ParticleComponent>();
+	mBackground = scene->FindEntity("Background").get();
+	if (mBackground)
+	{
+		mBackgroundBasePosition = mBackground->GetTransform()->GetPosition();
+		mBackgroundBaseScale = mBackground->GetTransform()->GetScale();
+	}
 
 	if (mCamera)
 		mCameraBaseOffset = mCamera->GetOffset();
@@ -97,6 +118,10 @@ void GameRules::OnUpdate()
 	UpdateShake();
 	UpdateInputPrompts();
 	UpdateTemporaryPowers();
+	UpdatePowerDrops();
+	UpdateTransientEffects();
+	UpdateAmbientMotion();
+	UpdateAchievementNotifications();
 
 	if (mLevel > 0 && sSessionActive)
 	{
@@ -128,6 +153,10 @@ void GameRules::OnDestroy()
 		mCamera->SetOffset(mCameraBaseOffset);
 	if (mPaddle)
 		mPaddle->SetWide(false);
+	for (PowerDrop& drop : mPowerDrops)
+		if (drop.entity) drop.entity->RemoveFromScene();
+	for (TransientEffect& effect : mTransientEffects)
+		if (effect.entity) effect.entity->RemoveFromScene();
 
 	if (sActiveRules == this)
 		sActiveRules = nullptr;
@@ -203,13 +232,14 @@ void GameRules::RegisterBrickDamage(const Vector2& position, bool destroyed, con
 	if (GameSettings::HasCameraShake())
 	{
 		sActiveRules->mShakeRemaining = sActiveRules->mShakeDuration;
+		sActiveRules->mActiveShakeStrength = sActiveRules->mShakeStrength;
 		sActiveRules->mShakeFrame = 0;
 	}
 	if (sActiveRules->mImpactParticles)
-		sActiveRules->mImpactParticles->EmitAt(position, destroyed ? 30 : 14);
+		sActiveRules->mImpactParticles->EmitAt(position, destroyed ? 64 : 28);
 
 	if (destroyed && !power.empty())
-		sActiveRules->ActivatePower(power, position, sourceBall);
+		sActiveRules->SpawnPowerDrop(power, position);
 
 	sActiveRules->UpdateHud();
 }
@@ -223,7 +253,7 @@ void GameRules::UpdateHud()
 		mAttemptsText->SetText(LION_FORMAT_TEXT("{} {}", GameSettings::Text(GameText::Balls), sAttempts));
 
 	if (mLevelText && mLevel > 0)
-		mLevelText->SetText(LION_FORMAT_TEXT("{} {:02}", GameSettings::Text(GameText::Level), mLevel));
+		mLevelText->SetText(LION_FORMAT_TEXT("{} {:03}", GameSettings::Text(GameText::Level), mLevel));
 
 	if (mComboText)
 	{
@@ -272,8 +302,8 @@ void GameRules::UpdateShake()
 
 	const Vector2& direction = offsets[mShakeFrame++ % std::size(offsets)];
 	mCamera->SetOffset(Vector2(
-		mCameraBaseOffset.x + direction.x * mShakeStrength,
-		mCameraBaseOffset.y + direction.y * mShakeStrength));
+		mCameraBaseOffset.x + direction.x * mActiveShakeStrength,
+		mCameraBaseOffset.y + direction.y * mActiveShakeStrength));
 }
 
 void GameRules::UpdateInputPrompts()
@@ -316,6 +346,120 @@ void GameRules::UpdateTemporaryPowers()
 			mDuplicatePaddle = nullptr;
 		}
 	}
+
+	const float32 remaining = std::max(mWidePaddleRemaining, mDuplicatePaddleRemaining);
+	if (mPowerTimer)
+	{
+		const bool active = remaining > 0.0f;
+		mPowerTimer->SetVisible(active);
+		mPowerTimer->SetEnabled(active);
+		if (active && mPowerTimerIcon)
+			mPowerTimerIcon->SetTexturePath(mWidePaddleRemaining >= mDuplicatePaddleRemaining
+				? "Sprites/Brickout/power-wide.png" : "Sprites/Brickout/power-duplicate.png");
+		if (active && mPowerTimerRing)
+		{
+			const int32 frame = std::clamp(static_cast<int32>(std::ceil(remaining / 12.0f * 11.0f)), 0, 11);
+			mPowerTimerRing->SetTexturePath(LION_FORMAT_TEXT("Sprites/Brickout/power-timer-{:02}.png", frame));
+		}
+		if (active && mPowerTimerText)
+			mPowerTimerText->SetText(LION_FORMAT_TEXT("{:.1f}s", remaining));
+	}
+}
+
+void GameRules::UpdatePowerDrops()
+{
+	if (!mPaddle)
+		return;
+
+	const float32 deltaTime = Clock::GetDeltaTime();
+	const Vector2 paddlePosition = mPaddle->GetOwner().GetWorldPosition();
+	for (auto drop = mPowerDrops.begin(); drop != mPowerDrops.end();)
+	{
+		if (!drop->entity || !drop->entity->IsActive())
+		{
+			drop = mPowerDrops.erase(drop);
+			continue;
+		}
+
+		drop->phase += deltaTime;
+		Vector2 position = drop->entity->GetWorldPosition();
+		position.y -= 78.0f * deltaTime;
+		position.x += std::sin(drop->phase * 3.2f) * 9.0f * deltaTime;
+		drop->entity->SetWorldPosition(position);
+		drop->entity->GetTransform()->SetRotation(std::sin(drop->phase * 2.4f) * 7.0f);
+
+		const bool collected = std::abs(position.x - paddlePosition.x) <= mPaddle->GetHalfWidth() + 24.0f
+			&& std::abs(position.y - paddlePosition.y) <= mPaddle->GetHalfHeight() + 26.0f;
+		if (collected)
+		{
+			const std::string power = drop->power;
+			drop->entity->RemoveFromScene();
+			drop = mPowerDrops.erase(drop);
+			ActivatePower(power, position);
+			continue;
+		}
+		if (position.y < mLoseHeight - 40.0f)
+		{
+			drop->entity->RemoveFromScene();
+			drop = mPowerDrops.erase(drop);
+			continue;
+		}
+		++drop;
+	}
+}
+
+void GameRules::UpdateTransientEffects()
+{
+	const float32 deltaTime = Clock::GetDeltaTime();
+	for (auto effect = mTransientEffects.begin(); effect != mTransientEffects.end();)
+	{
+		effect->age += deltaTime;
+		if (!effect->entity || effect->age >= effect->lifetime)
+		{
+			if (effect->entity) effect->entity->RemoveFromScene();
+			effect = mTransientEffects.erase(effect);
+			continue;
+		}
+
+		const float32 progress = effect->age / effect->lifetime;
+		const float32 scale = 0.42f + progress * 1.25f;
+		effect->entity->SetWorldScale(Vector2(scale, scale));
+		if (effect->renderer)
+		{
+			const float32 intensity = 1.0f - progress * 0.82f;
+			effect->renderer->GetSprite().SetColor(Vector(intensity, intensity, intensity));
+		}
+		++effect;
+	}
+}
+
+void GameRules::UpdateAmbientMotion()
+{
+	if (!mBackground)
+		return;
+
+	mAmbientTime += Clock::GetDeltaTime();
+	mBackground->GetTransform()->SetPosition(Vector2(
+		mBackgroundBasePosition.x + std::sin(mAmbientTime * 0.17f) * 2.4f,
+		mBackgroundBasePosition.y + std::cos(mAmbientTime * 0.13f) * 1.8f));
+	const float32 pulse = 1.01f + std::sin(mAmbientTime * 0.21f) * 0.008f;
+	mBackground->GetTransform()->SetScale(Vector2(
+		mBackgroundBaseScale.x * pulse, mBackgroundBaseScale.y * pulse));
+}
+
+void GameRules::UpdateAchievementNotifications()
+{
+	if (mPowerMessageRemaining > 0.0f)
+		return;
+
+	const int32 achievementIndex = GameProgress::ConsumeRecentlyUnlockedAchievement();
+	if (achievementIndex < 0)
+		return;
+
+	const GameProgress::Achievement& achievement = GameProgress::GetAchievement(achievementIndex);
+	ShowPowerMessage(LION_FORMAT_TEXT("ACHIEVEMENT UNLOCKED\n{}", achievement.title));
+	mPowerMessageRemaining = 3.2f;
+	GameAudio::PlaySfx("Sounds/achievement.wav", 0.72f);
 }
 
 void GameRules::HandleLevelFlow()
@@ -365,6 +509,8 @@ void GameRules::HandleLevelFlow()
 		sAttempts = std::max(sAttempts - 1, 0);
 		sCombo = 1;
 		GameProgress::RegisterBallLost();
+		GameAudio::PlaySfx(sAttempts > 0 ? "Sounds/ball-lost.wav" : "Sounds/game-over.wav",
+			sAttempts > 0 ? 0.62f : 0.84f);
 		UpdateHud();
 
 		if (sAttempts > 0)
@@ -389,7 +535,34 @@ void GameRules::RespawnBall()
 	mBall->Reset();
 }
 
-void GameRules::ActivatePower(const std::string& power, const Vector2& position, Ball* sourceBall)
+void GameRules::SpawnPowerDrop(const std::string& power, const Vector2& position)
+{
+	const Reference<Scene> scene = GetOwner().GetScene();
+	if (!scene)
+		return;
+
+	std::string texture;
+	if (power == "Extra Life") texture = "Sprites/Brickout/power-life.png";
+	else if (power == "Multiball") texture = "Sprites/Brickout/power-multiball.png";
+	else if (power == "Bomb") texture = "Sprites/Brickout/power-bomb.png";
+	else if (power == "Wide Paddle") texture = "Sprites/Brickout/power-wide.png";
+	else if (power == "Duplicate Paddle") texture = "Sprites/Brickout/power-duplicate.png";
+	else return;
+
+	Reference<Entity> entity = MakeReference<Entity>();
+	entity->SetName(LION_FORMAT_TEXT("{} Drop", power));
+	entity->GetTransform()->SetPosition(position);
+	entity->GetTransform()->SetScale(Vector2(0.72f, 0.72f));
+	SpriteRenderer* renderer = entity->AddComponent<SpriteRenderer>(texture);
+	renderer->SetOrder(35);
+	scene->Add(entity);
+	mPowerDrops.push_back({ entity, power, static_cast<float32>(mPowerDrops.size()) * 0.7f });
+	GameAudio::PlaySfx("Sounds/power-drop.wav", 0.44f);
+	if (mImpactParticles)
+		mImpactParticles->EmitAt(position, 84);
+}
+
+void GameRules::ActivatePower(const std::string& power, const Vector2& position)
 {
 	std::string message;
 
@@ -400,8 +573,16 @@ void GameRules::ActivatePower(const std::string& power, const Vector2& position,
 	}
 	else if (power == "Multiball")
 	{
-		if (sourceBall)
-			SpawnExtraBalls(*sourceBall);
+		Ball* sourceBall = nullptr;
+		const Reference<Scene> scene = GetOwner().GetScene();
+		for (const Reference<Entity>& entity : scene->GetEntities())
+			if (Ball* candidate = entity->GetComponent<Ball>(); candidate && candidate->IsLaunched()
+				&& entity->IsActive())
+			{
+				sourceBall = candidate;
+				break;
+			}
+		if (sourceBall) SpawnExtraBalls(*sourceBall);
 		message = GameSettings::Text(GameText::Multiball);
 	}
 	else if (power == "Bomb")
@@ -423,9 +604,10 @@ void GameRules::ActivatePower(const std::string& power, const Vector2& position,
 		return;
 
 	GameProgress::RegisterPowerCollected();
+	GameAudio::PlayPower(power);
 
 	if (mImpactParticles)
-		mImpactParticles->EmitAt(position, 48);
+		mImpactParticles->EmitAt(position, 110);
 
 	ShowPowerMessage(message);
 
@@ -476,7 +658,10 @@ void GameRules::ExplodeBomb(const Vector2& origin)
 	}
 
 	if (mImpactParticles)
-		mImpactParticles->EmitAt(origin, 110);
+		mImpactParticles->EmitAt(origin, 180);
+	mShakeRemaining = 0.12f;
+	mActiveShakeStrength = 1.05f;
+	mShakeFrame = 0;
 }
 
 void GameRules::ActivateWidePaddle()
@@ -533,17 +718,42 @@ void GameRules::ActivateShockwave()
 		const Vector2 offset = entity->GetWorldPosition() - origin;
 		if (offset.y >= 0.0f && offset.y <= 470.0f
 			&& std::abs(offset.x) <= 38.0f + offset.y * 0.58f)
-			brick->Damage(1, nullptr, false);
+			brick->Damage(10, nullptr, false);
 	}
 
 	if (mImpactParticles)
-		for (int32 step = 1; step <= 6; ++step)
-			mImpactParticles->EmitAt(Vector2(origin.x, origin.y + step * 62.0f), 24);
+		for (int32 step = 1; step <= 7; ++step)
+			mImpactParticles->EmitAt(Vector2(origin.x, origin.y + step * 58.0f), 56);
+
+	SpawnShockwaveEffect(origin);
+	mShakeRemaining = 0.16f;
+	mActiveShakeStrength = 1.45f;
+	mShakeFrame = 0;
+	GameAudio::PlaySfx("Sounds/power-shockwave.wav", 0.88f);
 
 	sShockwaveCharge = 0;
 	GameProgress::RegisterShockwave();
 	ShowPowerMessage(GameSettings::Text(GameText::ShockwaveFired));
 	UpdateHud();
+}
+
+void GameRules::SpawnShockwaveEffect(const Vector2& origin)
+{
+	const Reference<Scene> scene = GetOwner().GetScene();
+	if (!scene)
+		return;
+
+	for (int32 index = 0; index < 5; ++index)
+	{
+		Reference<Entity> entity = MakeReference<Entity>();
+		entity->SetName(LION_FORMAT_TEXT("Shockwave Effect {}", index + 1));
+		entity->GetTransform()->SetPosition(Vector2(origin.x, origin.y + 45.0f + index * 76.0f));
+		entity->GetTransform()->SetScale(Vector2(0.42f, 0.42f));
+		SpriteRenderer* renderer = entity->AddComponent<SpriteRenderer>("Sprites/Brickout/power-shockwave.png");
+		renderer->SetOrder(45);
+		scene->Add(entity);
+		mTransientEffects.push_back({ entity, renderer, index * -0.035f, 0.38f + index * 0.025f });
+	}
 }
 
 void GameRules::ShowPowerMessage(const std::string& message)
@@ -586,12 +796,12 @@ int32 GameRules::ActiveLevel()
 	const std::string& path = SceneManager::GetActivePath();
 	const size_t marker = path.find("Level");
 
-	if (marker == std::string::npos || marker + 7 > path.size())
+	if (marker == std::string::npos || marker + 6 > path.size())
 		return 0;
 
 	try
 	{
-		return std::clamp(std::stoi(path.substr(marker + 5, 2)), 1, kFinalLevel);
+		return std::clamp(std::stoi(path.substr(marker + 5)), 1, kFinalLevel);
 	}
 	catch (const std::exception&)
 	{

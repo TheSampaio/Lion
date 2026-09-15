@@ -1,4 +1,5 @@
 #include "EndScreen.h"
+#include "GameAudio.h"
 #include "GameRules.h"
 #include "GameSettings.h"
 #include "ScreenTransition.h"
@@ -24,6 +25,8 @@ void EndScreen::InitializeForScene()
 	const Reference<Entity> controllerPrompts = scene->FindEntity("End Controller Prompts");
 	const Reference<Entity> keyboardPrompts = scene->FindEntity("End Keyboard Prompts");
 	const bool victory = SceneManager::GetActivePath().find("Victory") != std::string::npos;
+	if (victory)
+		GameAudio::PlaySfx("Sounds/victory.wav", 0.78f);
 	mPlayAgainButton = playAgainEntity ? playAgainEntity->GetComponent<Button>() : nullptr;
 	mMainMenuButton = mainMenuEntity ? mainMenuEntity->GetComponent<Button>() : nullptr;
 	mControllerPrompts = controllerPrompts.get();
@@ -36,7 +39,7 @@ void EndScreen::InitializeForScene()
 	UpdateInputPrompts();
 
 	if (TextRenderer* title = titleEntity ? titleEntity->GetComponent<TextRenderer>() : nullptr)
-		title->SetText(GameSettings::Text(victory ? GameText::CircuitClear : GameText::SystemFailure));
+		title->SetText(GameSettings::Text(victory ? GameText::CircuitClear : GameText::GameOver));
 
 	if (TextRenderer* score = scoreEntity ? scoreEntity->GetComponent<TextRenderer>() : nullptr)
 		score->SetText(LION_FORMAT_TEXT("{}\n{:06}", GameSettings::Text(GameText::TotalScore), GameRules::GetScore()));
@@ -67,21 +70,30 @@ void EndScreen::OnUpdate()
 	if (mPlayAgainButton && mPlayAgainButton->IsHovered() && mSelection != 0)
 	{
 		mSelection = 0;
+		GameAudio::PlayUiHover();
 		RefreshSelection();
 	}
 	else if (mMainMenuButton && mMainMenuButton->IsHovered() && mSelection != 1)
 	{
 		mSelection = 1;
+		GameAudio::PlayUiHover();
 		RefreshSelection();
 	}
 
 	if (mPlayAgainButton && mPlayAgainButton->WasClicked())
+	{
+		GameAudio::PlayUiSelect();
 		GameRules::StartNewGame();
+	}
 	else if ((mMainMenuButton && mMainMenuButton->WasClicked()) || Input::GetActionTap("menu_back"))
+	{
+		GameAudio::PlayUiSelect();
 		ScreenTransition::LoadScene("Scenes/MainMenu.lnscene");
+	}
 	else if (Input::GetActionTap("menu_up") || Input::GetActionTap("menu_down"))
 	{
 		mSelection = 1 - mSelection;
+		GameAudio::PlayUiHover();
 		RefreshSelection();
 	}
 	else if (Input::GetActionTap("menu_confirm"))
@@ -119,6 +131,7 @@ void EndScreen::UpdateInputPrompts()
 
 void EndScreen::ActivateSelection()
 {
+	GameAudio::PlayUiSelect();
 	if (mSelection == 0)
 		GameRules::StartNewGame();
 	else
