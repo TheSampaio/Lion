@@ -35,3 +35,37 @@ void GameAudio::PlayPower(const std::string& power)
 	else if (power == "Wide Paddle") PlaySfx("Sounds/power-wide.wav", 0.68f);
 	else if (power == "Duplicate Paddle") PlaySfx("Sounds/power-duplicate.wav", 0.68f);
 }
+
+void GameAudio::EnsureMusic(bool gameplay)
+{
+	if (sMusicVoice != kInvalidAudioVoice && Audio::IsPlaying(sMusicVoice)
+		&& gameplay == sPlayingGameplayMusic)
+		return;
+
+	Audio::Stop(sMusicVoice);
+	sMusicVoice = kInvalidAudioVoice;
+	sPlayingGameplayMusic = gameplay;
+	Reference<AudioClip>& clip = gameplay ? sGameMusic : sMenuMusic;
+	const std::string path = gameplay ? "Sounds/music-game.wav" : "Sounds/music-menu.wav";
+	if (!clip)
+		clip = Asset::LoadAudio(path, path);
+	if (!clip)
+	{
+		Log::Console(LogLevel::Error, LION_FORMAT_TEXT("[GameAudio] Could not load music '{}'.", path));
+		return;
+	}
+
+	AudioPlayback playback;
+	playback.volume = gameplay ? 0.68f : 0.58f;
+	playback.loop = true;
+	playback.bus = AudioBus::Music;
+	sMusicVoice = Audio::Play(clip, playback, "brickout-music");
+	if (sMusicVoice == kInvalidAudioVoice)
+		Log::Console(LogLevel::Error, LION_FORMAT_TEXT("[GameAudio] Could not start music '{}'.", path));
+}
+
+void GameAudio::StopMusic()
+{
+	Audio::Stop(sMusicVoice);
+	sMusicVoice = kInvalidAudioVoice;
+}

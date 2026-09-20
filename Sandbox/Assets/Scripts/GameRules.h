@@ -71,6 +71,7 @@ private:
 	Lion::float32 mDuplicatePaddleRemaining = 0.0f;
 	Lion::int32 mShakeFrame = 0;
 	Lion::int32 mLevel = 0;
+	Lion::int32 mPendingMultiball = 0;
 	Lion::float32 mAmbientTime = 0.0f;
 	bool mInitialized = false;
 	bool mTransitionQueued = false;
@@ -116,6 +117,7 @@ private:
 	void SpawnShockwaveEffect(const Lion::Vector2& origin);
 	void ShowPowerMessage(const std::string& message);
 	void FinishAttempt(bool completed);
+	void HandleDebugReset();
 	void HandleDebugLevelKeys();
 	static Lion::int32 ActiveLevel();
 	static std::string LevelScene(Lion::int32 level);

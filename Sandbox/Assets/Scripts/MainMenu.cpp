@@ -27,6 +27,7 @@ void MainMenu::OnAwake()
 {
 	Window::SetBackgroundColor(0.015f, 0.02f, 0.045f);
 	GameSettings::ApplyAudio();
+	GameAudio::EnsureMusic(false);
 	GameProgress::Load();
 }
 
@@ -90,7 +91,23 @@ void MainMenu::Initialize()
 		const Reference<Entity> button = scene->FindEntity(settingNames[index]);
 		mSettingsButtons[index] = button ? button->GetComponent<Button>() : nullptr;
 		mSettingsTexts[index] = button ? button->GetComponent<TextRenderer>() : nullptr;
+		mSettingCombos[index] = button ? button->GetComponent<ComboBox>() : nullptr;
 	}
+	static const char8* checkBoxNames[] = {
+		"", "VSync CheckBox", "", "Bloom CheckBox", "Vignette CheckBox", "Motion Blur CheckBox",
+		"", "", "Camera Shake CheckBox", "", "", "Control Hints CheckBox"
+	};
+	for (int32 index = 0; index < GameSettings::kSettingCount; ++index)
+	{
+		if (checkBoxNames[index][0] == '\0')
+			continue;
+		const Reference<Entity> checkBox = scene->FindEntity(checkBoxNames[index]);
+		mSettingCheckBoxes[index] = checkBox ? checkBox->GetComponent<CheckBox>() : nullptr;
+	}
+	const Reference<Entity> sfxProgress = scene->FindEntity("SFX Progress");
+	const Reference<Entity> musicProgress = scene->FindEntity("Music Progress");
+	mSfxProgress = sfxProgress ? sfxProgress->GetComponent<ProgressBar>() : nullptr;
+	mMusicProgress = musicProgress ? musicProgress->GetComponent<ProgressBar>() : nullptr;
 
 	static const char8* groupNames[] = {
 		"Graphics Settings", "Sound Settings", "Accessibility Settings", "Controls Settings"
@@ -189,6 +206,40 @@ void MainMenu::OnUpdate()
 
 		for (int32 index = 0; index < GameSettings::kSettingCount; ++index)
 		{
+			if (mSettingCombos[index] && mSettingCombos[index]->WasChanged())
+			{
+				GameSettings::SetValue(index, mSettingCombos[index]->GetSelectedIndex());
+				mSettingsSelection = index;
+				GameAudio::PlayUiSelect();
+				if (index == 10) RefreshLocalizedText(); else RefreshSettings();
+				return;
+			}
+			if (mSettingCheckBoxes[index] && mSettingCheckBoxes[index]->WasChanged())
+			{
+				GameSettings::SetValue(index, mSettingCheckBoxes[index]->IsChecked());
+				mSettingsSelection = index;
+				GameAudio::PlayUiSelect();
+				RefreshSettings();
+				return;
+			}
+		}
+		if (mSfxProgress && mSfxProgress->WasChanged())
+		{
+			GameSettings::SetValue(6, static_cast<int32>(std::round(mSfxProgress->GetValue())));
+			mSettingsSelection = 6;
+			RefreshSettings();
+			return;
+		}
+		if (mMusicProgress && mMusicProgress->WasChanged())
+		{
+			GameSettings::SetValue(7, static_cast<int32>(std::round(mMusicProgress->GetValue())));
+			mSettingsSelection = 7;
+			RefreshSettings();
+			return;
+		}
+
+		for (int32 index = 0; index < GameSettings::kSettingCount; ++index)
+		{
 			if (static_cast<int32>(GameSettings::GetCategory(index)) != mSettingsPage)
 				continue;
 			Button* button = mSettingsButtons[index];
@@ -197,7 +248,10 @@ void MainMenu::OnUpdate()
 			if (button->WasClicked())
 			{
 				mSettingsSelection = index;
-				ActivateSetting(1);
+				if (!mSettingCombos[index])
+					ActivateSetting(1);
+				else
+					RefreshSettings();
 				return;
 			}
 			if (button->IsHovered() && mSettingsSelection != index)
@@ -242,7 +296,15 @@ void MainMenu::OnUpdate()
 			RefreshSettings();
 		}
 		else if (Input::GetActionTap("menu_left")) ActivateSetting(-1);
-		else if (Input::GetActionTap("menu_right") || Input::GetActionTap("menu_confirm")) ActivateSetting(1);
+		else if (Input::GetActionTap("menu_right")) ActivateSetting(1);
+		else if (Input::GetActionTap("menu_confirm"))
+		{
+			if (mSettingsSelection >= 0 && mSettingsSelection < GameSettings::kSettingCount
+				&& mSettingCombos[mSettingsSelection])
+				mSettingCombos[mSettingsSelection]->SetOpen(!mSettingCombos[mSettingsSelection]->IsOpen());
+			else
+				ActivateSetting(1);
+		}
 		return;
 	}
 
@@ -283,8 +345,10 @@ void MainMenu::OnUpdate()
 			ShowState(State::Menu);
 			return;
 		}
-		if (Input::GetActionTap("menu_up")) mLevelSelection = std::max(mLevelSelection - 1, 0);
-		else if (Input::GetActionTap("menu_down")) mLevelSelection = std::min(mLevelSelection + 1, kLevelButtonsPerPage - 1);
+		if (Input::GetActionTap("menu_up")) mLevelSelection = std::max(mLevelSelection - 2, 0);
+		else if (Input::GetActionTap("menu_down")) mLevelSelection = std::min(mLevelSelection + 2, kLevelButtonsPerPage - 1);
+		else if (Input::GetActionTap("menu_left") && (mLevelSelection % 2) == 1) mLevelSelection--;
+		else if (Input::GetActionTap("menu_right") && (mLevelSelection % 2) == 0) mLevelSelection++;
 		else if (Input::GetActionTap("menu_confirm"))
 		{
 			const int32 level = mLevelPage * kLevelButtonsPerPage + mLevelSelection + 1;
@@ -397,9 +461,22 @@ void MainMenu::RefreshSettings()
 	}
 	for (int32 index = 0; index < GameSettings::kSettingCount; ++index)
 	{
-		if (mSettingsTexts[index]) mSettingsTexts[index]->SetText(GameSettings::Label(index));
+		if (mSettingCombos[index])
+		{
+			mSettingCombos[index]->SetPrefix(index == 0 ? GameSettings::Text(GameText::Resolution)
+				: index == 2 ? GameSettings::Text(GameText::Quality)
+				: index == 9 ? GameSettings::Text(GameText::ColorMode)
+				: GameSettings::Text(GameText::Language));
+			mSettingCombos[index]->SetSelectedIndex(GameSettings::GetValue(index));
+		}
+		else if (mSettingsTexts[index])
+			mSettingsTexts[index]->SetText(GameSettings::Label(index));
+		if (mSettingCheckBoxes[index])
+			mSettingCheckBoxes[index]->SetChecked(GameSettings::GetValue(index) != 0);
 		if (mSettingsButtons[index]) mSettingsButtons[index]->SetSelected(index == mSettingsSelection);
 	}
+	if (mSfxProgress) mSfxProgress->SetValue(static_cast<float32>(GameSettings::GetValue(6)));
+	if (mMusicProgress) mMusicProgress->SetValue(static_cast<float32>(GameSettings::GetValue(7)));
 	if (mSettingsPageText)
 		mSettingsPageText->SetText("Q / LB                                      E / RB");
 	if (mBackButton) mBackButton->SetSelected(mSettingsSelection == GameSettings::kSettingCount);
@@ -419,12 +496,12 @@ void MainMenu::RefreshLevels()
 		if (!mLevelTexts[index])
 			continue;
 		if (!unlocked)
-			mLevelTexts[index]->SetText(LION_FORMAT_TEXT("{} {:03}   {}", GameSettings::Text(GameText::Level),
+			mLevelTexts[index]->SetText(LION_FORMAT_TEXT("{} {:03}\n{}", GameSettings::Text(GameText::Level),
 				level, GameSettings::Text(GameText::Locked)));
 		else
-			mLevelTexts[index]->SetText(LION_FORMAT_TEXT("{} {:03}   {} {:06}{}", GameSettings::Text(GameText::Level),
-				level, GameSettings::Text(GameText::HighScore), GameProgress::GetLevelHighScore(level),
-				GameProgress::IsLevelCompleted(level) ? "   [X]" : ""));
+			mLevelTexts[index]->SetText(LION_FORMAT_TEXT("{} {:03}{}\n{} {:06}", GameSettings::Text(GameText::Level),
+				level, GameProgress::IsLevelCompleted(level) ? "  COMPLETE" : "",
+				GameSettings::Text(GameText::HighScore), GameProgress::GetLevelHighScore(level)));
 	}
 	if (mLevelPageText)
 		mLevelPageText->SetText(LION_FORMAT_TEXT("Q / LB     PAGE {:02}/10     E / RB", mLevelPage + 1));
@@ -437,7 +514,7 @@ void MainMenu::RefreshStatistics()
 		return;
 	const int32 seconds = GameProgress::GetPlayedSeconds();
 	mStatisticsText->SetText(LION_FORMAT_TEXT(
-		"{}  {}/{}\n{}  {:08}\n{}  {}\n{}  {}\n{}  {}\n{}  {}\n{}  X{}\n{}  {}\n{}  {:02}:{:02}:{:02}",
+		"{}                 {}/{}\n{}              {:08}\n{}                  {}\n{}            {}\n{}         {}\n{}              {}\n{}            X{}\n{}              {}\n{}               {:02}:{:02}:{:02}",
 		GameSettings::Text(GameText::Completed), GameProgress::GetCompletedLevelCount(), GameProgress::kLevelCount,
 		GameSettings::Text(GameText::TotalScore), GameProgress::GetTotalScore(),
 		GameSettings::Text(GameText::Sessions), GameProgress::GetSessionsPlayed(),
@@ -464,8 +541,11 @@ void MainMenu::RefreshAchievements()
 				? Vector(1.0f, 1.0f, 1.0f) : Vector(0.22f, 0.28f, 0.38f));
 		}
 		if (mAchievementTexts[row])
-			mAchievementTexts[row]->SetText(LION_FORMAT_TEXT("{}  {}\n{}", unlocked ? "[X]" : "[ ]",
-				achievement.title, achievement.description));
+		{
+			mAchievementTexts[row]->SetText(LION_FORMAT_TEXT("{}\n{}", achievement.title, achievement.description));
+			mAchievementTexts[row]->SetColor(unlocked
+				? Vector(1.0f, 1.0f, 1.0f) : Vector(0.38f, 0.45f, 0.58f));
+		}
 	}
 	if (mAchievementProgressText)
 		mAchievementProgressText->SetText(LION_FORMAT_TEXT("Q / LB   {}/{} UNLOCKED   PAGE {}/2   E / RB",
@@ -505,18 +585,15 @@ void MainMenu::UpdateInputPresentation(bool force)
 
 	mUsingGamepad = usingGamepad;
 	const bool hints = GameSettings::HasControlHints();
-	const bool simpleDetail = mState == State::Credits || mState == State::Statistics;
-	const bool pagedDetail = mState == State::Settings || mState == State::LevelSelect
-		|| mState == State::Achievements;
 	SetShown(mPrompt, mState == State::Attract && !hints);
 	SetShown(mKeyboardAttractPrompt, hints && mState == State::Attract && !usingGamepad);
 	SetShown(mControllerAttractPrompt, hints && mState == State::Attract && usingGamepad);
 	SetShown(mKeyboardControls, hints && mState == State::Menu && !usingGamepad);
 	SetShown(mControllerMenuPrompts, hints && mState == State::Menu && usingGamepad);
-	SetShown(mKeyboardDetailPrompts, hints && simpleDetail && !usingGamepad);
-	SetShown(mControllerDetailPrompts, hints && simpleDetail && usingGamepad);
-	SetShown(mKeyboardSettingsPrompt, hints && pagedDetail && !usingGamepad);
-	SetShown(mControllerSettingsPrompt, hints && pagedDetail && usingGamepad);
+	SetShown(mKeyboardDetailPrompts, false);
+	SetShown(mControllerDetailPrompts, false);
+	SetShown(mKeyboardSettingsPrompt, false);
+	SetShown(mControllerSettingsPrompt, false);
 }
 
 void MainMenu::UpdateAmbientMotion()
@@ -553,7 +630,14 @@ void MainMenu::ActivateSetting(int32 direction)
 	}
 
 	GameAudio::PlayUiSelect();
-	GameSettings::Change(mSettingsSelection, direction);
+	if (mSettingCombos[mSettingsSelection])
+	{
+		mSettingCombos[mSettingsSelection]->SelectRelative(direction);
+		GameSettings::SetValue(mSettingsSelection,
+			mSettingCombos[mSettingsSelection]->GetSelectedIndex());
+	}
+	else
+		GameSettings::Change(mSettingsSelection, direction);
 	if (mSettingsSelection == 10)
 		RefreshLocalizedText();
 	else

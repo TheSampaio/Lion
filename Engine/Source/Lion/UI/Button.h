@@ -2,17 +2,16 @@
 
 #include <Lion/Logic/Component.h>
 #include <Lion/Math/Vector.h>
+#include <Lion/Render/Sprite.h>
 
 namespace Lion
 {
-	class Sprite;
-
 	// A screen-space button for Widget Assemblies. It owns its visual background, exposes interaction
 	// state to gameplay components and leaves the action itself in game code.
 	class Button final : public Component
 	{
 	public:
-		LION_API Button() = default;
+		LION_API Button();
 		LION_API ~Button();
 
 		LION_API bool WasClicked() const { return mClicked; }
@@ -20,6 +19,12 @@ namespace Lion
 		LION_API bool IsSelected() const { return mSelected; }
 		LION_API void SetSelected(bool selected);
 		LION_API void SetInteractable(bool interactable);
+		LION_API void SetBackgroundPath(const std::string& path) { mBackgroundPath = path; }
+		LION_API void SetSize(const Vector& size) { mSize = size; }
+		LION_API void SetOrder(int32 order) { mOrder = order; }
+		LION_API void SetColors(const Vector& normal, const Vector& selected,
+			const Vector& hovered, const Vector& pressed);
+		LION_API void CopyVisualStyleTo(Button& target) const;
 
 		LION_API void OnEnable() override;
 		LION_API void OnDisable() override;

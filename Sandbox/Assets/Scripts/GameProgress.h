@@ -31,6 +31,7 @@ public:
 	static void RegisterPowerCollected();
 	static void RegisterCombo(Lion::int32 combo);
 	static void RegisterShockwave();
+	static void ResetAll();
 
 	static Lion::int32 GetHighestUnlockedLevel();
 	static Lion::int32 GetCompletedLevelCount();

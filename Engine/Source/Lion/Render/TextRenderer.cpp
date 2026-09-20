@@ -32,6 +32,17 @@ namespace Lion
 		mBuiltFontPath.clear();
 	}
 
+	void TextRenderer::CopyStyleTo(TextRenderer& target) const
+	{
+		target.SetFontPath(mFontPath);
+		target.SetSize(mSize);
+		target.SetSpacing(mSpacing);
+		target.SetCentered(mCentered);
+		target.SetOrder(mOrder);
+		target.SetOffset(mOffset);
+		target.SetColor(mColor);
+	}
+
 	void TextRenderer::OnRender()
 	{
 		if (mText != mBuiltText || mFontPath != mBuiltFontPath)
@@ -41,8 +52,15 @@ namespace Lion
 			return;
 
 		Entity& owner = GetOwner();
-		const Vector2 origin = owner.GetWorldPosition();
+		const Vector2 position = owner.GetWorldPosition();
 		const Vector2 ownerScale = owner.GetWorldScale();
+		const float32 radians = owner.GetWorldRotation() * 3.14159265359f / 180.0f;
+		const float32 cosine = std::cos(radians);
+		const float32 sine = std::sin(radians);
+		const Vector2 scaledOffset(mOffset.x * ownerScale.x, mOffset.y * ownerScale.y);
+		const Vector2 origin(
+			position.x + scaledOffset.x * cosine - scaledOffset.y * sine,
+			position.y + scaledOffset.x * sine + scaledOffset.y * cosine);
 		const float32 glyphScale = mSize / std::max(mFont->GetLineHeight(), 1.0f);
 		const float32 advance = (mFont->GetAdvance() + mSpacing) * glyphScale * ownerScale.x;
 		const float32 lineHeight = mFont->GetLineHeight() * glyphScale * ownerScale.y;
@@ -97,6 +115,7 @@ namespace Lion
 		reflector.Field("Spacing", mSpacing);
 		reflector.Field("Centered", mCentered);
 		reflector.Field("Order", mOrder);
+		reflector.Field("Offset", mOffset);
 		reflector.Field("Color", mColor);
 	}
 

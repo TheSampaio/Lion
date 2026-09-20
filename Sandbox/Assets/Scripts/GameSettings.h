@@ -83,6 +83,9 @@ public:
 	static constexpr Lion::int32 kSettingCount = 12;
 
 	static void Change(Lion::int32 setting, Lion::int32 direction);
+	static void SetValue(Lion::int32 setting, Lion::int32 value);
+	static Lion::int32 GetValue(Lion::int32 setting);
+	static bool IsToggle(Lion::int32 setting);
 	static void Apply(Lion::PostProcessingComponent& postProcessing);
 	static void ApplyAudio();
 	static std::string Label(Lion::int32 setting);

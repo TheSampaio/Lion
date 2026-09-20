@@ -10,6 +10,8 @@
 
 namespace Lion
 {
+	Button::Button() = default;
+
 	Button::~Button() = default;
 
 	void Button::SetSelected(bool selected)
@@ -29,6 +31,24 @@ namespace Lion
 		mInteractable = interactable;
 		ResetInteraction();
 		RefreshVisual();
+	}
+
+	void Button::SetColors(const Vector& normal, const Vector& selected,
+		const Vector& hovered, const Vector& pressed)
+	{
+		mNormalColor = normal;
+		mSelectedColor = selected;
+		mHoveredColor = hovered;
+		mPressedColor = pressed;
+		RefreshVisual();
+	}
+
+	void Button::CopyVisualStyleTo(Button& target) const
+	{
+		target.SetBackgroundPath(mBackgroundPath);
+		target.SetSize(mSize);
+		target.SetColors(mNormalColor, mSelectedColor, mHoveredColor, mPressedColor);
+		target.SetOrder(mOrder);
 	}
 
 	void Button::OnEnable()

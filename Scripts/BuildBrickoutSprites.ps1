@@ -73,10 +73,7 @@ for ($index = 0; $index -lt $achievementNames.Count; $index++)
 	Copy-Item -LiteralPath (Join-Path $assetRoot $achievementSources[$index]) -Destination (Join-Path $assetRoot ("achievement-{0}.png" -f $achievementNames[$index])) -Force
 }
 
-$whiteAssets = @(
-	'ball.png', 'player.png', 'bumper.png', 'pinball-rail.png', 'rail.png',
-	'wall-horizontal.png', 'wall-horizontal-v2.png', 'wall-vertical.png', 'wall-vertical-v2.png'
-)
+$whiteAssets = @('ball.png', 'player.png')
 $matrix = [Drawing.Imaging.ColorMatrix]::new(@(
 	[float[]]@(0.2126, 0.2126, 0.2126, 0, 0),
 	[float[]]@(0.7152, 0.7152, 0.7152, 0, 0),
@@ -101,4 +98,32 @@ foreach ($name in $whiteAssets)
 }
 $attributes.Dispose()
 
-Write-Host 'Brickout power icons, radial timers, achievement badges and white collider sprites are up to date.'
+$blueAssets = @(
+	'bumper.png', 'pinball-rail.png', 'rail.png',
+	'wall-horizontal.png', 'wall-horizontal-v2.png', 'wall-vertical.png', 'wall-vertical-v2.png'
+)
+$blueMatrix = [Drawing.Imaging.ColorMatrix]::new(@(
+	[float[]]@(0.0043, 0.117, 0.2126, 0, 0),
+	[float[]]@(0.0143, 0.393, 0.7152, 0, 0),
+	[float[]]@(0.0014, 0.040, 0.0722, 0, 0),
+	[float[]]@(0, 0, 0, 1, 0),
+	[float[]]@(0.02, 0.08, 0.15, 0, 1)
+))
+$blueAttributes = [Drawing.Imaging.ImageAttributes]::new()
+$blueAttributes.SetColorMatrix($blueMatrix)
+foreach ($name in $blueAssets)
+{
+	$path = Join-Path $assetRoot $name
+	$source = [Drawing.Bitmap]::new($path)
+	$output = [Drawing.Bitmap]::new($source.Width, $source.Height, [Drawing.Imaging.PixelFormat]::Format32bppArgb)
+	$graphics = [Drawing.Graphics]::FromImage($output)
+	$graphics.DrawImage($source, [Drawing.Rectangle]::new(0, 0, $source.Width, $source.Height), 0, 0,
+		$source.Width, $source.Height, [Drawing.GraphicsUnit]::Pixel, $blueAttributes)
+	$graphics.Dispose()
+	$source.Dispose()
+	$output.Save($path, [Drawing.Imaging.ImageFormat]::Png)
+	$output.Dispose()
+}
+$blueAttributes.Dispose()
+
+Write-Host 'Brickout power icons, radial timers, achievement badges, white player sprites and blue arena sprites are up to date.'

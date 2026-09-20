@@ -87,15 +87,19 @@ function New-Transform([float]$x = 0, [float]$y = 0, [float]$scaleX = 1, [float]
 	}
 }
 
-function New-TextComponent([string]$text, [float]$size, [int]$order = 100)
+function New-TextComponent([string]$text, [float]$size, [int]$order = 100,
+	[bool]$centered = $true, [float]$offsetX = 0, [float]$offsetY = 0)
 {
 	return [ordered]@{
 		Text = $text
 		Font = 'Fonts/Arcade.lnfont'
 		Size = $size
 		Spacing = 0
-		Centered = $true
+		Centered = $centered
 		Order = $order
+		'Offset.x' = $offsetX
+		'Offset.y' = $offsetY
+		'Offset.z' = 0
 		'Color.x' = 1
 		'Color.y' = 1
 		'Color.z' = 1
@@ -141,6 +145,40 @@ function New-ButtonComponent([float]$width = 360, [float]$height = 56)
 	}
 }
 
+function New-CheckBoxComponent([bool]$checked = $false)
+{
+	return [ordered]@{
+		Background = 'Sprites/UI/checkbox-frame.png'
+		Checkmark = 'Sprites/UI/checkbox-check.png'
+		'Size.x' = 30; 'Size.y' = 30; 'Size.z' = 0
+		'Normal Color.x' = 0.12; 'Normal Color.y' = 0.82; 'Normal Color.z' = 1
+		'Hovered Color.x' = 1; 'Hovered Color.y' = 0.22; 'Hovered Color.z' = 0.72
+		'Checkmark Color.x' = 1; 'Checkmark Color.y' = 1; 'Checkmark Color.z' = 1
+		Order = 105; Checked = $checked; Interactable = $true; type = 'CheckBox'
+	}
+}
+
+function New-ProgressBarComponent([float]$value)
+{
+	return [ordered]@{
+		Background = 'Sprites/UI/progress-track.png'; Fill = 'Sprites/UI/progress-fill.png'
+		'Size.x' = 300; 'Size.y' = 22; 'Size.z' = 0
+		'Background Color.x' = 0.08; 'Background Color.y' = 0.28; 'Background Color.z' = 0.42
+		'Fill Color.x' = 0.12; 'Fill Color.y' = 0.82; 'Fill Color.z' = 1
+		Minimum = 0; Maximum = 10; Value = $value; Order = 105; Interactable = $true
+		type = 'ProgressBar'
+	}
+}
+
+function New-ComboBoxComponent([string]$prefix, [string]$options, [int]$selected = 0)
+{
+	return [ordered]@{
+		Options = $options; Prefix = $prefix; Font = 'Fonts/Arcade.lnfont'
+		'Option Height' = 48; 'Selected Index' = $selected; 'Popup Order' = 180
+		type = 'ComboBox'
+	}
+}
+
 function New-PanelEntity([string]$name, [float]$width, [float]$height, [float]$anchorX,
 	[float]$anchorY, [float]$offsetX, [float]$offsetY, [int]$parent, [int]$order = 80,
 	[bool]$visible = $true, [string]$texture = 'Sprites/UI/neon-panel.png')
@@ -178,11 +216,12 @@ function New-PanelEntity([string]$name, [float]$width, [float]$height, [float]$a
 }
 
 function New-TextEntity([string]$name, [string]$text, [float]$size, [float]$anchorX,
-	[float]$anchorY, [float]$offsetX, [float]$offsetY, [int]$parent, [bool]$visible = $true)
+	[float]$anchorY, [float]$offsetX, [float]$offsetY, [int]$parent, [bool]$visible = $true,
+	[bool]$centered = $true)
 {
 	$entity = [ordered]@{
 		components = @(
-			(New-TextComponent $text $size)
+			(New-TextComponent $text $size 100 $centered)
 			(New-AnchorComponent $anchorX $anchorY $offsetX $offsetY)
 		)
 		name = $name
@@ -424,8 +463,8 @@ $mainMenuAssembly = [ordered]@{
 		}
 		$background
 		(New-PanelEntity 'Menu Panel' 860 690 0.5 0.5 0 0 0 70)
-		(New-TextEntity 'Menu Title' 'BRICKOUT' 58 0.5 0.5 0 292 0)
-		(New-TextEntity 'Menu Subtitle' 'NEON CIRCUIT' 19 0.5 0.5 0 238 0)
+		(New-SpriteEntity 'Menu Title' 'Sprites/UI/brickout-title.png' 0.5 0.5 0 280 0.8 0.8 0 100)
+		(New-TextEntity 'Menu Subtitle' 'NEON CIRCUIT' 18 0.5 0.5 0 222 0)
 		(New-TextEntity 'Menu Prompt' 'PRESS TO START' 22 0.5 0.5 0 -20 0)
 		(New-GroupEntity 'Menu Options' 0)
 		(New-ButtonEntity 'Continue Button' 'CONTINUE' 0.5 0.5 0 145 6 540 42 20)
@@ -435,13 +474,13 @@ $mainMenuAssembly = [ordered]@{
 		(New-ButtonEntity 'Credits Button' 'CREDITS' 0.5 0.5 0 -47 6 540 42 20)
 		(New-ButtonEntity 'Settings Button' 'SETTINGS' 0.5 0.5 0 -95 6 540 42 20)
 		(New-ButtonEntity 'Quit Button' 'QUIT' 0.5 0.5 0 -143 6 540 42 20)
-		(New-TextEntity 'Menu Detail' 'CREDITS' 23 0.5 0.5 0 186 0 $false)
+		(New-TextEntity 'Menu Detail' 'CREDITS' 23 0.5 0.5 0 166 0 $false)
 		(New-GroupEntity 'Settings Options' 0)
 		(New-GroupEntity 'Level Options' 0)
 		(New-GroupEntity 'Statistics Panel' 0)
 		(New-GroupEntity 'Achievements Panel' 0)
 		(New-GroupEntity 'Credits Panel' 0)
-		(New-ButtonEntity 'Back Button' 'BACK' 0.5 0.5 0 -256 0 660 40 18 $false)
+		(New-ButtonEntity 'Back Button' 'BACK' 0.5 0.5 0 -270 0 660 42 18 $false)
 	)
 	root = 0
 }
@@ -452,41 +491,78 @@ $achievementsIndex = 18
 $creditsIndex = 19
 
 $mainMenuAssembly.entities = @($mainMenuAssembly.entities) + @(
-	(New-TextEntity 'Settings Tab 1' 'GRAPHICS' 14 0.5 0.5 -270 142 $settingsOptionsIndex),
-	(New-TextEntity 'Settings Tab 2' 'SOUND' 14 0.5 0.5 -90 142 $settingsOptionsIndex),
-	(New-TextEntity 'Settings Tab 3' 'ACCESSIBILITY' 14 0.5 0.5 105 142 $settingsOptionsIndex),
-	(New-TextEntity 'Settings Tab 4' 'CONTROLS' 14 0.5 0.5 285 142 $settingsOptionsIndex),
-	(New-TextEntity 'Settings Page' 'Q / LB                                      E / RB' 11 0.5 0.5 0 105 $settingsOptionsIndex)
+	(New-TextEntity 'Settings Tab 1' 'GRAPHICS' 13 0.5 0.5 -270 126 $settingsOptionsIndex),
+	(New-TextEntity 'Settings Tab 2' 'SOUND' 13 0.5 0.5 -90 126 $settingsOptionsIndex),
+	(New-TextEntity 'Settings Tab 3' 'ACCESSIBILITY' 13 0.5 0.5 105 126 $settingsOptionsIndex),
+	(New-TextEntity 'Settings Tab 4' 'CONTROLS' 13 0.5 0.5 285 126 $settingsOptionsIndex),
+	(New-TextEntity 'Settings Page' 'Q / LB                                      E / RB' 11 0.5 0.5 0 94 $settingsOptionsIndex)
 )
 
 $graphicsIndex = $mainMenuAssembly.entities.Count
-$mainMenuAssembly.entities = @($mainMenuAssembly.entities) + @(
-	(New-GroupEntity 'Graphics Settings' $settingsOptionsIndex),
-	(New-ButtonEntity 'Resolution Button' 'RESOLUTION' 0.5 0.5 0 64 $graphicsIndex 660 38 16),
-	(New-ButtonEntity 'VSync Button' 'V-SYNC' 0.5 0.5 0 18 $graphicsIndex 660 38 16),
-	(New-ButtonEntity 'Quality Button' 'GRAPHICS' 0.5 0.5 0 -28 $graphicsIndex 660 38 16),
-	(New-ButtonEntity 'Bloom Button' 'BLOOM' 0.5 0.5 0 -74 $graphicsIndex 660 38 16),
-	(New-ButtonEntity 'Vignette Button' 'VIGNETTE' 0.5 0.5 0 -120 $graphicsIndex 660 38 16),
-	(New-ButtonEntity 'Motion Blur Button' 'MOTION BLUR' 0.5 0.5 0 -166 $graphicsIndex 660 38 16)
+$mainMenuAssembly.entities = @($mainMenuAssembly.entities) + @((New-GroupEntity 'Graphics Settings' $settingsOptionsIndex))
+$graphicsRows = @(
+	@{ Name='Resolution Button'; Label='RESOLUTION'; Y=55; Combo='960 X 540|1280 X 720|1600 X 900|1920 X 1080'; Selected=1 },
+	@{ Name='VSync Button'; Label='V-SYNC'; Y=7; Check='VSync CheckBox' },
+	@{ Name='Quality Button'; Label='GRAPHICS'; Y=-41; Combo='LOW|MEDIUM|HIGH'; Selected=2 },
+	@{ Name='Bloom Button'; Label='BLOOM'; Y=-89; Check='Bloom CheckBox' },
+	@{ Name='Vignette Button'; Label='VIGNETTE'; Y=-137; Check='Vignette CheckBox' },
+	@{ Name='Motion Blur Button'; Label='MOTION BLUR'; Y=-185; Check='Motion Blur CheckBox' }
 )
+foreach ($row in $graphicsRows)
+{
+	$button = New-ButtonEntity $row.Name $row.Label 0.5 0.5 0 $row.Y $graphicsIndex 660 40 15
+	$text = $button.components | Where-Object { $_.type -eq 'TextRenderer' } | Select-Object -First 1
+	$text.Centered = $false; $text.'Offset.x' = -292
+	if ($row.Combo) { $button.components = @($button.components) + @((New-ComboBoxComponent $row.Label $row.Combo $row.Selected)) }
+	$mainMenuAssembly.entities = @($mainMenuAssembly.entities) + @($button)
+	if ($row.Check)
+	{
+		$mainMenuAssembly.entities = @($mainMenuAssembly.entities) + @([ordered]@{
+			components = @((New-CheckBoxComponent $true), (New-AnchorComponent 0.5 0.5 282 $row.Y))
+			name = $row.Check; parent = $graphicsIndex; transform = New-Transform
+		})
+	}
+}
 $soundIndex = $mainMenuAssembly.entities.Count
 $mainMenuAssembly.entities = @($mainMenuAssembly.entities) + @(
 	(New-GroupEntity 'Sound Settings' $settingsOptionsIndex),
-	(New-ButtonEntity 'SFX Volume Button' 'SFX' 0.5 0.5 0 42 $soundIndex 660 52 18),
-	(New-ButtonEntity 'Music Volume Button' 'MUSIC' 0.5 0.5 0 -28 $soundIndex 660 52 18)
+	(New-ButtonEntity 'SFX Volume Button' 'SFX 80%' 0.5 0.5 0 40 $soundIndex 660 56 16),
+	(New-ButtonEntity 'Music Volume Button' 'MUSIC 60%' 0.5 0.5 0 -36 $soundIndex 660 56 16),
+	[ordered]@{ components=@((New-ProgressBarComponent 8), (New-AnchorComponent 0.5 0.5 120 40)); name='SFX Progress'; parent=$soundIndex; transform=New-Transform },
+	[ordered]@{ components=@((New-ProgressBarComponent 6), (New-AnchorComponent 0.5 0.5 120 -36)); name='Music Progress'; parent=$soundIndex; transform=New-Transform }
 )
+foreach ($name in @('SFX Volume Button', 'Music Volume Button'))
+{
+	$button = $mainMenuAssembly.entities | Where-Object { $_.name -eq $name } | Select-Object -First 1
+	$text = $button.components | Where-Object { $_.type -eq 'TextRenderer' } | Select-Object -First 1
+	$text.Centered = $false; $text.'Offset.x' = -292
+}
 $accessibilityIndex = $mainMenuAssembly.entities.Count
+$mainMenuAssembly.entities = @($mainMenuAssembly.entities) + @((New-GroupEntity 'Accessibility Settings' $settingsOptionsIndex))
+$cameraButton = New-ButtonEntity 'Camera Shake Button' 'CAMERA SHAKE' 0.5 0.5 0 48 $accessibilityIndex 660 46 16
+$cameraText = $cameraButton.components | Where-Object { $_.type -eq 'TextRenderer' } | Select-Object -First 1
+$cameraText.Centered = $false; $cameraText.'Offset.x' = -292
+$colorButton = New-ButtonEntity 'Color Mode Button' 'COLOR MODE' 0.5 0.5 0 -10 $accessibilityIndex 660 46 15
+$colorText = $colorButton.components | Where-Object { $_.type -eq 'TextRenderer' } | Select-Object -First 1
+$colorText.Centered = $false; $colorText.'Offset.x' = -292
+$colorButton.components = @($colorButton.components) + @((New-ComboBoxComponent 'COLOR MODE' 'NONE|PROTANOPIA|DEUTERANOPIA|TRITANOPIA' 0))
+$languageButton = New-ButtonEntity 'Language Button' 'LANGUAGE' 0.5 0.5 0 -68 $accessibilityIndex 660 46 15
+$languageText = $languageButton.components | Where-Object { $_.type -eq 'TextRenderer' } | Select-Object -First 1
+$languageText.Centered = $false; $languageText.'Offset.x' = -292
+$languageButton.components = @($languageButton.components) + @((New-ComboBoxComponent 'LANGUAGE' 'ENGLISH|PORTUGUES|ESPANOL|ITALIANO|FRANCAIS|DEUTSCH|RUSSIAN|GREEK' 0))
 $mainMenuAssembly.entities = @($mainMenuAssembly.entities) + @(
-	(New-GroupEntity 'Accessibility Settings' $settingsOptionsIndex),
-	(New-ButtonEntity 'Camera Shake Button' 'CAMERA SHAKE' 0.5 0.5 0 48 $accessibilityIndex 660 46 17),
-	(New-ButtonEntity 'Color Mode Button' 'COLOR MODE' 0.5 0.5 0 -10 $accessibilityIndex 660 46 17),
-	(New-ButtonEntity 'Language Button' 'LANGUAGE' 0.5 0.5 0 -68 $accessibilityIndex 660 46 17)
+	$cameraButton, $colorButton, $languageButton,
+	[ordered]@{ components=@((New-CheckBoxComponent $true), (New-AnchorComponent 0.5 0.5 282 48)); name='Camera Shake CheckBox'; parent=$accessibilityIndex; transform=New-Transform }
 )
 $controlsIndex = $mainMenuAssembly.entities.Count
+$mainMenuAssembly.entities = @($mainMenuAssembly.entities) + @((New-GroupEntity 'Controls Settings' $settingsOptionsIndex))
+$controlButton = New-ButtonEntity 'Control Hints Button' 'CONTROL HINTS' 0.5 0.5 0 45 $controlsIndex 660 48 16
+$controlText = $controlButton.components | Where-Object { $_.type -eq 'TextRenderer' } | Select-Object -First 1
+$controlText.Centered = $false; $controlText.'Offset.x' = -292
 $mainMenuAssembly.entities = @($mainMenuAssembly.entities) + @(
-	(New-GroupEntity 'Controls Settings' $settingsOptionsIndex),
-	(New-ButtonEntity 'Control Hints Button' 'CONTROL HINTS' 0.5 0.5 0 34 $controlsIndex 660 52 18),
-	(New-TextEntity 'Controls Help' "ARROWS / STICK    MOVE`nSPACE / A         LAUNCH`nE / X             SHOCKWAVE`nESC / START       PAUSE" 14 0.5 0.5 0 -80 $controlsIndex)
+	$controlButton,
+	[ordered]@{ components=@((New-CheckBoxComponent $true), (New-AnchorComponent 0.5 0.5 282 45)); name='Control Hints CheckBox'; parent=$controlsIndex; transform=New-Transform },
+	(New-TextEntity 'Controls Help' "ARROWS / LEFT STICK    MOVE`nSPACE / A              LAUNCH`nE / X                  SHOCKWAVE`nESC / START            PAUSE" 14 0.5 0.5 -285 -35 $controlsIndex $true $false)
 )
 
 for ($slot = 0; $slot -lt 10; $slot++)
@@ -494,17 +570,17 @@ for ($slot = 0; $slot -lt 10; $slot++)
 	$column = $slot % 2
 	$row = [Math]::Floor($slot / 2)
 	$x = if ($column -eq 0) { -178 } else { 178 }
-	$y = 96 - $row * 55
+	$y = 82 - $row * 58
 	$slotName = "Level Slot {0} Button" -f ($slot + 1)
 	$slotLabel = "LEVEL {0:D3}" -f ($slot + 1)
 	$mainMenuAssembly.entities = @($mainMenuAssembly.entities) + @(
-		(New-ButtonEntity $slotName $slotLabel 0.5 0.5 $x $y $levelOptionsIndex 320 44 15)
+		(New-ButtonEntity $slotName $slotLabel 0.5 0.5 $x $y $levelOptionsIndex 330 48 12)
 	)
 }
 $mainMenuAssembly.entities = @($mainMenuAssembly.entities) + @(
-	(New-TextEntity 'Level Page' 'Q / LB     PAGE 01/10     E / RB' 13 0.5 0.5 0 -194 $levelOptionsIndex),
-	(New-TextEntity 'Statistics Text' 'STATISTICS' 19 0.5 0.5 0 82 $statisticsIndex),
-	(New-TextEntity 'Achievement Progress' '0/10 UNLOCKED' 13 0.5 0.5 0 -190 $achievementsIndex),
+	(New-TextEntity 'Level Page' 'Q / LB     PAGE 01/10     E / RB' 13 0.5 0.5 0 -210 $levelOptionsIndex),
+	(New-TextEntity 'Statistics Text' 'STATISTICS' 18 0.5 0.5 -270 95 $statisticsIndex $true $false),
+	(New-TextEntity 'Achievement Progress' '0/10 UNLOCKED' 13 0.5 0.5 0 -202 $achievementsIndex),
 	(New-SpriteEntity 'Credits Logo' 'Images/sampaio-games-logo.png' 0.5 0.5 0 78 0.085 0.085 $creditsIndex 100),
 	(New-TextEntity 'Credits Creator' "CREATED BY`nKELLVYN SAMPAIO" 21 0.5 0.5 0 -50 $creditsIndex),
 	(New-TextEntity 'Credits Technology' "POWERED BY LION ENGINE`nA SAMPAIO GAMES PRODUCTION" 14 0.5 0.5 0 -142 $creditsIndex)
@@ -512,14 +588,14 @@ $mainMenuAssembly.entities = @($mainMenuAssembly.entities) + @(
 for ($row = 0; $row -lt 5; $row++)
 {
 	$rowIndex = $mainMenuAssembly.entities.Count
-	$y = 94 - $row * 60
+	$y = 92 - $row * 58
 	$rowName = "Achievement Row {0}" -f ($row + 1)
 	$iconName = "Achievement Icon {0}" -f ($row + 1)
 	$textName = "Achievement Text {0}" -f ($row + 1)
 	$mainMenuAssembly.entities = @($mainMenuAssembly.entities) + @(
 		(New-GroupEntity $rowName $achievementsIndex $true),
 		(New-SpriteEntity $iconName 'Sprites/Brickout/achievement-first.png' 0.5 0.5 -285 $y 0.58 0.58 $rowIndex 100),
-		(New-TextEntity $textName 'ACHIEVEMENT' 13 0.5 0.5 28 $y $rowIndex)
+		(New-TextEntity $textName 'ACHIEVEMENT' 13 0.5 0.5 -238 ($y + 6) $rowIndex $true $false)
 	)
 }
 $attractPromptIndex = $mainMenuAssembly.entities.Count
@@ -549,30 +625,6 @@ $mainMenuAssembly.entities = @($mainMenuAssembly.entities) + @(
 	(New-TextEntity 'Keyboard Navigate Label' 'NAVIGATE' 13 0.5 0.5 -88 -301 $keyboardMenuIndex),
 	(New-SpriteEntity 'Keyboard Select Icon' 'Sprites/UI/key-enter.png' 0.5 0.5 52 -300 1 1 $keyboardMenuIndex),
 	(New-TextEntity 'Keyboard Select Label' 'SELECT' 13 0.5 0.5 132 -301 $keyboardMenuIndex)
-)
-$detailPromptIndex = $mainMenuAssembly.entities.Count
-$mainMenuAssembly.entities = @($mainMenuAssembly.entities) + @(
-	(New-GroupEntity 'Controller Detail Prompts' 0),
-	(New-SpriteEntity 'Controller Back Icon' 'Sprites/UI/controller-b.png' 0.5 0.5 70 -300 1 1 $detailPromptIndex),
-	(New-TextEntity 'Controller Back Label' 'BACK' 13 0.5 0.5 140 -301 $detailPromptIndex)
-)
-$keyboardDetailIndex = $mainMenuAssembly.entities.Count
-$mainMenuAssembly.entities = @($mainMenuAssembly.entities) + @(
-	(New-GroupEntity 'Keyboard Detail Prompts' 0),
-	(New-SpriteEntity 'Keyboard Back Icon' 'Sprites/UI/key-esc.png' 0.5 0.5 62 -300 1 1 $keyboardDetailIndex),
-	(New-TextEntity 'Keyboard Back Label' 'BACK' 13 0.5 0.5 138 -301 $keyboardDetailIndex)
-)
-$settingsPromptIndex = $mainMenuAssembly.entities.Count
-$mainMenuAssembly.entities = @($mainMenuAssembly.entities) + @(
-	(New-GroupEntity 'Controller Settings Prompt' 0),
-	(New-SpriteEntity 'Controller Toggle Icon' 'Sprites/UI/controller-a.png' 0.5 0.5 -115 -300 1 1 $settingsPromptIndex),
-	(New-TextEntity 'Controller Toggle Label' 'TOGGLE    LB / RB  TABS' 13 0.5 0.5 -32 -301 $settingsPromptIndex)
-)
-$keyboardSettingsIndex = $mainMenuAssembly.entities.Count
-$mainMenuAssembly.entities = @($mainMenuAssembly.entities) + @(
-	(New-GroupEntity 'Keyboard Settings Prompt' 0),
-	(New-SpriteEntity 'Keyboard Toggle Icon' 'Sprites/UI/key-enter.png' 0.5 0.5 -125 -300 1 1 $keyboardSettingsIndex),
-	(New-TextEntity 'Keyboard Toggle Label' 'TOGGLE    Q / E  TABS' 13 0.5 0.5 -35 -301 $keyboardSettingsIndex)
 )
 Write-SealedJson (Join-Path $assetRoot 'Assemblies\Main Menu.lnassembly') $mainMenuAssembly
 
@@ -710,7 +762,7 @@ $paddleBehavior = $paddleRoot.components | Where-Object { $_.type -eq 'Paddle' }
 if ($paddleBehavior)
 {
 	$paddleBehavior.Speed = 550
-	$paddleBehavior.'Horizontal Limit' = 350
+	$paddleBehavior.'Horizontal Limit' = 338
 }
 
 Write-SealedJson $paddlePath $paddleAssembly
@@ -779,8 +831,8 @@ function Get-LevelLayout([int]$level, [int]$count)
 		{
 			$row = [Math]::Floor($index / 10)
 			$column = $index % 10
-			$x = -315 + $column * 70
-			$y = 220 - $row * 48
+			$x = -333 + $column * 74
+			$y = 220 - $row * 58
 			switch ($family)
 			{
 				0 { $y += [Math]::Sin(($column + $level * 0.3) * 0.85) * 42 }
@@ -789,10 +841,10 @@ function Get-LevelLayout([int]$level, [int]$count)
 				3 { $x += [Math]::Sin($row * 1.4) * 34; $y += [Math]::Cos($column * 0.8) * 22 }
 				4 { $y += (($column + $row) % 2) * 25 - 12 }
 				5 { if (($row % 2) -eq 0) { $x -= 24 } else { $x += 24 }; $y += ($column % 3) * 10 }
-				6 { $x *= (0.62 + $row * 0.12); $y += [Math]::Abs($column - 4.5) * 5 }
+				6 { $x += ($row % 2) * 20 - 10; $y += [Math]::Abs($column - 4.5) * 5 }
 				7 { $y += [Math]::Sin($column * 1.2) * 25; $x += [Math]::Cos($row * 1.8) * 22 }
 				8 { $y += [Math]::Sin(($column + $row) * 0.72) * 36 }
-				9 { $x *= (0.78 + [Math]::Abs($row - 1.5) * 0.08); $y -= [Math]::Abs($column - 4.5) * 4 }
+				9 { $x += ($row - 1.5) * 12; $y -= [Math]::Abs($column - 4.5) * 4 }
 			}
 			$layout.Add([pscustomobject]@{ x=$x; y=[Math]::Round($y, 1); rotation=0 })
 		}
@@ -988,12 +1040,12 @@ for ($level = 1; $level -le 100; $level++)
 		$point = $layout[$brickNumber]
 		$brick.transform.position = @([float]$point.x, [float]$point.y)
 		$brick.transform.rotation = 0
-		$maximumDurability = [Math]::Min(2 + [Math]::Floor(($level - 1) / 20), 5)
-		$durability = 1 + (($brickNumber + $level - 1) % $maximumDurability)
-		if ($level -ge 60 -and ($brickNumber % 11) -eq 4)
-		{
-			$durability = 5
-		}
+		$durability = 1 + (($brickNumber + $level) % 2)
+		if ($level -ge 2 -and (($brickNumber + $level) % 7) -eq 0) { $durability = 3 }
+		if ($level -ge 4 -and (($brickNumber * 3 + $level) % 11) -eq 0) { $durability = 4 }
+		if ($level -ge 6 -and (($brickNumber * 5 + $level) % 17) -eq 0) { $durability = 5 }
+		if ($level -ge 25 -and (($brickNumber + $level) % 5) -eq 0) { $durability = [Math]::Max($durability, 3) }
+		if ($level -ge 50 -and (($brickNumber + $level) % 4) -eq 0) { $durability = [Math]::Max($durability, 4) }
 		$behavior = $brick.components | Where-Object { $_.type -eq 'Brick' } | Select-Object -First 1
 		$behavior | Add-Member -NotePropertyName 'Hit Points' -NotePropertyValue $durability -Force
 		$behavior | Add-Member -NotePropertyName 'Power' -NotePropertyValue '' -Force
@@ -1249,6 +1301,18 @@ for ($level = 1; $level -le 100; $level++)
 	if ($bricks.Count -eq 0)
 	{
 		throw "Brickout level $level has no gameplay bricks."
+	}
+	for ($left = 0; $left -lt $bricks.Count; $left++)
+	{
+		for ($right = $left + 1; $right -lt $bricks.Count; $right++)
+		{
+			$deltaX = [Math]::Abs($bricks[$left].transform.position[0] - $bricks[$right].transform.position[0])
+			$deltaY = [Math]::Abs($bricks[$left].transform.position[1] - $bricks[$right].transform.position[1])
+			if ($deltaX -lt 66 -and $deltaY -lt 28)
+			{
+				throw "Brickout level $level overlaps bricks $left and $right."
+			}
+		}
 	}
 
 	$unsafeObstacles = @($scene.entities | Where-Object {

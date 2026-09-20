@@ -68,6 +68,9 @@
 
 // UI
 #include <Lion/UI/Button.h>
+#include <Lion/UI/CheckBox.h>
+#include <Lion/UI/ComboBox.h>
+#include <Lion/UI/ProgressBar.h>
 #include <Lion/UI/WidgetAnchor.h>
 
 // Signal

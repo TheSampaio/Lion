@@ -142,18 +142,87 @@ function New-ControllerButton([string]$path, [string]$label)
 	$graphics = [Drawing.Graphics]::FromImage($bitmap)
 	$graphics.SmoothingMode = [Drawing.Drawing2D.SmoothingMode]::AntiAlias
 	$graphics.TextRenderingHint = [Drawing.Text.TextRenderingHint]::AntiAliasGridFit
-	$fill = [Drawing.SolidBrush]::new([Drawing.Color]::FromArgb(255, 20, 105, 210))
-	$edge = [Drawing.Pen]::new([Drawing.Color]::FromArgb(255, 122, 215, 255), 2)
+	$glow = [Drawing.Pen]::new([Drawing.Color]::FromArgb(110, 20, 170, 255), 4)
+	$fill = [Drawing.SolidBrush]::new([Drawing.Color]::FromArgb(255, 5, 42, 88))
+	$edge = [Drawing.Pen]::new([Drawing.Color]::FromArgb(255, 55, 225, 255), 2)
+	$inner = [Drawing.Pen]::new([Drawing.Color]::FromArgb(255, 155, 245, 255), 1)
 	$font = [Drawing.Font]::new('Arial', 16, [Drawing.FontStyle]::Bold, [Drawing.GraphicsUnit]::Pixel)
 	$brush = [Drawing.SolidBrush]::new([Drawing.Color]::White)
 	$format = [Drawing.StringFormat]::new()
 	$format.Alignment = [Drawing.StringAlignment]::Center
 	$format.LineAlignment = [Drawing.StringAlignment]::Center
-	$graphics.FillEllipse($fill, 2, 2, 28, 28)
-	$graphics.DrawEllipse($edge, 2, 2, 28, 28)
+	$graphics.DrawEllipse($glow, 3, 3, 26, 26)
+	$graphics.FillEllipse($fill, 3, 3, 26, 26)
+	$graphics.DrawEllipse($edge, 3, 3, 26, 26)
+	$graphics.DrawEllipse($inner, 6, 6, 20, 20)
 	$graphics.DrawString($label, $font, $brush, [Drawing.RectangleF]::new(0, -1, 32, 32), $format)
 	$bitmap.Save($path, [Drawing.Imaging.ImageFormat]::Png)
-	$format.Dispose(); $brush.Dispose(); $font.Dispose(); $edge.Dispose(); $fill.Dispose(); $graphics.Dispose(); $bitmap.Dispose()
+	$format.Dispose(); $brush.Dispose(); $font.Dispose(); $inner.Dispose(); $edge.Dispose(); $fill.Dispose(); $glow.Dispose(); $graphics.Dispose(); $bitmap.Dispose()
+}
+
+function New-WidgetAssets
+{
+	$frame = [Drawing.Bitmap]::new(32, 32, [Drawing.Imaging.PixelFormat]::Format32bppArgb)
+	$graphics = [Drawing.Graphics]::FromImage($frame)
+	$graphics.SmoothingMode = [Drawing.Drawing2D.SmoothingMode]::AntiAlias
+	$graphics.Clear([Drawing.Color]::Transparent)
+	$fill = [Drawing.SolidBrush]::new([Drawing.Color]::FromArgb(245, 3, 12, 29))
+	$edge = [Drawing.Pen]::new([Drawing.Color]::White, 2)
+	$graphics.FillRectangle($fill, 4, 4, 24, 24)
+	$graphics.DrawRectangle($edge, 4, 4, 23, 23)
+	$frame.Save((Join-Path $ui 'checkbox-frame.png'), [Drawing.Imaging.ImageFormat]::Png)
+	$edge.Dispose(); $fill.Dispose(); $graphics.Dispose(); $frame.Dispose()
+
+	$check = [Drawing.Bitmap]::new(32, 32, [Drawing.Imaging.PixelFormat]::Format32bppArgb)
+	$graphics = [Drawing.Graphics]::FromImage($check)
+	$graphics.SmoothingMode = [Drawing.Drawing2D.SmoothingMode]::AntiAlias
+	$graphics.Clear([Drawing.Color]::Transparent)
+	$glow = [Drawing.Pen]::new([Drawing.Color]::FromArgb(105, 30, 225, 255), 6)
+	$mark = [Drawing.Pen]::new([Drawing.Color]::White, 3)
+	$mark.StartCap = [Drawing.Drawing2D.LineCap]::Round; $mark.EndCap = [Drawing.Drawing2D.LineCap]::Round
+	$graphics.DrawLines($glow, [Drawing.Point[]]@([Drawing.Point]::new(8, 16), [Drawing.Point]::new(14, 22), [Drawing.Point]::new(25, 9)))
+	$graphics.DrawLines($mark, [Drawing.Point[]]@([Drawing.Point]::new(8, 16), [Drawing.Point]::new(14, 22), [Drawing.Point]::new(25, 9)))
+	$check.Save((Join-Path $ui 'checkbox-check.png'), [Drawing.Imaging.ImageFormat]::Png)
+	$mark.Dispose(); $glow.Dispose(); $graphics.Dispose(); $check.Dispose()
+
+	foreach ($name in @('progress-track.png', 'progress-fill.png'))
+	{
+		$bitmap = [Drawing.Bitmap]::new(16, 16, [Drawing.Imaging.PixelFormat]::Format32bppArgb)
+		$graphics = [Drawing.Graphics]::FromImage($bitmap)
+		$graphics.SmoothingMode = [Drawing.Drawing2D.SmoothingMode]::AntiAlias
+		$graphics.Clear([Drawing.Color]::Transparent)
+		$shape = New-RoundedPath ([Drawing.RectangleF]::new(1, 3, 14, 10)) 4
+		$color = if ($name -eq 'progress-track.png') { [Drawing.Color]::FromArgb(255, 20, 55, 75) } else { [Drawing.Color]::White }
+		$brush = [Drawing.SolidBrush]::new($color)
+		$graphics.FillPath($brush, $shape)
+		$bitmap.Save((Join-Path $ui $name), [Drawing.Imaging.ImageFormat]::Png)
+		$brush.Dispose(); $shape.Dispose(); $graphics.Dispose(); $bitmap.Dispose()
+	}
+}
+
+function New-Title([string]$path)
+{
+	$bitmap = [Drawing.Bitmap]::new(560, 96, [Drawing.Imaging.PixelFormat]::Format32bppArgb)
+	$graphics = [Drawing.Graphics]::FromImage($bitmap)
+	$graphics.SmoothingMode = [Drawing.Drawing2D.SmoothingMode]::AntiAlias
+	$graphics.Clear([Drawing.Color]::Transparent)
+	$family = [Drawing.FontFamily]::new('Consolas')
+	$shape = [Drawing.Drawing2D.GraphicsPath]::new()
+	$format = [Drawing.StringFormat]::new()
+	$format.Alignment = [Drawing.StringAlignment]::Center
+	$format.LineAlignment = [Drawing.StringAlignment]::Center
+	$shape.AddString('BRICKOUT', $family, [int][Drawing.FontStyle]::Bold, 70,
+		[Drawing.RectangleF]::new(0, -2, 560, 96), $format)
+	$cyanGlow = [Drawing.Pen]::new([Drawing.Color]::FromArgb(90, 0, 225, 255), 9)
+	$darkEdge = [Drawing.Pen]::new([Drawing.Color]::FromArgb(255, 3, 12, 29), 5)
+	$white = [Drawing.SolidBrush]::new([Drawing.Color]::White)
+	$graphics.DrawPath($cyanGlow, $shape)
+	$graphics.DrawPath($darkEdge, $shape)
+	$graphics.FillPath($white, $shape)
+	$accent = [Drawing.Pen]::new([Drawing.Color]::FromArgb(255, 255, 150, 45), 2)
+	$graphics.DrawLine($accent, 90, 85, 470, 85)
+	$bitmap.Save($path, [Drawing.Imaging.ImageFormat]::Png)
+	$accent.Dispose(); $white.Dispose(); $darkEdge.Dispose(); $cyanGlow.Dispose(); $format.Dispose(); $shape.Dispose(); $family.Dispose(); $graphics.Dispose(); $bitmap.Dispose()
 }
 
 function New-PowerIcon([string]$path, [string]$kind)
@@ -202,6 +271,8 @@ New-Keycap (Join-Path $ui 'key-e.png') 32 'E' 14
 New-ArrowKeys (Join-Path $ui 'key-arrows.png')
 New-ControllerButton (Join-Path $ui 'controller-x.png') 'X'
 New-Keycap (Join-Path $ui 'controller-start.png') 54 'START' 10
+New-WidgetAssets
+New-Title (Join-Path $ui 'brickout-title.png')
 
 New-PowerIcon (Join-Path $brickout 'power-bomb.png') 'Bomb'
 New-PowerIcon (Join-Path $brickout 'power-wide.png') 'Wide'

@@ -54,6 +54,8 @@ private:
 	std::array<Lion::TextRenderer*, 7> mMenuButtonTexts{};
 	std::array<Lion::Button*, GameSettings::kSettingCount> mSettingsButtons{};
 	std::array<Lion::TextRenderer*, GameSettings::kSettingCount> mSettingsTexts{};
+	std::array<Lion::ComboBox*, GameSettings::kSettingCount> mSettingCombos{};
+	std::array<Lion::CheckBox*, GameSettings::kSettingCount> mSettingCheckBoxes{};
 	std::array<Lion::Entity*, static_cast<size_t>(GameSettings::Category::Count)> mSettingsGroups{};
 	std::array<Lion::TextRenderer*, static_cast<size_t>(GameSettings::Category::Count)> mSettingsTabs{};
 	std::array<Lion::Button*, 10> mLevelButtons{};
@@ -63,6 +65,8 @@ private:
 	std::array<Lion::TextRenderer*, 5> mAchievementTexts{};
 	Lion::Button* mBackButton = nullptr;
 	Lion::TextRenderer* mBackButtonText = nullptr;
+	Lion::ProgressBar* mSfxProgress = nullptr;
+	Lion::ProgressBar* mMusicProgress = nullptr;
 	Lion::int32 mSelection = 0;
 	Lion::int32 mSettingsSelection = 0;
 	Lion::int32 mLevelSelection = 0;

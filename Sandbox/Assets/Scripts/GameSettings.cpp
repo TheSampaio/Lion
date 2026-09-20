@@ -116,31 +116,71 @@ int32 GameSettings::Wrap(int32 value, int32 count)
 void GameSettings::Change(int32 setting, int32 direction)
 {
 	direction = direction < 0 ? -1 : 1;
+	if (IsToggle(setting))
+	{
+		SetValue(setting, !GetValue(setting));
+		return;
+	}
+	SetValue(setting, GetValue(setting) + direction);
+}
+
+void GameSettings::SetValue(int32 setting, int32 value)
+{
 	switch (setting)
 	{
-		case 0: sResolution = Wrap(sResolution + direction, static_cast<int32>(std::size(kWidths))); ApplyWindow(); break;
-		case 1: sVSync = !sVSync; ApplyWindow(); break;
-		case 2: sQuality = Wrap(sQuality + direction, 3); break;
-		case 3: sBloom = !sBloom; break;
-		case 4: sVignette = !sVignette; break;
-		case 5: sMotionBlur = !sMotionBlur; break;
+		case 0: sResolution = Wrap(value, static_cast<int32>(std::size(kWidths))); ApplyWindow(); break;
+		case 1: sVSync = value != 0; ApplyWindow(); break;
+		case 2: sQuality = Wrap(value, 3); break;
+		case 3: sBloom = value != 0; break;
+		case 4: sVignette = value != 0; break;
+		case 5: sMotionBlur = value != 0; break;
 		case 6:
-			sSfxVolume = std::clamp(sSfxVolume + direction, 0, 10);
+			sSfxVolume = std::clamp(value, 0, 10);
 			Audio::SetBusVolume(AudioBus::SFX, static_cast<float32>(sSfxVolume) / 10.0f);
 			break;
 		case 7:
-			sMusicVolume = std::clamp(sMusicVolume + direction, 0, 10);
+			sMusicVolume = std::clamp(value, 0, 10);
 			Audio::SetBusVolume(AudioBus::Music, static_cast<float32>(sMusicVolume) / 10.0f);
 			break;
-		case 8: sCameraShake = !sCameraShake; break;
-		case 9: sColorMode = Wrap(sColorMode + direction, 4); break;
-		case 10: sLanguage = Wrap(sLanguage + direction, static_cast<int32>(std::size(kLanguageNames))); break;
-		case 11: sControlHints = !sControlHints; break;
+		case 8: sCameraShake = value != 0; break;
+		case 9: sColorMode = Wrap(value, 4); break;
+		case 10: sLanguage = Wrap(value, static_cast<int32>(std::size(kLanguageNames))); break;
+		case 11: sControlHints = value != 0; break;
 	}
+}
+
+int32 GameSettings::GetValue(int32 setting)
+{
+	switch (setting)
+	{
+		case 0: return sResolution;
+		case 1: return sVSync;
+		case 2: return sQuality;
+		case 3: return sBloom;
+		case 4: return sVignette;
+		case 5: return sMotionBlur;
+		case 6: return sSfxVolume;
+		case 7: return sMusicVolume;
+		case 8: return sCameraShake;
+		case 9: return sColorMode;
+		case 10: return sLanguage;
+		case 11: return sControlHints;
+		default: return 0;
+	}
+}
+
+bool GameSettings::IsToggle(int32 setting)
+{
+	return setting == 1 || (setting >= 3 && setting <= 5) || setting == 8 || setting == 11;
 }
 
 void GameSettings::ApplyWindow()
 {
+	// Play mode shares the editor process. Project presentation settings must never resize or alter the
+	// editor host; the standalone launcher applies them normally.
+	if (Application::IsEditor())
+		return;
+
 	Window::SetSize(kWidths[sResolution], kHeights[sResolution]);
 	Graphics::SetVerticalSynchronization(sVSync);
 }
@@ -174,25 +214,23 @@ std::string GameSettings::Label(int32 setting)
 	const char8* state = nullptr;
 	switch (setting)
 	{
-		case 0: return LION_FORMAT_TEXT("{}   < {} X {} >", Text(GameText::Resolution), kWidths[sResolution], kHeights[sResolution]);
-		case 1: return LION_FORMAT_TEXT("[{}]  {}", sVSync ? "X" : " ", Text(GameText::VSync));
+		case 0: return Text(GameText::Resolution);
+		case 1: return Text(GameText::VSync);
 		case 2:
 			state = Text(sQuality == 0 ? GameText::Low : sQuality == 1 ? GameText::Medium : GameText::High);
-			return LION_FORMAT_TEXT("{}   < {} >", Text(GameText::Quality), state);
-		case 3: return LION_FORMAT_TEXT("[{}]  {}", sBloom ? "X" : " ", Text(GameText::Bloom));
-		case 4: return LION_FORMAT_TEXT("[{}]  {}", sVignette ? "X" : " ", Text(GameText::Vignette));
-		case 5: return LION_FORMAT_TEXT("[{}]  {}", sMotionBlur ? "X" : " ", Text(GameText::MotionBlur));
-		case 6: return LION_FORMAT_TEXT("SFX     [{}{}]  {:3}%", std::string(sSfxVolume, '|'),
-			std::string(10 - sSfxVolume, '.'), sSfxVolume * 10);
-		case 7: return LION_FORMAT_TEXT("MUSIC   [{}{}]  {:3}%", std::string(sMusicVolume, '|'),
-			std::string(10 - sMusicVolume, '.'), sMusicVolume * 10);
-		case 8: return LION_FORMAT_TEXT("[{}]  {}", sCameraShake ? "X" : " ", Text(GameText::CameraShake));
+			return state;
+		case 3: return Text(GameText::Bloom);
+		case 4: return Text(GameText::Vignette);
+		case 5: return Text(GameText::MotionBlur);
+		case 6: return LION_FORMAT_TEXT("SFX     {}%", sSfxVolume * 10);
+		case 7: return LION_FORMAT_TEXT("MUSIC   {}%", sMusicVolume * 10);
+		case 8: return Text(GameText::CameraShake);
 		case 9:
 			state = Text(sColorMode == 0 ? GameText::None : sColorMode == 1 ? GameText::Protanopia
 				: sColorMode == 2 ? GameText::Deuteranopia : GameText::Tritanopia);
-			return LION_FORMAT_TEXT("{}   < {} >", Text(GameText::ColorMode), state);
-		case 10: return LION_FORMAT_TEXT("{}   < {} >", Text(GameText::Language), kLanguageNames[sLanguage]);
-		case 11: return LION_FORMAT_TEXT("[{}]  {}", sControlHints ? "X" : " ", Text(GameText::ControlHints));
+			return state;
+		case 10: return kLanguageNames[sLanguage];
+		case 11: return Text(GameText::ControlHints);
 	}
 	return {};
 }

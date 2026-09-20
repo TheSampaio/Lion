@@ -16,10 +16,6 @@ protected:
 
 private:
 	Lion::Reference<Lion::CameraOrthographic> mCamera;
-	Lion::Reference<Lion::AudioClip> mMenuMusic;
-	Lion::Reference<Lion::AudioClip> mGameMusic;
-	Lion::AudioVoice mMusicVoice = Lion::kInvalidAudioVoice;
-	bool mPlayingGameMusic = false;
 
 	void UpdateMusic();
 };

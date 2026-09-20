@@ -115,6 +115,11 @@ void GameRules::OnUpdate()
 		return;
 	}
 
+	GameAudio::EnsureMusic(mLevel > 0);
+	HandleDebugReset();
+	if (mTransitionQueued)
+		return;
+
 	UpdateShake();
 	UpdateInputPrompts();
 	UpdateTemporaryPowers();
@@ -122,6 +127,12 @@ void GameRules::OnUpdate()
 	UpdateTransientEffects();
 	UpdateAmbientMotion();
 	UpdateAchievementNotifications();
+	if (mPendingMultiball > 0 && mBall && mBall->IsLaunched())
+	{
+		mPendingMultiball--;
+		SpawnExtraBalls(*mBall);
+		ShowPowerMessage(GameSettings::Text(GameText::Multiball));
+	}
 
 	if (mLevel > 0 && sSessionActive)
 	{
@@ -238,7 +249,9 @@ void GameRules::RegisterBrickDamage(const Vector2& position, bool destroyed, con
 	if (sActiveRules->mImpactParticles)
 		sActiveRules->mImpactParticles->EmitAt(position, destroyed ? 64 : 28);
 
-	if (destroyed && !power.empty())
+	if (destroyed && power == "Bomb")
+		sActiveRules->ActivatePower(power, position);
+	else if (destroyed && !power.empty())
 		sActiveRules->SpawnPowerDrop(power, position);
 
 	sActiveRules->UpdateHud();
@@ -582,7 +595,10 @@ void GameRules::ActivatePower(const std::string& power, const Vector2& position)
 				sourceBall = candidate;
 				break;
 			}
-		if (sourceBall) SpawnExtraBalls(*sourceBall);
+		if (sourceBall)
+			SpawnExtraBalls(*sourceBall);
+		else
+			mPendingMultiball++;
 		message = GameSettings::Text(GameText::Multiball);
 	}
 	else if (power == "Bomb")
@@ -645,7 +661,7 @@ void GameRules::ExplodeBomb(const Vector2& origin)
 	if (!scene)
 		return;
 
-	constexpr float32 kBlastRadius = 135.0f;
+	constexpr float32 kBlastRadius = 220.0f;
 	for (const Reference<Entity>& entity : scene->GetEntities())
 	{
 		Brick* brick = entity->GetComponent<Brick>();
@@ -656,11 +672,22 @@ void GameRules::ExplodeBomb(const Vector2& origin)
 		if (offset.x * offset.x + offset.y * offset.y <= kBlastRadius * kBlastRadius)
 			brick->Damage(99, nullptr, false);
 	}
+	for (int32 ring = 0; ring < 3; ++ring)
+	{
+		Reference<Entity> effect = MakeReference<Entity>();
+		effect->SetName(LION_FORMAT_TEXT("Bomb Blast {}", ring + 1));
+		effect->GetTransform()->SetPosition(origin);
+		effect->GetTransform()->SetScale(Vector2(0.5f, 0.5f));
+		SpriteRenderer* renderer = effect->AddComponent<SpriteRenderer>("Sprites/Brickout/power-bomb.png");
+		renderer->SetOrder(44);
+		scene->Add(effect);
+		mTransientEffects.push_back({ effect, renderer, ring * -0.055f, 0.46f + ring * 0.04f });
+	}
 
 	if (mImpactParticles)
-		mImpactParticles->EmitAt(origin, 180);
-	mShakeRemaining = 0.12f;
-	mActiveShakeStrength = 1.05f;
+		mImpactParticles->EmitAt(origin, 280);
+	mShakeRemaining = 0.14f;
+	mActiveShakeStrength = 1.25f;
 	mShakeFrame = 0;
 }
 
@@ -687,13 +714,15 @@ void GameRules::ActivateDuplicatePaddle()
 	Reference<Entity> entity = MakeReference<Entity>();
 	entity->SetName("Duplicate Paddle");
 	const Vector2 source = mPaddle->GetOwner().GetWorldPosition();
-	entity->GetTransform()->SetPosition(Vector2(source.x, source.y + 42.0f));
+	const float32 offset = source.x >= 0.0f ? -155.0f : 155.0f;
+	entity->GetTransform()->SetPosition(Vector2(source.x + offset, source.y));
 	SpriteRenderer* renderer = entity->AddComponent<SpriteRenderer>("Sprites/Brickout/player.png");
 	renderer->SetOrder(11);
 	entity->AddComponent<RigidBody2D>(BodyType::Kinematic, true);
 	entity->AddComponent<BoxCollider2D>(100.0f, 20.0f, 1.0f, 0.0f, 1.0f);
 	Paddle* duplicate = entity->AddComponent<Paddle>();
 	scene->Add(entity);
+	duplicate->Follow(*mPaddle, offset);
 	mDuplicatePaddle = entity.get();
 	if (mWidePaddleRemaining > 0.0f)
 		duplicate->SetWide(true);
@@ -776,6 +805,25 @@ void GameRules::FinishAttempt(bool completed)
 
 	sLevelScore = 0;
 	sSessionSeconds = 0.0f;
+}
+
+void GameRules::HandleDebugReset()
+{
+#ifndef LN_SHIPPING
+	if (!Input::GetKeyPress(KeyCode::Shift) || !Input::GetKeyTap(KeyCode::Delete))
+		return;
+
+	GameProgress::ResetAll();
+	sScore = 0;
+	sAttempts = kStartingAttempts;
+	sCombo = 1;
+	sShockwaveCharge = 0;
+	sLevelScore = 0;
+	sSessionSeconds = 0.0f;
+	sSessionActive = false;
+	mTransitionQueued = true;
+	ScreenTransition::LoadScene("Scenes/MainMenu.lnscene");
+#endif
 }
 
 void GameRules::HandleDebugLevelKeys()

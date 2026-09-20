@@ -1,4 +1,5 @@
 #include "GameLayer.h"
+#include "../../Assets/Scripts/GameAudio.h"
 
 #include <Lion/Core/Asset.h>
 #include <Lion/Core/Filesystem.h>
@@ -50,8 +51,7 @@ void GameLayer::OnRender()
 
 void GameLayer::OnDetach()
 {
-	Audio::Stop(mMusicVoice);
-	mMusicVoice = kInvalidAudioVoice;
+	GameAudio::StopMusic();
 	SceneManager::Clear();
 }
 
@@ -62,31 +62,9 @@ void GameLayer::UpdateMusic()
 	const bool menu = path.find("Scenes/MainMenu") != std::string::npos;
 
 	if (!gameplay && !menu)
-	{
-		if (mMusicVoice != kInvalidAudioVoice)
-		{
-			Audio::Stop(mMusicVoice);
-			mMusicVoice = kInvalidAudioVoice;
-		}
-		return;
-	}
-
-	if (mMusicVoice != kInvalidAudioVoice && Audio::IsPlaying(mMusicVoice)
-		&& gameplay == mPlayingGameMusic)
 		return;
 
-	Audio::Stop(mMusicVoice);
-	mPlayingGameMusic = gameplay;
-	Reference<AudioClip>& clip = gameplay ? mGameMusic : mMenuMusic;
-	const std::string clipPath = gameplay ? "Sounds/music-game.wav" : "Sounds/music-menu.wav";
-	if (!clip)
-		clip = Asset::LoadAudio(clipPath, clipPath);
-
-	AudioPlayback playback;
-	playback.volume = gameplay ? 0.42f : 0.36f;
-	playback.loop = true;
-	playback.bus = AudioBus::Music;
-	mMusicVoice = Audio::Play(clip, playback, "brickout-music");
+	GameAudio::EnsureMusic(gameplay);
 }
 
 void GameLayer::OnEvent(Event& event)

@@ -45,6 +45,7 @@ private:
 	Lion::SpriteRenderer* mRenderer = nullptr;
 	Lion::float32 mAttachOffsetY = 0.0f;
 	Lion::float32 mLastHorizontalSign = 1.0f;
+	bool mHasBounced = false;
 
 	void FollowPaddle();
 	glm::vec2 CorrectDirection(const glm::vec2& direction);

@@ -36,7 +36,7 @@ void Ball::OnUpdate()
 
 		// Launch through the project action so keyboard and gamepad remain interchangeable.
 		if (Input::GetActionTap("player_launch"))
-			Launch(glm::vec2(0.0f, 1.0f));
+			Launch(glm::vec2(0.045f * mLastHorizontalSign, 1.0f));
 
 		return;
 	}
@@ -47,9 +47,9 @@ void Ball::OnUpdate()
 	if (velocity.x * velocity.x + velocity.y * velocity.y < 1.0f)
 		return;
 
-	// Modern brick breakers constrain both axes: shallow angles stall progression, while a nearly
-	// vertical lane can repeat forever. Correct the direction gently and then restore constant speed.
-	mBody->SetLinearVelocity(CorrectDirection(velocity) * mSpeed);
+	// The first shot is deliberately predictable and nearly vertical. Once it touches the arena, the
+	// anti-lock angle constraints take over for the remainder of that ball's life.
+	mBody->SetLinearVelocity((mHasBounced ? CorrectDirection(velocity) : glm::normalize(velocity)) * mSpeed);
 }
 
 void Ball::OnCollision(Entity& other)
@@ -62,6 +62,7 @@ void Ball::OnCollision(Entity& other)
 	else if (other.HasComponent<Paddle>()) GameAudio::PlaySfx("Sounds/ball-paddle.wav", 0.62f);
 	else if (other.GetName().find("Arena") != std::string::npos) GameAudio::PlaySfx("Sounds/ball-bumper.wav", 0.58f);
 	else GameAudio::PlaySfx("Sounds/ball-wall.wav", 0.36f);
+	mHasBounced = true;
 
 	// Steering only happens on the paddle; walls and bricks bounce through the physics solver.
 	Paddle* paddle = other.GetComponent<Paddle>();
@@ -99,6 +100,7 @@ void Ball::Reset()
 {
 	mState = State::Attached;
 	mLastHorizontalSign = -mLastHorizontalSign;
+	mHasBounced = false;
 	FollowPaddle();
 	SetVisible(true);
 }
@@ -132,7 +134,8 @@ void Ball::Launch(const glm::vec2& direction)
 		return;
 
 	mState = State::Launched;
-	mBody->SetLinearVelocity(CorrectDirection(direction) * mSpeed);
+	const glm::vec2 launchDirection = mHasBounced ? CorrectDirection(direction) : glm::normalize(direction);
+	mBody->SetLinearVelocity(launchDirection * mSpeed);
 }
 
 void Ball::LaunchFrom(const Vector2& position, const glm::vec2& direction)
@@ -143,6 +146,7 @@ void Ball::LaunchFrom(const Vector2& position, const glm::vec2& direction)
 	GetOwner().SetWorldPosition(position);
 	mBody->SetPosition(glm::vec2(position.x, position.y));
 	SetVisible(true);
+	mHasBounced = true;
 	Launch(direction);
 }
 

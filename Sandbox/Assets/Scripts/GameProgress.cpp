@@ -205,6 +205,28 @@ void GameProgress::RegisterShockwave()
 	EvaluateAchievements();
 }
 
+void GameProgress::ResetAll()
+{
+	std::error_code error;
+	std::filesystem::remove(SavePath(), error);
+	sLoaded = true;
+	sHighestUnlockedLevel = 1;
+	sCompletedLevels.reset();
+	sTotalScore = 0;
+	sLevelHighScores.fill(0);
+	sSessionsPlayed = 0;
+	sLevelsCompleted = 0;
+	sBricksDestroyed = 0;
+	sBallsLost = 0;
+	sPowersCollected = 0;
+	sHighestCombo = 1;
+	sShockwavesFired = 0;
+	sPlayedSeconds = 0;
+	sAchievementMask = 0;
+	sRecentlyUnlockedAchievements.clear();
+	Log::Console(LogLevel::Success, "[GameProgress] All Brickout progress was reset.");
+}
+
 int32 GameProgress::GetHighestUnlockedLevel() { EnsureLoaded(); return sHighestUnlockedLevel; }
 int32 GameProgress::GetCompletedLevelCount() { EnsureLoaded(); return static_cast<int32>(sCompletedLevels.count()); }
 bool GameProgress::IsLevelUnlocked(int32 level) { EnsureLoaded(); return level >= 1 && level <= sHighestUnlockedLevel; }

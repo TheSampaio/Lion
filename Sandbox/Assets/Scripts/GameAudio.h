@@ -11,4 +11,12 @@ public:
 	static void PlayUiHover();
 	static void PlayUiSelect();
 	static void PlayPower(const std::string& power);
+	static void EnsureMusic(bool gameplay);
+	static void StopMusic();
+
+private:
+	static inline Lion::Reference<Lion::AudioClip> sMenuMusic;
+	static inline Lion::Reference<Lion::AudioClip> sGameMusic;
+	static inline Lion::AudioVoice sMusicVoice = Lion::kInvalidAudioVoice;
+	static inline bool sPlayingGameplayMusic = false;
 };
