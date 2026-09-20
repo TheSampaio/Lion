@@ -27,7 +27,6 @@ void MainMenu::OnAwake()
 {
 	Window::SetBackgroundColor(0.015f, 0.02f, 0.045f);
 	GameSettings::ApplyAudio();
-	GameAudio::EnsureMusic(0);
 	GameProgress::Load();
 }
 
@@ -143,6 +142,10 @@ void MainMenu::Initialize()
 
 void MainMenu::OnUpdate()
 {
+	// OnAwake also runs while the editor is only displaying an authored scene. Audio belongs to the
+	// running game, so it starts from the first simulation update instead.
+	GameAudio::EnsureMusic(0);
+
 	if (!mInitialized)
 	{
 		Initialize();
