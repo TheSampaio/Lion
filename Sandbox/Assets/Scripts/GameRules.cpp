@@ -246,6 +246,8 @@ void GameRules::RegisterBrickDamage(const Vector2& position, bool destroyed, con
 
 	if (!sActiveRules)
 		return;
+	if (sActiveRules->mApplyingAreaDamage)
+		return;
 
 	if (GameSettings::HasCameraShake())
 	{
@@ -704,6 +706,7 @@ void GameRules::ExplodeBomb(const Vector2& origin)
 		return;
 
 	constexpr float32 kBlastRadius = 220.0f;
+	mApplyingAreaDamage = true;
 	for (const Reference<Entity>& entity : scene->GetEntities())
 	{
 		Brick* brick = entity->GetComponent<Brick>();
@@ -714,6 +717,7 @@ void GameRules::ExplodeBomb(const Vector2& origin)
 		if (offset.x * offset.x + offset.y * offset.y <= kBlastRadius * kBlastRadius)
 			brick->Damage(99, nullptr, false);
 	}
+	mApplyingAreaDamage = false;
 	for (int32 ring = 0; ring < 3; ++ring)
 	{
 		Reference<Entity> effect = MakeReference<Entity>();
@@ -766,6 +770,7 @@ void GameRules::ActivateShockwave()
 	GameAudio::EnsureMusic(mLevel, true);
 	UpdateHud();
 
+	mApplyingAreaDamage = true;
 	for (const Reference<Entity>& entity : scene->GetEntities())
 	{
 		Brick* brick = entity->GetComponent<Brick>();
@@ -774,14 +779,19 @@ void GameRules::ActivateShockwave()
 
 		brick->Damage(1, nullptr, false);
 	}
+	mApplyingAreaDamage = false;
 
+	std::vector<Vector2> ballPositions;
+	ballPositions.reserve(4);
 	for (const Reference<Entity>& entity : scene->GetEntities())
 		if (Ball* ball = entity->GetComponent<Ball>(); ball && entity->IsActive())
-		{
-			if (mOverdriveParticles)
-				mOverdriveParticles->EmitAt(entity->GetWorldPosition(), 180);
-			SpawnShockwaveEffect(entity->GetWorldPosition());
-		}
+			ballPositions.push_back(entity->GetWorldPosition());
+	for (const Vector2& ballPosition : ballPositions)
+	{
+		if (mOverdriveParticles)
+			mOverdriveParticles->EmitAt(ballPosition, 96);
+		SpawnShockwaveEffect(ballPosition);
+	}
 	mShakeRemaining = 0.16f;
 	mActiveShakeStrength = 1.45f;
 	mShakeFrame = 0;

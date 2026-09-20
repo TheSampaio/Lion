@@ -77,6 +77,7 @@ private:
 	Lion::float32 mAmbientTime = 0.0f;
 	bool mInitialized = false;
 	bool mTransitionQueued = false;
+	bool mApplyingAreaDamage = false;
 	bool mShowingGamepadPrompts = false;
 	bool mShowingKeyboardPrompts = false;
 

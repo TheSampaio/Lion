@@ -241,6 +241,10 @@ void EditorLayer::StepOneFrame()
 void EditorLayer::OnDetach()
 {
 	SaveEditorSettings();
+	mPlaying = false;
+	mPaused = false;
+	mStepFrame = false;
+	Audio::StopAll();
 	SceneManager::Clear();
 	// The module goes before the editor does, and for the same reason a reload drops it first: the
 	// registries hold factories that are code inside it, and the scene holds components whose vtables
@@ -321,6 +325,8 @@ void EditorLayer::StartPlay()
 
 	if (mConsoleClearOnPlay)
 		Log::ClearHistory();
+	// A previous game run must never leave a persistent music voice behind in the editor process.
+	Audio::StopAll();
 
 	// Save the edited scene, then rebuild it so every component runs OnAwake again (which creates
 	// the Box2D bodies/shapes needed for the simulation). The rebuild preserves entity order, so the
@@ -334,6 +340,7 @@ void EditorLayer::StartPlay()
 
 	mPlaying = true;
 	mPaused = false;
+	mStepFrame = false;
 	mPlaySelectionMode = false;
 	Log::Console(LogLevel::Information, "[Editor] Play mode started.");
 }
@@ -355,14 +362,16 @@ void EditorLayer::StopPlay()
 	// Restore the scene to exactly the edited state captured when Play started.
 	const int selected = SelectedEntityIndex();
 
-	SceneManager::Clear();
+	// End the runtime state before destroying its scene so no later editor work can observe a half-stopped game.
+	mPlaying = false;
+	mPaused = false;
+	mStepFrame = false;
+	mPlaySelectionMode = false;
 	Audio::StopAll();
+	SceneManager::Clear();
 	SceneSerializer::DeserializeFromString(mScene, mPlaySnapshot, GameAssetsDirectory().string());
 	SelectEntityByIndex(selected);
 
-	mPlaying = false;
-	mPaused = false;
-	mPlaySelectionMode = false;
 	Log::Console(LogLevel::Information, "[Editor] Play mode stopped.");
 }
 
