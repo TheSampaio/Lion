@@ -23,35 +23,66 @@ public static class BrickoutSynth
 	}
 
 	public static void WriteMusic(string path, double bpm, int[] roots, int[] melody,
-		int measures, double level)
+		int measures, double level, int style)
 	{
 		double beat = 60.0 / bpm;
+		int family = Math.Abs(style) % 5;
 		int count = (int)(measures * 4.0 * beat * SampleRate);
 		short[] samples = new short[count];
+		int[][] arpPatterns = {
+			new int[] { 0, 7, 12, 7 }, new int[] { 0, 3, 10, 15 }, new int[] { 0, 12, 7, 19 },
+			new int[] { 0, 5, 12, 17 }, new int[] { 0, 10, 15, 22 }
+		};
 		for (int index = 0; index < count; ++index)
 		{
 			double time = (double)index / SampleRate;
 			int beatNumber = (int)Math.Floor(time / beat);
 			int measure = beatNumber / 4 % roots.Length;
 			int root = roots[measure];
-			double stepLength = beat / 2.0;
+			double subdivision = family == 2 ? 4.0 : family == 3 ? 1.0 : 2.0;
+			double stepLength = beat / subdivision;
 			int step = (int)Math.Floor(time / stepLength);
 			double stepPhase = time % stepLength / stepLength;
-			double envelope = Math.Min(stepPhase / 0.08, 1.0) * Math.Pow(1.0 - stepPhase, 0.55);
-			double leadPhase = 2.0 * Math.PI * Frequency(root + 12 + melody[step % melody.Length]) * time;
-			double lead = (Math.Sin(leadPhase + Math.Sin(leadPhase * 0.5) * 0.8)
-				+ Math.Sin(leadPhase * 2.01) * 0.28) * envelope;
-			double bassPhase = 2.0 * Math.PI * Frequency(root - 12) * time;
-			double bass = Math.Sin(bassPhase) * 0.72 + Math.Sin(bassPhase * 2.0) * 0.18;
-			int[] arpOffsets = { 0, 7, 12, 7 };
-			double arpPhase = 2.0 * Math.PI * Frequency(root + arpOffsets[step % 4]) * time;
-			double arp = Math.Sin(arpPhase) + Math.Sin(arpPhase * 2.0) * 0.22;
+			double envelope = Math.Min(stepPhase / (family == 3 ? 0.24 : 0.06), 1.0)
+				* Math.Pow(1.0 - stepPhase, family == 3 ? 0.22 : 0.72);
+			int melodyIndex = (step + style * 3) % melody.Length;
+			double octave = family == 1 ? 0.0 : family == 3 ? 12.0 : 7.0;
+			double leadPhase = 2.0 * Math.PI * Frequency(root + octave + melody[melodyIndex]) * time;
+			double lead;
+			if (family == 0)
+				lead = Math.Sin(leadPhase + Math.Sin(leadPhase * 0.5) * 0.9) + Math.Sin(leadPhase * 2.01) * 0.24;
+			else if (family == 1)
+				lead = Triangle(leadPhase) * 0.82 + Math.Sin(leadPhase * 0.5) * 0.18;
+			else if (family == 2)
+				lead = (Math.Sin(leadPhase) >= 0.0 ? 0.72 : -0.72) + Math.Sin(leadPhase * 2.0) * 0.16;
+			else if (family == 3)
+				lead = Math.Sin(leadPhase) * 0.72 + Math.Sin(leadPhase * 1.501) * 0.30;
+			else
+				lead = Math.Sin(leadPhase) + Math.Sin(leadPhase * 2.0) * 0.34 + Math.Sin(leadPhase * 3.0) * 0.17;
+			lead *= envelope;
+
+			int bassOffset = family == 4 && beatNumber % 4 == 3 ? 7 : 0;
+			double bassPhase = 2.0 * Math.PI * Frequency(root - 12 + bassOffset) * time;
+			double bassGate = family == 1 ? (beatNumber % 2 == 0 ? 1.0 : 0.28)
+				: family == 2 ? (step % 3 == 0 ? 1.0 : 0.38) : 0.78;
+			double bass = (Math.Sin(bassPhase) * 0.76 + Triangle(bassPhase) * 0.18) * bassGate;
+			int[] arpOffsets = arpPatterns[family];
+			double arpPhase = 2.0 * Math.PI * Frequency(root + arpOffsets[(step + measure) % 4]) * time;
+			double arp = (family == 2 ? Triangle(arpPhase) : Math.Sin(arpPhase))
+				+ Math.Sin(arpPhase * 2.0) * 0.18;
 			double beatPhase = time % beat / beat;
-			double kick = Math.Sin(2.0 * Math.PI * (70.0 - 28.0 * beatPhase) * time) * Math.Pow(1.0 - beatPhase, 8);
-			double offbeat = (time + beat * 0.5) % beat / beat;
-			double hat = Math.Sin(index * 1.618) * Math.Pow(1.0 - offbeat, 18);
-			double value = (lead * 0.38 + bass * 0.32 + arp * 0.18 * envelope
-				+ kick * 0.17 + hat * 0.035) * level;
+			double kickPattern = family == 3 ? (beatNumber % 4 == 0 ? 1.0 : 0.0)
+				: family == 4 ? (beatNumber % 4 == 0 || beatNumber % 4 == 3 ? 1.0 : 0.25) : 1.0;
+			double kick = Math.Sin(2.0 * Math.PI * (76.0 - 36.0 * beatPhase) * time)
+				* Math.Pow(1.0 - beatPhase, 9) * kickPattern;
+			double hatPhase = (time + beat * (family == 2 ? 0.25 : 0.5)) % beat / beat;
+			double hat = Math.Sin(index * (1.37 + family * 0.113)) * Math.Pow(1.0 - hatPhase, family == 3 ? 28 : 16);
+			double snarePhase = (time + beat * 2.0) % (beat * 4.0) / beat;
+			double snare = Math.Sin(index * 0.731) * Math.Pow(Math.Max(1.0 - snarePhase, 0.0), 12);
+			double leadLevel = family == 3 ? 0.28 : family == 2 ? 0.30 : 0.36;
+			double arpLevel = family == 1 ? 0.08 : family == 3 ? 0.22 : 0.15;
+			double value = (lead * leadLevel + bass * 0.29 + arp * arpLevel * envelope
+				+ kick * 0.18 + hat * 0.04 + snare * (family == 4 ? 0.07 : 0.035)) * level;
 			samples[index] = (short)(Math.Max(-1.0, Math.Min(1.0, value)) * 32767.0);
 		}
 
@@ -136,9 +167,9 @@ function Get-Frequency([double]$midi)
 }
 
 function New-Music([string]$name, [double]$bpm, [int[]]$roots, [int[]]$melody,
-	[int]$measures, [double]$level)
+	[int]$measures, [double]$level, [int]$style = 0)
 {
-	[BrickoutSynth]::WriteMusic((Join-Path $soundRoot $name), $bpm, $roots, $melody, $measures, $level)
+	[BrickoutSynth]::WriteMusic((Join-Path $soundRoot $name), $bpm, $roots, $melody, $measures, $level, $style)
 }
 
 New-Sweep 'ui-hover.wav' 0.055 980 1320 0.50 0.00 1
@@ -153,16 +184,36 @@ New-Sweep 'power-life.wav' 0.420 660 1760 0.70 0.00 4
 New-Sweep 'power-multiball.wav' 0.360 520 1980 0.70 0.00 5
 New-Sweep 'power-bomb.wav' 0.520 420 72 0.80 0.24 2
 New-Sweep 'power-wide.wav' 0.360 880 380 0.70 0.00 3
-New-Sweep 'power-duplicate.wav' 0.390 700 1440 0.70 0.00 4
+New-Sweep 'power-piercing.wav' 0.390 920 2380 0.72 0.00 5
 New-Sweep 'power-shockwave.wav' 0.680 360 58 0.82 0.30 3
 New-Sweep 'achievement.wav' 0.720 740 2100 0.68 0.00 6
 New-Sweep 'game-over.wav' 0.900 520 70 0.72 0.06 2
 New-Sweep 'victory.wav' 0.950 620 1900 0.70 0.00 7
 
 New-Music 'music-menu.wav' 100 @(45, 41, 38, 43) @(0, 7, 12, 7, 3, 10, 12, 10, 0, 7, 15, 12, 3, 7, 10, 7) 12 0.34
-New-Music 'music-game.wav' 128 @(45, 48, 41, 43) @(0, 7, 12, 15, 12, 7, 3, 7, 0, 10, 12, 17, 15, 12, 7, 3) 16 0.38
+$rootSets = @(
+	@(45,48,41,43), @(43,46,50,48), @(48,44,41,46), @(41,45,48,43), @(50,46,43,45),
+	@(38,41,45,43), @(46,50,43,48), @(44,48,51,46), @(40,43,47,45), @(49,45,42,47),
+	@(42,46,49,44), @(47,43,50,45), @(39,46,42,44), @(51,48,44,46), @(45,50,47,42),
+	@(43,49,46,41), @(48,42,45,50), @(41,47,44,49), @(46,40,48,43), @(50,45,48,52)
+)
+$melodies = @(
+	@(0,7,12,15,12,7,3,7,0,10,12,17,15,12,7,3),
+	@(0,3,7,10,12,10,7,5,0,5,8,12,15,12,8,5),
+	@(0,12,7,15,10,17,12,19,15,12,10,7,5,7,3,0),
+	@(0,5,10,12,7,10,15,12,3,7,12,14,10,7,5,3),
+	@(0,7,10,14,17,14,10,7,2,9,12,16,19,16,12,9)
+)
+for ($theme = 1; $theme -le 20; $theme++)
+{
+	$bpm = 116 + (($theme - 1) % 5) * 6 + [Math]::Floor(($theme - 1) / 5) * 2
+	New-Music ("music-theme-{0:D2}.wav" -f $theme) $bpm $rootSets[$theme - 1] $melodies[($theme - 1) % $melodies.Count] 8 0.36 ($theme - 1)
+}
+New-Music 'music-overdrive.wav' 168 @(45,48,50,52) @(0,12,7,15,10,17,12,19,7,15,10,17,12,19,15,22) 8 0.38 2
+Remove-Item -LiteralPath (Join-Path $soundRoot 'music-game.wav') -Force -ErrorAction SilentlyContinue
+Remove-Item -LiteralPath (Join-Path $soundRoot 'power-duplicate.wav') -Force -ErrorAction SilentlyContinue
 
 Copy-Item -LiteralPath (Join-Path $soundRoot 'ball-wall.wav') -Destination (Join-Path $soundRoot 'ball-impact-general.wav') -Force
 Copy-Item -LiteralPath (Join-Path $soundRoot 'ball-brick.wav') -Destination (Join-Path $soundRoot 'ball-impact-point.wav') -Force
 
-Write-Host 'Brickout arcade SFX and seamless menu/game music are up to date.'
+Write-Host 'Brickout arcade SFX and 20 seamless stage themes are up to date.'

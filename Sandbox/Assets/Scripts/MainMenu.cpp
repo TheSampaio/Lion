@@ -27,7 +27,7 @@ void MainMenu::OnAwake()
 {
 	Window::SetBackgroundColor(0.015f, 0.02f, 0.045f);
 	GameSettings::ApplyAudio();
-	GameAudio::EnsureMusic(false);
+	GameAudio::EnsureMusic(0);
 	GameProgress::Load();
 }
 
@@ -57,6 +57,8 @@ void MainMenu::Initialize()
 	mControllerMenuPrompts = scene->FindEntity("Controller Menu Prompts").get();
 	mControllerDetailPrompts = scene->FindEntity("Controller Detail Prompts").get();
 	mControllerSettingsPrompt = scene->FindEntity("Controller Settings Prompt").get();
+	mKeyboardPagePrompt = scene->FindEntity("Keyboard Page Prompt").get();
+	mControllerPagePrompt = scene->FindEntity("Controller Page Prompt").get();
 	mDetailText = detail ? detail->GetComponent<TextRenderer>() : nullptr;
 	mPromptText = prompt ? prompt->GetComponent<TextRenderer>() : nullptr;
 	const Reference<Entity> statisticsText = scene->FindEntity("Statistics Text");
@@ -220,6 +222,8 @@ void MainMenu::OnUpdate()
 				mSettingsSelection = index;
 				GameAudio::PlayUiSelect();
 				RefreshSettings();
+				if (index == 11)
+					UpdateInputPresentation(true);
 				return;
 			}
 		}
@@ -478,7 +482,7 @@ void MainMenu::RefreshSettings()
 	if (mSfxProgress) mSfxProgress->SetValue(static_cast<float32>(GameSettings::GetValue(6)));
 	if (mMusicProgress) mMusicProgress->SetValue(static_cast<float32>(GameSettings::GetValue(7)));
 	if (mSettingsPageText)
-		mSettingsPageText->SetText("Q / LB                                      E / RB");
+		mSettingsPageText->SetText(LION_FORMAT_TEXT("PAGE {}/4", mSettingsPage + 1));
 	if (mBackButton) mBackButton->SetSelected(mSettingsSelection == GameSettings::kSettingCount);
 }
 
@@ -504,7 +508,7 @@ void MainMenu::RefreshLevels()
 				GameSettings::Text(GameText::HighScore), GameProgress::GetLevelHighScore(level)));
 	}
 	if (mLevelPageText)
-		mLevelPageText->SetText(LION_FORMAT_TEXT("Q / LB     PAGE {:02}/10     E / RB", mLevelPage + 1));
+		mLevelPageText->SetText(LION_FORMAT_TEXT("PAGE {:02}/10", mLevelPage + 1));
 	if (mBackButton) mBackButton->SetSelected(false);
 }
 
@@ -548,7 +552,7 @@ void MainMenu::RefreshAchievements()
 		}
 	}
 	if (mAchievementProgressText)
-		mAchievementProgressText->SetText(LION_FORMAT_TEXT("Q / LB   {}/{} UNLOCKED   PAGE {}/2   E / RB",
+		mAchievementProgressText->SetText(LION_FORMAT_TEXT("{}/{} UNLOCKED   PAGE {}/2",
 			GameProgress::GetUnlockedAchievementCount(), GameProgress::kAchievementCount, mAchievementPage + 1));
 }
 
@@ -590,10 +594,14 @@ void MainMenu::UpdateInputPresentation(bool force)
 	SetShown(mControllerAttractPrompt, hints && mState == State::Attract && usingGamepad);
 	SetShown(mKeyboardControls, hints && mState == State::Menu && !usingGamepad);
 	SetShown(mControllerMenuPrompts, hints && mState == State::Menu && usingGamepad);
-	SetShown(mKeyboardDetailPrompts, false);
-	SetShown(mControllerDetailPrompts, false);
-	SetShown(mKeyboardSettingsPrompt, false);
-	SetShown(mControllerSettingsPrompt, false);
+	const bool detail = mState != State::Attract && mState != State::Menu;
+	const bool paged = mState == State::LevelSelect || mState == State::Achievements;
+	SetShown(mKeyboardDetailPrompts, hints && detail && !usingGamepad);
+	SetShown(mControllerDetailPrompts, hints && detail && usingGamepad);
+	SetShown(mKeyboardSettingsPrompt, hints && mState == State::Settings && !usingGamepad);
+	SetShown(mControllerSettingsPrompt, hints && mState == State::Settings && usingGamepad);
+	SetShown(mKeyboardPagePrompt, hints && paged && !usingGamepad);
+	SetShown(mControllerPagePrompt, hints && paged && usingGamepad);
 }
 
 void MainMenu::UpdateAmbientMotion()

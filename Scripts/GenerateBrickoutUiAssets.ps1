@@ -160,6 +160,29 @@ function New-ControllerButton([string]$path, [string]$label)
 	$format.Dispose(); $brush.Dispose(); $font.Dispose(); $inner.Dispose(); $edge.Dispose(); $fill.Dispose(); $glow.Dispose(); $graphics.Dispose(); $bitmap.Dispose()
 }
 
+function New-ShoulderButton([string]$path, [string]$label)
+{
+	$bitmap = [Drawing.Bitmap]::new(44, 32, [Drawing.Imaging.PixelFormat]::Format32bppArgb)
+	$graphics = [Drawing.Graphics]::FromImage($bitmap)
+	$graphics.SmoothingMode = [Drawing.Drawing2D.SmoothingMode]::AntiAlias
+	$graphics.TextRenderingHint = [Drawing.Text.TextRenderingHint]::AntiAliasGridFit
+	$shape = New-RoundedPath ([Drawing.RectangleF]::new(2, 6, 40, 22)) 6
+	$glow = [Drawing.Pen]::new([Drawing.Color]::FromArgb(100, 20, 170, 255), 5)
+	$fill = [Drawing.SolidBrush]::new([Drawing.Color]::FromArgb(255, 5, 42, 88))
+	$edge = [Drawing.Pen]::new([Drawing.Color]::FromArgb(255, 55, 225, 255), 2)
+	$font = [Drawing.Font]::new('Arial', 12, [Drawing.FontStyle]::Bold, [Drawing.GraphicsUnit]::Pixel)
+	$brush = [Drawing.SolidBrush]::new([Drawing.Color]::White)
+	$format = [Drawing.StringFormat]::new()
+	$format.Alignment = [Drawing.StringAlignment]::Center
+	$format.LineAlignment = [Drawing.StringAlignment]::Center
+	$graphics.DrawPath($glow, $shape)
+	$graphics.FillPath($fill, $shape)
+	$graphics.DrawPath($edge, $shape)
+	$graphics.DrawString($label, $font, $brush, [Drawing.RectangleF]::new(0, 4, 44, 25), $format)
+	$bitmap.Save($path, [Drawing.Imaging.ImageFormat]::Png)
+	$format.Dispose(); $brush.Dispose(); $font.Dispose(); $edge.Dispose(); $fill.Dispose(); $glow.Dispose(); $shape.Dispose(); $graphics.Dispose(); $bitmap.Dispose()
+}
+
 function New-WidgetAssets
 {
 	$frame = [Drawing.Bitmap]::new(32, 32, [Drawing.Imaging.PixelFormat]::Format32bppArgb)
@@ -227,36 +250,47 @@ function New-Title([string]$path)
 
 function New-PowerIcon([string]$path, [string]$kind)
 {
-	$size = 32
+	$size = 64
 	$bitmap = [Drawing.Bitmap]::new($size, $size, [Drawing.Imaging.PixelFormat]::Format32bppArgb)
 	$graphics = [Drawing.Graphics]::FromImage($bitmap)
 	$graphics.SmoothingMode = [Drawing.Drawing2D.SmoothingMode]::AntiAlias
-	$cyan = [Drawing.Pen]::new([Drawing.Color]::FromArgb(255, 55, 235, 255), 2.5)
-	$pink = [Drawing.Pen]::new([Drawing.Color]::FromArgb(255, 255, 45, 178), 2.5)
-	$white = [Drawing.Pen]::new([Drawing.Color]::White, 2)
+	$glow = [Drawing.Pen]::new([Drawing.Color]::FromArgb(90, 20, 190, 255), 8)
+	$ring = [Drawing.Pen]::new([Drawing.Color]::FromArgb(255, 35, 218, 255), 3)
+	$inner = [Drawing.Pen]::new([Drawing.Color]::FromArgb(230, 125, 245, 255), 1.5)
+	$cyan = [Drawing.Pen]::new([Drawing.Color]::FromArgb(255, 55, 235, 255), 4)
+	$pink = [Drawing.Pen]::new([Drawing.Color]::FromArgb(255, 255, 45, 178), 4)
+	$white = [Drawing.Pen]::new([Drawing.Color]::White, 3)
 	$dark = [Drawing.SolidBrush]::new([Drawing.Color]::FromArgb(230, 4, 12, 30))
+	$graphics.DrawEllipse($glow, 5, 5, 54, 54)
+	$graphics.FillEllipse($dark, 7, 7, 50, 50)
+	$graphics.DrawEllipse($ring, 7, 7, 50, 50)
+	$graphics.DrawEllipse($inner, 12, 12, 40, 40)
 	if ($kind -eq 'Bomb')
 	{
-		$graphics.FillEllipse($dark, 6, 8, 20, 20)
-		$graphics.DrawEllipse($pink, 6, 8, 20, 20)
-		$graphics.DrawArc($cyan, 15, 2, 12, 12, 185, 100)
-		$graphics.DrawLine($white, 25, 3, 28, 0)
-		$graphics.DrawLine($white, 27, 5, 31, 5)
+		$graphics.DrawEllipse($pink, 20, 23, 24, 24)
+		$graphics.DrawArc($cyan, 31, 14, 15, 15, 185, 105)
+		$graphics.DrawLine($white, 45, 15, 50, 10)
 	}
 	elseif ($kind -eq 'Wide')
 	{
-		$graphics.FillRectangle($dark, 5, 12, 22, 8)
-		$graphics.DrawRectangle($cyan, 5, 12, 22, 8)
-		$graphics.DrawLine($pink, 2, 16, 8, 16); $graphics.DrawLine($pink, 2, 16, 5, 13); $graphics.DrawLine($pink, 2, 16, 5, 19)
-		$graphics.DrawLine($pink, 30, 16, 24, 16); $graphics.DrawLine($pink, 30, 16, 27, 13); $graphics.DrawLine($pink, 30, 16, 27, 19)
+		$graphics.DrawRectangle($cyan, 19, 27, 26, 10)
+		$graphics.DrawLine($pink, 14, 32, 23, 32); $graphics.DrawLine($pink, 14, 32, 19, 27); $graphics.DrawLine($pink, 14, 32, 19, 37)
+		$graphics.DrawLine($pink, 50, 32, 41, 32); $graphics.DrawLine($pink, 50, 32, 45, 27); $graphics.DrawLine($pink, 50, 32, 45, 37)
+	}
+	elseif ($kind -eq 'Piercing')
+	{
+		$graphics.DrawEllipse($cyan, 22, 22, 20, 20)
+		$graphics.DrawLine($pink, 14, 32, 50, 32)
+		$graphics.DrawLine($white, 42, 24, 51, 32)
+		$graphics.DrawLine($white, 42, 40, 51, 32)
 	}
 	else
 	{
-		$graphics.FillRectangle($dark, 4, 8, 22, 7); $graphics.DrawRectangle($cyan, 4, 8, 22, 7)
-		$graphics.FillRectangle($dark, 7, 18, 22, 7); $graphics.DrawRectangle($pink, 7, 18, 22, 7)
+		$graphics.DrawRectangle($cyan, 17, 20, 28, 9)
+		$graphics.DrawRectangle($pink, 20, 35, 28, 9)
 	}
 	$bitmap.Save($path, [Drawing.Imaging.ImageFormat]::Png)
-	$dark.Dispose(); $white.Dispose(); $pink.Dispose(); $cyan.Dispose(); $graphics.Dispose(); $bitmap.Dispose()
+	$dark.Dispose(); $white.Dispose(); $pink.Dispose(); $cyan.Dispose(); $inner.Dispose(); $ring.Dispose(); $glow.Dispose(); $graphics.Dispose(); $bitmap.Dispose()
 }
 
 $source = Join-Path $brickout 'Source'
@@ -268,14 +302,18 @@ New-Keycap (Join-Path $ui 'key-enter.png') 52 'ENTER' 10
 New-Keycap (Join-Path $ui 'key-esc.png') 44 'ESC' 11
 New-Keycap (Join-Path $ui 'key-space.png') 64 'SPACE' 10
 New-Keycap (Join-Path $ui 'key-e.png') 32 'E' 14
+New-Keycap (Join-Path $ui 'key-q.png') 32 'Q' 14
 New-ArrowKeys (Join-Path $ui 'key-arrows.png')
 New-ControllerButton (Join-Path $ui 'controller-x.png') 'X'
+New-ShoulderButton (Join-Path $ui 'controller-lb.png') 'LB'
+New-ShoulderButton (Join-Path $ui 'controller-rb.png') 'RB'
 New-Keycap (Join-Path $ui 'controller-start.png') 54 'START' 10
 New-WidgetAssets
 New-Title (Join-Path $ui 'brickout-title.png')
 
 New-PowerIcon (Join-Path $brickout 'power-bomb.png') 'Bomb'
 New-PowerIcon (Join-Path $brickout 'power-wide.png') 'Wide'
-New-PowerIcon (Join-Path $brickout 'power-duplicate.png') 'Duplicate'
+New-PowerIcon (Join-Path $brickout 'power-piercing.png') 'Piercing'
+Remove-Item -LiteralPath (Join-Path $brickout 'power-duplicate.png') -Force -ErrorAction SilentlyContinue
 
 Write-Host 'Generated Brickout collider, prompt and power sprites.'

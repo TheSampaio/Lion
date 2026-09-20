@@ -371,6 +371,30 @@ $gameRulesAssembly = [ordered]@{
 			parent = -1
 			transform = New-Transform
 		}
+		[ordered]@{
+			components = @([ordered]@{
+				Texture = 'Sprites/Brickout/particle.png'
+				'Max Particles' = 920
+				'Emission Rate' = 0
+				Lifetime = 0.68
+				Speed = 165
+				Direction = 90
+				Spread = 360
+				'Start Size' = 20
+				'End Size' = 1
+				'Start Color.x' = 1
+				'Start Color.y' = 0.2
+				'Start Color.z' = 0.82
+				'End Color.x' = 0.05
+				'End Color.y' = 0.92
+				'End Color.z' = 1
+				Order = 72
+				type = 'ParticleComponent'
+			})
+			name = 'Shockwave Overdrive Particles'
+			parent = 0
+			transform = New-Transform
+		}
 	)
 	root = 0
 }
@@ -401,7 +425,7 @@ $hudAssembly = [ordered]@{
 		(New-TextEntity 'Score Text' 'SCORE 000000' 20 0 1 125 -34 0)
 		(New-TextEntity 'Combo Text' 'COMBO X2' 17 0.5 1 -275 -34 0 $false)
 		(New-TextEntity 'Level Text' 'LEVEL 01' 20 0.5 1 0 -34 0)
-		(New-TextEntity 'Shockwave Text' 'SHOCKWAVE 0/8' 15 0.5 1 248 -34 0)
+		(New-TextEntity 'Shockwave Text' 'SHOCKWAVE 0/16' 15 0.5 1 248 -34 0)
 		(New-TextEntity 'Attempts Text' 'BALLS 3' 20 1 1 -88 -34 0)
 		(New-TextEntity 'Power Text' 'MULTIBALL x3' 22 0.5 1 0 -92 0 $false)
 		(New-GroupEntity 'Power Timer' 0)
@@ -495,7 +519,7 @@ $mainMenuAssembly.entities = @($mainMenuAssembly.entities) + @(
 	(New-TextEntity 'Settings Tab 2' 'SOUND' 13 0.5 0.5 -90 126 $settingsOptionsIndex),
 	(New-TextEntity 'Settings Tab 3' 'ACCESSIBILITY' 13 0.5 0.5 105 126 $settingsOptionsIndex),
 	(New-TextEntity 'Settings Tab 4' 'CONTROLS' 13 0.5 0.5 285 126 $settingsOptionsIndex),
-	(New-TextEntity 'Settings Page' 'Q / LB                                      E / RB' 11 0.5 0.5 0 94 $settingsOptionsIndex)
+	(New-TextEntity 'Settings Page' 'PAGE 1/4' 11 0.5 0.5 0 94 $settingsOptionsIndex)
 )
 
 $graphicsIndex = $mainMenuAssembly.entities.Count
@@ -578,7 +602,7 @@ for ($slot = 0; $slot -lt 10; $slot++)
 	)
 }
 $mainMenuAssembly.entities = @($mainMenuAssembly.entities) + @(
-	(New-TextEntity 'Level Page' 'Q / LB     PAGE 01/10     E / RB' 13 0.5 0.5 0 -210 $levelOptionsIndex),
+	(New-TextEntity 'Level Page' 'PAGE 01/10' 13 0.5 0.5 0 -210 $levelOptionsIndex),
 	(New-TextEntity 'Statistics Text' 'STATISTICS' 18 0.5 0.5 -270 95 $statisticsIndex $true $false),
 	(New-TextEntity 'Achievement Progress' '0/10 UNLOCKED' 13 0.5 0.5 0 -202 $achievementsIndex),
 	(New-SpriteEntity 'Credits Logo' 'Images/sampaio-games-logo.png' 0.5 0.5 0 78 0.085 0.085 $creditsIndex 100),
@@ -625,6 +649,40 @@ $mainMenuAssembly.entities = @($mainMenuAssembly.entities) + @(
 	(New-TextEntity 'Keyboard Navigate Label' 'NAVIGATE' 13 0.5 0.5 -88 -301 $keyboardMenuIndex),
 	(New-SpriteEntity 'Keyboard Select Icon' 'Sprites/UI/key-enter.png' 0.5 0.5 52 -300 1 1 $keyboardMenuIndex),
 	(New-TextEntity 'Keyboard Select Label' 'SELECT' 13 0.5 0.5 132 -301 $keyboardMenuIndex)
+)
+$keyboardDetailIndex = $mainMenuAssembly.entities.Count
+$mainMenuAssembly.entities = @($mainMenuAssembly.entities) + @(
+	(New-GroupEntity 'Keyboard Detail Prompts' 0),
+	(New-SpriteEntity 'Keyboard Back Icon' 'Sprites/UI/key-esc.png' 0.5 0.5 -278 -270 1 1 $keyboardDetailIndex)
+)
+$controllerDetailIndex = $mainMenuAssembly.entities.Count
+$mainMenuAssembly.entities = @($mainMenuAssembly.entities) + @(
+	(New-GroupEntity 'Controller Detail Prompts' 0),
+	(New-SpriteEntity 'Controller Back Icon' 'Sprites/UI/controller-b.png' 0.5 0.5 -278 -270 1 1 $controllerDetailIndex)
+)
+$keyboardPageIndex = $mainMenuAssembly.entities.Count
+$mainMenuAssembly.entities = @($mainMenuAssembly.entities) + @(
+	(New-GroupEntity 'Keyboard Settings Prompt' 0),
+	(New-SpriteEntity 'Keyboard Previous Tab Icon' 'Sprites/UI/key-q.png' 0.5 0.5 -355 94 1 1 $keyboardPageIndex),
+	(New-SpriteEntity 'Keyboard Next Tab Icon' 'Sprites/UI/key-e.png' 0.5 0.5 355 94 1 1 $keyboardPageIndex)
+)
+$controllerPageIndex = $mainMenuAssembly.entities.Count
+$mainMenuAssembly.entities = @($mainMenuAssembly.entities) + @(
+	(New-GroupEntity 'Controller Settings Prompt' 0),
+	(New-SpriteEntity 'Controller Previous Tab Icon' 'Sprites/UI/controller-lb.png' 0.5 0.5 -355 94 1 1 $controllerPageIndex),
+	(New-SpriteEntity 'Controller Next Tab Icon' 'Sprites/UI/controller-rb.png' 0.5 0.5 355 94 1 1 $controllerPageIndex)
+)
+$keyboardPagingIndex = $mainMenuAssembly.entities.Count
+$mainMenuAssembly.entities = @($mainMenuAssembly.entities) + @(
+	(New-GroupEntity 'Keyboard Page Prompt' 0),
+	(New-SpriteEntity 'Keyboard Previous Page Icon' 'Sprites/UI/key-q.png' 0.5 0.5 -355 -214 1 1 $keyboardPagingIndex),
+	(New-SpriteEntity 'Keyboard Next Page Icon' 'Sprites/UI/key-e.png' 0.5 0.5 355 -214 1 1 $keyboardPagingIndex)
+)
+$controllerPagingIndex = $mainMenuAssembly.entities.Count
+$mainMenuAssembly.entities = @($mainMenuAssembly.entities) + @(
+	(New-GroupEntity 'Controller Page Prompt' 0),
+	(New-SpriteEntity 'Controller Previous Page Icon' 'Sprites/UI/controller-lb.png' 0.5 0.5 -355 -214 1 1 $controllerPagingIndex),
+	(New-SpriteEntity 'Controller Next Page Icon' 'Sprites/UI/controller-rb.png' 0.5 0.5 355 -214 1 1 $controllerPagingIndex)
 )
 Write-SealedJson (Join-Path $assetRoot 'Assemblies\Main Menu.lnassembly') $mainMenuAssembly
 
@@ -898,8 +956,10 @@ $baseScenes = @(1..5 | ForEach-Object {
 	Read-SealedJson (Join-Path $assetRoot ("Scenes\Level{0:D2}.lnscene" -f $_))
 })
 
+$arenaSignatures = [Collections.Generic.HashSet[string]]::new()
 for ($level = 1; $level -le 100; $level++)
 {
+	$theme = [int]([Math]::Floor(($level - 1) / 5) + 1)
 	$scenePath = Join-Path $assetRoot ("Scenes\Level{0:D2}.lnscene" -f $level)
 	if ($level -le 5)
 	{
@@ -954,9 +1014,9 @@ for ($level = 1; $level -le 100; $level++)
 			$entity.components = @($entity.components | Where-Object { $_.type -ne 'PostProcessingComponent' }) + @((New-PostProcessingComponent))
 		}
 
-		if ($sprite -and $sprite.texture -like 'Sprites/Brickout/background.*')
+		if ($entity.name -eq 'Background' -and $sprite)
 		{
-			$sprite.texture = 'Sprites/Brickout/background.png'
+			$sprite.texture = "Sprites/Brickout/background-theme-{0:D2}.png" -f $theme
 			$entity.transform.scale = @(1, 1)
 		}
 		elseif ($sprite -and $sprite.texture -eq 'Sprites/Brickout/ball.png')
@@ -1029,9 +1089,9 @@ for ($level = 1; $level -le 100; $level++)
 	{
 		0 { @('Extra Life', 'Wide Paddle') }
 		1 { @('Bomb', 'Multiball') }
-		2 { @('Extra Life', 'Duplicate Paddle', 'Bomb') }
+		2 { @('Extra Life', 'Piercing Ball', 'Bomb') }
 		3 { @('Multiball', 'Wide Paddle', 'Bomb') }
-		default { @('Extra Life', 'Multiball', 'Bomb', 'Wide Paddle', 'Duplicate Paddle') }
+		default { @('Extra Life', 'Multiball', 'Bomb', 'Wide Paddle', 'Piercing Ball') }
 	}
 	for ($brickNumber = 0; $brickNumber -lt $brickIndices.Count; $brickNumber++)
 	{
@@ -1066,14 +1126,14 @@ for ($level = 1; $level -le 100; $level++)
 				'Multiball' { 'Sprites/Brickout/power-multiball.png' }
 				'Bomb' { 'Sprites/Brickout/power-bomb.png' }
 				'Wide Paddle' { 'Sprites/Brickout/power-wide.png' }
-				'Duplicate Paddle' { 'Sprites/Brickout/power-duplicate.png' }
+				'Piercing Ball' { 'Sprites/Brickout/power-piercing.png' }
 			}
 			$icon = New-WorldSprite ("Power Icon {0:D2}" -f ($brickNumber + 1)) $iconTexture 0 0 0.42 0.42 0 $entityIndex 8
 			$scene.entities = @($scene.entities) + @($icon)
 		}
 	}
 
-	$arenaElements = switch (($level - 1) % 10)
+	$arenaElements = switch (($level - 1) % 20)
 	{
 		0 { @(
 			(New-Rail 'Arena Rail Left' -285 25 28),
@@ -1117,9 +1177,61 @@ for ($level = 1; $level -le 100; $level++)
 			(New-Post 'Arena Post Left' -80 85),
 			(New-Post 'Arena Post Right' 80 85)
 		) }
-		default { @(
+		9 { @(
 			(New-Bumper 'Arena Bumper Left' -300 75),
 			(New-Bumper 'Arena Bumper Right' 300 75)
+		) }
+		10 { @(
+			(New-Rail 'Arena Chevron Left' -175 55 -24),
+			(New-Rail 'Arena Chevron Right' 175 55 24),
+			(New-Post 'Arena Post Center' 0 125)
+		) }
+		11 { @(
+			(New-Bumper 'Arena Bumper Inner Left' -145 45),
+			(New-Bumper 'Arena Bumper Inner Right' 145 45),
+			(New-Post 'Arena Post Outer Left' -315 125),
+			(New-Post 'Arena Post Outer Right' 315 125)
+		) }
+		12 { @(
+			(New-Rail 'Arena Funnel Left' -250 110 -32),
+			(New-Rail 'Arena Funnel Right' 250 110 32),
+			(New-Bumper 'Arena Bumper Center' 0 45)
+		) }
+		13 { @(
+			(New-Post 'Arena Post Left' -275 45),
+			(New-Post 'Arena Post Center' 0 115),
+			(New-Post 'Arena Post Right' 275 45)
+		) }
+		14 { @(
+			(New-Rail 'Arena Zig Left' -305 45 42),
+			(New-Rail 'Arena Zig Center' 0 110 -12),
+			(New-Rail 'Arena Zig Right' 305 45 -42)
+		) }
+		15 { @(
+			(New-Bumper 'Arena Diamond Top' 0 145),
+			(New-Post 'Arena Diamond Left' -125 55),
+			(New-Post 'Arena Diamond Right' 125 55)
+		) }
+		16 { @(
+			(New-Rail 'Arena Gate Left' -315 105 -18),
+			(New-Rail 'Arena Gate Right' 315 105 18),
+			(New-Bumper 'Arena Gate Left Bumper' -105 35),
+			(New-Bumper 'Arena Gate Right Bumper' 105 35)
+		) }
+		17 { @(
+			(New-Post 'Arena Orbit Left' -325 55),
+			(New-Bumper 'Arena Orbit Center' 0 95),
+			(New-Post 'Arena Orbit Right' 325 55)
+		) }
+		18 { @(
+			(New-Rail 'Arena Crown Left' -205 65 20),
+			(New-Rail 'Arena Crown Center' 0 125 0),
+			(New-Rail 'Arena Crown Right' 205 65 -20)
+		) }
+		default { @(
+			(New-Bumper 'Arena Cascade Left' -250 125),
+			(New-Post 'Arena Cascade Center' 0 80),
+			(New-Bumper 'Arena Cascade Right' 250 35)
 		) }
 	}
 	$scene.entities = @($scene.entities) + $arenaElements
@@ -1297,6 +1409,13 @@ for ($level = 1; $level -le 100; $level++)
 	}
 
 	$scene = Read-SealedJson $scenePath
+	$expectedTheme = "Sprites/Brickout/background-theme-{0:D2}.png" -f ([int]([Math]::Floor(($level - 1) / 5) + 1))
+	$background = $scene.entities | Where-Object { $_.name -eq 'Background' } | Select-Object -First 1
+	$backgroundSprite = $background.components | Where-Object { $_.type -eq 'SpriteRenderer' } | Select-Object -First 1
+	if (!$backgroundSprite -or $backgroundSprite.texture -ne $expectedTheme)
+	{
+		throw "Brickout level $level does not use its expected five-level theme."
+	}
 	$bricks = @($scene.entities | Where-Object { $_.components | Where-Object { $_.type -eq 'Brick' } })
 	if ($bricks.Count -eq 0)
 	{
@@ -1322,6 +1441,14 @@ for ($level = 1; $level -le 100; $level++)
 	{
 		throw "Brickout level $level places a pinball obstacle in the paddle approach lane."
 	}
+	$arenaSignature = (($scene.entities | Where-Object { $_.name -like 'Arena *' } | Sort-Object name |
+		ForEach-Object { "{0}:{1}:{2}:{3}" -f $_.name, $_.transform.position[0], $_.transform.position[1], $_.transform.rotation }) -join '|')
+	[void]$arenaSignatures.Add($arenaSignature)
+}
+
+if ($arenaSignatures.Count -ne 20)
+{
+	throw "Expected 20 distinct pinball layouts, found $($arenaSignatures.Count)."
 }
 
 Write-Host 'Brickout scenes, assemblies and menu input actions are up to date.'

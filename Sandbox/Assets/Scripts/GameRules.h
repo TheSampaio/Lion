@@ -29,7 +29,7 @@ private:
 	static constexpr Lion::int32 kStartingAttempts = 3;
 	static constexpr Lion::int32 kBrickScore = 100;
 	static constexpr Lion::int32 kFinalLevel = 100;
-	static constexpr Lion::int32 kShockwaveHitsRequired = 8;
+	static constexpr Lion::int32 kShockwaveHitsRequired = 16;
 
 	static inline GameRules* sActiveRules = nullptr;
 	static inline Lion::int32 sScore = 0;
@@ -44,6 +44,7 @@ private:
 	Paddle* mPaddle = nullptr;
 	Lion::Camera2D* mCamera = nullptr;
 	Lion::ParticleComponent* mImpactParticles = nullptr;
+	Lion::ParticleComponent* mOverdriveParticles = nullptr;
 	Lion::TextRenderer* mScoreText = nullptr;
 	Lion::TextRenderer* mAttemptsText = nullptr;
 	Lion::TextRenderer* mLevelText = nullptr;
@@ -56,7 +57,6 @@ private:
 	Lion::Entity* mPowerTimer = nullptr;
 	Lion::Entity* mControllerPrompts = nullptr;
 	Lion::Entity* mKeyboardPrompts = nullptr;
-	Lion::Entity* mDuplicatePaddle = nullptr;
 	Lion::Entity* mBackground = nullptr;
 	Lion::Vector2 mCameraBaseOffset;
 	Lion::Vector2 mBackgroundBasePosition;
@@ -68,7 +68,9 @@ private:
 	Lion::float32 mActiveShakeStrength = 0.0f;
 	Lion::float32 mPowerMessageRemaining = 0.0f;
 	Lion::float32 mWidePaddleRemaining = 0.0f;
-	Lion::float32 mDuplicatePaddleRemaining = 0.0f;
+	Lion::float32 mPiercingBallRemaining = 0.0f;
+	Lion::float32 mOverdriveRemaining = 0.0f;
+	Lion::float32 mOverdriveParticleDelay = 0.0f;
 	Lion::int32 mShakeFrame = 0;
 	Lion::int32 mLevel = 0;
 	Lion::int32 mPendingMultiball = 0;
@@ -112,7 +114,7 @@ private:
 	void SpawnExtraBalls(Ball& sourceBall);
 	void ExplodeBomb(const Lion::Vector2& origin);
 	void ActivateWidePaddle();
-	void ActivateDuplicatePaddle();
+	void ActivatePiercingBall();
 	void ActivateShockwave();
 	void SpawnShockwaveEffect(const Lion::Vector2& origin);
 	void ShowPowerMessage(const std::string& message);

@@ -44,6 +44,8 @@ private:
 	Lion::Entity* mControllerMenuPrompts = nullptr;
 	Lion::Entity* mControllerDetailPrompts = nullptr;
 	Lion::Entity* mControllerSettingsPrompt = nullptr;
+	Lion::Entity* mKeyboardPagePrompt = nullptr;
+	Lion::Entity* mControllerPagePrompt = nullptr;
 	Lion::TextRenderer* mDetailText = nullptr;
 	Lion::TextRenderer* mPromptText = nullptr;
 	Lion::TextRenderer* mStatisticsText = nullptr;

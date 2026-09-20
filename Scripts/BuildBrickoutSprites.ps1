@@ -4,8 +4,10 @@ Add-Type -AssemblyName System.Drawing
 
 $prepareArt = Join-Path $PSScriptRoot 'PrepareBrickoutArt.ps1'
 $prepareUi = Join-Path $PSScriptRoot 'GenerateBrickoutUiAssets.ps1'
+$prepareThemes = Join-Path $PSScriptRoot 'GenerateBrickoutThemes.ps1'
 & $prepareArt | Out-Null
 & $prepareUi | Out-Null
+& $prepareThemes | Out-Null
 
 $assetRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\Sandbox\Assets\Sprites\Brickout'))
 $sourcePath = Join-Path $assetRoot 'Source\power-icons-atlas-v2.png'
@@ -16,7 +18,6 @@ $icons = @(
 	@{ Name = 'power-multiball.png'; Column = 1; Row = 0 },
 	@{ Name = 'power-bomb.png'; Column = 2; Row = 0 },
 	@{ Name = 'power-wide.png'; Column = 0; Row = 1 },
-	@{ Name = 'power-duplicate.png'; Column = 1; Row = 1 },
 	@{ Name = 'power-shockwave.png'; Column = 2; Row = 1 }
 )
 
@@ -65,7 +66,7 @@ for ($frame = 0; $frame -lt 12; $frame++)
 
 $achievementSources = @(
 	'power-life.png', 'power-bomb.png', 'power-multiball.png', 'power-life.png', 'power-shockwave.png',
-	'power-wide.png', 'power-bomb.png', 'power-duplicate.png', 'power-shockwave.png', 'power-multiball.png'
+	'power-wide.png', 'power-bomb.png', 'power-piercing.png', 'power-shockwave.png', 'power-multiball.png'
 )
 $achievementNames = @('first', 'century', 'combo', 'power', 'wave', 'clear', 'score', 'depth', 'time', 'master')
 for ($index = 0; $index -lt $achievementNames.Count; $index++)

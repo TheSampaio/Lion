@@ -21,7 +21,7 @@ namespace
 		"CIRCUIT CLEAR", "GAME OVER", "SCORE", "BALLS", "LEVEL", "EXTRA BALL +1", "MULTIBALL X3",
 		"PRESS TO START", "CONTINUE", "LEVEL SELECT", "STATISTICS", "CONTROL HINTS", "LOCKED",
 		"COMPLETED", "HIGH SCORE", "COMBO", "SHOCKWAVE", "SHOCKWAVE READY", "SHOCKWAVE FIRED",
-		"BOMB", "WIDE PADDLE", "DOUBLE PADDLE", "SESSIONS", "LEVELS CLEARED", "BRICKS DESTROYED",
+		"BOMB", "WIDE PADDLE", "PIERCING BALL", "SESSIONS", "LEVELS CLEARED", "BRICKS DESTROYED",
 		"BALLS LOST", "POWERS COLLECTED", "HIGHEST COMBO", "SHOCKWAVES", "PLAY TIME"
 	};
 	constexpr Translation kPortuguese = {
@@ -32,7 +32,7 @@ namespace
 		"CIRCUITO COMPLETO", "FIM DE JOGO", "PONTOS", "BOLAS", "FASE", "BOLA EXTRA +1", "MULTIBOLA X3",
 		"PRESSIONE PARA INICIAR", "CONTINUAR", "SELECIONAR FASE", "ESTATÍSTICAS", "DICAS DE CONTROLE", "BLOQUEADA",
 		"CONCLUÍDA", "RECORDE", "COMBO", "ONDA DE CHOQUE", "ONDA PRONTA", "ONDA DISPARADA",
-		"BOMBA", "PADDLE MAIOR", "PADDLE DUPLO", "SESSÕES", "FASES CONCLUÍDAS", "BLOCOS DESTRUÍDOS",
+		"BOMBA", "PADDLE MAIOR", "BOLA PERFURANTE", "SESSÕES", "FASES CONCLUÍDAS", "BLOCOS DESTRUÍDOS",
 		"BOLAS PERDIDAS", "PODERES COLETADOS", "MAIOR COMBO", "ONDAS DE CHOQUE", "TEMPO DE JOGO"
 	};
 	constexpr Translation kSpanish = {
@@ -43,7 +43,7 @@ namespace
 		"CIRCUITO COMPLETO", "FIN DE LA PARTIDA", "PUNTOS", "BOLAS", "NIVEL", "BOLA EXTRA +1", "MULTIBOLA X3",
 		"PULSA PARA EMPEZAR", "CONTINUAR", "SELECCIONAR NIVEL", "ESTADÍSTICAS", "AYUDAS DE CONTROL", "BLOQUEADO",
 		"COMPLETADO", "RÉCORD", "COMBO", "ONDA DE CHOQUE", "ONDA LISTA", "ONDA LANZADA",
-		"BOMBA", "PALA GRANDE", "PALA DOBLE", "SESIONES", "NIVELES SUPERADOS", "BLOQUES DESTRUIDOS",
+		"BOMBA", "PALA GRANDE", "BOLA PERFORANTE", "SESIONES", "NIVELES SUPERADOS", "BLOQUES DESTRUIDOS",
 		"BOLAS PERDIDAS", "PODERES RECOGIDOS", "MAYOR COMBO", "ONDAS DE CHOQUE", "TIEMPO DE JUEGO"
 	};
 	constexpr Translation kItalian = {
@@ -54,7 +54,7 @@ namespace
 		"CIRCUITO COMPLETO", "FINE PARTITA", "PUNTI", "PALLE", "LIVELLO", "PALLA EXTRA +1", "MULTIPALLA X3",
 		"PREMI PER INIZIARE", "CONTINUA", "SELEZIONA LIVELLO", "STATISTICHE", "SUGGERIMENTI", "BLOCCATO",
 		"COMPLETATO", "RECORD", "COMBO", "ONDA D'URTO", "ONDA PRONTA", "ONDA LANCIATA",
-		"BOMBA", "RACCHETTA LARGA", "DOPPIA RACCHETTA", "SESSIONI", "LIVELLI COMPLETATI", "MATTONI DISTRUTTI",
+		"BOMBA", "RACCHETTA LARGA", "PALLA PERFORANTE", "SESSIONI", "LIVELLI COMPLETATI", "MATTONI DISTRUTTI",
 		"PALLE PERSE", "POTERI RACCOLTI", "COMBO MASSIMA", "ONDE D'URTO", "TEMPO DI GIOCO"
 	};
 	constexpr Translation kFrench = {
@@ -65,7 +65,7 @@ namespace
 		"CIRCUIT TERMINE", "PARTIE TERMINEE", "SCORE", "BALLES", "NIVEAU", "BALLE BONUS +1", "MULTIBALLE X3",
 		"APPUYEZ POUR JOUER", "CONTINUER", "CHOIX DU NIVEAU", "STATISTIQUES", "AIDES DE CONTRÔLE", "VERROUILLÉ",
 		"TERMINÉ", "MEILLEUR SCORE", "COMBO", "ONDE DE CHOC", "ONDE PRÊTE", "ONDE LANCÉE",
-		"BOMBE", "RAQUETTE LARGE", "DOUBLE RAQUETTE", "SESSIONS", "NIVEAUX TERMINÉS", "BRIQUES DÉTRUITES",
+		"BOMBE", "RAQUETTE LARGE", "BALLE PERFORANTE", "SESSIONS", "NIVEAUX TERMINÉS", "BRIQUES DÉTRUITES",
 		"BALLES PERDUES", "BONUS COLLECTÉS", "MEILLEUR COMBO", "ONDES DE CHOC", "TEMPS DE JEU"
 	};
 	constexpr Translation kGerman = {
@@ -76,7 +76,7 @@ namespace
 		"KREISLAUF FREI", "SPIEL VORBEI", "PUNKTE", "BALLE", "LEVEL", "EXTRA BALL +1", "MULTIBALL X3",
 		"DRÜCKEN ZUM START", "FORTSETZEN", "LEVELAUSWAHL", "STATISTIK", "STEUERUNGSHILFEN", "GESPERRT",
 		"ABGESCHLOSSEN", "BESTWERT", "COMBO", "SCHOCKWELLE", "WELLE BEREIT", "WELLE AUSGELÖST",
-		"BOMBE", "BREITES PADDLE", "DOPPELPADDLE", "SITZUNGEN", "LEVEL BEENDET", "STEINE ZERSTÖRT",
+		"BOMBE", "BREITES PADDLE", "DURCHSCHLAGBALL", "SITZUNGEN", "LEVEL BEENDET", "STEINE ZERSTÖRT",
 		"BÄLLE VERLOREN", "POWERUPS", "HÖCHSTER COMBO", "SCHOCKWELLEN", "SPIELZEIT"
 	};
 	constexpr Translation kRussian = {
@@ -87,7 +87,7 @@ namespace
 		"ЦЕПЬ ОЧИЩЕНА", "ИГРА ОКОНЧЕНА", "СЧЁТ", "МЯЧИ", "УРОВЕНЬ", "ДОП МЯЧ +1", "МУЛЬТИМЯЧ X3",
 		"НАЖМИТЕ ДЛЯ СТАРТА", "ПРОДОЛЖИТЬ", "ВЫБОР УРОВНЯ", "СТАТИСТИКА", "ПОДСКАЗКИ", "ЗАКРЫТО",
 		"ПРОЙДЕНО", "РЕКОРД", "КОМБО", "УДАРНАЯ ВОЛНА", "ВОЛНА ГОТОВА", "ВОЛНА ЗАПУЩЕНА",
-		"БОМБА", "ШИРОКАЯ ПЛАТФОРМА", "ДВОЙНАЯ ПЛАТФОРМА", "СЕАНСЫ", "УРОВНИ ПРОЙДЕНЫ", "БЛОКИ РАЗБИТЫ",
+		"БОМБА", "ШИРОКАЯ ПЛАТФОРМА", "ПРОБИВНОЙ МЯЧ", "СЕАНСЫ", "УРОВНИ ПРОЙДЕНЫ", "БЛОКИ РАЗБИТЫ",
 		"МЯЧИ ПОТЕРЯНЫ", "БОНУСЫ СОБРАНЫ", "ЛУЧШИЙ КОМБО", "УДАРНЫЕ ВОЛНЫ", "ВРЕМЯ ИГРЫ"
 	};
 	constexpr Translation kGreek = {
@@ -98,7 +98,7 @@ namespace
 		"ΚΥΚΛΩΜΑ ΚΑΘΑΡΟ", "ΤΕΛΟΣ ΠΑΙΧΝΙΔΙΟΥ", "ΠΟΝΤΟΙ", "ΜΠΑΛΕΣ", "ΕΠΙΠΕΔΟ", "ΕΞΤΡΑ ΜΠΑΛΑ +1", "ΠΟΛΛΑΠΛΗ ΜΠΑΛΑ X3",
 		"ΠΑΤΗΣΕ ΓΙΑ ΕΝΑΡΞΗ", "ΣΥΝΕΧΕΙΑ", "ΕΠΙΛΟΓΗ ΕΠΙΠΕΔΟΥ", "ΣΤΑΤΙΣΤΙΚΑ", "ΥΠΟΔΕΙΞΕΙΣ", "ΚΛΕΙΔΩΜΕΝΟ",
 		"ΟΛΟΚΛΗΡΩΘΗΚΕ", "ΡΕΚΟΡ", "COMBO", "ΚΡΟΥΣΤΙΚΟ ΚΥΜΑ", "ΚΥΜΑ ΕΤΟΙΜΟ", "ΚΥΜΑ ΕΝΕΡΓΟ",
-		"ΒΟΜΒΑ", "ΠΛΑΤΙΑ ΡΑΚΕΤΑ", "ΔΙΠΛΗ ΡΑΚΕΤΑ", "ΣΥΝΕΔΡΙΕΣ", "ΕΠΙΠΕΔΑ ΤΕΛΟΣ", "ΤΟΥΒΛΑ ΣΠΑΣΜΕΝΑ",
+		"ΒΟΜΒΑ", "ΠΛΑΤΙΑ ΡΑΚΕΤΑ", "ΔΙΑΤΡΗΤΙΚΗ ΜΠΑΛΑ", "ΣΥΝΕΔΡΙΕΣ", "ΕΠΙΠΕΔΑ ΤΕΛΟΣ", "ΤΟΥΒΛΑ ΣΠΑΣΜΕΝΑ",
 		"ΜΠΑΛΕΣ ΧΑΜΕΝΕΣ", "ΔΥΝΑΜΕΙΣ", "ΜΕΓΙΣΤΟ COMBO", "ΚΡΟΥΣΤΙΚΑ ΚΥΜΑΤΑ", "ΧΡΟΝΟΣ ΠΑΙΧΝΙΔΙΟΥ"
 	};
 

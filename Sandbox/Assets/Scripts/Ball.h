@@ -23,7 +23,9 @@ public:
 	void SetSpeed(Lion::float32 speed);
 	void Launch(const glm::vec2& direction);
 	void LaunchFrom(const Lion::Vector2& position, const glm::vec2& direction);
+	void SetPiercing(bool piercing);
 	bool IsLaunched() const { return mState == State::Launched; }
+	bool IsPiercing() const { return mPiercing; }
 	glm::vec2 GetDirection() const;
 
 private:
@@ -43,10 +45,15 @@ private:
 	Paddle* mPaddle = nullptr;
 	Lion::RigidBody2D* mBody = nullptr;
 	Lion::SpriteRenderer* mRenderer = nullptr;
+	Lion::CircleCollider2D* mCollider = nullptr;
+	Lion::Vector2 mBaseScale{ 1.0f, 1.0f };
 	Lion::float32 mAttachOffsetY = 0.0f;
 	Lion::float32 mLastHorizontalSign = 1.0f;
+	glm::vec2 mIncomingDirection{ 0.0f, 1.0f };
 	bool mHasBounced = false;
+	bool mPiercing = false;
 
 	void FollowPaddle();
+	void UpdatePiercingScale();
 	glm::vec2 CorrectDirection(const glm::vec2& direction);
 };

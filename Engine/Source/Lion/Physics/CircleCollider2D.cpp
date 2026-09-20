@@ -21,6 +21,11 @@ namespace Lion
 
 	void CircleCollider2D::OnAwake()
 	{
+		RefreshShape();
+	}
+
+	void CircleCollider2D::RefreshShape()
+	{
 		RigidBody2D* body = GetOwner().GetComponent<RigidBody2D>();
 
 		if (!body)
@@ -28,6 +33,9 @@ namespace Lion
 			Log::Console(LogLevel::Error, "[CircleCollider2D] Requires a RigidBody2D on the same entity.");
 			return;
 		}
+
+		if (b2Shape_IsValid(mShapeId))
+			b2DestroyShape(mShapeId, true);
 
 		// The radius is expressed in unscaled pixels; the owner's world scale is applied on top
 		// (using the largest axis, so a non-uniform scale still yields a circle).

@@ -36,6 +36,7 @@ void GameRules::InitializeForScene()
 	const Reference<Entity> powerTimerText = scene->FindEntity("Power Timer Text");
 	const Reference<Entity> controllerPrompts = scene->FindEntity("HUD Controller Prompts");
 	const Reference<Entity> keyboardPrompts = scene->FindEntity("HUD Keyboard Prompts");
+	const Reference<Entity> overdriveParticles = scene->FindEntity("Shockwave Overdrive Particles");
 	mScoreText = scoreEntity ? scoreEntity->GetComponent<TextRenderer>() : nullptr;
 	mAttemptsText = attemptsEntity ? attemptsEntity->GetComponent<TextRenderer>() : nullptr;
 	mLevelText = levelEntity ? levelEntity->GetComponent<TextRenderer>() : nullptr;
@@ -48,6 +49,7 @@ void GameRules::InitializeForScene()
 	mPowerTimerText = powerTimerText ? powerTimerText->GetComponent<TextRenderer>() : nullptr;
 	mControllerPrompts = controllerPrompts.get();
 	mKeyboardPrompts = keyboardPrompts.get();
+	mOverdriveParticles = overdriveParticles ? overdriveParticles->GetComponent<ParticleComponent>() : nullptr;
 
 	if (powerEntity)
 	{
@@ -115,7 +117,7 @@ void GameRules::OnUpdate()
 		return;
 	}
 
-	GameAudio::EnsureMusic(mLevel > 0);
+	GameAudio::EnsureMusic(mLevel, mOverdriveRemaining > 0.0f);
 	HandleDebugReset();
 	if (mTransitionQueued)
 		return;
@@ -164,6 +166,10 @@ void GameRules::OnDestroy()
 		mCamera->SetOffset(mCameraBaseOffset);
 	if (mPaddle)
 		mPaddle->SetWide(false);
+	if (const Reference<Scene> scene = GetOwner().GetScene())
+		for (const Reference<Entity>& entity : scene->GetEntities())
+			if (Ball* ball = entity->GetComponent<Ball>())
+				ball->SetPiercing(false);
 	for (PowerDrop& drop : mPowerDrops)
 		if (drop.entity) drop.entity->RemoveFromScene();
 	for (TransientEffect& effect : mTransientEffects)
@@ -230,7 +236,8 @@ void GameRules::RegisterBrickDamage(const Vector2& position, bool destroyed, con
 	if (destroyed)
 	{
 		sCombo = std::min(sCombo + 1, 16);
-		const int32 points = kBrickScore * sCombo;
+		const int32 multiplier = sCombo * (sActiveRules && sActiveRules->mOverdriveRemaining > 0.0f ? 2 : 1);
+		const int32 points = kBrickScore * multiplier;
 		sScore += points;
 		sLevelScore += points;
 		GameProgress::RegisterBrickDestroyed();
@@ -270,10 +277,13 @@ void GameRules::UpdateHud()
 
 	if (mComboText)
 	{
-		mComboText->SetText(sCombo >= 2
-			? LION_FORMAT_TEXT("{} X{}", GameSettings::Text(GameText::Combo), sCombo)
+		const bool overdrive = mOverdriveRemaining > 0.0f;
+		const int32 multiplier = sCombo * (overdrive ? 2 : 1);
+		mComboText->SetText(sCombo >= 2 || overdrive
+			? LION_FORMAT_TEXT("{} X{}{}", GameSettings::Text(GameText::Combo), multiplier,
+				overdrive ? "  OVERDRIVE" : "")
 			: std::string());
-		mComboText->GetOwner().SetVisible(sCombo >= 2);
+		mComboText->GetOwner().SetVisible(sCombo >= 2 || overdrive);
 	}
 
 	if (mShockwaveText)
@@ -350,25 +360,54 @@ void GameRules::UpdateTemporaryPowers()
 			mPaddle->SetWide(false);
 	}
 
-	if (mDuplicatePaddleRemaining > 0.0f)
+	if (mPiercingBallRemaining > 0.0f)
 	{
-		mDuplicatePaddleRemaining = std::max(0.0f, mDuplicatePaddleRemaining - deltaTime);
-		if (mDuplicatePaddleRemaining <= 0.0f && mDuplicatePaddle)
+		mPiercingBallRemaining = std::max(0.0f, mPiercingBallRemaining - deltaTime);
+		if (mPiercingBallRemaining <= 0.0f)
 		{
-			mDuplicatePaddle->RemoveFromScene();
-			mDuplicatePaddle = nullptr;
+			const Reference<Scene> scene = GetOwner().GetScene();
+			for (const Reference<Entity>& entity : scene->GetEntities())
+				if (Ball* ball = entity->GetComponent<Ball>())
+					ball->SetPiercing(false);
 		}
 	}
 
-	const float32 remaining = std::max(mWidePaddleRemaining, mDuplicatePaddleRemaining);
+	if (mOverdriveRemaining > 0.0f)
+	{
+		mOverdriveRemaining = std::max(0.0f, mOverdriveRemaining - deltaTime);
+		mOverdriveParticleDelay -= deltaTime;
+		if (mOverdriveParticles && mOverdriveParticleDelay <= 0.0f)
+		{
+			mOverdriveParticleDelay = 0.08f;
+			const Reference<Scene> scene = GetOwner().GetScene();
+			for (const Reference<Entity>& entity : scene->GetEntities())
+				if (Ball* ball = entity->GetComponent<Ball>(); ball && entity->IsActive())
+					mOverdriveParticles->EmitAt(entity->GetWorldPosition(), 5);
+		}
+		if (mOverdriveRemaining <= 0.0f)
+		{
+			GameAudio::EnsureMusic(mLevel);
+			UpdateHud();
+		}
+	}
+
+	const float32 remaining = std::max({ mWidePaddleRemaining, mPiercingBallRemaining,
+		mOverdriveRemaining });
 	if (mPowerTimer)
 	{
 		const bool active = remaining > 0.0f;
 		mPowerTimer->SetVisible(active);
 		mPowerTimer->SetEnabled(active);
 		if (active && mPowerTimerIcon)
-			mPowerTimerIcon->SetTexturePath(mWidePaddleRemaining >= mDuplicatePaddleRemaining
-				? "Sprites/Brickout/power-wide.png" : "Sprites/Brickout/power-duplicate.png");
+		{
+			if (mOverdriveRemaining >= mWidePaddleRemaining
+				&& mOverdriveRemaining >= mPiercingBallRemaining)
+				mPowerTimerIcon->SetTexturePath("Sprites/Brickout/power-shockwave.png");
+			else if (mPiercingBallRemaining >= mWidePaddleRemaining)
+				mPowerTimerIcon->SetTexturePath("Sprites/Brickout/power-piercing.png");
+			else
+				mPowerTimerIcon->SetTexturePath("Sprites/Brickout/power-wide.png");
+		}
 		if (active && mPowerTimerRing)
 		{
 			const int32 frame = std::clamp(static_cast<int32>(std::ceil(remaining / 12.0f * 11.0f)), 0, 11);
@@ -455,7 +494,9 @@ void GameRules::UpdateAmbientMotion()
 	mBackground->GetTransform()->SetPosition(Vector2(
 		mBackgroundBasePosition.x + std::sin(mAmbientTime * 0.17f) * 2.4f,
 		mBackgroundBasePosition.y + std::cos(mAmbientTime * 0.13f) * 1.8f));
-	const float32 pulse = 1.01f + std::sin(mAmbientTime * 0.21f) * 0.008f;
+	const bool overdrive = mOverdriveRemaining > 0.0f;
+	const float32 pulse = 1.01f + std::sin(mAmbientTime * (overdrive ? 2.8f : 0.21f))
+		* (overdrive ? 0.018f : 0.008f);
 	mBackground->GetTransform()->SetScale(Vector2(
 		mBackgroundBaseScale.x * pulse, mBackgroundBaseScale.y * pulse));
 }
@@ -559,7 +600,7 @@ void GameRules::SpawnPowerDrop(const std::string& power, const Vector2& position
 	else if (power == "Multiball") texture = "Sprites/Brickout/power-multiball.png";
 	else if (power == "Bomb") texture = "Sprites/Brickout/power-bomb.png";
 	else if (power == "Wide Paddle") texture = "Sprites/Brickout/power-wide.png";
-	else if (power == "Duplicate Paddle") texture = "Sprites/Brickout/power-duplicate.png";
+	else if (power == "Piercing Ball") texture = "Sprites/Brickout/power-piercing.png";
 	else return;
 
 	Reference<Entity> entity = MakeReference<Entity>();
@@ -611,10 +652,10 @@ void GameRules::ActivatePower(const std::string& power, const Vector2& position)
 		ActivateWidePaddle();
 		message = GameSettings::Text(GameText::WidePaddle);
 	}
-	else if (power == "Duplicate Paddle")
+	else if (power == "Piercing Ball")
 	{
-		ActivateDuplicatePaddle();
-		message = GameSettings::Text(GameText::DuplicatePaddle);
+		ActivatePiercingBall();
+		message = GameSettings::Text(GameText::PiercingBall);
 	}
 	else
 		return;
@@ -649,6 +690,7 @@ void GameRules::SpawnExtraBalls(Ball& sourceBall)
 		entity->AddComponent<CircleCollider2D>(7.0f, 1.0f, 0.0f, 1.0f);
 		Ball* ball = entity->AddComponent<Ball>();
 		scene->Add(entity);
+		ball->SetPiercing(mPiercingBallRemaining > 0.0f);
 		const glm::vec2 direction = glm::normalize(glm::vec2(
 			sourceDirection.x + side * 0.55f, std::max(std::abs(sourceDirection.y), 0.65f)));
 		ball->LaunchFrom(origin, direction);
@@ -696,36 +738,17 @@ void GameRules::ActivateWidePaddle()
 	mWidePaddleRemaining = 12.0f;
 	if (mPaddle)
 		mPaddle->SetWide(true);
-	if (mDuplicatePaddle)
-		if (Paddle* paddle = mDuplicatePaddle->GetComponent<Paddle>())
-			paddle->SetWide(true);
 }
 
-void GameRules::ActivateDuplicatePaddle()
+void GameRules::ActivatePiercingBall()
 {
-	mDuplicatePaddleRemaining = 12.0f;
-	if (mDuplicatePaddle || !mPaddle)
-		return;
-
+	mPiercingBallRemaining = 12.0f;
 	const Reference<Scene> scene = GetOwner().GetScene();
 	if (!scene)
 		return;
-
-	Reference<Entity> entity = MakeReference<Entity>();
-	entity->SetName("Duplicate Paddle");
-	const Vector2 source = mPaddle->GetOwner().GetWorldPosition();
-	const float32 offset = source.x >= 0.0f ? -155.0f : 155.0f;
-	entity->GetTransform()->SetPosition(Vector2(source.x + offset, source.y));
-	SpriteRenderer* renderer = entity->AddComponent<SpriteRenderer>("Sprites/Brickout/player.png");
-	renderer->SetOrder(11);
-	entity->AddComponent<RigidBody2D>(BodyType::Kinematic, true);
-	entity->AddComponent<BoxCollider2D>(100.0f, 20.0f, 1.0f, 0.0f, 1.0f);
-	Paddle* duplicate = entity->AddComponent<Paddle>();
-	scene->Add(entity);
-	duplicate->Follow(*mPaddle, offset);
-	mDuplicatePaddle = entity.get();
-	if (mWidePaddleRemaining > 0.0f)
-		duplicate->SetWide(true);
+	for (const Reference<Entity>& entity : scene->GetEntities())
+		if (Ball* ball = entity->GetComponent<Ball>(); ball && entity->IsActive())
+			ball->SetPiercing(true);
 }
 
 void GameRules::ActivateShockwave()
@@ -738,23 +761,27 @@ void GameRules::ActivateShockwave()
 	if (!scene)
 		return;
 
+	mOverdriveRemaining = 12.0f;
+	mOverdriveParticleDelay = 0.0f;
+	GameAudio::EnsureMusic(mLevel, true);
+	UpdateHud();
+
 	for (const Reference<Entity>& entity : scene->GetEntities())
 	{
 		Brick* brick = entity->GetComponent<Brick>();
 		if (!brick || !entity->IsActive())
 			continue;
 
-		const Vector2 offset = entity->GetWorldPosition() - origin;
-		if (offset.y >= 0.0f && offset.y <= 470.0f
-			&& std::abs(offset.x) <= 38.0f + offset.y * 0.58f)
-			brick->Damage(10, nullptr, false);
+		brick->Damage(1, nullptr, false);
 	}
 
-	if (mImpactParticles)
-		for (int32 step = 1; step <= 7; ++step)
-			mImpactParticles->EmitAt(Vector2(origin.x, origin.y + step * 58.0f), 56);
-
-	SpawnShockwaveEffect(origin);
+	for (const Reference<Entity>& entity : scene->GetEntities())
+		if (Ball* ball = entity->GetComponent<Ball>(); ball && entity->IsActive())
+		{
+			if (mOverdriveParticles)
+				mOverdriveParticles->EmitAt(entity->GetWorldPosition(), 180);
+			SpawnShockwaveEffect(entity->GetWorldPosition());
+		}
 	mShakeRemaining = 0.16f;
 	mActiveShakeStrength = 1.45f;
 	mShakeFrame = 0;

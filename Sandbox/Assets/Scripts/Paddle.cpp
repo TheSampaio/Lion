@@ -29,19 +29,6 @@ void Paddle::OnUpdate()
 {
 	const float32 extraHalfWidth = std::max(GetHalfWidth() - mBaseHalfWidth, 0.0f);
 	const float32 limit = std::max(mHorizontalLimit - extraHalfWidth, 0.0f);
-	if (mFollowTarget)
-	{
-		mMoveDirection = mFollowTarget->GetMoveDirection();
-		const Vector2 target = mFollowTarget->GetOwner().GetWorldPosition();
-		float32 requestedX = target.x + mFollowOffset;
-		if (requestedX < -limit || requestedX > limit)
-			requestedX = target.x - mFollowOffset;
-		const float32 x = std::clamp(requestedX, -limit, limit);
-		mBody->SetLinearVelocity(glm::vec2(0.0f, 0.0f));
-		mBody->SetPosition(glm::vec2(x, target.y));
-		return;
-	}
-
 	mMoveDirection = Input::GetActionStrength("player_right")
 		- Input::GetActionStrength("player_left");
 	Vector2 position = GetOwner().GetWorldPosition();
@@ -101,12 +88,6 @@ void Paddle::SetWide(bool wide)
 		scale.x *= 1.55f;
 	GetOwner().SetWorldScale(scale);
 	mCollider->RefreshShape();
-}
-
-void Paddle::Follow(Paddle& target, float32 horizontalOffset)
-{
-	mFollowTarget = &target;
-	mFollowOffset = horizontalOffset;
 }
 
 LION_REGISTER_COMPONENT(Paddle)

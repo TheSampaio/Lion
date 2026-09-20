@@ -20,7 +20,8 @@ void Brick::OnCollision(Entity& other)
 	if (!GetOwner().IsEnabled() || !other.HasComponent<Ball>())
 		return;
 
-	Damage(1, other.GetComponent<Ball>());
+	Ball* ball = other.GetComponent<Ball>();
+	Damage(ball && ball->IsPiercing() ? 99 : 1, ball);
 }
 
 void Brick::Damage(int32 amount, Ball* sourceBall, bool triggerPower)

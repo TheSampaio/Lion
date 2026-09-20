@@ -36,6 +36,9 @@ namespace Lion
 		void SetFriction(float32 value) { mFriction = value; }
 		void SetRestitution(float32 value) { mRestitution = value; }
 
+		// Rebuilds the native shape after a runtime Transform scale change.
+		LION_API void RefreshShape();
+
 	private:
 		float32 mRadius;
 		float32 mDensity;

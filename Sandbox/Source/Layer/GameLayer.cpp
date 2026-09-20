@@ -58,13 +58,10 @@ void GameLayer::OnDetach()
 void GameLayer::UpdateMusic()
 {
 	const std::string& path = SceneManager::GetActivePath();
-	const bool gameplay = path.find("Scenes/Level") != std::string::npos;
 	const bool menu = path.find("Scenes/MainMenu") != std::string::npos;
 
-	if (!gameplay && !menu)
-		return;
-
-	GameAudio::EnsureMusic(gameplay);
+	if (menu)
+		GameAudio::EnsureMusic(0);
 }
 
 void GameLayer::OnEvent(Event& event)

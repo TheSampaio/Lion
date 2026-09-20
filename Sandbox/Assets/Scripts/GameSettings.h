@@ -55,7 +55,7 @@ enum class GameText
 	ShockwaveFired,
 	Bomb,
 	WidePaddle,
-	DuplicatePaddle,
+	PiercingBall,
 	Sessions,
 	LevelsCleared,
 	BricksDestroyed,

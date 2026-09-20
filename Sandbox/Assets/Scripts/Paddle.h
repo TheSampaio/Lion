@@ -21,7 +21,6 @@ public:
 	Lion::float32 GetHalfHeight() const;
 	Lion::float32 GetMoveDirection() const { return mMoveDirection; }
 	void SetWide(bool wide);
-	void Follow(Paddle& target, Lion::float32 horizontalOffset);
 
 private:
 	Lion::float32 mSpeed = 500.0f;
@@ -34,7 +33,5 @@ private:
 	Lion::Vector2 mBaseScale;
 	Lion::float32 mMoveDirection = 0.0f;
 	Lion::float32 mBaseHalfWidth = 0.0f;
-	Lion::float32 mFollowOffset = 0.0f;
-	Paddle* mFollowTarget = nullptr;
 	bool mWide = false;
 };
