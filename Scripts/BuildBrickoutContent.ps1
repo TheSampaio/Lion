@@ -911,6 +911,18 @@ function Get-LevelLayout([int]$level, [int]$count)
 	return @($layout)
 }
 
+function Get-LevelPowerPlan([int]$level)
+{
+	switch (($level - 1) % 5)
+	{
+		0 { @('Extra Life', 'Wide Paddle') }
+		1 { @('Bomb', 'Multiball') }
+		2 { @('Extra Life', 'Piercing Ball', 'Bomb') }
+		3 { @('Multiball', 'Wide Paddle', 'Bomb') }
+		default { @('Extra Life', 'Multiball', 'Bomb', 'Wide Paddle', 'Piercing Ball') }
+	}
+}
+
 function ConvertTo-SymmetricLayout([object[]]$layout, [int]$count)
 {
 	$pairCount = [Math]::Floor($count / 2)
@@ -1149,14 +1161,14 @@ for ($level = 1; $level -le 100; $level++)
 	}
 
 	$layout = ConvertTo-SymmetricLayout (Get-LevelLayout $level $brickIndices.Count) $brickIndices.Count
-	$symmetricSlotCount = [Math]::Ceiling($brickIndices.Count / 2)
-	$powerPlan = switch (($level - 1) % 5)
+	$powerPlan = @(Get-LevelPowerPlan $level)
+	$powerAssignments = @{}
+	$mirroredPairCount = [Math]::Floor($brickIndices.Count / 2)
+	for ($powerIndex = 0; $powerIndex -lt $powerPlan.Count; $powerIndex++)
 	{
-		0 { @('Extra Life', 'Wide Paddle') }
-		1 { @('Bomb', 'Multiball') }
-		2 { @('Extra Life', 'Piercing Ball', 'Bomb') }
-		3 { @('Multiball', 'Wide Paddle', 'Bomb') }
-		default { @('Extra Life', 'Multiball', 'Bomb', 'Wide Paddle', 'Piercing Ball') }
+		$slot = [Math]::Floor(($powerIndex + 1) * $mirroredPairCount / ($powerPlan.Count + 1))
+		$side = ($level + $powerIndex) % 2
+		$powerAssignments[[int]($slot * 2 + $side)] = $powerPlan[$powerIndex]
 	}
 	for ($brickNumber = 0; $brickNumber -lt $brickIndices.Count; $brickNumber++)
 	{
@@ -1176,12 +1188,7 @@ for ($level = 1; $level -le 100; $level++)
 		$behavior | Add-Member -NotePropertyName 'Hit Points' -NotePropertyValue $durability -Force
 		$behavior | Add-Member -NotePropertyName 'Power' -NotePropertyValue '' -Force
 
-		$power = ''
-		for ($powerIndex = 0; $powerIndex -lt $powerPlan.Count; $powerIndex++)
-		{
-			$slot = [Math]::Floor(($powerIndex + 1) * $symmetricSlotCount / ($powerPlan.Count + 1))
-			if ($symmetricSlot -eq $slot) { $power = $powerPlan[$powerIndex]; break }
-		}
+		$power = if ($powerAssignments.ContainsKey($brickNumber)) { $powerAssignments[$brickNumber] } else { '' }
 
 		if ($power)
 		{
@@ -1511,11 +1518,22 @@ for ($level = 1; $level -le 100; $level++)
 		$mirrorBehavior = if ($mirror) {
 			$mirror.components | Where-Object { $_.type -eq 'Brick' } | Select-Object -First 1
 		} else { $null }
-		if (!$mirror -or $mirrorBehavior.'Hit Points' -ne $behavior.'Hit Points' -or
-			$mirrorBehavior.Power -ne $behavior.Power)
+		if (!$mirror -or $mirrorBehavior.'Hit Points' -ne $behavior.'Hit Points')
 		{
-			throw "Brickout level $level has a brick without an identical mirrored counterpart."
+			throw "Brickout level $level has a brick without a mirrored counterpart of equal durability."
 		}
+		if ($x -ne 0 -and $behavior.Power -and $mirrorBehavior.Power)
+		{
+			throw "Brickout level $level mirrors a power across both sides of the arena."
+		}
+	}
+	$expectedPowerPlan = @(Get-LevelPowerPlan $level)
+	$placedPowers = @($bricks | ForEach-Object {
+		($_.components | Where-Object { $_.type -eq 'Brick' } | Select-Object -First 1).Power
+	} | Where-Object { $_ })
+	if ((($placedPowers | Sort-Object) -join '|') -ne (($expectedPowerPlan | Sort-Object) -join '|'))
+	{
+		throw "Brickout level $level has powers '$($placedPowers -join '|')', expected '$($expectedPowerPlan -join '|')'."
 	}
 
 	$unsafeObstacles = @($scene.entities | Where-Object {

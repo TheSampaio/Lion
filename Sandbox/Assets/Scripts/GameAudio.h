@@ -19,7 +19,7 @@ public:
 private:
 	static inline Lion::Reference<Lion::AudioClip> sMenuMusic;
 	static inline std::array<Lion::Reference<Lion::AudioClip>, 20> sThemeMusic;
-	static inline Lion::Reference<Lion::AudioClip> sOverdriveMusic;
 	static inline Lion::AudioVoice sMusicVoice = Lion::kInvalidAudioVoice;
 	static inline Lion::int32 sPlayingMusic = -1;
+	static inline bool sOverdriveActive = false;
 };

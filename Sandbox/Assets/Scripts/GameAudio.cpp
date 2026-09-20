@@ -38,22 +38,28 @@ void GameAudio::PlayPower(const std::string& power)
 
 void GameAudio::EnsureMusic(int32 level, bool overdrive)
 {
-	const int32 music = level <= 0 ? 0 : overdrive ? 21 : std::clamp((level - 1) / 5 + 1, 1, 20);
+	const int32 music = level <= 0 ? 0 : std::clamp((level - 1) / 5 + 1, 1, 20);
+	const bool activeOverdrive = music > 0 && overdrive;
+	const float32 volume = music == 0 ? 0.58f : activeOverdrive ? 0.72f : 0.66f;
+	const float32 pitch = activeOverdrive ? 1.1f : 1.0f;
 	if (sMusicVoice != kInvalidAudioVoice && Audio::IsPlaying(sMusicVoice)
 		&& music == sPlayingMusic)
+	{
+		if (sOverdriveActive != activeOverdrive)
+		{
+			Audio::SetVolume(sMusicVoice, volume);
+			Audio::SetPitch(sMusicVoice, pitch);
+			sOverdriveActive = activeOverdrive;
+		}
 		return;
+	}
 
 	Audio::Stop(sMusicVoice);
 	sMusicVoice = kInvalidAudioVoice;
 	sPlayingMusic = music;
 	Reference<AudioClip>* clip = &sMenuMusic;
 	std::string path = "Sounds/music-menu.wav";
-	if (music == 21)
-	{
-		clip = &sOverdriveMusic;
-		path = "Sounds/music-overdrive.wav";
-	}
-	else if (music > 0)
+	if (music > 0)
 	{
 		clip = &sThemeMusic[static_cast<size_t>(music - 1)];
 		path = LION_FORMAT_TEXT("Sounds/music-theme-{:02}.wav", music);
@@ -67,10 +73,12 @@ void GameAudio::EnsureMusic(int32 level, bool overdrive)
 	}
 
 	AudioPlayback playback;
-	playback.volume = music == 0 ? 0.58f : music == 21 ? 0.72f : 0.66f;
+	playback.volume = volume;
+	playback.pitch = pitch;
 	playback.loop = true;
 	playback.bus = AudioBus::Music;
 	sMusicVoice = Audio::Play(*clip, playback, "brickout-music");
+	sOverdriveActive = activeOverdrive;
 	if (sMusicVoice == kInvalidAudioVoice)
 		Log::Console(LogLevel::Error, LION_FORMAT_TEXT("[GameAudio] Could not start music '{}'.", path));
 }
@@ -80,4 +88,5 @@ void GameAudio::StopMusic()
 	Audio::Stop(sMusicVoice);
 	sMusicVoice = kInvalidAudioVoice;
 	sPlayingMusic = -1;
+	sOverdriveActive = false;
 }
