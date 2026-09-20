@@ -1,6 +1,7 @@
 #include "Ball.h"
 #include "Brick.h"
 #include "GameAudio.h"
+#include "GameRules.h"
 #include "Paddle.h"
 
 #include <Lion/Logic/ComponentRegistry.h>
@@ -71,7 +72,16 @@ void Ball::OnCollision(Entity& other)
 			mBody->SetLinearVelocity(mIncomingDirection * mSpeed);
 	}
 	else if (other.HasComponent<Paddle>()) GameAudio::PlaySfx("Sounds/ball-paddle.wav", 0.62f);
-	else if (other.GetName().find("Arena") != std::string::npos) GameAudio::PlaySfx("Sounds/ball-bumper.wav", 0.58f);
+	else if (other.GetName().rfind("Arena ", 0) == 0)
+	{
+		if (mPiercing)
+		{
+			GameRules::DestroyArenaObstacle(other);
+			mBody->SetLinearVelocity(mIncomingDirection * mSpeed);
+		}
+		else
+			GameAudio::PlaySfx("Sounds/ball-bumper.wav", 0.58f);
+	}
 	else GameAudio::PlaySfx("Sounds/ball-wall.wav", 0.36f);
 	mHasBounced = true;
 
@@ -195,7 +205,7 @@ void Ball::FollowPaddle()
 
 void Ball::UpdatePiercingScale()
 {
-	const float32 targetMultiplier = mPiercing ? 2.0f : 1.0f;
+	const float32 targetMultiplier = mPiercing ? 1.5f : 1.0f;
 	const Vector2 target(mBaseScale.x * targetMultiplier, mBaseScale.y * targetMultiplier);
 	const Vector2 current = GetOwner().GetWorldScale();
 	const float32 blend = std::min(Clock::GetDeltaTime() * 9.0f, 1.0f);

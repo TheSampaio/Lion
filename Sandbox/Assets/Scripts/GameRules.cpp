@@ -247,7 +247,11 @@ void GameRules::RegisterBrickDamage(const Vector2& position, bool destroyed, con
 	if (!sActiveRules)
 		return;
 	if (sActiveRules->mApplyingAreaDamage)
+	{
+		if (sActiveRules->mSpawnAreaPowerDrops && destroyed && !power.empty())
+			sActiveRules->mPendingAreaPowerDrops.emplace_back(power, position);
 		return;
+	}
 
 	if (GameSettings::HasCameraShake())
 	{
@@ -264,6 +268,25 @@ void GameRules::RegisterBrickDamage(const Vector2& position, bool destroyed, con
 		sActiveRules->SpawnPowerDrop(power, position);
 
 	sActiveRules->UpdateHud();
+}
+
+void GameRules::DestroyArenaObstacle(Entity& obstacle)
+{
+	if (!sActiveRules || !obstacle.IsActive() || obstacle.GetName().rfind("Arena ", 0) != 0)
+		return;
+
+	const Vector2 position = obstacle.GetWorldPosition();
+	obstacle.SetVisible(false);
+	obstacle.SetEnabled(false);
+	if (sActiveRules->mImpactParticles)
+		sActiveRules->mImpactParticles->EmitAt(position, 150);
+	if (GameSettings::HasCameraShake())
+	{
+		sActiveRules->mShakeRemaining = 0.10f;
+		sActiveRules->mActiveShakeStrength = 0.9f;
+		sActiveRules->mShakeFrame = 0;
+	}
+	GameAudio::PlaySfx("Sounds/power-bomb.wav", 0.52f, 1.38f);
 }
 
 void GameRules::UpdateHud()
@@ -760,7 +783,6 @@ void GameRules::ActivateShockwave()
 	if (!mPaddle || sShockwaveCharge < kShockwaveHitsRequired)
 		return;
 
-	const Vector2 origin = mPaddle->GetOwner().GetWorldPosition();
 	const Reference<Scene> scene = GetOwner().GetScene();
 	if (!scene)
 		return;
@@ -771,29 +793,25 @@ void GameRules::ActivateShockwave()
 	UpdateHud();
 
 	mApplyingAreaDamage = true;
+	mSpawnAreaPowerDrops = true;
+	mPendingAreaPowerDrops.clear();
+	mPendingAreaPowerDrops.reserve(8);
 	for (const Reference<Entity>& entity : scene->GetEntities())
 	{
 		Brick* brick = entity->GetComponent<Brick>();
 		if (!brick || !entity->IsActive())
 			continue;
 
-		brick->Damage(1, nullptr, false);
+		brick->Damage(1, nullptr, true);
 	}
+	mSpawnAreaPowerDrops = false;
 	mApplyingAreaDamage = false;
+	for (const auto& [power, position] : mPendingAreaPowerDrops)
+		SpawnPowerDrop(power, position);
+	mPendingAreaPowerDrops.clear();
 
-	std::vector<Vector2> ballPositions;
-	ballPositions.reserve(4);
-	for (const Reference<Entity>& entity : scene->GetEntities())
-		if (Ball* ball = entity->GetComponent<Ball>(); ball && entity->IsActive())
-			ballPositions.push_back(entity->GetWorldPosition());
-	for (const Vector2& ballPosition : ballPositions)
-	{
-		if (mOverdriveParticles)
-			mOverdriveParticles->EmitAt(ballPosition, 96);
-		SpawnShockwaveEffect(ballPosition);
-	}
-	mShakeRemaining = 0.16f;
-	mActiveShakeStrength = 1.45f;
+	mShakeRemaining = 0.34f;
+	mActiveShakeStrength = 1.15f;
 	mShakeFrame = 0;
 	GameAudio::PlaySfx("Sounds/power-shockwave.wav", 0.88f);
 
@@ -802,26 +820,6 @@ void GameRules::ActivateShockwave()
 	ShowPowerMessage(GameSettings::Text(GameText::ShockwaveFired));
 	UpdateHud();
 }
-
-void GameRules::SpawnShockwaveEffect(const Vector2& origin)
-{
-	const Reference<Scene> scene = GetOwner().GetScene();
-	if (!scene)
-		return;
-
-	for (int32 index = 0; index < 5; ++index)
-	{
-		Reference<Entity> entity = MakeReference<Entity>();
-		entity->SetName(LION_FORMAT_TEXT("Shockwave Effect {}", index + 1));
-		entity->GetTransform()->SetPosition(Vector2(origin.x, origin.y + 45.0f + index * 76.0f));
-		entity->GetTransform()->SetScale(Vector2(0.42f, 0.42f));
-		SpriteRenderer* renderer = entity->AddComponent<SpriteRenderer>("Sprites/Brickout/power-shockwave.png");
-		renderer->SetOrder(45);
-		scene->Add(entity);
-		mTransientEffects.push_back({ entity, renderer, index * -0.035f, 0.38f + index * 0.025f });
-	}
-}
-
 void GameRules::ShowPowerMessage(const std::string& message)
 {
 	if (!mPowerText)

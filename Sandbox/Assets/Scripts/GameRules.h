@@ -22,6 +22,7 @@ public:
 	static void AbandonSession();
 	static void RegisterBrickDamage(const Lion::Vector2& position, bool destroyed,
 		const std::string& power, Ball* sourceBall);
+	static void DestroyArenaObstacle(Lion::Entity& obstacle);
 	static Lion::int32 GetScore() { return sScore; }
 	static Lion::int32 GetAttempts() { return sAttempts; }
 
@@ -78,6 +79,7 @@ private:
 	bool mInitialized = false;
 	bool mTransitionQueued = false;
 	bool mApplyingAreaDamage = false;
+	bool mSpawnAreaPowerDrops = false;
 	bool mShowingGamepadPrompts = false;
 	bool mShowingKeyboardPrompts = false;
 
@@ -97,6 +99,7 @@ private:
 	};
 
 	std::vector<PowerDrop> mPowerDrops;
+	std::vector<std::pair<std::string, Lion::Vector2>> mPendingAreaPowerDrops;
 	std::vector<TransientEffect> mTransientEffects;
 
 	void InitializeForScene();
@@ -117,7 +120,6 @@ private:
 	void ActivateWidePaddle();
 	void ActivatePiercingBall();
 	void ActivateShockwave();
-	void SpawnShockwaveEffect(const Lion::Vector2& origin);
 	void ShowPowerMessage(const std::string& message);
 	void FinishAttempt(bool completed);
 	void HandleDebugReset();

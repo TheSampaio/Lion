@@ -110,9 +110,8 @@ void EndScreen::RefreshSelection()
 
 void EndScreen::UpdateInputPrompts()
 {
-	const bool hints = GameSettings::HasControlHints();
-	const bool gamepad = hints && Input::GetLastInputMethod() == InputMethod::Gamepad;
-	const bool keyboard = hints && !gamepad;
+	const bool gamepad = Input::GetLastInputMethod() == InputMethod::Gamepad;
+	const bool keyboard = !gamepad;
 
 	if (mControllerPrompts && gamepad != mShowingGamepadPrompts)
 	{

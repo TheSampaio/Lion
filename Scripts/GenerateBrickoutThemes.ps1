@@ -6,6 +6,56 @@ $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Drawing
 New-Item -ItemType Directory -Force -Path $AssetRoot | Out-Null
 
+Add-Type -TypeDefinition @'
+using System;
+using System.Drawing;
+using System.Drawing.Imaging;
+using System.Runtime.InteropServices;
+
+public static class BrickoutThemeTint
+{
+	public static Bitmap Colorize(string path, Color primary, Color secondary)
+	{
+		using (Bitmap loaded = new Bitmap(path))
+		{
+			Bitmap result = new Bitmap(1280, 720, PixelFormat.Format32bppArgb);
+			using (Graphics graphics = Graphics.FromImage(result))
+				graphics.DrawImage(loaded, 0, 0, result.Width, result.Height);
+
+			Rectangle rectangle = new Rectangle(0, 0, result.Width, result.Height);
+			BitmapData data = result.LockBits(rectangle, ImageLockMode.ReadWrite, PixelFormat.Format32bppArgb);
+			byte[] pixels = new byte[Math.Abs(data.Stride) * data.Height];
+			Marshal.Copy(data.Scan0, pixels, 0, pixels.Length);
+			for (int y = 0; y < result.Height; ++y)
+			{
+				for (int x = 0; x < result.Width; ++x)
+				{
+					int offset = y * data.Stride + x * 4;
+					double brightness = Math.Max(pixels[offset], Math.Max(pixels[offset + 1], pixels[offset + 2])) / 255.0;
+					double edge = Math.Pow(Math.Abs(x - result.Width * 0.5) / (result.Width * 0.5), 1.35);
+					double blend = 0.18 + edge * 0.64;
+					double red = primary.R + (secondary.R - primary.R) * blend;
+					double green = primary.G + (secondary.G - primary.G) * blend;
+					double blue = primary.B + (secondary.B - primary.B) * blend;
+					double glow = Math.Pow(brightness, 0.82);
+					pixels[offset] = Clamp(pixels[offset] * 0.08 + blue * glow * 1.08);
+					pixels[offset + 1] = Clamp(pixels[offset + 1] * 0.08 + green * glow * 1.08);
+					pixels[offset + 2] = Clamp(pixels[offset + 2] * 0.08 + red * glow * 1.08);
+				}
+			}
+			Marshal.Copy(pixels, 0, data.Scan0, pixels.Length);
+			result.UnlockBits(data);
+			return result;
+		}
+	}
+
+	private static byte Clamp(double value)
+	{
+		return (byte)Math.Max(0.0, Math.Min(255.0, value));
+	}
+}
+'@ -ReferencedAssemblies System.Drawing
+
 $basePath = Join-Path $AssetRoot 'background.png'
 if (!(Test-Path -LiteralPath $basePath))
 {
@@ -13,11 +63,11 @@ if (!(Test-Path -LiteralPath $basePath))
 }
 
 $palettes = @(
-	@('#00D9FF','#FF2BB5'), @('#39F7FF','#8D5CFF'), @('#00E5FF','#FF5A8A'), @('#55FFD5','#36A8FF'),
-	@('#44CCFF','#E14DFF'), @('#28F0D0','#FF4CAC'), @('#4DA3FF','#FF713D'), @('#36E6FF','#A862FF'),
-	@('#00D7FF','#FFCC38'), @('#54F6FF','#FF497D'), @('#40FFB8','#5785FF'), @('#7AE6FF','#FF4FC4'),
-	@('#32D5FF','#FF8A45'), @('#59FFD0','#C64DFF'), @('#45B8FF','#FF4A6E'), @('#4DEBFF','#FFB33D'),
-	@('#7CFFDF','#8464FF'), @('#44CFFF','#FF64A8'), @('#75DEFF','#D653FF'), @('#E7FAFF','#27CFFF')
+	@('#FF3500','#FFB000'), @('#00F5D4','#45FF72'), @('#9B3DFF','#FF24D6'), @('#B8FF16','#00E5FF'),
+	@('#00C8FF','#FF2BB5'), @('#FF5733','#FFE033'), @('#35FFB4','#3185FF'), @('#E64DFF','#FF406C'),
+	@('#27DFFF','#8D5CFF'), @('#FF8A24','#FF335F'), @('#4CFF6A','#C9FF29'), @('#4DDCFF','#FF54CF'),
+	@('#FFD43B','#FF4D1F'), @('#34FFD5','#7A5CFF'), @('#FF49B8','#7B38FF'), @('#72FFEF','#39A8FF'),
+	@('#C5FF38','#29E2A6'), @('#FF6245','#D93BFF'), @('#52B7FF','#8AFFE3'), @('#F4F8FF','#27CFFF')
 )
 
 function To-Color([string]$hex, [int]$alpha = 255)
@@ -28,15 +78,15 @@ function To-Color([string]$hex, [int]$alpha = 255)
 
 for ($theme = 1; $theme -le 20; $theme++)
 {
-	$source = [Drawing.Bitmap]::FromFile($basePath)
+	$primary = $palettes[$theme - 1][0]
+	$secondary = $palettes[$theme - 1][1]
+	$source = [BrickoutThemeTint]::Colorize($basePath, (To-Color $primary), (To-Color $secondary))
 	$bitmap = [Drawing.Bitmap]::new(1280, 720, [Drawing.Imaging.PixelFormat]::Format32bppArgb)
 	$graphics = [Drawing.Graphics]::FromImage($bitmap)
 	$graphics.SmoothingMode = [Drawing.Drawing2D.SmoothingMode]::AntiAlias
 	$graphics.InterpolationMode = [Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
 	$graphics.DrawImage($source, 0, 0, 1280, 720)
 
-	$primary = $palettes[$theme - 1][0]
-	$secondary = $palettes[$theme - 1][1]
 	$random = [Random]::new(3907 + $theme * 811)
 	$starPrimary = [Drawing.SolidBrush]::new((To-Color $primary 145))
 	$starSecondary = [Drawing.SolidBrush]::new((To-Color $secondary 120))

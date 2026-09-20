@@ -911,6 +911,70 @@ function Get-LevelLayout([int]$level, [int]$count)
 	return @($layout)
 }
 
+function ConvertTo-SymmetricLayout([object[]]$layout, [int]$count)
+{
+	$pairCount = [Math]::Floor($count / 2)
+	$candidates = [Collections.Generic.List[object]]::new()
+	$centerCandidates = [Collections.Generic.List[object]]::new()
+	$seen = [Collections.Generic.HashSet[string]]::new()
+
+	foreach ($point in $layout)
+	{
+		$absoluteX = [Math]::Round([Math]::Abs([double]$point.x), 1)
+		if ($absoluteX -lt 35)
+		{
+			$centerCandidates.Add($point)
+			continue
+		}
+
+		$key = '{0:F1}|{1:F1}' -f $absoluteX, [double]$point.y
+		$overlaps = $candidates | Where-Object {
+			[Math]::Abs([double]$_.x - $absoluteX) -lt 66 -and
+			[Math]::Abs([double]$_.y - [double]$point.y) -lt 28
+		} | Select-Object -First 1
+		if (!$seen.Contains($key) -and !$overlaps)
+		{
+			[void]$seen.Add($key)
+			$candidates.Add([pscustomobject]@{
+				x=$absoluteX; y=[double]$point.y; rotation=[Math]::Abs([double]$point.rotation)
+			})
+		}
+	}
+
+	$fallback = 0
+	while ($candidates.Count -lt $pairCount)
+	{
+		$column = $fallback % 5
+		$row = [Math]::Floor($fallback / 5)
+		$fallback++
+		$x = 70 + $column * 66
+		$y = 220 - $row * 54
+		$overlaps = $candidates | Where-Object {
+			[Math]::Abs([double]$_.x - $x) -lt 66 -and [Math]::Abs([double]$_.y - $y) -lt 28
+		} | Select-Object -First 1
+		if (!$overlaps)
+		{
+			$candidates.Add([pscustomobject]@{ x=$x; y=$y; rotation=0 })
+		}
+	}
+
+	$symmetric = [Collections.Generic.List[object]]::new()
+	for ($index = 0; $index -lt $pairCount; $index++)
+	{
+		$point = $candidates[$index]
+		$symmetric.Add([pscustomobject]@{ x=-[double]$point.x; y=[double]$point.y; rotation=-[double]$point.rotation })
+		$symmetric.Add([pscustomobject]@{ x= [double]$point.x; y=[double]$point.y; rotation= [double]$point.rotation })
+	}
+
+	if (($count % 2) -ne 0)
+	{
+		$centerY = if ($centerCandidates.Count -gt 0) { [double]$centerCandidates[0].y } else { 235.0 }
+		$symmetric.Add([pscustomobject]@{ x=0; y=$centerY; rotation=0 })
+	}
+
+	return @($symmetric)
+}
+
 function New-WorldSprite([string]$name, [string]$texture, [float]$x, [float]$y,
 	[float]$scaleX, [float]$scaleY, [float]$rotation, [int]$parent = -1, [int]$order = 5)
 {
@@ -1084,7 +1148,8 @@ for ($level = 1; $level -le 100; $level++)
 		}
 	}
 
-	$layout = Get-LevelLayout $level $brickIndices.Count
+	$layout = ConvertTo-SymmetricLayout (Get-LevelLayout $level $brickIndices.Count) $brickIndices.Count
+	$symmetricSlotCount = [Math]::Ceiling($brickIndices.Count / 2)
 	$powerPlan = switch (($level - 1) % 5)
 	{
 		0 { @('Extra Life', 'Wide Paddle') }
@@ -1100,12 +1165,13 @@ for ($level = 1; $level -le 100; $level++)
 		$point = $layout[$brickNumber]
 		$brick.transform.position = @([float]$point.x, [float]$point.y)
 		$brick.transform.rotation = 0
-		$durability = 1 + (($brickNumber + $level) % 2)
-		if ($level -ge 2 -and (($brickNumber + $level) % 7) -eq 0) { $durability = 3 }
-		if ($level -ge 4 -and (($brickNumber * 3 + $level) % 11) -eq 0) { $durability = 4 }
-		if ($level -ge 6 -and (($brickNumber * 5 + $level) % 17) -eq 0) { $durability = 5 }
-		if ($level -ge 25 -and (($brickNumber + $level) % 5) -eq 0) { $durability = [Math]::Max($durability, 3) }
-		if ($level -ge 50 -and (($brickNumber + $level) % 4) -eq 0) { $durability = [Math]::Max($durability, 4) }
+		$symmetricSlot = [Math]::Floor($brickNumber / 2)
+		$durability = 1 + (($symmetricSlot + $level) % 2)
+		if ($level -ge 2 -and (($symmetricSlot + $level) % 7) -eq 0) { $durability = 3 }
+		if ($level -ge 4 -and (($symmetricSlot * 3 + $level) % 11) -eq 0) { $durability = 4 }
+		if ($level -ge 6 -and (($symmetricSlot * 5 + $level) % 17) -eq 0) { $durability = 5 }
+		if ($level -ge 25 -and (($symmetricSlot + $level) % 5) -eq 0) { $durability = [Math]::Max($durability, 3) }
+		if ($level -ge 50 -and (($symmetricSlot + $level) % 4) -eq 0) { $durability = [Math]::Max($durability, 4) }
 		$behavior = $brick.components | Where-Object { $_.type -eq 'Brick' } | Select-Object -First 1
 		$behavior | Add-Member -NotePropertyName 'Hit Points' -NotePropertyValue $durability -Force
 		$behavior | Add-Member -NotePropertyName 'Power' -NotePropertyValue '' -Force
@@ -1113,8 +1179,8 @@ for ($level = 1; $level -le 100; $level++)
 		$power = ''
 		for ($powerIndex = 0; $powerIndex -lt $powerPlan.Count; $powerIndex++)
 		{
-			$slot = [Math]::Floor(($powerIndex + 1) * $brickIndices.Count / ($powerPlan.Count + 1))
-			if ($brickNumber -eq $slot) { $power = $powerPlan[$powerIndex]; break }
+			$slot = [Math]::Floor(($powerIndex + 1) * $symmetricSlotCount / ($powerPlan.Count + 1))
+			if ($symmetricSlot -eq $slot) { $power = $powerPlan[$powerIndex]; break }
 		}
 
 		if ($power)
@@ -1204,7 +1270,7 @@ for ($level = 1; $level -le 100; $level++)
 		) }
 		14 { @(
 			(New-Rail 'Arena Zig Left' -305 45 42),
-			(New-Rail 'Arena Zig Center' 0 110 -12),
+			(New-Rail 'Arena Zig Center' 0 110 0),
 			(New-Rail 'Arena Zig Right' 305 45 -42)
 		) }
 		15 { @(
@@ -1231,7 +1297,7 @@ for ($level = 1; $level -le 100; $level++)
 		default { @(
 			(New-Bumper 'Arena Cascade Left' -250 125),
 			(New-Post 'Arena Cascade Center' 0 80),
-			(New-Bumper 'Arena Cascade Right' 250 35)
+			(New-Bumper 'Arena Cascade Right' 250 125)
 		) }
 	}
 	$scene.entities = @($scene.entities) + $arenaElements
@@ -1433,6 +1499,24 @@ for ($level = 1; $level -le 100; $level++)
 			}
 		}
 	}
+	foreach ($brick in $bricks)
+	{
+		$x = [double]$brick.transform.position[0]
+		$y = [double]$brick.transform.position[1]
+		$behavior = $brick.components | Where-Object { $_.type -eq 'Brick' } | Select-Object -First 1
+		$mirror = $bricks | Where-Object {
+			[Math]::Abs([double]$_.transform.position[0] + $x) -lt 0.2 -and
+			[Math]::Abs([double]$_.transform.position[1] - $y) -lt 0.2
+		} | Select-Object -First 1
+		$mirrorBehavior = if ($mirror) {
+			$mirror.components | Where-Object { $_.type -eq 'Brick' } | Select-Object -First 1
+		} else { $null }
+		if (!$mirror -or $mirrorBehavior.'Hit Points' -ne $behavior.'Hit Points' -or
+			$mirrorBehavior.Power -ne $behavior.Power)
+		{
+			throw "Brickout level $level has a brick without an identical mirrored counterpart."
+		}
+	}
 
 	$unsafeObstacles = @($scene.entities | Where-Object {
 		$_.name -like 'Arena *' -and $_.transform.position[1] -lt 0
@@ -1440,6 +1524,24 @@ for ($level = 1; $level -le 100; $level++)
 	if ($unsafeObstacles.Count -gt 0)
 	{
 		throw "Brickout level $level places a pinball obstacle in the paddle approach lane."
+	}
+	$arenaElements = @($scene.entities | Where-Object { $_.name -like 'Arena *' })
+	foreach ($element in $arenaElements)
+	{
+		$x = [double]$element.transform.position[0]
+		$y = [double]$element.transform.position[1]
+		$rotation = [double]$element.transform.rotation
+		$sprite = $element.components | Where-Object { $_.type -eq 'SpriteRenderer' } | Select-Object -First 1
+		$mirror = $arenaElements | Where-Object {
+			[Math]::Abs([double]$_.transform.position[0] + $x) -lt 0.2 -and
+			[Math]::Abs([double]$_.transform.position[1] - $y) -lt 0.2 -and
+			[Math]::Abs([double]$_.transform.rotation + $rotation) -lt 0.2 -and
+			(($_.components | Where-Object { $_.type -eq 'SpriteRenderer' } | Select-Object -First 1).texture -eq $sprite.texture)
+		} | Select-Object -First 1
+		if (!$mirror)
+		{
+			throw "Brickout level $level has a pinball obstacle without a mirrored counterpart."
+		}
 	}
 	$arenaSignature = (($scene.entities | Where-Object { $_.name -like 'Arena *' } | Sort-Object name |
 		ForEach-Object { "{0}:{1}:{2}:{3}" -f $_.name, $_.transform.position[0], $_.transform.position[1], $_.transform.rotation }) -join '|')

@@ -123,9 +123,9 @@ void PauseMenu::RefreshSelection()
 
 void PauseMenu::UpdateInputPrompts()
 {
-	const bool hints = SceneManager::IsPaused() && GameSettings::HasControlHints();
-	const bool gamepad = hints && Input::GetLastInputMethod() == InputMethod::Gamepad;
-	const bool keyboard = hints && !gamepad;
+	const bool visible = SceneManager::IsPaused();
+	const bool gamepad = visible && Input::GetLastInputMethod() == InputMethod::Gamepad;
+	const bool keyboard = visible && !gamepad;
 
 	if (mControllerPrompts && gamepad != mShowingGamepadPrompts)
 	{

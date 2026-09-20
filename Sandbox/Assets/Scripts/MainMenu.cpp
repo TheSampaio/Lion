@@ -591,7 +591,8 @@ void MainMenu::UpdateInputPresentation(bool force)
 		return;
 
 	mUsingGamepad = usingGamepad;
-	const bool hints = GameSettings::HasControlHints();
+	// Menu navigation is always explained. The accessibility option only controls the in-level HUD hints.
+	constexpr bool hints = true;
 	SetShown(mPrompt, mState == State::Attract && !hints);
 	SetShown(mKeyboardAttractPrompt, hints && mState == State::Attract && !usingGamepad);
 	SetShown(mControllerAttractPrompt, hints && mState == State::Attract && usingGamepad);
