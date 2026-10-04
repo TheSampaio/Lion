@@ -187,7 +187,7 @@ namespace Lion
 	void Application::ShowStartupSplash()
 	{
 		const Reference<Texture> texture = Asset::LoadTexture(
-			"Lion Engine Startup Splash", "Images/lion-engine-banner.png");
+			"Lion Engine Startup Splash", "Images/lion-engine-splash-screen.png");
 
 		if (!texture)
 			return;
@@ -195,9 +195,11 @@ namespace Lion
 		const Size windowSize = Window::GetSize();
 		Reference<CameraOrthographic> camera = MakeReference<CameraOrthographic>();
 		camera->OnResize(windowSize.width, windowSize.height);
-		Sprite logo(texture);
-		const float32 targetWidth = std::min(windowSize.width * 0.48f, 620.0f);
-		const float32 scale = targetWidth / std::max(logo.GetSize().width, 1.0f);
+		Sprite splash(texture);
+		const Size splashSize = splash.GetSize();
+		const float32 scale = std::max(
+			windowSize.width / std::max(splashSize.width, 1.0f),
+			windowSize.height / std::max(splashSize.height, 1.0f));
 		const auto started = std::chrono::steady_clock::now();
 		constexpr auto duration = std::chrono::milliseconds(900);
 
@@ -208,7 +210,7 @@ namespace Lion
 			Clock::UpdateFrameTime();
 			Renderer::Clear(0.012f, 0.012f, 0.014f, 1.0f);
 			Renderer::RenderBegin(camera);
-			logo.Draw(Vector2(0.0f, 0.0f), Vector(), Vector(scale, scale, 1.0f));
+			splash.Draw(Vector2(0.0f, 0.0f), Vector(), Vector(scale, scale, 1.0f));
 			Renderer::RenderEnd();
 			Graphics::SwapBuffers();
 		}
