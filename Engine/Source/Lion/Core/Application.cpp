@@ -10,6 +10,7 @@
 #include <Lion/Core/Log.h>
 #include <Lion/Core/Stack.h>
 #include <Lion/Core/Window.h>
+#include <Lion/Core/Version.h>
 
 #include <Lion/Signal/Event.h>
 #include <Lion/Signal/EventDispatcher.h>
@@ -187,7 +188,7 @@ namespace Lion
 	void Application::ShowStartupSplash()
 	{
 		const Reference<Texture> texture = Asset::LoadTexture(
-			"Lion Engine Startup Splash", "Images/lion-engine-splash-screen.png");
+			"Lion Engine Startup Splash", kEngineSplashFile);
 
 		if (!texture)
 			return;

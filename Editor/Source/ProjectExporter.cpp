@@ -7,6 +7,7 @@
 
 #include <Lion/Core/Filesystem.h>
 #include <Lion/Core/GameModule.h>
+#include <Lion/Core/Version.h>
 
 #include <filesystem>
 #include <fstream>
@@ -141,6 +142,12 @@ namespace ProjectExporter
 			return result;
 		}
 
+		if (!std::filesystem::is_regular_file(runtime / Lion::kEngineSplashFile, code))
+		{
+			result.message = "The Windows Shipping runtime is missing the engine splash. Rebuild or reinstall the Shipping tools.";
+			return result;
+		}
+
 		std::string buildError;
 
 		if (!ProjectBuild::Build(projectDirectory, "Shipping", sdk, result.buildOutput, buildError))
@@ -206,6 +213,8 @@ namespace ProjectExporter
 			|| !CopyFile(runtime / "lion-core.dll", staging / "lion-core.dll", copyError)
 			|| !CopyFile(runtime / "lion-platform.dll", staging / "lion-platform.dll", copyError)
 			|| !CopyFile(ProjectBuild::ModulePath(projectDirectory, "Shipping"), staging / Lion::kGameModuleFile, copyError)
+			|| !CopyDirectory(runtime / "Images", staging / "Images", copyError)
+			|| !CopyDirectory(runtime / "Shaders", staging / "Shaders", copyError)
 			|| (options.includeIcons && !CopyDirectory(runtime / "Icons", staging / "Icons", copyError))
 			|| (options.includeLicenses && !CopyDirectory(runtime / "Licenses", staging / "Licenses", copyError))
 			|| !CopyAssets(projectDirectory / "Assets", staging, copyError)

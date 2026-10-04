@@ -51,6 +51,7 @@ project "Launcher"
         dependson { editor_project }
 
         postbuildcommands {
+            '"%{wks.location}/Build/Bin/' .. output_dir .. editor_project .. '/Lion.exe" --seal-assets "%{wks.location}/Engine/Assets" "%{cfg.targetdir}"',
             '"%{wks.location}/Build/Bin/' .. output_dir .. editor_project .. '/Lion.exe" --seal-assets "%{wks.location}/Sandbox/Assets" "%{cfg.targetdir}"',
 
 			-- A distributed Shipping editor carries a clean Windows player template. Project export adds the
@@ -61,6 +62,9 @@ project "Launcher"
 			'{COPYFILE} "%{cfg.targetdir}/lion-core.dll" "%{wks.location}/Build/Bin/' .. output_dir .. editor_project .. '/ExportTemplates/Windows/"',
 			'{COPYFILE} "%{cfg.targetdir}/lion-platform.dll" "%{wks.location}/Build/Bin/' .. output_dir .. editor_project .. '/ExportTemplates/Windows/"',
 			'xcopy /E /I /Y /Q "%{cfg.targetdir}/Icons" "%{wks.location}/Build/Bin/' .. output_dir .. editor_project .. '/ExportTemplates/Windows/Icons"',
+			'xcopy /E /I /Y /Q "%{wks.location}/Engine/Assets/Images" "%{wks.location}/Build/Bin/' .. output_dir .. editor_project .. '/ExportTemplates/Windows/Images"',
+			'xcopy /E /I /Y /Q "%{wks.location}/Engine/Assets/Shaders" "%{wks.location}/Build/Bin/' .. output_dir .. editor_project .. '/ExportTemplates/Windows/Shaders"',
+			'"%{wks.location}/Build/Bin/' .. output_dir .. editor_project .. '/Lion.exe" --seal "%{wks.location}/Build/Bin/' .. output_dir .. editor_project .. '/ExportTemplates/Windows" .png .ico .lnshader',
 			'xcopy /E /I /Y /Q "%{cfg.targetdir}/Licenses" "%{wks.location}/Build/Bin/' .. output_dir .. editor_project .. '/ExportTemplates/Windows/Licenses"',
         }
 
