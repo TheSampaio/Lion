@@ -110,6 +110,8 @@ namespace Lion
         if (deltaTime < 0.0f)
             deltaTime = Clock::GetDeltaTime();
 
+        mDeltaTime = deltaTime;
+
         for (auto& entity : mEntities)
             entity->UpdateBegin(paused);
 

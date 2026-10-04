@@ -1,0 +1,5 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="..\Lion.Engine\Lion.Engine.csproj" />
+  </ItemGroup>
+</Project>

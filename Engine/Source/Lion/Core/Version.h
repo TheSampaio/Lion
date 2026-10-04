@@ -8,7 +8,7 @@ namespace Lion
 	// It is bumped by hand, because it is a statement about the engine and not a count of builds:
 	// the patch for a fix, the minor for something the engine can now do, the major for something it
 	// does differently enough to break a game that was written against the old one.
-	constexpr const char8* kVersion = "0.40.3";
+	constexpr const char8* kVersion = "0.41.0";
 
 	constexpr const char8* kEngineSplashFile = "Images/lion-engine-splash-screen.png";
 

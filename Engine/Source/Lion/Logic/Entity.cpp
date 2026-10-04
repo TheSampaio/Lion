@@ -3,6 +3,7 @@
 
 #include <Lion/Logic/ComponentRegistry.h>
 #include <Lion/Logic/Scene.h>
+#include <Lion/Scripting/CSharpRuntime.h>
 
 namespace Lion
 {
@@ -309,6 +310,8 @@ namespace Lion
 	{
 		for (const auto& component : mComponents)
 			component->OnDestroy();
+
+		CSharpRuntime::InvalidateEntity(*this);
 	}
 
 	void Entity::UpdateBegin(bool paused)
