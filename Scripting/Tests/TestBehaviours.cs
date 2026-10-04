@@ -4,6 +4,31 @@ using Lion.Engine;
 
 namespace Lion.Scripting.Tests;
 
+public abstract class AuthoringBase : Behaviour
+{
+	[Editable] private int _count = 3;
+	protected int Count => _count;
+}
+
+public sealed class AuthoringProbe : AuthoringBase
+{
+	[Editable] private float _speed = 12.0f;
+	[Editable] public bool Running = true;
+	[Editable] public string Message = "Lion café 🦁";
+	[Editable] public Vector2 Offset = new(2, 4);
+	public override void OnAwake()
+	{
+		Transform.Position = new Vector2(_speed, Message.Length);
+		Transform.Rotation = Count;
+		Transform.Scale = Offset;
+	}
+	public override void OnUpdate(float deltaTime)
+	{
+		if (Running) { _speed += deltaTime; }
+		Transform.Position = new Vector2(_speed, 0);
+	}
+}
+
 public sealed class LifecycleProbe : Behaviour
 {
 	public override void OnAwake()

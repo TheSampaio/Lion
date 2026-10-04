@@ -5,6 +5,7 @@
 #include "../Expression.h"
 #include "../ComponentScripts.h"
 #include "../ProjectBuild.h"
+#include "../ProjectScripting.h"
 #include "../ProjectExporter.h"
 #include "../Projects.h"
 
@@ -24,6 +25,7 @@
 #include <Lion/Core/Filesystem.h>
 #include <Lion/Logic/ComponentRegistry.h>
 #include <Lion/Logic/Reflector.h>
+#include <Lion/Scripting/CSharpRuntime.h>
 #include <Lion/Render/RenderCommand.h>
 
 // For running the compile without a console flashing up (see RunCommand). windowsx.h defines IsMaximized
@@ -323,6 +325,13 @@ void EditorLayer::StartPlay()
 		return;
 	}
 
+	if (mBuilding || (ProjectScripting::HasSources(ActiveProjectDirectory()) && !CSharpRuntime::IsInitialized()))
+	{
+		Log::Console(LogLevel::Error, "[Editor] Finish a successful C# Compile before entering Play.");
+		PushToast("Compile C# scripts before Play", false);
+		return;
+	}
+
 	if (mConsoleClearOnPlay)
 		Log::ClearHistory();
 	// A previous game run must never leave a persistent music voice behind in the editor process.
@@ -334,6 +343,7 @@ void EditorLayer::StartPlay()
 	const int selected = SelectedEntityIndex();
 
 	mPlaySnapshot = SceneSerializer::SerializeToString(mScene);
+	CSharpRuntime::SetGameplayActive(true);
 	SceneSerializer::DeserializeFromString(mScene, mPlaySnapshot, GameAssetsDirectory().string());
 	SelectEntityByIndex(selected);
 	SceneManager::SetActiveScene(mScene, mScenePath);
@@ -369,6 +379,7 @@ void EditorLayer::StopPlay()
 	mPlaySelectionMode = false;
 	Audio::StopAll();
 	SceneManager::Clear();
+	CSharpRuntime::SetGameplayActive(false);
 	SceneSerializer::DeserializeFromString(mScene, mPlaySnapshot, GameAssetsDirectory().string());
 	SelectEntityByIndex(selected);
 
@@ -6256,6 +6267,18 @@ void EditorLayer::ApplyReflectedField(const std::string& typeName, const char8* 
 	ApplyReflectorToSelection(typeName, setter);
 }
 
+void EditorLayer::InspectorReflector::FieldVector2(const char8* name, float32& x, float32& y)
+{
+	mDrew = true;
+	float32 values[] = { x, y };
+	if (mEditor.DrawVectorControl(name, values, 2, 0.1f, 0.0f))
+	{
+		x = values[0];
+		y = values[1];
+		mEditor.ApplyReflectedField(mTypeName, name, Vector(x, y, 0.0f));
+	}
+}
+
 void EditorLayer::InspectorReflector::Field(const char8* name, float32& value)
 {
 	mDrew = true;
@@ -6890,7 +6913,7 @@ void EditorLayer::DrawProperties()
 				component->Reflect(reflector);
 
 				if (!reflector.DrewAnything())
-					ImGui::TextDisabled("No fields. Describe them in Reflect().");
+					ImGui::TextDisabled("No editable fields.");
 			}
 		}
 
@@ -8131,6 +8154,12 @@ bool EditorLayer::LoadGameModule()
 	if (loaded)
 		Log::Console(LogLevel::Success, "[Editor] Loaded the game module.");
 
+	std::string managedError;
+	if (!ProjectScripting::Load(active, BuildConfiguration(), root, managedError))
+	{
+		Log::Console(LogLevel::Error, "[Editor] " + managedError);
+		return false;
+	}
 	return loaded;
 }
 
@@ -8755,7 +8784,7 @@ void EditorLayer::CompileGameModule()
 
 		build =
 			"\"" + MSBuildPath() + "\""
-			" \"" + ProjectBuild::VcxprojPath(active).string() + "\""
+			" \"" + (active / (Projects::DisplayName(active) + ".sln")).string() + "\""
 			" -p:PlatformToolset=" + ProjectBuild::PlatformToolset() +
 			" -p:Configuration=" + BuildConfiguration() +
 			" -p:Platform=x64 -v:minimal -nologo";
@@ -8765,7 +8794,9 @@ void EditorLayer::CompileGameModule()
 	PushToast("Compiling the game module", true);
 
 	mBuilding = true;
-	mGameBuild = std::async(std::launch::async, [generate, build]
+	const std::string configuration = BuildConfiguration();
+	const std::filesystem::path sdk = ResourceRootDirectory();
+	mGameBuild = std::async(std::launch::async, [generate, build, active, configuration, sdk]
 	{
 		GameBuild result;
 
@@ -8783,6 +8814,15 @@ void EditorLayer::CompileGameModule()
 		}
 
 		result.exitCode = RunCommand(build, result.output);
+		if (result.exitCode == 0)
+		{
+			std::string error;
+			if (!ProjectScripting::Build(active, configuration, sdk, result.output, error))
+			{
+				result.exitCode = 1;
+				result.output += "[Editor] " + error + "\n";
+			}
+		}
 		return result;
 	});
 }
@@ -8852,6 +8892,7 @@ void EditorLayer::UnloadGameModule()
 	mEntityLookup.clear();
 	mScene->Clear();
 
+	ProjectScripting::Unload();
 	Lion::UnloadGameModule(mGameModule);
 }
 
@@ -8872,11 +8913,15 @@ void EditorLayer::ReloadGameModule()
 	SceneSerializer::DeserializeFromString(mScene, scene, GameAssetsDirectory().string());
 	SelectEntityByIndex(selected);
 
+	DismissBusyToasts();
 	if (loaded)
 	{
 		Log::Console(LogLevel::Success, "[Editor] Reloaded the game module.");
-		DismissBusyToasts();
 		PushToast("Reloaded the game module", false);
+	}
+	else
+	{
+		PushToast("Could not reload the game module", false);
 	}
 }
 

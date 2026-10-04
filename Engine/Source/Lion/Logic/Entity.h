@@ -181,7 +181,8 @@ namespace Lion
 		void DetachFromHierarchy();
 
 		// Component storage helpers (kept out of line to keep the templates thin).
-		LION_API void RegisterComponent(Scope<Component> component, std::type_index type);
+		LION_API void RegisterComponent(Scope<Component> component, std::type_index type,
+			const std::string& registeredName = {});
 		LION_API Component* FindComponent(std::type_index type) const;
 		LION_API void UnregisterComponent(std::type_index type);
 

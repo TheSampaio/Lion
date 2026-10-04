@@ -62,6 +62,28 @@ namespace Lion
 		}
 	}
 
+	bool ComponentRegistry::RegisterNamed(const std::string& name, Factory factory)
+	{
+		if (name.empty() || !factory || Contains(name))
+			return false;
+
+		Factories().emplace(name, std::move(factory));
+		RegisteredNames().push_back(name);
+		return true;
+	}
+
+	void ComponentRegistry::UnregisterNamed(const std::string& name)
+	{
+		// Typed entries belong to the native registry/module rather than an adapter session.
+		for (const auto& entry : TypeNames())
+			if (entry.second == name)
+				return;
+
+		Factories().erase(name);
+		auto& names = RegisteredNames();
+		names.erase(std::remove(names.begin(), names.end(), name), names.end());
+	}
+
 	Scope<Component> ComponentRegistry::Create(const std::string& name)
 	{
 		const auto it = Factories().find(name);

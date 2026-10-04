@@ -1,5 +1,7 @@
 #pragma once
 
+#include <Lion/Scripting/ScriptField.h>
+
 namespace Lion
 {
 	class CSharpScript;
@@ -22,6 +24,11 @@ namespace Lion
 		static LION_API bool Shutdown(std::string& error);
 		static LION_API bool IsInitialized();
 
+		// Tools keep gameplay dormant during authoring, then activate it before rebuilding the Play scene.
+		// Native hosts default to active. Returns false when called from another thread.
+		static LION_API bool SetGameplayActive(bool active);
+		static LION_API bool IsGameplayActive();
+
 		// Most recent script/host failure, retained even when the game's logging is disabled.
 		static LION_API const std::string& GetLastError();
 
@@ -33,5 +40,8 @@ namespace Lion
 		static void Invoke(uint64 instance, int32 callback, float32 deltaTime = 0.0f);
 		static void DestroyInstance(uint64 instance);
 		static void InvalidateEntity(Entity& entity);
+		static bool GetFields(const std::string& typeName, std::vector<ScriptingDetail::ScriptField>& fields);
+		static bool ReadFields(uint64 instance, std::vector<ScriptingDetail::ScriptField>& fields);
+		static bool WriteFields(uint64 instance, const std::vector<ScriptingDetail::ScriptField>& fields);
 	};
 }

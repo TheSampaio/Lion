@@ -21,6 +21,11 @@ namespace Lion
 		// look up a live component's name when serializing). Re-registering the same name replaces it.
 		static LION_API void Register(const std::string& name, std::type_index type, Factory factory);
 
+		// Registers a named adapter without assigning a unique C++ type to its authored identity.
+		// Returns false on a name collision; the existing factory is never replaced.
+		static LION_API bool RegisterNamed(const std::string& name, Factory factory);
+		static LION_API void UnregisterNamed(const std::string& name);
+
 		// Instantiates a registered component, or returns null when the name is unknown/empty.
 		static LION_API Scope<Component> Create(const std::string& name);
 

@@ -25,7 +25,7 @@ internal static unsafe class NativeApi
 
 	internal static bool Bind(NativeFunctions* functions)
 	{
-		if (functions == null || functions->Version != 1 || functions->Size != sizeof(NativeFunctions)
+		if (functions == null || functions->Version != 2 || functions->Size != sizeof(NativeFunctions)
 			|| functions->ValidateEntity == null || functions->GetTransform == null
 			|| functions->SetTransform == null || functions->ResolveAction == null
 			|| functions->ReadAction == null || functions->IsLogEnabled == null

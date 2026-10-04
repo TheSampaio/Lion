@@ -634,6 +634,7 @@ private:
 		void Field(const Lion::char8* name, bool& value) override;
 		void Field(const Lion::char8* name, std::string& value) override;
 		void Field(const Lion::char8* name, Lion::Vector& value) override;
+		void FieldVector2(const Lion::char8* name, Lion::float32& x, Lion::float32& y) override;
 		void FieldAsset(const Lion::char8* name, std::string& path) override;
 
 		bool DrewAnything() const { return mDrew; }

@@ -2,6 +2,7 @@
 #include "ProjectExporter.h"
 
 #include "ProjectBuild.h"
+#include "ProjectScripting.h"
 #include "Projects.h"
 #include "Sealer.h"
 
@@ -124,6 +125,12 @@ namespace ProjectExporter
 		if (destination.empty())
 		{
 			result.message = "Choose a destination for the exported game.";
+			return result;
+		}
+
+		if (ProjectScripting::HasSources(projectDirectory))
+		{
+			result.message = "C# player export is not implemented yet. This project can run in Mane, but exporting it would omit managed gameplay.";
 			return result;
 		}
 

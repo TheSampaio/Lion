@@ -3,6 +3,7 @@ using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Runtime.Loader;
+using System.Text;
 
 namespace Lion.Engine.Internal;
 
@@ -11,11 +12,15 @@ internal unsafe struct ManagedFunctions
 {
 	internal uint Version;
 	internal uint Size;
-	internal delegate* unmanaged[Cdecl]<byte*, int> LoadAssembly;
+	internal delegate* unmanaged[Cdecl]<byte*, delegate* unmanaged[Cdecl]<byte*, int>, int> LoadAssembly;
 	internal delegate* unmanaged[Cdecl]<ulong, byte*, ulong*, uint*, int> Create;
 	internal delegate* unmanaged[Cdecl]<ulong, int, float, int> Invoke;
 	internal delegate* unmanaged[Cdecl]<ulong, int> Destroy;
 	internal delegate* unmanaged[Cdecl]<int> Shutdown;
+	internal delegate* unmanaged[Cdecl]<void*, delegate* unmanaged[Cdecl]<void*, byte*, int>, int> EnumerateTypes;
+	internal delegate* unmanaged[Cdecl]<byte*, void*, delegate* unmanaged[Cdecl]<void*, byte*, FieldValue*, int>, int> Describe;
+	internal delegate* unmanaged[Cdecl]<ulong, void*, delegate* unmanaged[Cdecl]<void*, byte*, FieldValue*, int>, int> ReadFields;
+	internal delegate* unmanaged[Cdecl]<ulong, byte*, FieldValue*, int> WriteField;
 }
 
 internal static unsafe class ScriptRuntime
@@ -45,7 +50,7 @@ internal static unsafe class ScriptRuntime
 		}
 	}
 
-	private sealed record ScriptType(Func<Behaviour> Create, uint Callbacks);
+	private sealed record ScriptType(Func<Behaviour> Create, uint Callbacks, Dictionary<string, FieldMetadata> Fields);
 	private static readonly string[] CallbackNames = ["OnAwake", "OnEnable", "OnDisable", "OnUpdateBegin", "OnUpdate", "OnUpdateEnd"];
 	private static readonly Dictionary<string, ScriptType> Factories = new(StringComparer.Ordinal);
 	private static readonly Dictionary<ulong, Instance> Instances = [];
@@ -57,7 +62,7 @@ internal static unsafe class ScriptRuntime
 	{
 		try
 		{
-			if (managed == null || managed->Version != 1 || managed->Size != sizeof(ManagedFunctions)
+			if (managed == null || managed->Version != 2 || managed->Size != sizeof(ManagedFunctions)
 				|| !NativeApi.Bind(native))
 			{
 				return 1;
@@ -67,13 +72,17 @@ internal static unsafe class ScriptRuntime
 			managed->Invoke = &Invoke;
 			managed->Destroy = &Destroy;
 			managed->Shutdown = &Shutdown;
+			managed->EnumerateTypes = &EnumerateTypes;
+			managed->Describe = &Describe;
+			managed->ReadFields = &ReadFields;
+			managed->WriteField = &WriteField;
 			return 0;
 		}
 		catch { return 1; }
 	}
 
 	[UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-	private static int LoadAssembly(byte* path)
+	private static int LoadAssembly(byte* path, delegate* unmanaged[Cdecl]<byte*, int> canRegister)
 	{
 		GameContext? pending = null;
 		try
@@ -101,13 +110,21 @@ internal static unsafe class ScriptRuntime
 				{
 					throw new InvalidOperationException($"Behaviour '{name}' is already registered.");
 				}
+				fixed (byte* nativeName = Encoding.UTF8.GetBytes(name + '\0'))
+				{
+					if (canRegister == null || canRegister(nativeName) != 0)
+					{
+						throw new InvalidOperationException($"Behaviour '{name}' conflicts with an existing native component.");
+					}
+				}
 				uint callbacks = 0;
 				for (int index = 0; index < CallbackNames.Length; index++)
 				{
 					var method = type.GetMethod(CallbackNames[index], index < 3 ? Type.EmptyTypes : [typeof(float)]);
 					if (method?.DeclaringType != typeof(Behaviour)) { callbacks |= 1u << index; }
 				}
-				discovered.Add(name, new ScriptType(Expression.Lambda<Func<Behaviour>>(Expression.New(constructor)).Compile(), callbacks));
+				discovered.Add(name, new ScriptType(Expression.Lambda<Func<Behaviour>>(Expression.New(constructor)).Compile(), callbacks,
+					FieldMetadata.Discover(type)));
 			}
 			foreach (var entry in discovered)
 			{
@@ -147,6 +164,65 @@ internal static unsafe class ScriptRuntime
 	}
 
 	private static int NativeStatus(ulong entity) => NativeApi.IsEntityValid(entity) ? 0 : 1;
+
+	[UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+	private static int EnumerateTypes(void* context, delegate* unmanaged[Cdecl]<void*, byte*, int> receive)
+	{
+		try
+		{
+			NativeApi.CheckThread();
+			if (receive == null) { throw new ArgumentNullException(nameof(receive)); }
+			foreach (string name in Factories.Keys)
+			{
+				fixed (byte* text = Encoding.UTF8.GetBytes(name + '\0')) { NativeApi.CheckStatus(receive(context, text)); }
+			}
+			return 0;
+		}
+		catch (Exception exception) { return Report(0, "Script catalog", exception); }
+	}
+
+	[UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+	private static int Describe(byte* name, void* context,
+		delegate* unmanaged[Cdecl]<void*, byte*, FieldValue*, int> receive)
+	{
+		try
+		{
+			NativeApi.CheckThread();
+			var type = Factories[Marshal.PtrToStringUTF8((nint)name)!];
+			if (type.Fields.Count == 0) { return 0; }
+			var defaults = type.Create();
+			foreach (var field in type.Fields.Values) { field.Emit(defaults, context, receive); }
+			return 0;
+		}
+		catch (Exception exception) { return Report(0, "Script field defaults", exception); }
+	}
+
+	[UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+	private static int ReadFields(ulong id, void* context,
+		delegate* unmanaged[Cdecl]<void*, byte*, FieldValue*, int> receive)
+	{
+		try
+		{
+			NativeApi.CheckThread();
+			var owner = Instances[id].Behaviour;
+			foreach (var field in Factories[owner.GetType().FullName!].Fields.Values) { field.Emit(owner, context, receive); }
+			return 0;
+		}
+		catch (Exception exception) { return Report(0, "Script field read", exception); }
+	}
+
+	[UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+	private static int WriteField(ulong id, byte* name, FieldValue* value)
+	{
+		try
+		{
+			NativeApi.CheckThread();
+			var owner = Instances[id].Behaviour;
+			Factories[owner.GetType().FullName!].Fields[Marshal.PtrToStringUTF8((nint)name)!].Apply(owner, value);
+			return 0;
+		}
+		catch (Exception exception) { return Report(0, "Script field write", exception); }
+	}
 
 	[UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
 	private static int Invoke(ulong id, int callback, float deltaTime)

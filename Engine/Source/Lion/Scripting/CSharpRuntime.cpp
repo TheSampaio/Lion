@@ -3,7 +3,8 @@
 
 #include <Lion/Core/Input.h>
 #include <Lion/Core/Log.h>
-#include <Lion/Core/Filesystem.h>
+#include <Lion/Logic/ComponentRegistry.h>
+#include <Lion/Scripting/CSharpScript.h>
 #include <Lion/Logic/SceneManager.h>
 #include <Lion/Logic/Entity.h>
 #include <Lion/Logic/Scene.h>
@@ -22,7 +23,7 @@ namespace Lion
 {
 	namespace
 	{
-		constexpr uint32 kAbiVersion = 1;
+		constexpr uint32 kAbiVersion = 2;
 		constexpr int32 kSuccess = 0;
 		constexpr int32 kInvalidLifetime = 1;
 		constexpr int32 kWrongThread = 2;
@@ -49,22 +50,39 @@ namespace Lion
 			void (*reportError)(uint64, const char8*);
 		};
 
+		struct FieldValue
+		{
+			int32 kind;
+			float32 number;
+			int32 integer;
+			float32 x, y;
+			const char8* text;
+		};
+		static_assert(sizeof(FieldValue) == 32);
+		using ReceiveField = int32 (*)(void*, const char8*, const FieldValue*);
+		using ReceiveType = int32 (*)(void*, const char8*);
+
 		struct ManagedFunctions
 		{
 			uint32 version = kAbiVersion;
 			uint32 size = sizeof(ManagedFunctions);
-			int32 (*loadAssembly)(const char8*) = nullptr;
+			int32 (*loadAssembly)(const char8*, int32 (*)(const char8*)) = nullptr;
 			int32 (*create)(uint64, const char8*, uint64*, uint32*) = nullptr;
 			int32 (*invoke)(uint64, int32, float32) = nullptr;
 			int32 (*destroy)(uint64) = nullptr;
 			int32 (*shutdown)() = nullptr;
+			int32 (*enumerateTypes)(void*, ReceiveType) = nullptr;
+			int32 (*describe)(const char8*, void*, ReceiveField) = nullptr;
+			int32 (*readFields)(uint64, void*, ReceiveField) = nullptr;
+			int32 (*writeField)(uint64, const char8*, const FieldValue*) = nullptr;
 		};
 		static_assert(sizeof(NativeFunctions) == 72);
-		static_assert(sizeof(ManagedFunctions) == 48);
+		static_assert(sizeof(ManagedFunctions) == 80);
 
 		struct RuntimeState
 		{
 			std::atomic<bool> initialized = false;
+			bool gameplayActive = true;
 			std::thread::id thread;
 			ManagedFunctions managed;
 			std::string error;
@@ -74,12 +92,53 @@ namespace Lion
 			std::unordered_map<std::string, uint64> actionHandles;
 			uint64 nextEntity = 0;
 			uint64 nextAction = 0;
+			std::vector<std::string> scriptNames;
+			std::unordered_map<std::string, std::vector<ScriptingDetail::ScriptField>> fieldDefaults;
 		};
 
 		RuntimeState& State()
 		{
 			static RuntimeState state;
 			return state;
+		}
+
+		int32 CanRegister(const char8* name)
+		{
+			try { return name && !ComponentRegistry::Contains(name) ? kSuccess : kFailure; }
+			catch (...) { return kFailure; }
+		}
+
+		int32 CollectType(void* context, const char8* name)
+		{
+			try
+			{
+				if (!context || !name)
+					return kFailure;
+				static_cast<std::vector<std::string>*>(context)->emplace_back(name);
+				return kSuccess;
+			}
+			catch (...) { return kFailure; }
+		}
+
+		int32 CollectField(void* context, const char8* name, const FieldValue* value)
+		{
+			try
+			{
+				if (!context || !name || !value || value->kind < 0 || value->kind > 4
+					|| !std::isfinite(value->number) || !std::isfinite(value->x) || !std::isfinite(value->y))
+					return kFailure;
+				ScriptingDetail::ScriptField field;
+				field.name = name;
+				field.kind = static_cast<ScriptingDetail::FieldKind>(value->kind);
+				field.number = value->number;
+				field.integer = value->integer;
+				field.x = value->x;
+				field.y = value->y;
+				field.text = value->text ? value->text : "";
+				static_cast<std::vector<ScriptingDetail::ScriptField>*>(context)->push_back(std::move(field));
+				return kSuccess;
+			}
+			catch (...) { return kFailure; }
 		}
 
 		int32 CheckRuntime()
@@ -323,7 +382,8 @@ namespace Lion
 		ManagedFunctions functions;
 		if (bind(&kNativeFunctions, &functions) != kSuccess || functions.version != kAbiVersion
 			|| functions.size != sizeof(ManagedFunctions) || !functions.loadAssembly || !functions.create
-			|| !functions.invoke || !functions.destroy || !functions.shutdown)
+			|| !functions.invoke || !functions.destroy || !functions.shutdown || !functions.enumerateTypes
+			|| !functions.describe || !functions.readFields || !functions.writeField)
 		{
 			error = "The Lion native and managed scripting ABIs are incompatible.";
 			return false;
@@ -350,10 +410,28 @@ namespace Lion
 		}
 
 		State().error.clear();
-		if (State().managed.loadAssembly(assemblyPath.c_str()) != kSuccess)
+		if (State().managed.loadAssembly(assemblyPath.c_str(), CanRegister) != kSuccess)
 		{
 			error = State().error;
 			return false;
+		}
+
+		std::vector<std::string> names;
+		if (State().managed.enumerateTypes(&names, CollectType) != kSuccess)
+		{
+			error = State().error;
+			return false;
+		}
+		for (const std::string& name : names)
+		{
+			if (std::find(State().scriptNames.begin(), State().scriptNames.end(), name) != State().scriptNames.end())
+				continue;
+			if (!ComponentRegistry::RegisterNamed(name, [name]() -> Scope<Component> { return MakeScope<CSharpScript>(name); }))
+			{
+				error = "Could not register script '" + name + "'.";
+				return false;
+			}
+			State().scriptNames.push_back(name);
 		}
 		error.clear();
 		return true;
@@ -361,7 +439,7 @@ namespace Lion
 
 	uint64 CSharpRuntime::CreateInstance(Entity& entity, const std::string& typeName, uint32& callbacks)
 	{
-		if (CheckRuntime() != kSuccess || !entity.GetScene())
+		if (CheckRuntime() != kSuccess || !State().gameplayActive || !entity.GetScene())
 			return 0;
 
 		RuntimeState& state = State();
@@ -390,7 +468,7 @@ namespace Lion
 
 	void CSharpRuntime::Invoke(uint64 instance, int32 callback, float32 deltaTime)
 	{
-		if (instance != 0 && CheckRuntime() == kSuccess)
+		if (instance != 0 && CheckRuntime() == kSuccess && State().gameplayActive)
 			State().managed.invoke(instance, callback, deltaTime);
 	}
 
@@ -417,7 +495,10 @@ namespace Lion
 	bool CSharpRuntime::Shutdown(std::string& error)
 	{
 		if (!IsInitialized())
+		{
+			error.clear();
 			return true;
+		}
 
 		if (CheckRuntime() != kSuccess)
 		{
@@ -427,6 +508,10 @@ namespace Lion
 
 		RuntimeState& state = State();
 		const bool succeeded = state.managed.shutdown() == kSuccess;
+		for (const std::string& name : state.scriptNames)
+			ComponentRegistry::UnregisterNamed(name);
+		state.scriptNames.clear();
+		state.fieldDefaults.clear();
 		state.entities.clear();
 		state.entityHandles.clear();
 		state.actions.clear();
@@ -436,6 +521,59 @@ namespace Lion
 		return succeeded;
 	}
 
+	bool CSharpRuntime::GetFields(const std::string& typeName, std::vector<ScriptingDetail::ScriptField>& fields)
+	{
+		if (CheckRuntime() != kSuccess)
+			return false;
+		RuntimeState& state = State();
+		const auto found = state.fieldDefaults.find(typeName);
+		if (found != state.fieldDefaults.end())
+		{
+			fields = found->second;
+			return true;
+		}
+		std::vector<ScriptingDetail::ScriptField> defaults;
+		if (state.managed.describe(typeName.c_str(), &defaults, CollectField) != kSuccess)
+			return false;
+		fields = defaults;
+		state.fieldDefaults.emplace(typeName, std::move(defaults));
+		return true;
+	}
+
+	bool CSharpRuntime::ReadFields(uint64 instance, std::vector<ScriptingDetail::ScriptField>& fields)
+	{
+		if (instance == 0 || CheckRuntime() != kSuccess)
+			return false;
+		std::vector<ScriptingDetail::ScriptField> values;
+		if (State().managed.readFields(instance, &values, CollectField) != kSuccess)
+			return false;
+		fields = std::move(values);
+		return true;
+	}
+
+	bool CSharpRuntime::WriteFields(uint64 instance, const std::vector<ScriptingDetail::ScriptField>& fields)
+	{
+		if (instance == 0 || CheckRuntime() != kSuccess)
+			return false;
+		for (const auto& field : fields)
+		{
+			const FieldValue value = { static_cast<int32>(field.kind), field.number, field.integer,
+				field.x, field.y, field.text.c_str() };
+			if (State().managed.writeField(instance, field.name.c_str(), &value) != kSuccess)
+				return false;
+		}
+		return true;
+	}
+
+	bool CSharpRuntime::SetGameplayActive(bool active)
+	{
+		if (State().thread != std::thread::id() && State().thread != std::this_thread::get_id())
+			return false;
+		State().gameplayActive = active;
+		return true;
+	}
+
+	bool CSharpRuntime::IsGameplayActive() { return State().gameplayActive; }
 	bool CSharpRuntime::IsInitialized() { return State().initialized.load(); }
 	const std::string& CSharpRuntime::GetLastError() { return State().error; }
 }

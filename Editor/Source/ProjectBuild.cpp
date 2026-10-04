@@ -262,13 +262,48 @@ namespace ProjectBuild
 				<< "EndProject\n"
 				<< "Global\n"
 				<< "\tGlobalSection(SolutionConfigurationPlatforms) = preSolution\n"
-				<< "\t\t" << configuration << "|x64 = " << configuration << "|x64\n"
+				<< "\t\tDebug|x64 = Debug|x64\n"
+				<< "\t\tRelease|x64 = Release|x64\n"
+				<< "\t\tShipping|x64 = Shipping|x64\n"
 				<< "\tEndGlobalSection\n"
 				<< "\tGlobalSection(ProjectConfigurationPlatforms) = postSolution\n"
-				<< "\t\t" << kProjectGuid << "." << configuration << "|x64.ActiveCfg = " << configuration << "|x64\n"
-				<< "\t\t" << kProjectGuid << "." << configuration << "|x64.Build.0 = " << configuration << "|x64\n"
+				<< "\t\t" << kProjectGuid << ".Debug|x64.ActiveCfg = Debug|x64\n"
+				<< "\t\t" << kProjectGuid << ".Debug|x64.Build.0 = Debug|x64\n"
+				<< "\t\t" << kProjectGuid << ".Release|x64.ActiveCfg = Release|x64\n"
+				<< "\t\t" << kProjectGuid << ".Release|x64.Build.0 = Release|x64\n"
+				<< "\t\t" << kProjectGuid << ".Shipping|x64.ActiveCfg = Shipping|x64\n"
+				<< "\t\t" << kProjectGuid << ".Shipping|x64.Build.0 = Shipping|x64\n"
 				<< "\tEndGlobalSection\n"
 				<< "EndGlobal\n";
+		}
+
+		// Older generated solutions listed only the configuration of the editor that created them.
+		// Add a missing configuration without replacing other projects or user-authored solution settings.
+		std::ifstream existing(solution);
+		std::string contents((std::istreambuf_iterator<char>(existing)), std::istreambuf_iterator<char>());
+		const std::string platform = configuration + "|x64";
+		if (contents.find(platform + " =") == std::string::npos)
+		{
+			const auto add = [&](const std::string& section, const std::string& lines) -> bool
+			{
+				const size_t start = contents.find("GlobalSection(" + section + ")");
+				const size_t end = start == std::string::npos ? start : contents.find("\tEndGlobalSection", start);
+				if (end == std::string::npos) return false;
+				contents.insert(end, lines);
+				return true;
+			};
+			if (!add("SolutionConfigurationPlatforms", "\t\t" + platform + " = " + platform + "\n")
+				|| !add("ProjectConfigurationPlatforms", "\t\t" + std::string(kProjectGuid) + "." + platform + ".ActiveCfg = " + platform
+					+ "\n\t\t" + kProjectGuid + "." + platform + ".Build.0 = " + platform + "\n"))
+			{
+				error = "The project solution is missing its build configuration sections.";
+				return false;
+			}
+			existing.close();
+			std::ofstream updated(solution, std::ios::trunc);
+			updated << contents;
+			updated.close();
+			if (!updated) { error = "Could not update the project solution configuration."; return false; }
 		}
 
 		return true;
@@ -368,7 +403,7 @@ namespace ProjectBuild
 
 		const std::string command =
 			"\"" + MSBuildPath() + "\""
-			" \"" + VcxprojPath(project).string() + "\""
+			" \"" + (project / (Projects::DisplayName(project) + ".sln")).string() + "\""
 			" -p:PlatformToolset=" + PlatformToolset() +
 			" -p:Configuration=" + configuration +
 			" -p:Platform=x64 -v:minimal -nologo";

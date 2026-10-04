@@ -4,8 +4,9 @@
 
 This is an incremental SDK, not a migration of Brickout. Existing native games keep their module,
 entry point, components, scene files, and build workflow. The first increment is an opt-in Windows
-x64 host plus an executable native/managed integration test. It does not yet make C# projects
-creatable, editable, compilable, or exportable through Mane.
+x64 host plus an executable native/managed integration test. The second increment adds Mane
+scaffolding, project compilation, named component attachment, editable fields and Play/Stop ownership.
+C# player export remains unsupported and is rejected before creating an incomplete player.
 
 1. **Foundation:** .NET hosting, assembly discovery, component lifecycle adapter, safe entity
    references, local Transform access, input actions, Time, logging, exception isolation, and tests.
@@ -55,7 +56,7 @@ without a managed runtime. Native hosting declarations are private, limited to t
 x64 ABI, and must be checked against the SDK headers when extending the host.
 
 The permanent SDK bootstrap returns unmanaged function pointers and accepts a size/version-tagged
-native function table. Both sides validate the entire v1 table before binding. Calls use fixed-width
+native function table. Both sides validate the entire v2 table before binding. Calls use fixed-width
 values, UTF-8 at setup/error boundaries, status codes, and plain sequential structs. No STL, GLM,
 JSON, object references, exceptions, or allocator ownership cross this boundary.
 
@@ -89,8 +90,16 @@ and Log. Public math uses System.Numerics. Future component wrappers must use Li
 ## Ownership, lifecycle, and threading
 
 The native Scene/Entity remain the owners. CSharpScript is an opt-in native Component adapter and
-is intentionally not registered in the authoring picker yet. It creates a managed instance on Awake,
-forwards native lifecycle callbacks, and releases it on Destroy or component destruction.
+is registered once per discovered stable full script name, using the same language-neutral registry
+as native components. Named registration does not overwrite the C++ type-to-name mapping: different
+managed scripts share one native adapter class but keep distinct authored identities.
+
+Mane initializes the host/catalog before loading its scene and keeps gameplay inactive while editing.
+The adapter owns a native field cache, not an authoring Behaviour instance. Metadata discovery caches
+compiled field accessors; a temporary unattached default instance is constructed once when the field
+schema is first requested. Constructors must only initialize data, never run gameplay or subscribe
+to events. Play rebuilds the edited snapshot with gameplay active, applies its fields before Awake,
+then uses the native update passes. Stop clears live scripts before restoring the inactive snapshot.
 
 Managed instances live in a bootstrap-owned dictionary, keyed by monotonic instance tokens.
 Managed Entity contains only a monotonic native lifetime token. The native table stores weak entity
@@ -113,7 +122,12 @@ permits Destroy; diagnostics include callback, script type, exception/stack, and
 The .NET process runtime and permanent SDK bootstrap are not unloaded on Shutdown. Each game assembly
 uses a collectible context and an AssemblyDependencyResolver, sharing the bootstrap's Lion.Engine
 assembly explicitly. Shutdown releases instances, discovery metadata and native tokens, and requests
-context unload. Verified collection and state-preserving hot reload are future work: an
+context unload. Mane compiles to the original project output but loads a unique private build copy,
+so a loaded assembly does not prevent recompilation. A successful Compile clears the old scene,
+instances, registry entries and metadata before loading the new catalog and reconstructing the scene.
+Compiler failures keep the live build; invalid new metadata restores the previous private catalog
+for the same project when available. This is an explicit scene-reconstructing reload, not in-place
+hot reload. Verified collection and state-preserving gameplay hot reload are future work: an
 AssemblyLoadContext is not a sandbox, and its Unload call alone does not prove collection.
 
 Discovery caches constructors and overridden-callback masks. Native adapters skip unimplemented
@@ -122,16 +136,26 @@ property access and update dispatch allocate no wrappers. Input names are intern
 
 ## Serialization and editor integration plan
 
-Use a stable assembly-relative script name in the registry; never persist a native address, DLL type
-index, language tag, or machine path. Cache editable field metadata at load. Initially support only
-types that the Reflector/Serializer can represent correctly; vector/enum/entity/asset/list support
-must define a real archive contract before becoming public. Add metadata attributes only alongside
-working Inspector and serialization behavior. Reflection is acceptable at load, not in update loops.
+Use the full script type name in the registry; never persist a native address, DLL type index, language
+tag, or machine path. `[Editable]` opts mutable instance fields into cached metadata. Float, int, bool,
+string and Vector2 map to the existing abstract Reflector/Serializer. Vector2 uses `.x`/`.y` archive
+keys and the shared two-axis Inspector control. Private/inherited fields are supported; readonly,
+static, hidden duplicate names and unsupported types fail discovery with a field-specific diagnostic.
+Properties, enums, references, lists and additional attributes are not implemented. Renaming fields
+changes their saved keys; incompatible saved types report an error and restore the script's defaults.
+Null strings round-trip as empty strings. Reflection is acceptable at load, not in update loops.
 
-Mane must activate/deactivate the host around Play, and clear managed instances/tokens before native
-module unload or scene reconstruction. Script scaffolding/build and C#-only project entry must be
-implemented before exposing a C# choice in the UI. Export must include compiled assemblies, matching
-runtime configuration, SDK API and app-local runtime, with licenses and clean-machine tests.
+`ComponentScripts` now offers C# alongside C++. `ProjectScripting` generates a managed build under
+the project's Build directory, referencing the Managed SDK beside Mane rather than engine sources.
+Compile builds the generated native bootstrap through the project solution and builds all C# assets
+into `lion-scripts.dll`; Visual Studio C++ tools and the .NET 10 SDK are still required. Game developers
+do not need to edit that bootstrap. The same flow is available through `--compile-project` for CI.
+`PackManagedSdk.bat` packages the API when the .NET 10 SDK exists; native engine builds still work
+without it. Mane locates installed Windows x64 hostfxr in DOTNET_ROOT_X64, DOTNET_ROOT or ProgramFiles.
+
+Player export must still include compiled assemblies, matching runtime configuration, SDK API and
+app-local runtime, with licenses and clean-machine tests. The exporter currently rejects projects
+containing C# source instead of silently exporting only their native bootstrap.
 
 ## Extending the SDK
 
@@ -163,6 +187,9 @@ managed allocations after its initial 100-frame warmup. These are single-process
 not statistically controlled benchmarks, a claim of equal native performance, or proof that arbitrary
 user scripts allocate nothing. Native/managed transitions remain measurable overhead.
 
-Mane and the native Brickout launcher were also run in all three configurations. C# Inspector,
-serialization, project generation, app-local runtime export and proven assembly collection are not
-covered by this verification because they belong to subsequent increments.
+Mane and the native Brickout launcher were also run in all three configurations. The second increment
+extends verification with native authoring/Play/Stop round trips, editable inherited/private fields,
+distinct adapter identities, collision rejection, unsupported metadata, reentrant Inspector walks,
+incompatible archive recovery, generated-project builds and the managed-export guard. The UI fixture
+is under `Scripting/Tests/EditorProject`; run `Scripts/VerifyCSharpEditor.ps1` to create a Build-local copy.
+App-local runtime export and proven assembly collection still belong to subsequent increments.

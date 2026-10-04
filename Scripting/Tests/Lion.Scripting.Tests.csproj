@@ -1,5 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <ItemGroup>
+    <Compile Remove="MetadataInvalid.cs" />
+    <Compile Remove="EditorProject/**/*.cs" />
     <ProjectReference Include="..\Lion.Engine\Lion.Engine.csproj" />
   </ItemGroup>
 </Project>

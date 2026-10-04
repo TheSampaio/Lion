@@ -6,6 +6,10 @@
 
 #include "Source/Sealer.h"
 #include "Source/ProjectExporter.h"
+#include "Source/ProjectBuild.h"
+#include "Source/ProjectScripting.h"
+#include "Source/Projects.h"
+#include <Lion/Core/Filesystem.h>
 
 namespace
 {
@@ -42,6 +46,20 @@ Lion::Application* Lion::Main()
 
 	// The same export path the modal uses is available to CI and release scripts. It deliberately lives on
 	// the editor executable: packaging a game is editor tooling, while the launcher remains only a player.
+	if (CommandLine::GetCount() == 3 && CommandLine::Get(1) == "--compile-project")
+	{
+		const std::filesystem::path project = std::filesystem::absolute(CommandLine::Get(2));
+		std::string output, error;
+		const bool valid = Projects::IsProjectFolder(project);
+		if (!valid) error = "The project is not available on disk.";
+		const bool succeeded = valid
+			&& ProjectBuild::Build(project, BuildConfiguration(), ResourceRootDirectory(), output, error)
+			&& ProjectScripting::Build(project, BuildConfiguration(), ResourceRootDirectory(), output, error);
+		std::fputs(output.c_str(), succeeded ? stdout : stderr);
+		std::fprintf(succeeded ? stdout : stderr, "%s\n", succeeded ? "Project compilation succeeded." : error.c_str());
+		std::exit(succeeded ? 0 : 1);
+	}
+
 	if (CommandLine::GetCount() == 4 && CommandLine::Get(1) == "--export-windows")
 	{
 		const ProjectExporter::Result result = ProjectExporter::ExportWindows(

@@ -170,7 +170,7 @@ namespace Lion
 			return nullptr;
 
 		Component* raw = component.get();
-		RegisterComponent(std::move(component), std::type_index(typeid(*raw)));
+		RegisterComponent(std::move(component), std::type_index(typeid(*raw)), name);
 		return raw;
 	}
 
@@ -183,10 +183,10 @@ namespace Lion
 		return false;
 	}
 
-	void Entity::RegisterComponent(Scope<Component> component, std::type_index type)
+	void Entity::RegisterComponent(Scope<Component> component, std::type_index type, const std::string& registeredName)
 	{
 		component->mOwner = this;
-		component->mTypeName = ComponentRegistry::GetName(type);
+		component->mTypeName = registeredName.empty() ? ComponentRegistry::GetName(type) : registeredName;
 
 		// What a component cannot work without goes on before it does. A collider asks its entity for a
 		// body the moment it wakes, so an entity that had to be told twice — once for the trait, once for

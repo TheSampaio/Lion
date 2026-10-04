@@ -7,7 +7,7 @@ $ErrorActionPreference = 'Stop'
 $repository = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $managedConfiguration = if ($Configuration -eq 'Debug') { 'Debug' } else { 'Release' }
 
-foreach ($project in @('Examples\Lion.Scripting.Examples.csproj', 'Tests\Lion.Scripting.Tests.csproj'))
+foreach ($project in @('Examples\Lion.Scripting.Examples.csproj', 'Tests\Lion.Scripting.Tests.csproj', 'Tests\Lion.Scripting.Invalid.csproj'))
 {
 	& dotnet build (Join-Path $repository "Scripting\$project") --configuration $managedConfiguration --ignore-failed-sources -p:NuGetAudit=false
 	if ($LASTEXITCODE -ne 0) { throw 'Managed scripting build failed.' }
@@ -46,5 +46,6 @@ $managedRoot = Join-Path $repository 'Build\Managed\Bin'
 $runtime = Join-Path $managedRoot "Lion.Engine\$managedConfiguration\net10.0"
 $examples = Join-Path $managedRoot "Lion.Scripting.Examples\$managedConfiguration\net10.0\Lion.Scripting.Examples.dll"
 $tests = Join-Path $managedRoot "Lion.Scripting.Tests\$managedConfiguration\net10.0\Lion.Scripting.Tests.dll"
-& $executable $runtime (Join-Path $hostfxr.FullName 'hostfxr.dll') $examples $tests
+$invalid = Join-Path $managedRoot "Lion.Scripting.Invalid\$managedConfiguration\net10.0\Lion.Scripting.Invalid.dll"
+& $executable $runtime (Join-Path $hostfxr.FullName 'hostfxr.dll') $examples $tests $invalid
 if ($LASTEXITCODE -ne 0) { throw 'Native/managed scripting integration checks failed.' }

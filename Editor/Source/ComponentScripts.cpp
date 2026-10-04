@@ -5,6 +5,29 @@ namespace ComponentScripts
 {
 	namespace
 	{
+		bool GenerateCSharp(const std::string& name, const std::filesystem::path& directory, std::string& error)
+		{
+			const auto path = directory / (name + ".cs");
+			std::error_code code;
+			if (std::filesystem::exists(path, code))
+			{
+				error = "A script named '" + name + "' already exists.";
+				return false;
+			}
+			std::ofstream file(path);
+			file << "using Lion.Engine;\n\n"
+				<< "namespace Game;\n\n"
+				<< "public sealed class " << name << " : Behaviour\n"
+				<< "{\n"
+				<< "\t[Editable]\n\tpublic float Speed = 100.0f;\n\n"
+				<< "\tpublic override void OnAwake()\n\t{\n\t}\n\n"
+				<< "\tpublic override void OnUpdate(float deltaTime)\n\t{\n\t}\n"
+				<< "}\n";
+			file.close();
+			if (!file) { error = "Could not write '" + path.generic_string() + "'."; return false; }
+			return true;
+		}
+
 		bool GenerateCpp(const std::string& name, const std::filesystem::path& directory, std::string& error)
 		{
 			const std::filesystem::path headerPath = directory / (name + ".h");
@@ -73,6 +96,7 @@ namespace ComponentScripts
 	{
 		static const std::vector<LanguageInfo> languages = {
 			{ Language::Cpp, "C++", ".h/.cpp" },
+			{ Language::CSharp, "C#", ".cs" },
 		};
 
 		return languages;
@@ -94,6 +118,8 @@ namespace ComponentScripts
 		{
 			case Language::Cpp:
 				return GenerateCpp(name, directory, error);
+			case Language::CSharp:
+				return GenerateCSharp(name, directory, error);
 		}
 
 		error = "The selected component language is not available.";

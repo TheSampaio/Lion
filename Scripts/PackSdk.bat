@@ -33,5 +33,8 @@ rem The engine's import library.
 if not exist "%TARGET%\Bin" mkdir "%TARGET%\Bin"
 copy /Y "%ROOT%\Build\Bin\%CONFIG%\Lion\lion-core.lib" "%TARGET%\Bin\" >nul
 
+call "%ROOT%\Scripts\PackManagedSdk.bat" "%ROOT%" "%TARGET%" "%CONFIG%"
+if errorlevel 1 exit /b 1
+
 endlocal
 exit /b 0
