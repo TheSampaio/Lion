@@ -20,6 +20,7 @@ namespace Lion
 
 	// The symbol a game module exports to hand back its Application (see Game/GameModule.cpp).
 	constexpr const char8* kGameModuleEntryPoint = "LionCreateApplication";
+	constexpr const char8* kPlayerSettingsFile = "Config/Player.lnplayer";
 
 	class DynamicLibrary;
 

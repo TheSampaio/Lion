@@ -4,6 +4,10 @@
 # Everything the build produces, including the vendored libraries.
 Build/
 
+# Local game copies and exported players are not engine sources.
+/Brickout/
+/Exports/
+
 # Legacy output folder; kept ignored so an old working tree stays clean.
 .Out/
 

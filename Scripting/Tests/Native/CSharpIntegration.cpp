@@ -106,6 +106,27 @@ int main(int argc, const char* argv[])
 		worker.join();
 		Require(wrongThreadRejected, "Native hosting calls must reject worker threads.");
 
+		Reference<Scene> bindingScene = MakeReference<Scene>();
+		// Probe comes first: authored Awake must still be able to resolve later entities.
+		Require(SceneSerializer::DeserializeFromString(bindingScene, R"({"entities":[
+			{"name":"Binding Probe","components":[{"type":"Lion.Scripting.Tests.BindingsProbe"}]},
+			{"name":"Caption","components":[{"type":"TextRenderer"},{"type":"SpriteRenderer"}]}]})"),
+			"Could not deserialize the authored binding scene.");
+		Reference<Entity> bindingProbe = bindingScene->FindEntity("Binding Probe");
+		Reference<Entity> caption = bindingScene->FindEntity("Caption café");
+		Require(caption != nullptr, "Authored Awake ran before the complete scene was attached.");
+		bindingScene->OnUpdate(0.01f);
+		bindingScene->OnUpdate(0.01f);
+		Require(bindingProbe->GetTransform()->GetPosition().x == 2, CSharpRuntime::GetLastError());
+		Require(caption->GetComponent<TextRenderer>()->GetText() == "C# café ✓", "Typed text binding lost UTF-8.");
+		caption->RemoveComponent<SpriteRenderer>();
+		bindingScene->OnUpdate(0.01f);
+		Require(bindingProbe->GetTransform()->GetPosition().x == 3, CSharpRuntime::GetLastError());
+		bindingScene->Clear();
+		Reference<Entity> bindingObserver = AddScript(bindingScene, "Lion.Scripting.Tests.BindingLifetimeObserver");
+		Require(bindingObserver->GetTransform()->GetPosition().x == 78, CSharpRuntime::GetLastError());
+		bindingScene->Clear();
+
 		Require(CSharpRuntime::SetGameplayActive(false), "Could not enter authoring mode.");
 		Reference<Scene> authored = MakeReference<Scene>();
 		Reference<Entity> authoredOwner = MakeReference<Entity>();

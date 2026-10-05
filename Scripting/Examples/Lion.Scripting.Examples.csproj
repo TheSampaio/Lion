@@ -1,5 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <ItemGroup>
+    <Compile Remove="StarCollector/**/*.cs" />
     <ProjectReference Include="..\Lion.Engine\Lion.Engine.csproj" />
   </ItemGroup>
 </Project>

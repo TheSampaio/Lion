@@ -123,6 +123,7 @@ namespace ProjectScripting
 			<< "    <Nullable>enable</Nullable>\n"
 			<< "    <ImplicitUsings>enable</ImplicitUsings>\n"
 			<< "    <Deterministic>true</Deterministic>\n"
+			<< (configuration == "Debug" ? "" : "    <DebugType>none</DebugType>\n    <DebugSymbols>false</DebugSymbols>\n")
 			<< "    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>\n"
 			<< "    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>\n"
 			<< "    <OutputPath>Managed/" << configuration << "/</OutputPath>\n"
@@ -206,5 +207,62 @@ namespace ProjectScripting
 		std::string error;
 		if (!Lion::CSharpRuntime::Shutdown(error))
 			Lion::Log::Console(Lion::LogLevel::Error, "[Editor] C# shutdown failed: " + error);
+	}
+
+	bool PackPlayer(const std::filesystem::path& project, const std::filesystem::path& sdkDirectory,
+		const std::filesystem::path& destination, std::string& runtimeVersion, std::string& error)
+	{
+		const auto host = HostfxrPath();
+		if (host.empty()) { error = "Install the Windows x64 .NET 10 SDK/runtime to package C# gameplay."; return false; }
+		const auto root = host.parent_path().parent_path().parent_path().parent_path();
+		runtimeVersion = host.parent_path().filename().string();
+		const auto framework = root / "shared" / "Microsoft.NETCore.App" / runtimeVersion;
+		std::error_code code;
+		if (!std::filesystem::is_regular_file(framework / "coreclr.dll", code))
+		{
+			error = "The matching .NET runtime is missing: " + framework.generic_string();
+			return false;
+		}
+		const auto copy = [&](const std::filesystem::path& source, const std::filesystem::path& target) -> bool
+		{
+			std::filesystem::create_directories(target, code);
+			if (!code) std::filesystem::copy(source, target,
+				std::filesystem::copy_options::recursive | std::filesystem::copy_options::overwrite_existing, code);
+			if (code) error = "Could not package '" + source.generic_string() + "': " + code.message();
+			return !code;
+		};
+		const auto copyManaged = [&](const std::filesystem::path& source) -> bool
+		{
+			// An older Shipping output can retain symbols even after DebugType changes. Package runtime
+			// files without copying those stale artifacts or modifying the project's build directory.
+			for (std::filesystem::recursive_directory_iterator it(source, code), end;
+				!code && it != end; it.increment(code))
+			{
+				const bool regular = it->is_regular_file(code);
+				if (code) break;
+				if (!regular || it->path().extension() == ".pdb") continue;
+				const auto target = destination / "Managed" / it->path().lexically_relative(source);
+				std::filesystem::create_directories(target.parent_path(), code);
+				if (!code) std::filesystem::copy_file(it->path(), target,
+					std::filesystem::copy_options::overwrite_existing, code);
+				if (code) break;
+			}
+			if (code) error = "Could not package managed runtime files: " + code.message();
+			return !code;
+		};
+		if (!copyManaged(sdkDirectory / "Managed")
+			|| !copyManaged(AssemblyPath(project, "Shipping").parent_path())
+			|| !copy(host.parent_path(), destination / "Dotnet" / "host" / "fxr" / runtimeVersion)
+			|| !copy(framework, destination / "Dotnet" / "shared" / "Microsoft.NETCore.App" / runtimeVersion))
+			return false;
+		std::filesystem::create_directories(destination / "Licenses", code);
+		for (const auto& name : { "LICENSE", "ThirdPartyNotices" })
+		{
+			if (!code) std::filesystem::copy_file(root / (std::string(name) + ".txt"),
+				destination / "Licenses" / ("Dotnet-" + std::string(name) + ".md"), code);
+		}
+		if (code) { error = "Could not package the mandatory .NET licenses: " + code.message(); return false; }
+		error.clear();
+		return true;
 	}
 }

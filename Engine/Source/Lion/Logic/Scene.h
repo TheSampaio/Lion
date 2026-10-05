@@ -21,6 +21,8 @@ namespace Lion
 		virtual LION_API ~Scene();
 
 		virtual LION_API void Add(Reference<Entity> entity);
+		// Attaches an authored batch before dispatching Awake, so every script can find the complete scene.
+		LION_API void AddBatch(const std::vector<Reference<Entity>>& entities);
 		virtual LION_API void Remove(Reference<Entity> entity);
 
 		// Removes an entity by raw pointer (used for self-removal); deferred to end of frame.
@@ -95,5 +97,6 @@ namespace Lion
 		float32 mDeltaTime = 0.0f;
 
 		void FlushPendingRemoval();
+		void Attach(const Reference<Entity>& entity);
 	};
 }

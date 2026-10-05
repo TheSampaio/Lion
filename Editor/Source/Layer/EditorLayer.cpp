@@ -8726,17 +8726,17 @@ void EditorLayer::CompileGameModule()
 {
 	if (mBuilding)
 		return;
+	const std::filesystem::path active = ActiveProjectDirectory();
+	const bool builtIn = !active.empty()
+		&& active.lexically_normal() == Projects::DefaultProjectDirectory().lexically_normal();
 
-	if (MSBuildPath().empty())
+	if ((builtIn || ProjectBuild::HasNativeSources(active)) && MSBuildPath().empty())
 	{
 		Log::Console(LogLevel::Error,
 			"[Editor] Could not locate MSBuild; building C++ needs Visual Studio with its C++ tools installed.");
 		return;
 	}
 
-	const std::filesystem::path active = ActiveProjectDirectory();
-	const bool builtIn = !active.empty()
-		&& active.lexically_normal() == Projects::DefaultProjectDirectory().lexically_normal();
 
 	std::string generate;
 	std::string build;
@@ -8768,27 +8768,6 @@ void EditorLayer::CompileGameModule()
 			" -p:Configuration=" + BuildConfiguration() +
 			" -p:Platform=x64 -v:minimal -nologo";
 	}
-	else
-	{
-		// Any other project owns its build, the way an Unreal game does: a Visual Studio project of its
-		// own, tied to the SDK beside the editor — which is what lets a distributed editor compile C++
-		// with no engine tree in sight. Regenerated now, so the file list is the project as it stands.
-		std::string error;
-
-		if (!ProjectBuild::Generate(active, error))
-		{
-			Log::Console(LogLevel::Error, LION_FORMAT_TEXT("[Editor] Could not prepare the project's build: {}", error));
-			PushToast("Could not prepare the project's build", false);
-			return;
-		}
-
-		build =
-			"\"" + MSBuildPath() + "\""
-			" \"" + (active / (Projects::DisplayName(active) + ".sln")).string() + "\""
-			" -p:PlatformToolset=" + ProjectBuild::PlatformToolset() +
-			" -p:Configuration=" + BuildConfiguration() +
-			" -p:Platform=x64 -v:minimal -nologo";
-	}
 
 	Log::Console(LogLevel::Information, "[Editor] Compiling the game module...");
 	PushToast("Compiling the game module", true);
@@ -8796,7 +8775,7 @@ void EditorLayer::CompileGameModule()
 	mBuilding = true;
 	const std::string configuration = BuildConfiguration();
 	const std::filesystem::path sdk = ResourceRootDirectory();
-	mGameBuild = std::async(std::launch::async, [generate, build, active, configuration, sdk]
+	mGameBuild = std::async(std::launch::async, [generate, build, active, configuration, sdk, builtIn]
 	{
 		GameBuild result;
 
@@ -8813,7 +8792,10 @@ void EditorLayer::CompileGameModule()
 			}
 		}
 
-		result.exitCode = RunCommand(build, result.output);
+		std::string nativeError;
+		result.exitCode = builtIn ? RunCommand(build, result.output)
+			: (ProjectBuild::Build(active, configuration, sdk, result.output, nativeError) ? 0 : 1);
+		if (result.exitCode != 0 && !nativeError.empty()) result.output += "[Editor] " + nativeError + "\n";
 		if (result.exitCode == 0)
 		{
 			std::string error;

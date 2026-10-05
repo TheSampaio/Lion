@@ -63,16 +63,6 @@ namespace Lion
 				return authored.string();
 		}
 
-		// A standalone run launched from its output folder finds the flattened resource beside itself.
-		if (FileExists(path))
-			return path;
-
-		// Development fallback: running from the project folder, assets live under "Assets/".
-		const std::string devPath = "Assets/" + path;
-
-		if (FileExists(devPath))
-			return devPath;
-
 		// Packaged resources live next to the executable, independent of the working directory.
 		const std::string& executableDirectory = ExecutableDirectory();
 
@@ -83,6 +73,11 @@ namespace Lion
 			if (FileExists(exePath))
 				return exePath;
 		}
+
+		// Development-only fallback when no authored override or packaged resource provides this path.
+		if (FileExists(path)) return path;
+		const std::string devPath = "Assets/" + path;
+		if (FileExists(devPath)) return devPath;
 
 		return path;
 	}

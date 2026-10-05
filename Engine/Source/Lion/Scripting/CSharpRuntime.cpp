@@ -8,6 +8,10 @@
 #include <Lion/Logic/SceneManager.h>
 #include <Lion/Logic/Entity.h>
 #include <Lion/Logic/Scene.h>
+#include <Lion/Core/Application.h>
+#include <Lion/Render/TextRenderer.h>
+#include <Lion/Render/SpriteRenderer.h>
+#include <Lion/Render/Sprite.h>
 
 #include <atomic>
 #include <filesystem>
@@ -23,7 +27,7 @@ namespace Lion
 {
 	namespace
 	{
-		constexpr uint32 kAbiVersion = 2;
+		constexpr uint32 kAbiVersion = 3;
 		constexpr int32 kSuccess = 0;
 		constexpr int32 kInvalidLifetime = 1;
 		constexpr int32 kWrongThread = 2;
@@ -48,6 +52,20 @@ namespace Lion
 			int32 (*isLogEnabled)(int32);
 			void (*writeLog)(int32, const char8*);
 			void (*reportError)(uint64, const char8*);
+			int32 (*sceneOf)(uint64, uint64*);
+			int32 (*validateScene)(uint64);
+			int32 (*findSceneEntity)(uint64, const char8*, uint64*);
+			int32 (*createSceneEntity)(uint64, const char8*, uint64*);
+			int32 (*destroyEntity)(uint64);
+			int32 (*getEntityState)(uint64, int32, int32*);
+			int32 (*setEntityState)(uint64, int32, int32);
+			int32 (*readText)(uint64, int32, char8*, int32, int32*);
+			int32 (*writeText)(uint64, int32, const char8*);
+			int32 (*hasComponent)(uint64, int32, int32*);
+			int32 (*getComponentState)(uint64, int32, int32, int32*);
+			int32 (*setComponentState)(uint64, int32, int32, int32);
+			int32 (*requestScene)(uint64, const char8*);
+			int32 (*quit)();
 		};
 
 		struct FieldValue
@@ -76,7 +94,7 @@ namespace Lion
 			int32 (*readFields)(uint64, void*, ReceiveField) = nullptr;
 			int32 (*writeField)(uint64, const char8*, const FieldValue*) = nullptr;
 		};
-		static_assert(sizeof(NativeFunctions) == 72);
+		static_assert(sizeof(NativeFunctions) == 184);
 		static_assert(sizeof(ManagedFunctions) == 80);
 
 		struct RuntimeState
@@ -92,6 +110,9 @@ namespace Lion
 			std::unordered_map<std::string, uint64> actionHandles;
 			uint64 nextEntity = 0;
 			uint64 nextAction = 0;
+			uint64 nextScene = 0;
+			std::unordered_map<uint64, std::weak_ptr<Scene>> scenes;
+			std::unordered_map<Scene*, uint64> sceneHandles;
 			std::vector<std::string> scriptNames;
 			std::unordered_map<std::string, std::vector<ScriptingDetail::ScriptField>> fieldDefaults;
 		};
@@ -276,8 +297,204 @@ namespace Lion
 			catch (...) {}
 		}
 
+		uint64 EntityToken(const Reference<Entity>& entity)
+		{
+			if (!entity) return 0;
+			auto& state = State();
+			const auto found = state.entityHandles.find(entity.get());
+			if (found != state.entityHandles.end()) return found->second;
+			const uint64 token = ++state.nextEntity;
+			state.entityHandles.emplace(entity.get(), token);
+			state.entities.emplace(token, entity);
+			return token;
+		}
+
+		template<typename Operation>
+		int32 AccessEntity(uint64 token, Operation&& operation)
+		{
+			const int32 status = CheckRuntime();
+			if (status != kSuccess) return status;
+			try
+			{
+				const auto entity = FindEntity(token);
+				return entity ? operation(*entity) : kInvalidLifetime;
+			}
+			catch (const std::exception& error) { ReportError(token, error.what()); return kFailure; }
+			catch (...) { return kFailure; }
+		}
+
+		template<typename Operation>
+		int32 AccessScene(uint64 token, Operation&& operation)
+		{
+			const int32 status = CheckRuntime();
+			if (status != kSuccess) return status;
+			try
+			{
+				const auto found = State().scenes.find(token);
+				const auto scene = found == State().scenes.end() ? nullptr : found->second.lock();
+				return scene ? operation(*scene) : kInvalidLifetime;
+			}
+			catch (const std::exception& error) { ReportError(0, error.what()); return kFailure; }
+			catch (...) { return kFailure; }
+		}
+
+		int32 SceneOf(uint64 token, uint64* result)
+		{
+			if (!result) return kFailure;
+			return AccessEntity(token, [&](Entity& entity)
+			{
+				const auto scene = entity.GetScene();
+				if (!scene) return kInvalidLifetime;
+				auto& state = State();
+				auto found = state.sceneHandles.find(scene.get());
+				if (found == state.sceneHandles.end())
+				{
+					const uint64 handle = ++state.nextScene;
+					state.scenes.emplace(handle, scene);
+					found = state.sceneHandles.emplace(scene.get(), handle).first;
+				}
+				*result = found->second;
+				return kSuccess;
+			});
+		}
+
+		int32 ValidateScene(uint64 token) { return AccessScene(token, [](Scene&) { return kSuccess; }); }
+		int32 FindSceneEntity(uint64 token, const char8* name, uint64* result)
+		{
+			if (!name || !result) return kFailure;
+			return AccessScene(token, [&](Scene& scene) { *result = EntityToken(scene.FindEntity(name)); return kSuccess; });
+		}
+		int32 CreateSceneEntity(uint64 token, const char8* name, uint64* result)
+		{
+			if (!name || !result) return kFailure;
+			return AccessScene(token, [&](Scene& scene)
+			{
+				auto entity = MakeReference<Entity>();
+				entity->SetName(name);
+				scene.Add(entity);
+				*result = EntityToken(entity);
+				return kSuccess;
+			});
+		}
+		int32 DestroyEntity(uint64 token)
+		{
+			return AccessEntity(token, [](Entity& entity) { entity.RemoveFromScene(); return kSuccess; });
+		}
+		int32 GetEntityState(uint64 token, int32 property, int32* result)
+		{
+			if (!result) return kFailure;
+			return AccessEntity(token, [&](Entity& entity)
+			{
+				switch (property)
+				{
+					case 0: *result = entity.IsEnabled(); break;
+					case 1: *result = entity.IsVisible(); break;
+					case 2: *result = entity.IsActive(); break;
+					default: return kFailure;
+				}
+				return kSuccess;
+			});
+		}
+		int32 SetEntityState(uint64 token, int32 property, int32 value)
+		{
+			return AccessEntity(token, [&](Entity& entity)
+			{
+				if (property == 0) entity.SetEnabled(value != 0);
+				else if (property == 1) entity.SetVisible(value != 0);
+				else return kFailure;
+				return kSuccess;
+			});
+		}
+		int32 ReadText(uint64 token, int32 property, char8* buffer, int32 capacity, int32* required)
+		{
+			if (!required || capacity < 0) return kFailure;
+			return AccessEntity(token, [&](Entity& entity)
+			{
+				const std::string* text = nullptr;
+				if (property == 0) text = &entity.GetName();
+				else if (property == 1 && entity.HasComponent<TextRenderer>()) text = &entity.GetComponent<TextRenderer>()->GetText();
+				else if (property == 2 && entity.HasComponent<SpriteRenderer>()) text = &entity.GetComponent<SpriteRenderer>()->GetTexturePath();
+				if (!text || text->size() >= static_cast<size_t>(INT_MAX)) return kFailure;
+				*required = static_cast<int32>(text->size()) + 1;
+				if (!buffer) return kSuccess;
+				if (capacity < *required) return kFailure;
+				std::memcpy(buffer, text->c_str(), *required);
+				return kSuccess;
+			});
+		}
+		int32 WriteText(uint64 token, int32 property, const char8* text)
+		{
+			if (!text) return kFailure;
+			return AccessEntity(token, [&](Entity& entity)
+			{
+				if (property == 0) entity.SetName(text);
+				else if (property == 1 && entity.HasComponent<TextRenderer>()) entity.GetComponent<TextRenderer>()->SetText(text);
+				else if (property == 2 && entity.HasComponent<SpriteRenderer>()) entity.GetComponent<SpriteRenderer>()->SetTexturePath(text);
+				else return kFailure;
+				return kSuccess;
+			});
+		}
+		Component* NativeComponent(Entity& entity, int32 kind)
+		{
+			if (kind == 0) return entity.GetComponent<TextRenderer>();
+			if (kind == 1) return entity.GetComponent<SpriteRenderer>();
+			return nullptr;
+		}
+		int32 HasNativeComponent(uint64 token, int32 kind, int32* result)
+		{
+			if (!result) return kFailure;
+			return AccessEntity(token, [&](Entity& entity) { *result = NativeComponent(entity, kind) != nullptr; return kSuccess; });
+		}
+		int32 GetComponentState(uint64 token, int32 kind, int32 property, int32* result)
+		{
+			if (!result) return kFailure;
+			return AccessEntity(token, [&](Entity& entity)
+			{
+				Component* component = NativeComponent(entity, kind);
+				if (!component) return kInvalidLifetime;
+				if (property == 0) *result = component->IsEnabled();
+				else if (kind == 1 && property == 1) *result = static_cast<SpriteRenderer*>(component)->GetOrder();
+				else if (kind == 1 && property == 2) *result = static_cast<SpriteRenderer*>(component)->IsFlippedX();
+				else if (kind == 1 && property == 3) *result = static_cast<SpriteRenderer*>(component)->IsFlippedY();
+				else return kFailure;
+				return kSuccess;
+			});
+		}
+		int32 SetComponentState(uint64 token, int32 kind, int32 property, int32 value)
+		{
+			return AccessEntity(token, [&](Entity& entity)
+			{
+				Component* component = NativeComponent(entity, kind);
+				if (!component) return kInvalidLifetime;
+				if (property == 0) component->SetEnabled(value != 0);
+				else if (kind == 1 && property == 1) static_cast<SpriteRenderer*>(component)->SetOrder(value);
+				else if (kind == 1 && property == 2) static_cast<SpriteRenderer*>(component)->SetFlipX(value != 0);
+				else if (kind == 1 && property == 3) static_cast<SpriteRenderer*>(component)->SetFlipY(value != 0);
+				else return kFailure;
+				return kSuccess;
+			});
+		}
+		int32 RequestScene(uint64 token, const char8* path)
+		{
+			if (!path) return kFailure;
+			return AccessScene(token, [&](Scene& scene)
+			{
+				if (SceneManager::GetActiveScene().get() != &scene) return kUnavailable;
+				return SceneManager::LoadScene(path) ? kSuccess : kFailure;
+			});
+		}
+		int32 Quit()
+		{
+			const int32 status = CheckRuntime();
+			if (status != kSuccess) return status;
+			Application::RequestQuit();
+			return kSuccess;
+		}
+
 		const NativeFunctions kNativeFunctions = { kAbiVersion, sizeof(NativeFunctions), ValidateEntity,
-			GetTransform, SetTransform, ResolveAction, ReadAction, IsLogEnabled, WriteLog, ReportError };
+			GetTransform, SetTransform, ResolveAction, ReadAction, IsLogEnabled, WriteLog, ReportError,
+			SceneOf, ValidateScene, FindSceneEntity, CreateSceneEntity, DestroyEntity, GetEntityState,
+			SetEntityState, ReadText, WriteText, HasNativeComponent, GetComponentState, SetComponentState, RequestScene, Quit };
 	}
 
 	bool CSharpRuntime::Initialize(const std::string& managedDirectory,
@@ -351,8 +568,16 @@ namespace Lion
 			return false;
 		}
 
+		struct InitializeParameters
+		{
+			size_t size;
+			const wchar_t* hostPath;
+			const wchar_t* dotnetRoot;
+		};
+		const std::wstring dotnetRoot = std::filesystem::path(hostfxrPath).parent_path().parent_path().parent_path().parent_path().wstring();
+		const InitializeParameters parameters { sizeof(InitializeParameters), nullptr, dotnetRoot.c_str() };
 		void* context = nullptr;
-		int32 status = initialize(configuration.c_str(), nullptr, &context);
+		int32 status = initialize(configuration.c_str(), &parameters, &context);
 		if (status < 0 || !context)
 		{
 			if (context)
@@ -515,6 +740,8 @@ namespace Lion
 		state.entities.clear();
 		state.entityHandles.clear();
 		state.actions.clear();
+		state.scenes.clear();
+		state.sceneHandles.clear();
 		state.actionHandles.clear();
 		state.initialized.store(false);
 		error = succeeded ? std::string() : state.error;
@@ -574,6 +801,15 @@ namespace Lion
 	}
 
 	bool CSharpRuntime::IsGameplayActive() { return State().gameplayActive; }
+	void CSharpRuntime::InvalidateScene(Scene& scene)
+	{
+		if (!IsInitialized()) return;
+		auto& state = State();
+		const auto found = state.sceneHandles.find(&scene);
+		if (found == state.sceneHandles.end()) return;
+		state.scenes.erase(found->second);
+		state.sceneHandles.erase(found);
+	}
 	bool CSharpRuntime::IsInitialized() { return State().initialized.load(); }
 	const std::string& CSharpRuntime::GetLastError() { return State().error; }
 }

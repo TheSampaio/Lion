@@ -3,6 +3,9 @@
 #include <Lion/Base/Platform.h>
 #include <Lion/Core/Application.h>
 #include <Lion/Core/CommandLine.h>
+#include <cstdio>
+#include <memory>
+#include <exception>
 
 #ifdef LN_PLATFORM_WIN
 	extern Lion::Application* Lion::Main();
@@ -17,9 +20,18 @@
 			// arguments would take the double-click and show an empty scene.
 			Lion::CommandLine::Set(argc, argv);
 
-			auto application = Lion::Main();
-			application->Run();
-			delete application;
+			try
+			{
+				std::unique_ptr<Lion::Application> application(Lion::Main());
+				if (!application) return 1;
+				application->Run();
+				return 0;
+			}
+			catch (const std::exception& error)
+			{
+				std::fprintf(stderr, "[Player] %s\n", error.what());
+				return 1;
+			}
 		}
 
 	#else
@@ -29,10 +41,18 @@
 			// __argv is, and splitting it a second time by hand would be a second answer to one question.
 			Lion::CommandLine::Set(__argc, const_cast<const char**>(__argv));
 
-			auto application = Lion::Main();
-			application->Run();
-			delete application;
-			return 0;
+			try
+			{
+				std::unique_ptr<Lion::Application> application(Lion::Main());
+				if (!application) return 1;
+				application->Run();
+				return 0;
+			}
+			catch (const std::exception& error)
+			{
+				std::fprintf(stderr, "[Player] %s\n", error.what());
+				return 1;
+			}
 		}
 
 	#endif // !LN_SHIPPING

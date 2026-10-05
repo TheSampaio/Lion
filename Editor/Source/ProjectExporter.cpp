@@ -9,6 +9,8 @@
 #include <Lion/Core/Filesystem.h>
 #include <Lion/Core/GameModule.h>
 #include <Lion/Core/Version.h>
+#include <Lion/Core/Vault.h>
+#include <nlohmann/json.hpp>
 
 #include <filesystem>
 #include <fstream>
@@ -85,7 +87,7 @@ namespace ProjectExporter
 
 				const std::filesystem::path extension = it->path().extension();
 
-				if (extension == ".cpp" || extension == ".h" || extension == ".hpp" || extension == ".lnexport")
+				if (extension == ".cpp" || extension == ".h" || extension == ".hpp" || extension == ".cs" || extension == ".lnexport")
 					continue;
 
 				const std::filesystem::path target = destination / it->path().lexically_relative(assets);
@@ -128,11 +130,7 @@ namespace ProjectExporter
 			return result;
 		}
 
-		if (ProjectScripting::HasSources(projectDirectory))
-		{
-			result.message = "C# player export is not implemented yet. This project can run in Mane, but exporting it would omit managed gameplay.";
-			return result;
-		}
+		const bool managed = ProjectScripting::HasSources(projectDirectory);
 
 		const std::filesystem::path root = Projects::EngineRootDirectory();
 		const std::filesystem::path runtime = root.empty()
@@ -157,7 +155,8 @@ namespace ProjectExporter
 
 		std::string buildError;
 
-		if (!ProjectBuild::Build(projectDirectory, "Shipping", sdk, result.buildOutput, buildError))
+		if (!ProjectBuild::Build(projectDirectory, "Shipping", sdk, result.buildOutput, buildError)
+			|| !ProjectScripting::Build(projectDirectory, "Shipping", sdk, result.buildOutput, buildError))
 		{
 			result.message = buildError;
 			return result;
@@ -227,6 +226,20 @@ namespace ProjectExporter
 			|| !CopyAssets(projectDirectory / "Assets", staging, copyError)
 			|| (options.sealAssets && !Sealer::SealAssets(projectDirectory / "Assets", staging, copyError)))
 			return fail(copyError);
+
+		std::string runtimeVersion;
+		if (managed && !ProjectScripting::PackPlayer(projectDirectory, sdk, staging, runtimeVersion, copyError))
+			return fail(copyError);
+		const auto entry = Projects::DefaultScene(projectDirectory).lexically_relative(projectDirectory / "Assets");
+		if (entry.empty() || *entry.begin() == "..")
+			return fail("The project needs a default scene inside Assets before exporting.");
+		nlohmann::json settings = { { "name", gameName }, { "scene", entry.generic_string() }, { "managed", managed } };
+		if (managed) settings["runtimeVersion"] = runtimeVersion;
+		std::filesystem::create_directories((staging / Lion::kPlayerSettingsFile).parent_path(), code);
+		std::ofstream configuration(staging / Lion::kPlayerSettingsFile, std::ios::binary);
+		configuration << Lion::Vault::Seal(settings.dump(2));
+		configuration.close();
+		if (code || !configuration) return fail("Could not write the scene-player configuration.");
 
 		std::filesystem::rename(staging, output, code);
 

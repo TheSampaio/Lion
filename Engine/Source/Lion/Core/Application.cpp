@@ -160,15 +160,15 @@ namespace Lion
 		for (Layer* layer : *mStack)
 			layer->OnCreate();
 
-		// The window draws itself while it is being dragged by an edge, because Windows keeps the thread
-		// for the whole of that drag and hands it back only through this.
-		Window::SetRefreshCallback([this] { Frame(); });
-
 		// Show window
 		Window::Show();
 
 		if (!IsEditor())
 			ShowStartupSplash();
+
+		// Windows services edge dragging through this callback. Install it after the splash so a resize
+		// cannot render gameplay over the startup image.
+		Window::SetRefreshCallback([this] { Frame(); });
 
 		do
 		{
@@ -202,19 +202,28 @@ namespace Lion
 			windowSize.width / std::max(splashSize.width, 1.0f),
 			windowSize.height / std::max(splashSize.height, 1.0f));
 		const auto started = std::chrono::steady_clock::now();
-		constexpr auto duration = std::chrono::milliseconds(900);
+		constexpr float32 kFadeDuration = 0.5f;
+		constexpr float32 kHoldDuration = 0.8f;
+		constexpr float32 kDuration = kFadeDuration * 2.0f + kHoldDuration;
 
-		while (!Window::Close() && std::chrono::steady_clock::now() - started < duration)
+		while (!Window::Close())
 		{
+			const float32 elapsed = std::chrono::duration<float32>(std::chrono::steady_clock::now() - started).count();
+			if (elapsed >= kDuration)
+				break;
+			const float32 brightness = std::clamp(std::min(elapsed, kDuration - elapsed) / kFadeDuration, 0.0f, 1.0f);
 			Window::PollEvents();
 			Input::Update();
 			Clock::UpdateFrameTime();
-			Renderer::Clear(0.012f, 0.012f, 0.014f, 1.0f);
+			Renderer::Clear(0.0f, 0.0f, 0.0f, 1.0f);
 			Renderer::RenderBegin(camera);
+			splash.SetColor(Vector(brightness));
 			splash.Draw(Vector2(0.0f, 0.0f), Vector(), Vector(scale, scale, 1.0f));
 			Renderer::RenderEnd();
 			Graphics::SwapBuffers();
 		}
+		Renderer::Clear(0.0f, 0.0f, 0.0f, 1.0f);
+		Graphics::SwapBuffers();
 	}
 
 	void Application::Frame()

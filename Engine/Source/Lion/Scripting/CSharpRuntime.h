@@ -6,6 +6,7 @@ namespace Lion
 {
 	class CSharpScript;
 	class Entity;
+	class Scene;
 
 	// Optional process-wide managed gameplay host. All operations require the engine thread.
 	// Native games do not initialize this host and have no .NET runtime dependency.
@@ -35,11 +36,13 @@ namespace Lion
 	private:
 		friend CSharpScript;
 		friend Entity;
+		friend Scene;
 
 		static uint64 CreateInstance(Entity& entity, const std::string& typeName, uint32& callbacks);
 		static void Invoke(uint64 instance, int32 callback, float32 deltaTime = 0.0f);
 		static void DestroyInstance(uint64 instance);
 		static void InvalidateEntity(Entity& entity);
+		static void InvalidateScene(Scene& scene);
 		static bool GetFields(const std::string& typeName, std::vector<ScriptingDetail::ScriptField>& fields);
 		static bool ReadFields(uint64 instance, std::vector<ScriptingDetail::ScriptField>& fields);
 		static bool WriteFields(uint64 instance, const std::vector<ScriptingDetail::ScriptField>& fields);

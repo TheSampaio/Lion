@@ -1389,43 +1389,6 @@ function New-EndScene
 Write-SealedJson (Join-Path $assetRoot 'Scenes\Victory.lnscene') (New-EndScene)
 Write-SealedJson (Join-Path $assetRoot 'Scenes\Defeat.lnscene') (New-EndScene)
 
-$splashScene = [ordered]@{
-	entities = @(
-		[ordered]@{
-			components = @([ordered]@{ type = 'SplashScreen' })
-			name = 'Splash'
-			parent = -1
-			transform = New-Transform
-		}
-		(New-SpriteEntity 'Lion Engine Logo' 'Images/lion-engine-banner.png' 0.5 0.5 0 0 0.62 0.62 -1 20)
-		(New-AssemblyInstance 'Assemblies/Screen Transition.lnassembly')
-		[ordered]@{
-			components = @(
-				[ordered]@{
-					limit = $false
-					limitBottom = -360
-					limitLeft = -640
-					limitRight = 640
-					limitTop = 360
-					offsetX = 0
-					offsetY = 0
-					positionSmoothing = 5
-					rotationSmoothing = 5
-					smooth = $false
-					type = 'Camera2D'
-					zoom = 1
-				}
-				(New-PostProcessingComponent)
-			)
-			name = 'Camera'
-			parent = -1
-			transform = New-Transform
-		}
-	)
-	gravity = @(0, 0)
-}
-Write-SealedJson (Join-Path $assetRoot 'Scenes\Splash.lnscene') $splashScene
-
 $inputPath = Join-Path $assetRoot 'Config\Input.lninput'
 $inputMap = Read-SealedJson $inputPath
 $menuActions = @(

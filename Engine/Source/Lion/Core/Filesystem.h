@@ -4,8 +4,8 @@ namespace Lion
 {
 	// Resolves an asset path for the current run.
 	//
-	// Absolute paths stay absolute. Relative paths first use a tool's authored override, then the working
-	// directory, an Assets/ development folder and finally the executable directory. If none exists, the
+	// Absolute paths stay absolute. Relative paths first use a tool's authored override, then the executable
+	// directory, followed by working-directory development fallbacks. If none exists, the
 	// original path is returned for error reporting.
 	std::string ResolveResourcePath(const std::string& path);
 

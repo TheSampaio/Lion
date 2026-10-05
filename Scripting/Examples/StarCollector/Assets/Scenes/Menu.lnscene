@@ -1,0 +1,8 @@
+{
+  "gravity": [0, 0],
+  "entities": [
+    {"name":"Menu","transform":{"position":[0,150],"rotation":0,"scale":[1,1]},"components":[{"type":"TextRenderer","Text":"STAR COLLECTOR","Font":"Fonts/Arcade.lnfont","Size":36},{"type":"StarCollector.MenuController"}]},
+    {"name":"Instructions","transform":{"position":[0,-10],"rotation":0,"scale":[1,1]},"components":[{"type":"TextRenderer","Text":"COLLECT 3 STARS BEFORE TIME RUNS OUT\nWASD / ARROWS TO MOVE\nENTER TO PLAY   ESC TO QUIT","Font":"Fonts/Arcade.lnfont","Size":18}]},
+    {"name":"Camera","components":[{"type":"Camera2D"}]}
+  ]
+}

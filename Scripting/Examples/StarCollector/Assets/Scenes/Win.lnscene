@@ -1,0 +1,8 @@
+{
+  "gravity": [0, 0],
+  "entities": [
+    {"name":"Result","transform":{"position":[0,120],"rotation":0,"scale":[1,1]},"components":[{"type":"TextRenderer","Text":"YOU WIN!","Font":"Fonts/Arcade.lnfont","Size":36,"Color.x":0.3,"Color.y":1,"Color.z":0.5},{"type":"StarCollector.MenuController"}]},
+    {"name":"Instructions","transform":{"position":[0,-60],"rotation":0,"scale":[1,1]},"components":[{"type":"TextRenderer","Text":"ALL STARS COLLECTED\nENTER TO PLAY AGAIN   ESC TO QUIT","Font":"Fonts/Arcade.lnfont","Size":18}]},
+    {"name":"Camera","components":[{"type":"Camera2D"}]}
+  ]
+}

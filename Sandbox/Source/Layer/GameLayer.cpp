@@ -10,7 +10,7 @@ void GameLayer::OnCreate()
 {
 	mCamera = MakeReference<CameraOrthographic>();
 
-	if (!SceneManager::LoadScene("Scenes/Splash.lnscene"))
+	if (!SceneManager::LoadScene("Scenes/MainMenu.lnscene"))
 		Log::Console(LogLevel::Fatal, "[Game] Could not load the entry scene.");
 }
 

@@ -2,10 +2,13 @@
 
 This SDK hosts real gameplay in the native engine. It is opt-in and does not migrate
 Brickout. Mane can now scaffold, compile, attach and configure C# scripts, serialize their fields,
-and run them in Play mode. Managed player export is not implemented yet and is blocked explicitly.
-See [the authoring guide](../docs/scripting/csharp-authoring.md),
-[the architecture and roadmap](../docs/scripting/csharp-architecture.md)
-and [API conventions](../docs/scripting/csharp-api-guidelines.md).
+and run them in Play mode. C#-only projects use a packaged scene player and export with an app-local
+.NET runtime. The complete [Star Collector](Examples/StarCollector/README.md) example includes
+menu, movement, pickups, HUD, win/loss, restart and quit without authored C++.
+See [the authoring guide](../Docs/Scripting/csharp-authoring.md),
+[the architecture and roadmap](../Docs/Scripting/csharp-architecture.md)
+and [API conventions](../Docs/Scripting/csharp-api-guidelines.md). The
+[gameplay guide](../Docs/Scripting/csharp-gameplay.md) lists implemented bindings and remaining gaps.
 
 ## Build and verify
 
@@ -22,7 +25,7 @@ Scripts\VerifyCSharp.ps1 Release
 Scripts\Build.bat Shipping
 Scripts\VerifyCSharp.ps1 Shipping
 
-# Compile a generated native bootstrap and C# gameplay through Mane, then verify the export guard.
+# Compile/export C# gameplay through Mane, then verify execution with the app-local runtime.
 Scripts\VerifyCSharpEditor.ps1 Debug
 ```
 
@@ -66,7 +69,7 @@ For the current opt-in native harness, include `<Lion/Scripting/CSharpRuntime.h>
 and hostfxr path, then `LoadAssembly` with the game's assembly path. Attach a
 `CSharpScript("Namespace.TypeName")` before adding its owner to a Scene. The regular native Scene
 lifecycle drives the script. Clear scenes and call `Shutdown` before stopping the host. Tooling will
-eventually own these steps; game developers should not need to edit C++ for ordinary authoring.
+already owns these steps in Mane and the scene player; ordinary C# games do not edit this native harness.
 
 Input names are resolved once using `Input.Action("Move")` and read through the cached value's
 `Strength`. The first binding mirrors native signed strength, not a newly invented axis system.

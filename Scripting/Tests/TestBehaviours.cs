@@ -113,11 +113,76 @@ public sealed class AllocationProbe : Behaviour
 		var state = Transform.State;
 		state.Position.X += deltaTime + _action.Strength;
 		Transform.State = state;
+		if (Entity.HasComponent<TextRenderer>()) { throw new InvalidOperationException("Unexpected text trait."); }
 		_updates++;
 		if (_updates == 100) { _allocated = GC.GetAllocatedBytesForCurrentThread(); }
 		if (_updates == 1000 && GC.GetAllocatedBytesForCurrentThread() != _allocated)
 		{
 			throw new InvalidOperationException("Managed hot path allocated after warmup.");
 		}
+	}
+}
+
+public sealed class BindingsProbe : Behaviour
+{
+	internal static Scene PreviousScene;
+	private Entity _temporary;
+	private TextRenderer _text = null!;
+	private SpriteRenderer _sprite = null!;
+	private int _stage;
+
+	public override void OnAwake()
+	{
+		PreviousScene = Entity.Scene;
+		var caption = PreviousScene.FindEntity("Caption") ?? throw new InvalidOperationException("Missing authored entity.");
+		if (PreviousScene.FindEntity("Missing") != null) { throw new InvalidOperationException("Missing entity was found."); }
+		_text = caption.GetComponent<TextRenderer>() ?? throw new InvalidOperationException("Missing text binding.");
+		caption.Name = "Caption café";
+		if (caption.Name != "Caption café") { throw new InvalidOperationException("UTF-8 entity name failed."); }
+		_text.Text = "C# café ✓";
+		if (_text.Text != "C# café ✓") { throw new InvalidOperationException("UTF-8 native text failed."); }
+		caption.IsVisible = false;
+		caption.IsEnabled = false;
+		if (caption.IsVisible || caption.IsActive) { throw new InvalidOperationException("Native entity state failed."); }
+		caption.IsVisible = true;
+		caption.IsEnabled = true;
+		_sprite = caption.GetComponent<SpriteRenderer>() ?? throw new InvalidOperationException("Missing sprite binding.");
+		_sprite.Order = 17;
+		_sprite.FlipX = true;
+		_sprite.FlipY = true;
+		if (_sprite.Order != 17 || !_sprite.FlipX || !_sprite.FlipY) { throw new InvalidOperationException("Sprite state failed."); }
+		try { _ = TextureAsset.FromPath("../Outside.png"); throw new Exception("Traversal accepted."); }
+		catch (ArgumentException) { }
+		try { PreviousScene.Load("Scenes/Main.lnscene"); throw new Exception("Awake scene transition accepted."); }
+		catch (InvalidOperationException) { }
+		_temporary = PreviousScene.CreateEntity("Temporary");
+		_temporary.Transform.Position = new Vector2(10, 20);
+		_temporary.Destroy();
+		_temporary.Destroy();
+	}
+
+	public override void OnUpdate(float deltaTime)
+	{
+		if (_stage == 0 && !_temporary.IsValid) { throw new InvalidOperationException("Destroy was not deferred."); }
+		if (_stage == 1 && _temporary.IsValid) { throw new InvalidOperationException("Destroyed entity token survived."); }
+		if (_stage == 2)
+		{
+			if (_sprite.IsValid) { throw new InvalidOperationException("Removed component view remained valid."); }
+			try { _ = _sprite.Order; throw new Exception("Removed trait accepted access."); }
+			catch (InvalidOperationException) { }
+		}
+		_text.IsEnabled = !_text.IsEnabled;
+		Transform.Position = new Vector2(++_stage, 0);
+	}
+}
+
+public sealed class BindingLifetimeObserver : Behaviour
+{
+	public override void OnAwake()
+	{
+		if (BindingsProbe.PreviousScene.IsValid) { throw new InvalidOperationException("Cleared scene token survived."); }
+		try { BindingsProbe.PreviousScene.FindEntity("Caption"); }
+		catch (InvalidOperationException) { Transform.Position = new Vector2(78, 0); return; }
+		throw new InvalidOperationException("Cleared scene accepted a lookup.");
 	}
 }

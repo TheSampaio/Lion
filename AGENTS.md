@@ -10,6 +10,7 @@ area from the build target:
 | Folder | VS project | Group | Output | Responsibility |
 |---|---|---|---|---|
 | `Engine/` | `Lion` | Core | `lion-core.dll` | Engine runtime and public API |
+| `Engine/ScenePlayerModule.cpp` | `Player` | Runtime | `lion-game.dll` | Packaged scene-player bootstrap; no authored gameplay |
 | `Sandbox/` | `Game` | Runtime | `lion-game.dll` | Built-in Brickout module; components live in `Sandbox/Assets/Scripts/` |
 | `Editor/` | `Mane` | Tools | `Lion.exe` | Lion editor |
 | `Launcher/` | `Launcher` | Tools | `lion-launcher.exe` | Thin standalone launcher; owns no game behavior |

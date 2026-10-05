@@ -25,6 +25,21 @@ public sealed class EditorProbe : Behaviour
 		{
 			Transform.Position = Direction * (MathF.Sin(_elapsed) * Speed);
 		}
+		string? report = Environment.GetEnvironmentVariable("LION_SCRIPT_TEST_REPORT");
+		if (report != null && _elapsed >= 0.15f)
+		{
+			if (!Entity.HasComponent<SpriteRenderer>() || Entity.Scene.FindEntity("C# Mover") == null)
+			{
+				throw new InvalidOperationException("Packaged gameplay bindings failed.");
+			}
+			File.WriteAllText(report, System.Text.Json.JsonSerializer.Serialize(new
+			{
+				Position = Transform.Position.X,
+				Framework = typeof(object).Assembly.Location,
+				Script = GetType().Assembly.Location
+			}));
+			Application.RequestQuit();
+		}
 	}
 
 	public override void OnDestroy() => Log.Info("[EditorProbe] Destroy");

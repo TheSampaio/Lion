@@ -25,6 +25,7 @@ internal unsafe struct ManagedFunctions
 
 internal static unsafe class ScriptRuntime
 {
+	internal static int CurrentCallback { get; private set; } = -1;
 	private sealed class Instance(Behaviour behaviour)
 	{
 		internal readonly Behaviour Behaviour = behaviour;
@@ -62,7 +63,7 @@ internal static unsafe class ScriptRuntime
 	{
 		try
 		{
-			if (managed == null || managed->Version != 2 || managed->Size != sizeof(ManagedFunctions)
+			if (managed == null || managed->Version != 3 || managed->Size != sizeof(ManagedFunctions)
 				|| !NativeApi.Bind(native))
 			{
 				return 1;
@@ -228,6 +229,7 @@ internal static unsafe class ScriptRuntime
 	private static int Invoke(ulong id, int callback, float deltaTime)
 	{
 		float previousDeltaTime = Time.CallbackDeltaTime;
+		int previousCallback = CurrentCallback;
 		Instance? instance = null;
 		try
 		{
@@ -235,6 +237,7 @@ internal static unsafe class ScriptRuntime
 			if (!Instances.TryGetValue(id, out instance) || instance.Faulted) { return 1; }
 			NativeApi.CheckStatus(NativeStatus(instance.Behaviour.Entity.Handle));
 			Time.CallbackDeltaTime = callback is >= 3 and <= 5 ? deltaTime : 0;
+			CurrentCallback = callback;
 			switch (callback)
 			{
 				case 0: instance.Behaviour.OnAwake(); break;
@@ -253,7 +256,7 @@ internal static unsafe class ScriptRuntime
 			return Report(instance?.Behaviour.Entity.Handle ?? 0,
 				$"{instance?.Behaviour.GetType().FullName}, {CallbackName(callback)}", exception);
 		}
-		finally { Time.CallbackDeltaTime = previousDeltaTime; }
+		finally { Time.CallbackDeltaTime = previousDeltaTime; CurrentCallback = previousCallback; }
 	}
 
 	private static string CallbackName(int callback) => callback switch
@@ -272,12 +275,15 @@ internal static unsafe class ScriptRuntime
 	private static int DestroyInstance(ulong id)
 	{
 		if (!Instances.Remove(id, out var instance)) { return 0; }
+		int previousCallback = CurrentCallback;
+		CurrentCallback = 6;
 		try { instance.Behaviour.OnDestroy(); return 0; }
 		catch (Exception exception)
 		{
 			return Report(instance.Behaviour.Entity.Handle,
 				$"{instance.Behaviour.GetType().FullName}, OnDestroy", exception);
 		}
+		finally { CurrentCallback = previousCallback; }
 	}
 
 	[UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]

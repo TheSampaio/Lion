@@ -16,6 +16,20 @@ internal unsafe struct NativeFunctions
 	internal delegate* unmanaged[Cdecl]<int, int> IsLogEnabled;
 	internal delegate* unmanaged[Cdecl]<int, byte*, void> WriteLog;
 	internal delegate* unmanaged[Cdecl]<ulong, byte*, void> ReportError;
+	internal delegate* unmanaged[Cdecl]<ulong, ulong*, int> SceneOf;
+	internal delegate* unmanaged[Cdecl]<ulong, int> ValidateScene;
+	internal delegate* unmanaged[Cdecl]<ulong, byte*, ulong*, int> FindSceneEntity;
+	internal delegate* unmanaged[Cdecl]<ulong, byte*, ulong*, int> CreateSceneEntity;
+	internal delegate* unmanaged[Cdecl]<ulong, int> DestroyEntity;
+	internal delegate* unmanaged[Cdecl]<ulong, int, int*, int> GetEntityState;
+	internal delegate* unmanaged[Cdecl]<ulong, int, int, int> SetEntityState;
+	internal delegate* unmanaged[Cdecl]<ulong, int, byte*, int, int*, int> ReadText;
+	internal delegate* unmanaged[Cdecl]<ulong, int, byte*, int> WriteText;
+	internal delegate* unmanaged[Cdecl]<ulong, int, int*, int> HasComponent;
+	internal delegate* unmanaged[Cdecl]<ulong, int, int, int*, int> GetComponentState;
+	internal delegate* unmanaged[Cdecl]<ulong, int, int, int, int> SetComponentState;
+	internal delegate* unmanaged[Cdecl]<ulong, byte*, int> RequestScene;
+	internal delegate* unmanaged[Cdecl]<int> Quit;
 }
 
 internal static unsafe class NativeApi
@@ -25,11 +39,17 @@ internal static unsafe class NativeApi
 
 	internal static bool Bind(NativeFunctions* functions)
 	{
-		if (functions == null || functions->Version != 2 || functions->Size != sizeof(NativeFunctions)
+		if (functions == null || functions->Version != 3 || functions->Size != sizeof(NativeFunctions)
 			|| functions->ValidateEntity == null || functions->GetTransform == null
 			|| functions->SetTransform == null || functions->ResolveAction == null
 			|| functions->ReadAction == null || functions->IsLogEnabled == null
-			|| functions->WriteLog == null || functions->ReportError == null)
+			|| functions->WriteLog == null || functions->ReportError == null
+			|| functions->SceneOf == null || functions->ValidateScene == null || functions->FindSceneEntity == null
+			|| functions->CreateSceneEntity == null || functions->DestroyEntity == null
+			|| functions->GetEntityState == null || functions->SetEntityState == null
+			|| functions->ReadText == null || functions->WriteText == null || functions->HasComponent == null
+			|| functions->GetComponentState == null || functions->SetComponentState == null
+			|| functions->RequestScene == null || functions->Quit == null)
 		{
 			return false;
 		}
@@ -129,4 +149,93 @@ internal static unsafe class NativeApi
 			_functions.ReportError(entity, text);
 		}
 	}
+
+	internal static void CheckString(string value)
+	{
+		ArgumentNullException.ThrowIfNull(value);
+		if (value.Contains('\0')) { throw new ArgumentException("Lion strings cannot contain null characters.", nameof(value)); }
+	}
+
+	internal static Scene SceneOf(ulong handle)
+	{
+		CheckThread();
+		ulong result;
+		CheckStatus(_functions.SceneOf(handle, &result));
+		return new Scene(result);
+	}
+
+	internal static bool IsSceneValid(ulong handle) { CheckThread(); return _functions.ValidateScene(handle) == 0; }
+	internal static Entity SceneEntity(ulong handle, string name, bool create)
+	{
+		CheckThread();
+		CheckString(name);
+		fixed (byte* text = Encoding.UTF8.GetBytes(name + '\0'))
+		{
+			ulong result;
+			CheckStatus(create ? _functions.CreateSceneEntity(handle, text, &result) : _functions.FindSceneEntity(handle, text, &result));
+			return result == 0 ? default : new Entity(result);
+		}
+	}
+	internal static void DestroyEntity(ulong handle) { CheckThread(); CheckStatus(_functions.DestroyEntity(handle)); }
+	internal static bool GetEntityState(ulong handle, int property)
+	{
+		CheckThread();
+		int value;
+		CheckStatus(_functions.GetEntityState(handle, property, &value));
+		return value != 0;
+	}
+	internal static void SetEntityState(ulong handle, int property, bool value)
+	{
+		CheckThread();
+		CheckStatus(_functions.SetEntityState(handle, property, value ? 1 : 0));
+	}
+	internal static string ReadText(ulong handle, int property)
+	{
+		CheckThread();
+		int length;
+		CheckStatus(_functions.ReadText(handle, property, null, 0, &length));
+		if (length < 1 || length > 1_048_576) { throw new InvalidOperationException("Native text exceeds the supported size."); }
+		Span<byte> buffer = length <= 512 ? stackalloc byte[length] : new byte[length];
+		fixed (byte* text = buffer)
+		{
+			CheckStatus(_functions.ReadText(handle, property, text, length, &length));
+			return Encoding.UTF8.GetString(buffer[..(length - 1)]);
+		}
+	}
+	internal static void WriteText(ulong handle, int property, string value)
+	{
+		CheckThread();
+		CheckString(value);
+		fixed (byte* text = Encoding.UTF8.GetBytes(value + '\0')) { CheckStatus(_functions.WriteText(handle, property, text)); }
+	}
+	internal static bool HasComponent(ulong handle, int kind)
+	{
+		CheckThread();
+		int value;
+		CheckStatus(_functions.HasComponent(handle, kind, &value));
+		return value != 0;
+	}
+	internal static int GetComponentState(ulong handle, int kind, int property)
+	{
+		CheckThread();
+		int value;
+		CheckStatus(_functions.GetComponentState(handle, kind, property, &value));
+		return value;
+	}
+	internal static void SetComponentState(ulong handle, int kind, int property, int value)
+	{
+		CheckThread();
+		CheckStatus(_functions.SetComponentState(handle, kind, property, value));
+	}
+	internal static void RequestScene(ulong handle, string path)
+	{
+		CheckThread();
+		if (ScriptRuntime.CurrentCallback is < 3 or > 5)
+		{
+			throw new InvalidOperationException("Request scene changes from an update callback, never during construction or destruction.");
+		}
+		ResourcePath.Validate(path);
+		fixed (byte* text = Encoding.UTF8.GetBytes(path + '\0')) { CheckStatus(_functions.RequestScene(handle, text)); }
+	}
+	internal static void Quit() { CheckThread(); CheckStatus(_functions.Quit()); }
 }

@@ -526,20 +526,8 @@ namespace Projects
 		Lion::Input::SaveActionMap((folder / "Assets" / Lion::Input::kDefaultActionMapFile).string(),
 			DefaultInputActions());
 
-		// A game module the editor and launcher can load: the exported entry point every project needs,
-		// empty but complete, so the project compiles from the first build. Components added to it are
-		// picked up by the glob — a game grows by adding files, not by editing this one.
-		std::ofstream module(folder / "Source" / "GameModule.cpp");
-		module
-			<< "#include <Lion/Lion.h>\n\n"
-			<< "// The game module's entry point: the launcher and the editor both load this library and call\n"
-			<< "// this to build the game. Push your layers onto the application as the game grows; the components\n"
-			<< "// under Assets/Scripts register themselves by being compiled in, and need no mention here.\n"
-			<< "extern \"C\" __declspec(dllexport) Lion::Application* LionCreateApplication()\n"
-			<< "{\n"
-			<< "\treturn new Lion::Application();\n"
-			<< "}\n";
-		module.close();
+		// ProjectBuild supplies the standard scene-player entry point under Build. Ordinary gameplay,
+		// whether C# or native components, does not need a developer-owned C++ bootstrap.
 
 		// The project is born with its Visual Studio files, the way an Unreal game is: a solution at its
 		// root, tied to the SDK beside the editor, openable in VS from the first minute. Best-effort — the

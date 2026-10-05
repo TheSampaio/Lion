@@ -16,4 +16,8 @@ namespace ProjectScripting
 	bool Load(const std::filesystem::path& project, const std::string& configuration,
 		const std::filesystem::path& sdkDirectory, std::string& error);
 	void Unload();
+
+	// Packages the SDK, compiled scripts and an app-local .NET runtime from the installed SDK.
+	bool PackPlayer(const std::filesystem::path& project, const std::filesystem::path& sdkDirectory,
+		const std::filesystem::path& destination, std::string& runtimeVersion, std::string& error);
 }

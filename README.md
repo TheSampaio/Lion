@@ -42,7 +42,7 @@
     <ul>
       <li><strong>Scene editing</strong> — a viewport with <a href="https://github.com/CedricGuillemet/ImGuizmo">ImGuizmo</a> tools, multi-selection, drag-and-drop parenting, undo/redo, and play / pause / step / stop against the live scene.</li>
       <li><strong>Inspector</strong> — every component drawn from its own reflection, with per-field revert, a uniform-scale padlock, and required components pulled in automatically (<code>LION_REQUIRES</code>).</li>
-      <li><strong>Component source workflow</strong> — scaffold a component from the editor’s language picker, compile it, and hot-reload it without restarting. C++ is the current backend; source generation is isolated behind a language boundary so C# can be added without changing scenes, reflection, the Inspector, or component registration.</li>
+      <li><strong>Component source workflow</strong> — scaffold C++ or C# components, compile and reload their catalog, attach them by stable name, and edit reflected fields. C#-only projects use a supplied scene player and export with an app-local .NET runtime. See <a href="Docs/Scripting/csharp-gameplay.md">the C# gameplay guide</a> and the complete <code>Scripting/Examples/StarCollector</code> game.</li>
       <li><strong>Content Browser, Console and Statistics</strong> — create, rename, copy, cut, paste and duplicate project assets; open a scene by double-clicking it or reveal any asset in Explorer; a console that collapses repeats and renders through a clipper; frame, renderer and scene counters.</li>
       <li><strong>Its own window</strong> — a caption the editor draws itself, and <code>.lnproject</code> files registered with Windows on first run, so Explorer shows a project with the engine’s icon and a double-click opens it here — scenes open inside the editor.</li>
     </ul>
@@ -53,6 +53,7 @@
     <table>
       <tr><th>Folder</th><th>Project</th><th>Output</th><th>What it is</th></tr>
       <tr><td><code>Engine/</code></td><td><code>Lion</code></td><td><code>lion-core.dll</code></td><td>The engine.</td></tr>
+      <tr><td><code>Engine/ScenePlayerModule.cpp</code></td><td><code>Player</code></td><td><code>lion-game.dll</code></td><td>Packaged scene-player bootstrap for projects without a custom native entry point.</td></tr>
       <tr><td><code>Editor/</code></td><td><code>Mane</code></td><td><code>Lion.exe</code></td><td>The editor — the face of the engine, so it carries its name.</td></tr>
       <tr><td><code>Launcher/</code></td><td><code>Launcher</code></td><td><code>lion-launcher.exe</code></td><td>Thin executable: loads the game module and runs it.</td></tr>
       <tr><td><code>Sandbox/</code></td><td><code>Game</code></td><td><code>lion-game.dll</code></td><td>The game’s code, as a module. Brickout lives here.</td></tr>

@@ -26,7 +26,7 @@ namespace
 	bool IsPackagedAsset(const std::filesystem::path& path)
 	{
 		const std::filesystem::path extension = path.extension();
-		return extension != ".cpp" && extension != ".h" && extension != ".hpp" && extension != ".lnexport";
+		return extension != ".cpp" && extension != ".h" && extension != ".hpp" && extension != ".cs" && extension != ".lnexport";
 	}
 
 	// Sealing something already sealed would ruin it, so each file is asked which it is. The build copies
