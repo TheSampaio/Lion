@@ -186,3 +186,95 @@ public sealed class BindingLifetimeObserver : Behaviour
 		throw new InvalidOperationException("Cleared scene accepted a lookup.");
 	}
 }
+
+public sealed class GameplayCompanion : Behaviour
+{
+	internal bool Awoke;
+	public override void OnAwake() => Awoke = true;
+}
+
+public sealed class GameplayProbe : Behaviour
+{
+	private Entity _ground;
+	private BoxCollider2D _groundBox = null!;
+	private RigidBody2D _body = null!;
+	private int _updates, _contacts;
+	private long _allocated;
+	public override bool UpdatesWhenPaused => true;
+	public override void OnAwake()
+	{
+		const string resourceText = "Resource café ✓\n";
+		if (Resources.ReadText("Plain.txt") != resourceText || Resources.ReadText("Sealed.txt") != resourceText
+			|| Resources.ReadBytes("Empty.txt").Length != 0) throw new Exception("Plain/sealed resource reading failed.");
+		bool windowRejected = false;
+		try { _ = Window.Size; } catch (InvalidOperationException) { windowRejected = true; }
+		if (!windowRejected || Application.IsEditor) throw new Exception("Headless host contract failed.");
+		var scene = Entity.Scene;
+		scene.Gravity = new Vector2(0, -1);
+		if (scene.Gravity != new Vector2(0, -1)) throw new Exception("Gravity round trip failed.");
+		_ground = scene.CreateEntity("Managed Ground"); _ground.Transform.Position = new Vector2(0, -50);
+		_ground.AddComponent<RigidBody2D>(body => body.Configure(BodyType.Static));
+		_groundBox = _ground.AddComponent<BoxCollider2D>(box => box.Configure(new Vector2(80, 20), friction: 0));
+		_body = Entity.AddComponent<RigidBody2D>(body => body.Configure(BodyType.Dynamic, true));
+		Entity.AddComponent<BoxCollider2D>(box => box.Configure(new Vector2(10), friction: 0));
+		_body.LinearVelocity = new Vector2(0, -120);
+		if (_body.BodyType != BodyType.Dynamic || !_body.IsFixedRotation) throw new Exception("Rigid body configuration failed.");
+		if (!scene.Raycast(new Vector2(0, 30), new Vector2(0, -200), out var hit, Entity) || hit.Entity != _ground || hit.Normal.Y < 0.9f) throw new Exception("Native raycast failed.");
+		var child = scene.CreateEntity("Hierarchy Child"); child.Transform.Position = new Vector2(7, 9); child.SetParent(Entity, false);
+		if (Entity.ChildCount != 1 || Entity.GetChild(0) != child || child.Parent != Entity || child.WorldTransform.Position != new Vector2(7, 9)) throw new Exception("Hierarchy round trip failed.");
+		var combo = child.AddComponent<ComboBox>(value => value.SetField("Options", "First|Second"));
+		combo.SetPrefix("Mode: "); combo.SelectedIndex = 1;
+		if (!child.GetComponent<TextRenderer>()!.Text.Contains("Second")) throw new Exception("Dropdown label was not refreshed.");
+		child.SetEnabled(false);
+		bool initializerRejected = false;
+		try { child.AddComponent<AudioPlayer>(_ => throw new ArgumentException("Intentional initializer failure")); }
+		catch (ArgumentException) { initializerRejected = true; }
+		if (!initializerRejected) throw new Exception("Initializer exception was swallowed.");
+		try { Entity.SetParent(child); throw new Exception("Hierarchy cycle accepted."); } catch (InvalidOperationException) { }
+		var camera = Entity.AddComponent<Camera2D>(); camera.SetField("Offset", new Vector2(4, 5));
+		if (camera.GetField<Vector2>("Offset") != new Vector2(4, 5)) throw new Exception("Vector2 reflection failed.");
+		var text = Entity.AddComponent<TextRenderer>(); text.Text = "Reflection café"; text.SetField("Color", new Vector3(0.2f, 0.4f, 0.6f));
+		if (text.GetField<string>("Text") != text.Text || text.GetField<Vector3>("Color").Y != 0.4f) throw new Exception("Native reflection failed.");
+		text.SetField("Size", 23f); text.SetField("Order", 12); text.SetField("Centered", false);
+		if (text.GetField<float>("Size") != 23 || text.GetField<int>("Order") != 12 || text.GetField<bool>("Centered")) throw new Exception("Reflected scalar type mismatch.");
+		var button = Entity.AddComponent<Button>(); button.IsSelected = true;
+		if (!button.IsSelected) throw new Exception("Button state failed.");
+		button.IsEnabled = false;
+		var check = Entity.AddComponent<CheckBox>(); check.IsChecked = true;
+		if (!check.IsChecked) throw new Exception("Checkbox state failed.");
+		check.IsEnabled = false;
+		var bar = Entity.AddComponent<ProgressBar>(); bar.SetRange(2, 8); bar.Value = 40;
+		if (bar.Value != 8) throw new Exception("Progress range failed.");
+		bar.IsEnabled = false;
+		var audio = Entity.AddComponent<AudioPlayer>(source => source.PlayOnAwake = false); audio.Volume = 0.4f; audio.Pitch = 1.2f;
+		if (audio.IsPlaying || audio.Volume != 0.4f || audio.Pitch != 1.2f) throw new Exception("Audio state failed.");
+		Entity.AddComponent<ParticleEmitter>().EmitAt(Vector2.Zero, 4);
+		var companion = Entity.AddBehaviour<GameplayCompanion>();
+		if (!companion.Awoke || !ReferenceEquals(companion, Entity.GetBehaviour<GameplayCompanion>())) throw new Exception("Dynamic managed behaviour failed.");
+		Entity.RemoveBehaviour<GameplayCompanion>();
+		Transform.Scale = new Vector2(1, 91);
+	}
+	public override void OnUpdate(float deltaTime)
+	{
+		_updates++;
+		if (_updates == 2 && Entity.GetBehaviour<GameplayCompanion>() != null) throw new Exception("Managed removal was not deferred safely.");
+		if (_updates == 2 && Entity.GetChild(0).HasComponent<AudioPlayer>()) throw new Exception("Failed initializer did not roll back at the safe boundary.");
+		if (_updates == 20) _ground.RemoveComponent<BoxCollider2D>();
+		if (_updates == 21 && (_groundBox.IsValid || Entity.Scene.RaycastNormal(new Vector2(0, 50), new Vector2(0, -200), out _, Entity))) throw new Exception("Removed native shape remained queryable.");
+		// Warm and then verify the native velocity/query path without managed view or text allocation.
+		_ = _body.LinearVelocity;
+		_ = Entity.Scene.RaycastNormal(new Vector2(1000, 50), new Vector2(0, -200), out _, Entity);
+		if (_updates == 100) _allocated = GC.GetAllocatedBytesForCurrentThread();
+		if (_updates == 1000 && GC.GetAllocatedBytesForCurrentThread() != _allocated) throw new Exception("Physics hot path allocated.");
+		Transform.Scale = new Vector2(_updates, _contacts > 0 ? 92 : 91);
+	}
+	public override void OnCollision(Entity other)
+	{
+		if (other == _ground) _contacts++;
+	}
+}
+
+public sealed class RenderProbe : Behaviour
+{
+	public override void OnRender() => Transform.Position += Vector2.UnitX;
+}

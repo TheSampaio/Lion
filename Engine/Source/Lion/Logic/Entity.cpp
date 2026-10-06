@@ -291,8 +291,10 @@ namespace Lion
 
 		// Not running a component's callbacks stops it doing anything, but not being anything — a body
 		// left in the physics world would still block whatever ran into it. This is where it lets go.
-		for (const auto& component : mComponents)
+		const size_t count = mComponents.size();
+		for (size_t index = 0; index < count; index++)
 		{
+			Component* component = mComponents[index].get();
 			if (value)
 				component->OnEnable();
 			else
@@ -302,14 +304,16 @@ namespace Lion
 
 	void Entity::Awake()
 	{
-		for (const auto& component : mComponents)
-			component->OnAwake();
+		const size_t count = mComponents.size();
+		for (size_t index = 0; index < count; index++)
+			mComponents[index]->OnAwake();
 	}
 
 	void Entity::Destroy()
 	{
-		for (const auto& component : mComponents)
-			component->OnDestroy();
+		const size_t count = mComponents.size();
+		for (size_t index = 0; index < count; index++)
+			mComponents[index]->OnDestroy();
 
 		CSharpRuntime::InvalidateEntity(*this);
 	}
@@ -319,9 +323,12 @@ namespace Lion
 		if (!IsActive())
 			return;
 
-		for (const auto& component : mComponents)
-			if (component->IsEnabled() && (!paused || component->UpdatesWhenPaused()))
-				component->OnUpdateBegin();
+		const size_t count = mComponents.size();
+		for (size_t index = 0; index < count; index++)
+		{
+			Component* component = mComponents[index].get();
+			if (component->IsEnabled() && (!paused || component->UpdatesWhenPaused())) component->OnUpdateBegin();
+		}
 	}
 
 	void Entity::Update(bool paused)
@@ -329,9 +336,12 @@ namespace Lion
 		if (!IsActive())
 			return;
 
-		for (const auto& component : mComponents)
-			if (component->IsEnabled() && (!paused || component->UpdatesWhenPaused()))
-				component->OnUpdate();
+		const size_t count = mComponents.size();
+		for (size_t index = 0; index < count; index++)
+		{
+			Component* component = mComponents[index].get();
+			if (component->IsEnabled() && (!paused || component->UpdatesWhenPaused())) component->OnUpdate();
+		}
 	}
 
 	void Entity::UpdateEnd(bool paused)
@@ -339,9 +349,12 @@ namespace Lion
 		if (!IsActive())
 			return;
 
-		for (const auto& component : mComponents)
-			if (component->IsEnabled() && (!paused || component->UpdatesWhenPaused()))
-				component->OnUpdateEnd();
+		const size_t count = mComponents.size();
+		for (size_t index = 0; index < count; index++)
+		{
+			Component* component = mComponents[index].get();
+			if (component->IsEnabled() && (!paused || component->UpdatesWhenPaused())) component->OnUpdateEnd();
+		}
 	}
 
 	void Entity::Render()
@@ -351,9 +364,9 @@ namespace Lion
 		if (!IsActive() || !IsVisibleInHierarchy())
 			return;
 
-		for (const auto& component : mComponents)
-			if (component->IsEnabled())
-				component->OnRender();
+		const size_t count = mComponents.size();
+		for (size_t index = 0; index < count; index++)
+			if (mComponents[index]->IsEnabled()) mComponents[index]->OnRender();
 	}
 
 	void Entity::Collide(Entity& other)
@@ -361,8 +374,8 @@ namespace Lion
 		if (!IsActive())
 			return;
 
-		for (const auto& component : mComponents)
-			if (component->IsEnabled())
-				component->OnCollision(other);
+		const size_t count = mComponents.size();
+		for (size_t index = 0; index < count; index++)
+			if (mComponents[index]->IsEnabled()) mComponents[index]->OnCollision(other);
 	}
 }

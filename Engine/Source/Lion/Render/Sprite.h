@@ -43,6 +43,8 @@ namespace Lion
 
         // Returns the sprite's pixel size.
         Size LION_API GetSize();
+		// The dimensions selected by SetRegion, independent of the underlying atlas size.
+		Size LION_API GetRegionSize() const;
 
         // Returns the sprite's pixel center.
         Size LION_API GetCenter();

@@ -115,13 +115,17 @@ namespace Lion
 
 	void Camera2D::Reflect(Reflector& reflector)
 	{
-		// The editor draws this component itself (the limit's four sides collapse into one section), so
-		// this is what a game reads and writes through code rather than what the Inspector shows.
-		// The offset, the limits and the smoothing are drawn by the editor's own Camera 2D section (the
-		// four limit sides fold into one row), so what a reflection consumer sees is the plain switches.
+		// Tools may group these fields visually; other reflection consumers need the same full state.
 		reflector.Field("Zoom", mZoom);
+		reflector.FieldVector2("Offset", mOffset.x, mOffset.y);
 		reflector.Field("Limit", mLimit);
+		reflector.Field("Limit Top", mLimitTop);
+		reflector.Field("Limit Right", mLimitRight);
+		reflector.Field("Limit Bottom", mLimitBottom);
+		reflector.Field("Limit Left", mLimitLeft);
 		reflector.Field("Smooth", mSmooth);
+		reflector.Field("Position Smoothing", mPositionSmoothing);
+		reflector.Field("Rotation Smoothing", mRotationSmoothing);
 	}
 
 	void Camera2D::Serialize(Serializer& serializer) const

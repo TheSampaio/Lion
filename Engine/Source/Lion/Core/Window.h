@@ -21,6 +21,8 @@ namespace Lion
         // and a fresh game window agree before a project makes either one more specific.
         static constexpr uint32 kDefaultViewportWidth = 1280;
         static constexpr uint32 kDefaultViewportHeight = 720;
+		// Safe feature detection for headless hosts and managed diagnostics.
+		static LION_API bool IsAvailable();
 
         // Opaque native window handle (consumed by the graphics backend to build its surface).
         static LION_API void* GetNativeHandle() { return sInstance->mBackend->GetNativeHandle(); }

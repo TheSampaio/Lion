@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <ItemGroup>
     <Compile Remove="StarCollector/**/*.cs" />
+    <Compile Remove="AsterCircuit/**/*.cs" />
     <ProjectReference Include="..\Lion.Engine\Lion.Engine.csproj" />
   </ItemGroup>
 </Project>

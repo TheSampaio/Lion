@@ -3,9 +3,12 @@
 #include <Lion/Scripting/CSharpScript.h>
 #include <Lion/Logic/ComponentRegistry.h>
 #include <Lion/Logic/Reflector.h>
+#include <Lion/Core/Filesystem.h>
+#include <Lion/Core/Vault.h>
 
 #include <chrono>
 #include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <stdexcept>
 #include <thread>
@@ -178,6 +181,30 @@ int main(int argc, const char* argv[])
 		CSharpRuntime::SetGameplayActive(true);
 
 		Reference<Scene> scene = MakeReference<Scene>();
+		const auto renderScene = MakeReference<Scene>();
+		const auto renderProbe = AddScript(renderScene, "Lion.Scripting.Tests.RenderProbe");
+		renderScene->OnRender();
+		Require(renderProbe->GetTransform()->GetPosition().x == 1, "Managed native render callback did not run.");
+		renderProbe->SetVisible(false);
+		renderScene->OnRender();
+		Require(renderProbe->GetTransform()->GetPosition().x == 1, "Hidden owner received managed rendering.");
+		renderScene->Clear();
+		const auto resourceFixture = std::filesystem::absolute(argv[0]).parent_path() / "Resources";
+		std::filesystem::create_directories(resourceFixture);
+		const std::string resourceText = "Resource caf\xC3\xA9 \xE2\x9C\x93\n";
+		std::ofstream(resourceFixture / "Plain.txt", std::ios::binary) << resourceText;
+		std::ofstream(resourceFixture / "Sealed.txt", std::ios::binary) << Vault::Seal(resourceText);
+		std::ofstream(resourceFixture / "Empty.txt", std::ios::binary);
+		SetResourceOverrideDirectory(resourceFixture.string());
+		const auto gameplayScene = MakeReference<Scene>();
+		const auto gameplay = AddScript(gameplayScene, "Lion.Scripting.Tests.GameplayProbe");
+		Require(gameplay->GetTransform()->GetScale().y == 91, "Gameplay API setup failed: " + CSharpRuntime::GetLastError());
+		for (int32 index = 0; index < 1000; index++) gameplayScene->OnUpdate(0.016f);
+		Require(gameplay->GetTransform()->GetScale() == Vector2(1000, 92), "Gameplay physics/lifetime contract failed: " + CSharpRuntime::GetLastError());
+		gameplayScene->OnUpdate(0.016f, true);
+		Require(gameplay->GetTransform()->GetScale().x == 1001, "Paused managed updates did not opt in.");
+		gameplayScene->Clear();
+		SetResourceOverrideDirectory("");
 		Reference<Entity> probe = AddScript(scene, "Lion.Scripting.Tests.LifecycleProbe");
 		Require(probe->GetTransform()->GetPosition() == Vector2(1, 2), CSharpRuntime::GetLastError());
 		scene->OnUpdate(0.25f);

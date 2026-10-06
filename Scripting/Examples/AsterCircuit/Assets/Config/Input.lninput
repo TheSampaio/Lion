@@ -1,0 +1,14 @@
+{"actions":[
+{"name":"MoveLeft","bindings":[{"device":"keyboard","code":65},{"device":"keyboard","code":263},{"device":"gamepad_axis","code":0,"scale":-1},{"device":"gamepad_button","code":14}]},
+{"name":"MoveRight","bindings":[{"device":"keyboard","code":68},{"device":"keyboard","code":262},{"device":"gamepad_axis","code":0},{"device":"gamepad_button","code":12}]},
+{"name":"ClimbUp","bindings":[{"device":"keyboard","code":87},{"device":"keyboard","code":265},{"device":"gamepad_axis","code":1,"scale":-1},{"device":"gamepad_button","code":11}]},
+{"name":"ClimbDown","bindings":[{"device":"keyboard","code":83},{"device":"keyboard","code":264},{"device":"gamepad_axis","code":1},{"device":"gamepad_button","code":13}]},
+{"name":"Jump","bindings":[{"device":"keyboard","code":90},{"device":"keyboard","code":32},{"device":"gamepad_button","code":0}]},
+{"name":"Fire","bindings":[{"device":"keyboard","code":88},{"device":"keyboard","code":74},{"device":"gamepad_button","code":2},{"device":"gamepad_button","code":1}]},
+{"name":"Weapon","bindings":[{"device":"keyboard","code":67},{"device":"gamepad_button","code":5}]},
+{"name":"Pause","bindings":[{"device":"keyboard","code":80},{"device":"gamepad_button","code":7}]},
+{"name":"Confirm","bindings":[{"device":"keyboard","code":257},{"device":"gamepad_button","code":0}]},
+{"name":"Back","bindings":[{"device":"keyboard","code":256},{"device":"gamepad_button","code":6}]},
+{"name":"Next","bindings":[{"device":"keyboard","code":262},{"device":"keyboard","code":264},{"device":"keyboard","code":68},{"device":"keyboard","code":83},{"device":"gamepad_button","code":12},{"device":"gamepad_button","code":13}]},
+{"name":"Previous","bindings":[{"device":"keyboard","code":263},{"device":"keyboard","code":265},{"device":"keyboard","code":65},{"device":"keyboard","code":87},{"device":"gamepad_button","code":14},{"device":"gamepad_button","code":11}]}
+]}

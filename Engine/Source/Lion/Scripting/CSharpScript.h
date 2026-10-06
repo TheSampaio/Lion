@@ -18,6 +18,10 @@ namespace Lion
 		LION_API void OnUpdateBegin() override;
 		LION_API void OnUpdate() override;
 		LION_API void OnUpdateEnd() override;
+		LION_API void OnCollision(Entity& other) override;
+		LION_API void OnRender() override;
+		LION_API bool UpdatesWhenPaused() const override;
+		uint64 GetInstance() const { return mInstance; }
 		LION_API void OnDestroy() override;
 		LION_API void Reflect(Reflector& reflector) override;
 		LION_API void Deserialize(const Serializer& serializer) override;

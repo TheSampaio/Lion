@@ -17,9 +17,10 @@ C#-only game without a developer-owned C++ entry point.
 3. **Player:** implemented managed build output and app-local .NET runtime packaging, mandatory
    licenses and executable-relative startup. Isolated runtime-discovery tests exercise the package;
    these are not a clean-Windows-VM certification of native prerequisites.
-4. **Gameplay coverage:** implemented scene operations, entity lifetime/state, typed SpriteRenderer,
-   TextRenderer and TextureAsset. Physics, audio, particles, additional rendering, UI and Assembly
-   runtime bindings remain future work. Only expose implemented native operations.
+4. **Gameplay coverage:** fourteen native component views, dynamic composition, native physics/contact
+   and raycast queries, audio mixer/sources, widgets, particles, camera/effects, hierarchy, Assembly
+   instantiation and resource reads. Aster Circuit exercises these without authored C++. See
+   [the coverage boundary](csharp-parity.md), not an assertion that every internal C++ type is bound.
 5. **Reload and profiling:** collectible game contexts, state restoration, debugger workflows,
    and benchmarks for the additional bindings.
 
@@ -34,8 +35,8 @@ C#-only game without a developer-owned C++ entry point.
 | Transitions | `SceneManager`: deferred load while updating, serializer loading, Clear on replacement | Scene.Load uses the same deferred path and is restricted to update callbacks |
 | Transform/math | 2D pixel position/scale, scalar rotation in degrees, parent-composed world accessors | Use `System.Numerics.Vector2`; exchange a plain five-float local Transform snapshot, not GLM memory |
 | Input | `Core/Input`: keyboard/mouse/gamepads, resource-relative sealed action map, strength/press/tap | Intern named actions once; reuse the native action evaluation and remapping |
-| Physics | Scene-owned Box2D world, 100 pixels/meter, 60 Hz accumulator, capped substeps, contact callbacks | Bind existing RigidBody2D/collider capabilities later; no public fixed-update hook until the native loop exposes one |
-| Rendering | Sprite batches, orthographic/Camera2D framing, framebuffer picking, native post-processing | SpriteRenderer and TextRenderer are typed views; Camera2D and post-processing remain scene-authored |
+| Physics | Scene-owned Box2D world, 100 pixels/meter, 60 Hz accumulator, capped substeps, contact callbacks | RigidBody2D/collider views and shared native Raycast; no invented fixed-update hook |
+| Rendering | Sprite batches, orthographic/Camera2D framing, framebuffer picking, native post-processing | Native component views; raw GPU ownership stays in the core |
 | Particles | `ParticleComponent`: reserved CPU storage and cached shared textures | Expose the existing emitter, not a second managed particle simulation |
 | Audio | XAudio2, native voice IDs, buses, AudioClip cache, AudioPlayer scene component | Bind the mixer and existing component; do not expose voice pointers |
 | Assets | Named shared texture/audio/font caches; project override and executable fallback; Vault unsealing | Preserve resource-relative identity; introduce typed references when the actual binding needs them |
@@ -47,8 +48,10 @@ C#-only game without a developer-owned C++ entry point.
 
 Two lifecycle constraints matter for later tooling: Scene::Add calls Awake even during authoring,
 and component enable callbacks currently follow direct owner toggles rather than inherited hierarchy
-transitions. Do not silently introduce different C# semantics. Dynamic component mutation during a
-native component-vector iteration also needs a deferred contract before exposing Add/Remove from C#.
+transitions. Do not silently introduce different C# semantics. Callback loops capture their original
+component count and use indexes so appending cannot invalidate an iterator. Managed removal is queued,
+validated against the still-living owner, and applied after physics, before entity removal. Adding
+native traits uses an initializer before native Awake. Creation during Destroy is rejected.
 
 ## Runtime and interop decision
 
@@ -60,8 +63,8 @@ without a managed runtime. Native hosting declarations are private, limited to t
 x64 ABI, and must be checked against the SDK headers when extending the host.
 
 The permanent SDK bootstrap returns unmanaged function pointers and accepts a size/version-tagged
-native function table. Both sides validate the entire v3 table before binding (184-byte native table,
-80-byte managed table on Windows x64). Calls use fixed-width
+native function table. Both sides validate the entire v4 table before binding (240-byte native table,
+96-byte managed table on Windows x64). Calls use fixed-width
 values, UTF-8 at setup/error boundaries, status codes, and plain sequential structs. No STL, GLM,
 JSON, object references, exceptions, or allocator ownership cross this boundary.
 
@@ -89,8 +92,9 @@ References: [Microsoft native hosting guide](https://learn.microsoft.com/en-us/d
 - `Scripting/Tests`: native executable drives real scenes through the hosted runtime; no fake engine.
 
 The public surface includes Behaviour, Entity, Scene, Component, Transform/TransformState,
-Input/InputAction, Time, Log, Application, SpriteRenderer, TextRenderer and TextureAsset.
-Public math uses System.Numerics. Future component wrappers must use Lion's existing names
+Input/InputAction, Time, Log, Application, Window, Resources, AudioMixer, TextureAsset and the
+fourteen native component views listed in [gameplay coverage](csharp-parity.md).
+Public math uses System.Numerics. Component wrappers use Lion's existing names
 (RigidBody2D, Camera2D, AudioPlayer, etc.), not invented Unity component types.
 
 ## Ownership, lifecycle, and threading
@@ -118,8 +122,9 @@ runtime tokens. Destroy callbacks run before owner invalidation so cleanup can s
 
 UpdateBegin -> Update -> UpdateEnd occurs before native physics, followed by deferred removals.
 Disabled entities/ancestors and disabled components suppress updates through the existing native
-dispatch. Hidden entities still update. Pause follows native Component behavior. No OnFixedUpdate,
-OnStart, trigger-end event, or physics query is invented in this increment. Scene delta time is
+dispatch. Hidden entities still update. UpdatesWhenPaused opts managed controllers into paused updates.
+Native contact-begin calls OnCollision; native rendering calls OnRender. No OnFixedUpdate,
+OnStart or trigger-end event is invented. Scene delta time is
 passed explicitly to managed callbacks; Time.DeltaTime is callback-scoped.
 
 All runtime and gameplay operations are main-thread-only. Native callbacks reject another thread
@@ -205,4 +210,6 @@ incompatible archive recovery and generated-project builds. The third increment 
 Awake attachment, deferred destruction, scene/trait invalidation, UTF-8 state, allocation-free trait
 queries and execution of exported scripts with app-local framework-path assertions. The UI fixture
 is under `Scripting/Tests/EditorProject`; run `Scripts/VerifyCSharpEditor.ps1` to create a Build-local copy.
-Proven assembly collection and broader native bindings still belong to subsequent increments.
+The fourth increment verifies dynamic native traits and managed behaviours, deferred removal,
+initializer rollback, hierarchy/world transforms, physical contacts/raycast, widget state and render
+callbacks. Proven assembly collection and the explicit coverage gaps remain subsequent work.

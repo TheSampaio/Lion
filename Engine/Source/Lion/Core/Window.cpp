@@ -5,6 +5,7 @@
 
 namespace Lion
 {
+    bool Window::IsAvailable() { return sInstance && sInstance->mBackend && sInstance->mBackend->GetNativeHandle(); }
     Window* Window::sInstance = nullptr;
 
     void Window::New()

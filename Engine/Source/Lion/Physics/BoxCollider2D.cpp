@@ -54,6 +54,12 @@ namespace Lion
 		mShapeId = b2CreatePolygonShape(body->EnsureBody(), &shapeDef, &box);
 	}
 
+	void BoxCollider2D::OnDestroy()
+	{
+		if (b2Shape_IsValid(mShapeId)) b2DestroyShape(mShapeId, true);
+		mShapeId = {};
+	}
+
 	void BoxCollider2D::Serialize(Serializer& serializer) const
 	{
 		serializer.Write("width", mWidth);

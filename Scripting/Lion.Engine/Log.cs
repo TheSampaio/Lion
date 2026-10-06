@@ -6,6 +6,10 @@ namespace Lion.Engine;
 /// <remarks>Engine-thread-only. Check an enabled property before constructing expensive messages.</remarks>
 public static class Log
 {
+	/// <summary>Reports trace diagnostics when the native verbosity permits them.</summary>
+	public static void Trace(string message) => NativeApi.WriteLog(4, message);
+	/// <summary>Reports success when the native verbosity permits it.</summary>
+	public static void Success(string message) => NativeApi.WriteLog(3, message);
 	/// <summary>Whether an informational message would be retained by the current native verbosity.</summary>
 	public static bool IsInfoEnabled => NativeApi.IsLogEnabled(2);
 	/// <summary>Whether a warning would be retained by the current native verbosity.</summary>

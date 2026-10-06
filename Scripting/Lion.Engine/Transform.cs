@@ -26,13 +26,14 @@ public struct TransformState
 public sealed class Transform
 {
 	private readonly ulong _entityHandle;
-	internal Transform(ulong entityHandle) => _entityHandle = entityHandle;
+	private readonly bool _world;
+	internal Transform(ulong entityHandle, bool world = false) { _entityHandle = entityHandle; _world = world; }
 
 	/// <summary>Reads or writes all local Transform fields in a single call to the native core.</summary>
 	public TransformState State
 	{
-		get => NativeApi.GetTransform(_entityHandle);
-		set => NativeApi.SetTransform(_entityHandle, in value);
+		get => _world ? NativeApi.GetWorldTransform(_entityHandle) : NativeApi.GetTransform(_entityHandle);
+		set { if (_world) NativeApi.SetWorldTransform(_entityHandle, value); else NativeApi.SetTransform(_entityHandle, in value); }
 	}
 
 	/// <summary>Local pixel position relative to the parent; positive Y points upward.</summary>

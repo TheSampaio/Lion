@@ -30,16 +30,23 @@ internal unsafe struct NativeFunctions
 	internal delegate* unmanaged[Cdecl]<ulong, int, int, int, int> SetComponentState;
 	internal delegate* unmanaged[Cdecl]<ulong, byte*, int> RequestScene;
 	internal delegate* unmanaged[Cdecl]<int> Quit;
+	internal delegate* unmanaged[Cdecl]<ulong, int, int, float*, int> ComponentCommand;
+	internal delegate* unmanaged[Cdecl]<ulong, int, byte*, PropertyValue*, byte*, int, int*, int, int> ComponentField;
+	internal delegate* unmanaged[Cdecl]<ulong, int, ulong*, TransformState*, int> Hierarchy;
+	internal delegate* unmanaged[Cdecl]<ulong, int, ulong*, float*, byte*, int> SceneCommand;
+	internal delegate* unmanaged[Cdecl]<ulong, int, int, int, float*, int> InputQuery;
+	internal delegate* unmanaged[Cdecl]<ulong, byte*, int, ulong*, int> Behaviour;
+	internal delegate* unmanaged[Cdecl]<int, float*, byte*, int, int*, int> HostCommand;
 }
 
-internal static unsafe class NativeApi
+internal static unsafe partial class NativeApi
 {
 	private static NativeFunctions _functions;
 	private static int _threadId;
 
 	internal static bool Bind(NativeFunctions* functions)
 	{
-		if (functions == null || functions->Version != 3 || functions->Size != sizeof(NativeFunctions)
+		if (functions == null || functions->Version != 4 || functions->Size != sizeof(NativeFunctions)
 			|| functions->ValidateEntity == null || functions->GetTransform == null
 			|| functions->SetTransform == null || functions->ResolveAction == null
 			|| functions->ReadAction == null || functions->IsLogEnabled == null
@@ -49,7 +56,8 @@ internal static unsafe class NativeApi
 			|| functions->GetEntityState == null || functions->SetEntityState == null
 			|| functions->ReadText == null || functions->WriteText == null || functions->HasComponent == null
 			|| functions->GetComponentState == null || functions->SetComponentState == null
-			|| functions->RequestScene == null || functions->Quit == null)
+			|| functions->RequestScene == null || functions->Quit == null || functions->ComponentCommand == null
+			|| functions->ComponentField == null || functions->Hierarchy == null || functions->SceneCommand == null || functions->InputQuery == null || functions->Behaviour == null || functions->HostCommand == null)
 		{
 			return false;
 		}
@@ -167,6 +175,7 @@ internal static unsafe class NativeApi
 	internal static bool IsSceneValid(ulong handle) { CheckThread(); return _functions.ValidateScene(handle) == 0; }
 	internal static Entity SceneEntity(ulong handle, string name, bool create)
 	{
+		if (create && ScriptRuntime.CurrentCallback == 6) throw new InvalidOperationException("Cannot create entities during destruction.");
 		CheckThread();
 		CheckString(name);
 		fixed (byte* text = Encoding.UTF8.GetBytes(name + '\0'))
@@ -230,7 +239,7 @@ internal static unsafe class NativeApi
 	internal static void RequestScene(ulong handle, string path)
 	{
 		CheckThread();
-		if (ScriptRuntime.CurrentCallback is < 3 or > 5)
+		if (ScriptRuntime.CurrentCallback is not (3 or 4 or 5 or 7))
 		{
 			throw new InvalidOperationException("Request scene changes from an update callback, never during construction or destruction.");
 		}

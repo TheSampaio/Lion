@@ -5,6 +5,8 @@ Brickout. Mane can now scaffold, compile, attach and configure C# scripts, seria
 and run them in Play mode. C#-only projects use a packaged scene player and export with an app-local
 .NET runtime. The complete [Star Collector](Examples/StarCollector/README.md) example includes
 menu, movement, pickups, HUD, win/loss, restart and quit without authored C++.
+The larger [Aster Circuit](Examples/AsterCircuit/README.md) proof adds three original themed stages,
+bosses, weapons, checkpoints, native physics/audio/UI/particles and local saved progress, all in C#.
 See [the authoring guide](../Docs/Scripting/csharp-authoring.md),
 [the architecture and roadmap](../Docs/Scripting/csharp-architecture.md)
 and [API conventions](../Docs/Scripting/csharp-api-guidelines.md). The

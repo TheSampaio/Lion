@@ -5,6 +5,11 @@ gameplay and scene-authored native traits: menu, movement, pickups, countdown, H
 restart and quit. Enter/Space starts or retries, arrows/WASD move, and Escape quits or stops Play.
 The existing Brickout Sandbox remains native and is not migrated.
 
+For a larger gameplay proof, open [Aster Circuit](../../Scripting/Examples/AsterCircuit/README.md).
+It is an original action platformer with three themed stages, bosses, weapon unlocks, checkpoints,
+local progress, native physics, UI, particles and original synthesized music. All client gameplay
+is C#. The [coverage reference](csharp-parity.md) distinguishes supported gameplay from core internals.
+
 Automatic managed startup belongs to the supplied scene player. A developer-owned native entry
 point retains ownership of hosting, scene cleanup and shutdown; it must initialize CSharpRuntime
 explicitly if it also uses C# gameplay. Packaging managed files alone does not change a custom loop.
@@ -34,14 +39,24 @@ All generated files and local export verification artifacts belong under `Build/
 | Operation | Ownership and timing |
 | --- | --- |
 | `Entity.Scene`, `Scene.FindEntity(name)` | Native scene, exact case-sensitive first match. Cache references outside update loops. All authored entities are attached before any Awake runs. |
-| `Scene.CreateEntity(name)` | Native-owned bare entity; returns a lifetime-validated Entity. Does not attach arbitrary components. |
+| `Scene.CreateEntity(name)` | Native-owned bare entity; compose it with AddComponent/AddBehaviour. |
 | `Entity.Destroy()` | Idempotent deferred subtree removal. The reference stays valid until the native scene completes removal. |
 | `Entity.Name`, `IsEnabled`, `IsVisible`, `IsActive` | Native state; hidden entities still update. IsActive follows enabled ancestry. |
-| `HasComponent<T>()`, `GetComponent<T>()` | Supported native views are SpriteRenderer and TextRenderer. Trait queries allocate no managed objects; cache views returned by GetComponent. Not a managed Behaviour lookup API. |
+| `HasComponent<T>()`, `GetComponent<T>()` | Fourteen native views; existence checks allocate no wrappers. Cache GetComponent views. Managed scripts use GetBehaviour<T>. |
+| `AddComponent<T>(initializer)`, `RemoveComponent<T>()` | Configure before Awake; removal completes after physics. Adding the same native trait twice is rejected. |
+| `AddBehaviour<T>()`, `GetBehaviour<T>()`, `RemoveBehaviour<T>()` | Registered managed scripts remain native component adapters; dynamic addition runs Awake immediately. |
+| `Parent`, `GetChild`, `SetParent`, `WorldTransform` | Native hierarchy, validated same-scene parenting and cycle rejection. |
+| `Scene.Instantiate(path)` | Native Assembly reconstruction; complete hierarchy attaches before Awake. |
+| `RigidBody2D`, colliders, `Scene.Raycast` | Native simulation and pixel-space queries; velocity/ground-normal paths allocate no managed views. |
+| `AudioPlayer`, `Scene.Audio` | Native source playback, voice IDs, mixer buses. Stop explicit mixer voices; scene-owned sources clean up automatically. |
+| `Button`, `CheckBox`, `ComboBox`, `ProgressBar`, `WidgetAnchor` | Native widget state and reflected style/configuration. |
+| `Camera2D`, `PostProcessing`, `ParticleEmitter` | Native framing/effects/emission, not managed replacements. |
 | `SpriteRenderer.Texture`, `Order`, `FlipX`, `FlipY` | Forward to the current native trait. TextureAsset is a resource-relative identity; changing textures can perform asset loading. |
 | `TextRenderer.Text`, component `IsEnabled` | Native bitmap text/trait state. String reads and changes allocate/encode; avoid rewriting an unchanged HUD every frame. |
-| `Scene.Load(path)` | Active-scene update callbacks only. Resource-relative forward-slash path. Queued through SceneManager, never destroys the executing scene mid-callback. |
+| `Scene.Load(path)` | Active-scene update/contact callbacks only. Resource-relative forward-slash path; deferred through SceneManager. |
 | `Application.RequestQuit()` | Closes the standalone game or requests Mane to Stop Play. |
+| `Resources.ReadText/ReadBytes` | Authored override/executable fallback, native Vault unsealing, maximum 64 MiB decoded. Loading path, not per-frame. |
+| `Window` | Standalone title, dimensions, icon, clear color and state. Mutations are rejected in Mane Play. |
 
 All engine access is main-thread-only. Default/stale Entity or Scene values are invalid; guarded
 operations throw InvalidOperationException. Clear and scene transitions invalidate old scene and
@@ -53,13 +68,24 @@ The SDK caches discovery metadata and overridden callback masks. Transform acces
 cached input and native trait existence checks allocate no managed objects after warmup. Name lookup,
 entity creation, text/texture changes and user code are not promised allocation-free.
 
-## Scope and next increments
+## Configuration and hot paths
 
-This supports a complete small scene-authored game, not every native engine capability from C#.
-Physics/contact/query APIs, audio playback, UI events, particles, hierarchy editing, runtime Assembly
-instantiation, arbitrary component attachment and richer editable references/collections are not yet
-bound. Native versions can still be authored in scenes where their existing behavior is sufficient.
-Do not use an invented API or reflection into interop internals to work around those boundaries.
+Each native view exposes `GetField<T>(name)` / `SetField<T>(name, value)` using the native Reflect()
+schema, with float, int, bool, string, Vector2 and Vector3 values. `SetAssetField` validates portable
+resource-relative identities. Use these for setup, not per-frame animation: they encode field names
+and box values. Prefer the strongly typed live operations for audio, sprites, body motion and widgets.
+Body.Configure sets initial settings, before Awake; collider.Configure plus RefreshShape applies
+live shape changes. Generic reflection is not a substitute for a setter's asset-cache side effects.
+
+Native actions are zero-to-one strengths. Compose a signed axis as Right.Strength - Left.Strength;
+use opposite-signed gamepad-axis bindings on the two actions. InputAction.WasPressed fires on a
+press edge. The older raw native GetKeyTap fires on release after a press; it is not the same event.
+Behaviour.OnCollision receives native contact-begin ownership, OnRender participates in the native
+render pass, and UpdatesWhenPaused opts a controller into paused updates.
+
+Richer editable references/collections, trigger-end callbacks, state-preserving script reload and
+runtime input-map rebinding are not exposed yet. Core-only renderer buffers, OS/editor integration
+and native module ownership are intentionally not public gameplay APIs. See [coverage](csharp-parity.md).
 
 `Scripts/VerifyCSharp.ps1` tests native ownership, lifecycle, serialization, thread misuse, exceptions,
 UTF-8 bindings and allocation. `Scripts/VerifyCSharpEditor.ps1` builds/exports a fresh fixture and runs

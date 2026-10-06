@@ -35,6 +35,9 @@ namespace Lion
 	void CSharpScript::OnUpdateBegin() { Dispatch(3); }
 	void CSharpScript::OnUpdate() { Dispatch(4); }
 	void CSharpScript::OnUpdateEnd() { Dispatch(5); }
+	void CSharpScript::OnCollision(Entity& other) { if ((mCallbacks & (1u << 6)) != 0) CSharpRuntime::Collide(mInstance, other); }
+	void CSharpScript::OnRender() { Dispatch(8); }
+	bool CSharpScript::UpdatesWhenPaused() const { return CSharpRuntime::UpdatesWhenPaused(mInstance); }
 
 	void CSharpScript::Dispatch(int32 callback)
 	{

@@ -32,6 +32,14 @@ public abstract class Behaviour
 	/// <param name="deltaTime">The scene timestep in seconds.</param>
 	public virtual void OnUpdateEnd(float deltaTime) { }
 
+	/// <summary>Receives the native begin-contact event. Both owners need a native collider.</summary>
+	public virtual void OnCollision(Entity other) { }
+	/// <summary>Runs in the native render pass for a visible active owner.</summary>
+	public virtual void OnRender() { }
+
+	/// <summary>Opts this behaviour into updates while Scene.IsPaused is true.</summary>
+	public virtual bool UpdatesWhenPaused => false;
+
 	/// <summary>Releases gameplay resources before the native owner reference is invalidated.</summary>
 	/// <remarks>This also runs for a faulted instance. Do not depend on other entities surviving scene teardown.</remarks>
 	public virtual void OnDestroy() { }

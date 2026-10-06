@@ -1,0 +1,1 @@
+{"gravity":[0,0],"entities":[{"name":"Front End","components":[{"type":"AsterCircuit.FrontEnd","_screen":0}]},{"name":"Camera","components":[{"type":"Camera2D"}]}]}

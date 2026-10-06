@@ -119,8 +119,7 @@ namespace Lion
 		Reference<Entity> instance = tree.front();
 		instance->SetAssemblyPath(std::filesystem::path(assemblyPath).generic_string());
 
-		for (const auto& entity : tree)
-			scene->Add(entity);
+		scene->AddBatch(tree);
 
 		return instance;
 	}

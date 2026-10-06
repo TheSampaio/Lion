@@ -21,6 +21,7 @@ namespace Lion
 		LION_REQUIRES("RigidBody2D");
 
 		void OnAwake() override;
+		void OnDestroy() override;
 		void Serialize(Serializer& serializer) const override;
 		void Deserialize(const Serializer& serializer) override;
 

@@ -21,6 +21,8 @@ internal unsafe struct ManagedFunctions
 	internal delegate* unmanaged[Cdecl]<byte*, void*, delegate* unmanaged[Cdecl]<void*, byte*, FieldValue*, int>, int> Describe;
 	internal delegate* unmanaged[Cdecl]<ulong, void*, delegate* unmanaged[Cdecl]<void*, byte*, FieldValue*, int>, int> ReadFields;
 	internal delegate* unmanaged[Cdecl]<ulong, byte*, FieldValue*, int> WriteField;
+	internal delegate* unmanaged[Cdecl]<ulong, ulong, int> Collide;
+	internal delegate* unmanaged[Cdecl]<ulong, int> PausedUpdates;
 }
 
 internal static unsafe class ScriptRuntime
@@ -57,13 +59,14 @@ internal static unsafe class ScriptRuntime
 	private static readonly Dictionary<ulong, Instance> Instances = [];
 	private static readonly Dictionary<string, GameContext> Contexts = new(StringComparer.OrdinalIgnoreCase);
 	private static ulong _nextInstance;
+	internal static T? GetBehaviour<T>(ulong id) where T : Behaviour => Instances.TryGetValue(id, out var instance) ? instance.Behaviour as T : null;
 
 	[UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
 	public static int Initialize(NativeFunctions* native, ManagedFunctions* managed)
 	{
 		try
 		{
-			if (managed == null || managed->Version != 3 || managed->Size != sizeof(ManagedFunctions)
+			if (managed == null || managed->Version != 4 || managed->Size != sizeof(ManagedFunctions)
 				|| !NativeApi.Bind(native))
 			{
 				return 1;
@@ -77,6 +80,8 @@ internal static unsafe class ScriptRuntime
 			managed->Describe = &Describe;
 			managed->ReadFields = &ReadFields;
 			managed->WriteField = &WriteField;
+			managed->Collide = &Collide;
+			managed->PausedUpdates = &PausedUpdates;
 			return 0;
 		}
 		catch { return 1; }
@@ -124,6 +129,8 @@ internal static unsafe class ScriptRuntime
 					var method = type.GetMethod(CallbackNames[index], index < 3 ? Type.EmptyTypes : [typeof(float)]);
 					if (method?.DeclaringType != typeof(Behaviour)) { callbacks |= 1u << index; }
 				}
+				if (type.GetMethod(nameof(Behaviour.OnCollision), [typeof(Entity)])?.DeclaringType != typeof(Behaviour)) callbacks |= 1u << 6;
+				if (type.GetMethod(nameof(Behaviour.OnRender), Type.EmptyTypes)?.DeclaringType != typeof(Behaviour)) callbacks |= 1u << 8;
 				discovered.Add(name, new ScriptType(Expression.Lambda<Func<Behaviour>>(Expression.New(constructor)).Compile(), callbacks,
 					FieldMetadata.Discover(type)));
 			}
@@ -246,6 +253,7 @@ internal static unsafe class ScriptRuntime
 				case 3: instance.Behaviour.OnUpdateBegin(deltaTime); break;
 				case 4: instance.Behaviour.OnUpdate(deltaTime); break;
 				case 5: instance.Behaviour.OnUpdateEnd(deltaTime); break;
+				case 8: instance.Behaviour.OnRender(); break;
 				default: throw new ArgumentOutOfRangeException(nameof(callback));
 			}
 			return 0;
@@ -264,6 +272,35 @@ internal static unsafe class ScriptRuntime
 		0 => "OnAwake", 1 => "OnEnable", 2 => "OnDisable", 3 => "OnUpdateBegin",
 		4 => "OnUpdate", 5 => "OnUpdateEnd", _ => "Unknown callback"
 	};
+
+	[UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+	private static int Collide(ulong id, ulong other)
+	{
+		int previous = CurrentCallback;
+		Instance? instance = null;
+		try
+		{
+			NativeApi.CheckThread();
+			if (!Instances.TryGetValue(id, out instance) || instance.Faulted) return 1;
+			NativeApi.CheckStatus(NativeStatus(instance.Behaviour.Entity.Handle));
+			CurrentCallback = 7;
+			instance.Behaviour.OnCollision(new Entity(other));
+			return 0;
+		}
+		catch (Exception exception)
+		{
+			if (instance != null) instance.Faulted = true;
+			return Report(instance?.Behaviour.Entity.Handle ?? 0, "OnCollision", exception);
+		}
+		finally { CurrentCallback = previous; }
+	}
+
+	[UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+	private static int PausedUpdates(ulong id)
+	{
+		try { NativeApi.CheckThread(); return Instances.TryGetValue(id, out var instance) && !instance.Faulted && instance.Behaviour.UpdatesWhenPaused ? 1 : 0; }
+		catch (Exception exception) { Report(0, "UpdatesWhenPaused", exception); return 0; }
+	}
 
 	[UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
 	private static int Destroy(ulong id)

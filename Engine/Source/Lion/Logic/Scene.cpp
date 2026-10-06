@@ -138,6 +138,7 @@ namespace Lion
         if (!paused)
             mPhysicsWorld->Step(deltaTime);
 
+        CSharpRuntime::FlushComponentRemovals();
         FlushPendingRemoval();
     }
 

@@ -56,6 +56,12 @@ namespace Lion
 		mShapeId = b2CreateCircleShape(body->EnsureBody(), &shapeDef, &circle);
 	}
 
+	void CircleCollider2D::OnDestroy()
+	{
+		if (b2Shape_IsValid(mShapeId)) b2DestroyShape(mShapeId, true);
+		mShapeId = {};
+	}
+
 	void CircleCollider2D::Serialize(Serializer& serializer) const
 	{
 		serializer.Write("radius", mRadius);

@@ -68,6 +68,8 @@ namespace Lion
         return mTexture->GetSize();
     }
 
+    Size Sprite::GetRegionSize() const { return mSpriteInfo->size; }
+
     Size Sprite::GetCenter()
     {
         return mTexture->GetCenter();

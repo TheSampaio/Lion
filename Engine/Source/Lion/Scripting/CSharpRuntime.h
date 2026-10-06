@@ -40,6 +40,9 @@ namespace Lion
 
 		static uint64 CreateInstance(Entity& entity, const std::string& typeName, uint32& callbacks);
 		static void Invoke(uint64 instance, int32 callback, float32 deltaTime = 0.0f);
+		static void Collide(uint64 instance, Entity& other);
+		static bool UpdatesWhenPaused(uint64 instance);
+		static void FlushComponentRemovals();
 		static void DestroyInstance(uint64 instance);
 		static void InvalidateEntity(Entity& entity);
 		static void InvalidateScene(Scene& scene);
