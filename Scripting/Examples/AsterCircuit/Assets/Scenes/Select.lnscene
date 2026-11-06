@@ -1,0 +1,1 @@
+{"gravity":[0,0],"entities":[{"name":"Stage Select","components":[{"type":"AsterCircuit.FrontEnd","_screen":1}]},{"name":"Camera","components":[{"type":"Camera2D"}]}]}

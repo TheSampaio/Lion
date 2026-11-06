@@ -131,18 +131,6 @@ namespace Lion
 
 		case LogLevel::Fatal:
 			spdlog::critical(message);
-
-			// Halting on a fatal is a development aid: it only makes sense while someone is watching
-			// the log, which is exactly what the verbosity says.
-#if LN_PLATFORM_WIN
-			system("PAUSE");
-
-#else
-			std::puts("Press Enter to continue . . .");
-			std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
-
-#endif
-
 			break;
 
 		case LogLevel::Success:

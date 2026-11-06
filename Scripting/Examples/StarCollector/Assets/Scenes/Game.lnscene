@@ -1,0 +1,12 @@
+{
+  "gravity": [0, 0],
+  "entities": [
+    {"name":"Game Controller","transform":{"position":[0,300],"rotation":0,"scale":[1,1]},"components":[{"type":"TextRenderer","Font":"Fonts/Arcade.lnfont","Size":22},{"type":"StarCollector.GameController","RoundSeconds":20}]},
+    {"name":"Player","transform":{"position":[-320,0],"rotation":0,"scale":[0.8,0.8]},"components":[{"type":"SpriteRenderer","texture":"Sprites/Player.png"},{"type":"StarCollector.PlayerController","Speed":320}]},
+    {"name":"Coin 1","transform":{"position":[-160,0],"rotation":0,"scale":[0.6,0.6]},"components":[{"type":"SpriteRenderer","texture":"Sprites/Star.png"}]},
+    {"name":"Coin 2","transform":{"position":[0,0],"rotation":0,"scale":[0.6,0.6]},"components":[{"type":"SpriteRenderer","texture":"Sprites/Star.png"}]},
+    {"name":"Coin 3","transform":{"position":[160,0],"rotation":0,"scale":[0.6,0.6]},"components":[{"type":"SpriteRenderer","texture":"Sprites/Star.png"}]},
+    {"name":"Instructions","transform":{"position":[0,-300],"rotation":0,"scale":[1,1]},"components":[{"type":"TextRenderer","Text":"WASD / ARROWS TO MOVE   ESC TO QUIT","Font":"Fonts/Arcade.lnfont","Size":16}]},
+    {"name":"Camera","components":[{"type":"Camera2D"}]}
+  ]
+}

@@ -37,6 +37,7 @@ namespace Lion
 	private:
 		AudioPlayback Playback() const;
 		std::string PersistenceKey() const;
+		bool Play(bool preserveAcrossReload);
 
 		std::string mClipPath;
 		std::string mBus = "SFX";

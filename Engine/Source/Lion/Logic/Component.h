@@ -56,6 +56,9 @@ namespace Lion
 		// Called every frame, after the main update pass.
 		virtual void OnUpdateEnd() {}
 
+		// Menus that own a paused scene can opt into updates while gameplay and physics are frozen.
+		virtual bool UpdatesWhenPaused() const { return false; }
+
 		// Called every frame, during the render pass.
 		virtual void OnRender() {}
 

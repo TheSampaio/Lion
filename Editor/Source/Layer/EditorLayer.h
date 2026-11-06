@@ -1,6 +1,7 @@
 #pragma once
 
 #include <filesystem>
+#include <functional>
 #include <future>
 #include <optional>
 #include <unordered_map>
@@ -25,6 +26,7 @@ public:
 	void OnUpdate() override;
 	void OnRender() override;
 	void OnDetach() override;
+	void OnEvent(Lion::Event& event) override;
 
 private:
 	// Rebindable editor shortcuts. Each action holds a key plus modifier flags; the Shortcuts panel
@@ -47,6 +49,7 @@ private:
 		OpenProjectSettings,
 		CutSelection, NewFolder,
 		ViewLit, ViewUnlit, ViewWireframe,
+		TogglePlaySelection,
 		Count
 	};
 
@@ -132,6 +135,7 @@ private:
 	bool mConsoleShowInfo = true;
 
 	bool mConsoleCollapse = true;      // Unity's: identical lines become one line with a count.
+	bool mConsoleClearOnPlay = true;
 
 	// Console rendering: only the entries passing the filters are indexed here, and a list clipper
 	// draws just the visible slice, so a full history costs the same as a screenful. When collapsed, the
@@ -143,6 +147,7 @@ private:
 	bool mPlaying = false;
 	bool mPaused = false;        // In play mode but the simulation is halted.
 	bool mStepFrame = false;     // Advance the paused simulation by exactly one frame, then halt again.
+	bool mPlaySelectionMode = false; // Explicit opt-in: game UI clicks never edit the scene by accident.
 	bool mShowColliders = false;  // Collider outlines are a debug view, off until enabled in Settings.
 	bool mRenameFocus = false;   // Request keyboard focus on the inline rename field for one frame.
 	bool mScaleUniform = false;  // The Transform's scale padlock: the three axes move together.
@@ -187,7 +192,8 @@ private:
 	bool mAssemblyDirty = false;                    // Authored hierarchy differs from the last explicit save.
 	std::string mPendingAssemblyPath;               // Opened after panels finish drawing; hierarchy iteration stays valid.
 	bool mPendingAssemblyReturn = false;             // Restored after panels finish drawing for the same reason.
-	bool mOpenUnsavedAssemblyPopup = false;          // Returning never discards or applies authored changes silently.
+	bool mOpenUnsavedDocumentPopup = false;
+	std::function<void()> mPendingDocumentAction;
 	std::string mPendingScenePath;                  // Loaded after the selected project's module is ready.
 	glm::vec2 mViewportSize{ 0.0f, 0.0f };
 	Lion::Vector mViewportMenuPosition;   // Where the mouse was when the viewport's context menu opened.
@@ -271,13 +277,15 @@ private:
 	std::string mRenamingAsset;                // Relative path of the entry being renamed in place.
 	char mAssetRenameBuffer[128] = {};
 	bool mAssetRenameFocus = false;
-	std::string mAssetToDelete;                // Relative path awaiting the confirmation modal.
+	std::vector<std::string> mAssetsToDelete;  // Relative paths awaiting the confirmation modal.
 	std::string mSelectedAsset;                // Relative path selected in the Content Browser.
-	std::string mAssetClipboard;               // Relative source path copied or cut in the Content Browser.
+	std::vector<std::string> mAssetSelection;
+	std::vector<std::string> mAssetClipboard;  // Relative source paths copied or cut in the Content Browser.
 	bool mAssetClipboardCut = false;
 	bool mShowAssetExtensions = false;         // Content Browser defaults to concise, extension-free labels.
 	bool mProjectFocused = false;               // Routes shared editing shortcuts to the Content Browser.
 	bool mHierarchyFocused = false;             // Routes folder creation to the Scene Hierarchy.
+	bool mViewportFocused = false;              // Routes contextual display shortcuts to the viewport.
 
 	// The project's named input actions. They live under Assets/Config so the same resource-relative file
 	// is copied into a standalone build and loaded by the engine before the first game layer is created.
@@ -409,6 +417,10 @@ private:
 
 	void CreateAssetFolder();
 	void BeginRenameAsset(const std::string& assetPath);
+	void SetAssetSelection(const std::string& assetPath);
+	void AddToAssetSelection(const std::string& assetPath);
+	void SelectAssetRangeTo(const std::string& assetPath);
+	bool IsAssetSelected(const std::string& assetPath) const;
 	void CopyAsset(bool cut);
 	void PasteAsset();
 	void DuplicateAsset();
@@ -475,8 +487,12 @@ private:
 	bool ReturnFromAssembly();
 	bool SaveAssembly();
 	void SaveAssemblyAs();
-	void DrawUnsavedAssemblyPopup();
-	void CreateAssembly(const Lion::Reference<Lion::Entity>& entity = nullptr);
+	void DrawUnsavedDocumentPopup();
+	bool ConfirmDocumentChange(std::function<void()> action);
+	bool IsDocumentDirty() const;
+	void RequestEditorClose();
+	bool OnWindowClose(const Lion::EventWindowClose& event);
+	void CreateAssembly(const Lion::Reference<Lion::Entity>& entity = nullptr, bool widget = false);
 	Lion::Reference<Lion::Entity> InstantiateAssembly(const std::string& assetPath,
 		Lion::Entity* parent = nullptr, const Lion::Vector* position = nullptr);
 	void ResetAssemblyTracking();
@@ -618,6 +634,7 @@ private:
 		void Field(const Lion::char8* name, bool& value) override;
 		void Field(const Lion::char8* name, std::string& value) override;
 		void Field(const Lion::char8* name, Lion::Vector& value) override;
+		void FieldVector2(const Lion::char8* name, Lion::float32& x, Lion::float32& y) override;
 		void FieldAsset(const Lion::char8* name, std::string& path) override;
 
 		bool DrewAnything() const { return mDrew; }

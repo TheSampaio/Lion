@@ -23,9 +23,11 @@ namespace Lion
 		void PollEvents() override;
 		bool ShouldClose() const override;
 		void RequestClose() override;
+		void CancelClose() override;
 
 		void SetDisplayTitle(const std::string& title) override;
 		void SetResizable(bool enable) override;
+		void SetSize(uint32 width, uint32 height) override;
 		void SetIcon(const std::string& filePath) override;
 
 		void Minimize() override;
@@ -35,6 +37,7 @@ namespace Lion
 		bool IsKeyPressed(int32 keyCode) const override;
 		bool IsKeyReleased(int32 keyCode) const override;
 		bool IsMouseButtonPressed(int32 button) const override;
+		Vector2 GetPointerPosition() const override;
 		bool IsGamepadConnected(int32 gamepad) const override;
 		std::string GetGamepadName(int32 gamepad) const override;
 		bool IsGamepadButtonPressed(int32 gamepad, int32 button) const override;

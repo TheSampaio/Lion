@@ -10,17 +10,22 @@
 #include <Lion/Core/Log.h>
 #include <Lion/Core/Stack.h>
 #include <Lion/Core/Window.h>
+#include <Lion/Core/Version.h>
 
 #include <Lion/Signal/Event.h>
 #include <Lion/Signal/EventDispatcher.h>
 #include <Lion/Signal/EventWindow.h>
 
 #include <Lion/Render/Graphics.h>
+#include <Lion/Render/CameraOrthographic.h>
 #include <Lion/Render/Renderer.h>
+#include <Lion/Render/Sprite.h>
+#include <Lion/Render/Texture.h>
 
 namespace Lion
 {
 	ApplicationKind Application::sKind = ApplicationKind::Game;
+	bool Application::sQuitRequested = false;
 
 	template<typename T>
 	static T TryInitialize(T result, const char8* name)
@@ -49,6 +54,7 @@ namespace Lion
 
 	void Application::OnEvent(Event& event)
 	{
+		Input::OnEvent(event);
 		EventDispatcher dispatcher(event);
 
 		// Event window resize
@@ -98,6 +104,21 @@ namespace Lion
 		return sKind == ApplicationKind::Editor;
 	}
 
+	void Application::RequestQuit()
+	{
+		if (IsEditor())
+			sQuitRequested = true;
+		else
+			Window::RequestClose();
+	}
+
+	bool Application::ConsumeQuitRequest()
+	{
+		const bool requested = sQuitRequested;
+		sQuitRequested = false;
+		return requested;
+	}
+
 	Application::~Application()
 	{
 		Clock::Delete();
@@ -139,12 +160,15 @@ namespace Lion
 		for (Layer* layer : *mStack)
 			layer->OnCreate();
 
-		// The window draws itself while it is being dragged by an edge, because Windows keeps the thread
-		// for the whole of that drag and hands it back only through this.
-		Window::SetRefreshCallback([this] { Frame(); });
-
 		// Show window
 		Window::Show();
+
+		if (!IsEditor())
+			ShowStartupSplash();
+
+		// Windows services edge dragging through this callback. Install it after the splash so a resize
+		// cannot render gameplay over the startup image.
+		Window::SetRefreshCallback([this] { Frame(); });
 
 		do
 		{
@@ -159,6 +183,47 @@ namespace Lion
 		// release GPU/UI resources safely (the stack destructor only deletes them afterwards).
 		for (Layer* layer : *mStack)
 			layer->OnDetach();
+	}
+
+	void Application::ShowStartupSplash()
+	{
+		const Reference<Texture> texture = Asset::LoadTexture(
+			"Lion Engine Startup Splash", kEngineSplashFile);
+
+		if (!texture)
+			return;
+
+		const Size windowSize = Window::GetSize();
+		Reference<CameraOrthographic> camera = MakeReference<CameraOrthographic>();
+		camera->OnResize(windowSize.width, windowSize.height);
+		Sprite splash(texture);
+		const Size splashSize = splash.GetSize();
+		const float32 scale = std::max(
+			windowSize.width / std::max(splashSize.width, 1.0f),
+			windowSize.height / std::max(splashSize.height, 1.0f));
+		const auto started = std::chrono::steady_clock::now();
+		constexpr float32 kFadeDuration = 0.5f;
+		constexpr float32 kHoldDuration = 0.8f;
+		constexpr float32 kDuration = kFadeDuration * 2.0f + kHoldDuration;
+
+		while (!Window::Close())
+		{
+			const float32 elapsed = std::chrono::duration<float32>(std::chrono::steady_clock::now() - started).count();
+			if (elapsed >= kDuration)
+				break;
+			const float32 brightness = std::clamp(std::min(elapsed, kDuration - elapsed) / kFadeDuration, 0.0f, 1.0f);
+			Window::PollEvents();
+			Input::Update();
+			Clock::UpdateFrameTime();
+			Renderer::Clear(0.0f, 0.0f, 0.0f, 1.0f);
+			Renderer::RenderBegin(camera);
+			splash.SetColor(Vector(brightness));
+			splash.Draw(Vector2(0.0f, 0.0f), Vector(), Vector(scale, scale, 1.0f));
+			Renderer::RenderEnd();
+			Graphics::SwapBuffers();
+		}
+		Renderer::Clear(0.0f, 0.0f, 0.0f, 1.0f);
+		Graphics::SwapBuffers();
 	}
 
 	void Application::Frame()

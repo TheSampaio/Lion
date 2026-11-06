@@ -21,6 +21,8 @@ namespace Lion
 		virtual LION_API ~Scene();
 
 		virtual LION_API void Add(Reference<Entity> entity);
+		// Attaches an authored batch before dispatching Awake, so every script can find the complete scene.
+		LION_API void AddBatch(const std::vector<Reference<Entity>>& entities);
 		virtual LION_API void Remove(Reference<Entity> entity);
 
 		// Removes an entity by raw pointer (used for self-removal); deferred to end of frame.
@@ -29,7 +31,10 @@ namespace Lion
 		// Advances the scene by 'deltaTime' seconds. A negative value (the default) means "however long the
 		// last frame took" — the running game. A step passes a whole fixed frame instead, so one step is one
 		// visible frame and not a slice of real time too small for the fixed-timestep physics to act on.
-		LION_API void OnUpdate(float32 deltaTime = -1.0f);
+		LION_API void OnUpdate(float32 deltaTime = -1.0f, bool paused = false);
+
+		// Timestep of the current update pass, in seconds, including an explicit editor/test step.
+		LION_API float32 GetDeltaTime() const { return mDeltaTime; }
 		LION_API void OnRender();
 
 		// Physics world owned by this scene (never null).
@@ -89,7 +94,9 @@ namespace Lion
 		std::list<Reference<Entity>> mEntities;
 		std::vector<Reference<Entity>> mPendingRemoval;
 		Scope<PhysicsWorld> mPhysicsWorld;
+		float32 mDeltaTime = 0.0f;
 
 		void FlushPendingRemoval();
+		void Attach(const Reference<Entity>& entity);
 	};
 }

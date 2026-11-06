@@ -3,6 +3,7 @@
 
 #include <Lion/Logic/ComponentRegistry.h>
 #include <Lion/Logic/Scene.h>
+#include <Lion/Scripting/CSharpRuntime.h>
 
 namespace Lion
 {
@@ -169,7 +170,7 @@ namespace Lion
 			return nullptr;
 
 		Component* raw = component.get();
-		RegisterComponent(std::move(component), std::type_index(typeid(*raw)));
+		RegisterComponent(std::move(component), std::type_index(typeid(*raw)), name);
 		return raw;
 	}
 
@@ -182,10 +183,10 @@ namespace Lion
 		return false;
 	}
 
-	void Entity::RegisterComponent(Scope<Component> component, std::type_index type)
+	void Entity::RegisterComponent(Scope<Component> component, std::type_index type, const std::string& registeredName)
 	{
 		component->mOwner = this;
-		component->mTypeName = ComponentRegistry::GetName(type);
+		component->mTypeName = registeredName.empty() ? ComponentRegistry::GetName(type) : registeredName;
 
 		// What a component cannot work without goes on before it does. A collider asks its entity for a
 		// body the moment it wakes, so an entity that had to be told twice — once for the trait, once for
@@ -290,8 +291,10 @@ namespace Lion
 
 		// Not running a component's callbacks stops it doing anything, but not being anything — a body
 		// left in the physics world would still block whatever ran into it. This is where it lets go.
-		for (const auto& component : mComponents)
+		const size_t count = mComponents.size();
+		for (size_t index = 0; index < count; index++)
 		{
+			Component* component = mComponents[index].get();
 			if (value)
 				component->OnEnable();
 			else
@@ -301,44 +304,57 @@ namespace Lion
 
 	void Entity::Awake()
 	{
-		for (const auto& component : mComponents)
-			component->OnAwake();
+		const size_t count = mComponents.size();
+		for (size_t index = 0; index < count; index++)
+			mComponents[index]->OnAwake();
 	}
 
 	void Entity::Destroy()
 	{
-		for (const auto& component : mComponents)
-			component->OnDestroy();
+		const size_t count = mComponents.size();
+		for (size_t index = 0; index < count; index++)
+			mComponents[index]->OnDestroy();
+
+		CSharpRuntime::InvalidateEntity(*this);
 	}
 
-	void Entity::UpdateBegin()
+	void Entity::UpdateBegin(bool paused)
 	{
 		if (!IsActive())
 			return;
 
-		for (const auto& component : mComponents)
-			if (component->IsEnabled())
-				component->OnUpdateBegin();
+		const size_t count = mComponents.size();
+		for (size_t index = 0; index < count; index++)
+		{
+			Component* component = mComponents[index].get();
+			if (component->IsEnabled() && (!paused || component->UpdatesWhenPaused())) component->OnUpdateBegin();
+		}
 	}
 
-	void Entity::Update()
+	void Entity::Update(bool paused)
 	{
 		if (!IsActive())
 			return;
 
-		for (const auto& component : mComponents)
-			if (component->IsEnabled())
-				component->OnUpdate();
+		const size_t count = mComponents.size();
+		for (size_t index = 0; index < count; index++)
+		{
+			Component* component = mComponents[index].get();
+			if (component->IsEnabled() && (!paused || component->UpdatesWhenPaused())) component->OnUpdate();
+		}
 	}
 
-	void Entity::UpdateEnd()
+	void Entity::UpdateEnd(bool paused)
 	{
 		if (!IsActive())
 			return;
 
-		for (const auto& component : mComponents)
-			if (component->IsEnabled())
-				component->OnUpdateEnd();
+		const size_t count = mComponents.size();
+		for (size_t index = 0; index < count; index++)
+		{
+			Component* component = mComponents[index].get();
+			if (component->IsEnabled() && (!paused || component->UpdatesWhenPaused())) component->OnUpdateEnd();
+		}
 	}
 
 	void Entity::Render()
@@ -348,9 +364,9 @@ namespace Lion
 		if (!IsActive() || !IsVisibleInHierarchy())
 			return;
 
-		for (const auto& component : mComponents)
-			if (component->IsEnabled())
-				component->OnRender();
+		const size_t count = mComponents.size();
+		for (size_t index = 0; index < count; index++)
+			if (mComponents[index]->IsEnabled()) mComponents[index]->OnRender();
 	}
 
 	void Entity::Collide(Entity& other)
@@ -358,8 +374,8 @@ namespace Lion
 		if (!IsActive())
 			return;
 
-		for (const auto& component : mComponents)
-			if (component->IsEnabled())
-				component->OnCollision(other);
+		const size_t count = mComponents.size();
+		for (size_t index = 0; index < count; index++)
+			if (mComponents[index]->IsEnabled()) mComponents[index]->OnCollision(other);
 	}
 }

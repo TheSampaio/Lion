@@ -12,6 +12,7 @@ namespace Lion
 	std::string SceneManager::sActivePath;
 	std::string SceneManager::sPendingPath;
 	bool SceneManager::sUpdating = false;
+	bool SceneManager::sPaused = false;
 
 	bool SceneManager::LoadScene(const std::string& path)
 	{
@@ -37,6 +38,16 @@ namespace Lion
 		return sActivePath;
 	}
 
+	void SceneManager::SetPaused(bool paused)
+	{
+		sPaused = paused;
+	}
+
+	bool SceneManager::IsPaused()
+	{
+		return sPaused;
+	}
+
 	void SceneManager::SetActiveScene(const Reference<Scene>& scene, const std::string& path)
 	{
 		if (sActiveScene && sActiveScene != scene)
@@ -45,6 +56,7 @@ namespace Lion
 		sActiveScene = scene;
 		sActivePath = path;
 		sPendingPath.clear();
+		sPaused = false;
 	}
 
 	void SceneManager::Update(float32 deltaTime)
@@ -57,7 +69,7 @@ namespace Lion
 
 		const Reference<Scene> updating = sActiveScene;
 		sUpdating = true;
-		updating->OnUpdate(deltaTime);
+		updating->OnUpdate(deltaTime, sPaused);
 		sUpdating = false;
 
 		if (!sPendingPath.empty())
@@ -73,6 +85,7 @@ namespace Lion
 		sActivePath.clear();
 		sPendingPath.clear();
 		sUpdating = false;
+		sPaused = false;
 	}
 
 	bool SceneManager::LoadPendingScene()

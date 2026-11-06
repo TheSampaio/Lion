@@ -23,6 +23,7 @@ namespace ProjectBuild
 	// Whether there is anything to compile against: the Include and Bin folders beside the editor.
 	bool Available();
 	bool Available(const std::filesystem::path& sdkDirectory);
+	bool HasNativeSources(const std::filesystem::path& project);
 
 	// Where the project's compiled module lands — and where the editor looks for a project's own module
 	// before falling back to the one beside itself.

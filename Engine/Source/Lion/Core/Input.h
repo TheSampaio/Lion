@@ -1,8 +1,12 @@
 #pragma once
 
+#include <Lion/Math/Vector2.h>
+#include <Lion/Type/Size.h>
+
 namespace Lion
 {
 	class Application;
+	class Event;
 
 	enum class InputDevice
 	{
@@ -10,6 +14,14 @@ namespace Lion
 		MouseButton,
 		GamepadButton,
 		GamepadAxis,
+	};
+
+	// The presentation-level input family most recently used by the player. Bindings keep their exact
+	// device above; UI prompts only need to choose between desktop and controller conventions.
+	enum class InputMethod
+	{
+		KeyboardMouse,
+		Gamepad,
 	};
 
 	enum class GamepadButton
@@ -57,8 +69,11 @@ namespace Lion
 	};
 
     // Enumerates all keyboard keys
-    enum class KeyCode
-    {
+	enum class KeyCode
+	{
+		// Virtual key that represents any keyboard, mouse or gamepad button.
+		AnyKey = -2,
+
         // Letters keys
         A = GLFW_KEY_A,
         B = GLFW_KEY_B,
@@ -182,10 +197,16 @@ namespace Lion
         static LION_API bool GetKeyTap(KeyCode keyCode);
 
 		static LION_API bool GetMouseButtonPress(int32 button);
+
+		// Pointer position in the game's 1280x720 logical frame, centred at the origin with Y pointing up.
+		// A host such as the editor can identify the rectangle where that frame is displayed.
+		static LION_API Vector2 GetPointerPosition();
+		static LION_API void SetPointerViewport(const Vector2& position, const Size& size);
 		static LION_API bool IsGamepadConnected(int32 gamepad = 0);
 		static LION_API std::string GetGamepadName(int32 gamepad = 0);
 		static LION_API bool GetGamepadButtonPress(GamepadButton button, int32 gamepad = 0);
 		static LION_API float32 GetGamepadAxis(GamepadAxis axis, int32 gamepad = 0);
+		static LION_API InputMethod GetLastInputMethod();
 
 		// Named project actions combine keyboard, mouse and normalized GLFW gamepad bindings. A game asks
 		// for the action and stays independent of whether the player uses an Xbox, PlayStation or generic
@@ -207,6 +228,7 @@ namespace Lion
 		static void New();
 		static void Delete();
 		static void Update();
+		static void OnEvent(Event& event);
 
 		Input(const Input&) = delete;
 		Input& operator=(const Input&) = delete;
@@ -215,10 +237,20 @@ namespace Lion
         Input() = default;
 
 		static bool sControlKeys[GLFW_KEY_LAST + 1];
+		static bool sAnyKeyPressed;
+		static bool sAnyKeyPressedPrevious;
+		static bool sAnyKeyTapped;
+		static bool sAnyKeyEventPending;
+		static Vector2 sPointerViewportPosition;
+		static Size sPointerViewportSize;
 		static std::vector<InputAction> sActions;
 		static std::unordered_map<std::string, float32> sActionStrengths;
 		static std::unordered_map<std::string, float32> sPreviousActionStrengths;
+		static InputMethod sLastInputMethod;
+		static bool sGamepadInputActive;
 
 		static float32 EvaluateAction(const InputAction& action);
+		static bool IsAnyKeyPressed();
+		static bool HasGamepadInput();
 	};
 }

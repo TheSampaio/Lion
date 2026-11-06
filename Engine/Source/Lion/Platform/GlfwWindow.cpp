@@ -632,6 +632,12 @@ namespace Lion
 			glfwSetWindowShouldClose(mWindow, GLFW_TRUE);
 	}
 
+	void GlfwWindow::CancelClose()
+	{
+		if (mWindow)
+			glfwSetWindowShouldClose(mWindow, GLFW_FALSE);
+	}
+
 	void GlfwWindow::SetDisplayTitle(const std::string& title)
 	{
 		if (mWindow)
@@ -642,6 +648,17 @@ namespace Lion
 	{
 		if (mWindow)
 			glfwSetWindowAttrib(mWindow, GLFW_RESIZABLE, enable ? GLFW_TRUE : GLFW_FALSE);
+	}
+
+	void GlfwWindow::SetSize(uint32 width, uint32 height)
+	{
+		if (!mWindow)
+			return;
+
+		if (mData && mData->maximized)
+			ApplyMaximized(false);
+
+		glfwSetWindowSize(mWindow, static_cast<int32>(width), static_cast<int32>(height));
 	}
 
 	void GlfwWindow::SetIcon(const std::string& filePath)
@@ -683,6 +700,14 @@ namespace Lion
 	bool GlfwWindow::IsMouseButtonPressed(int32 button) const
 	{
 		return glfwGetMouseButton(mWindow, button) == GLFW_PRESS;
+	}
+
+	Vector2 GlfwWindow::GetPointerPosition() const
+	{
+		double x = 0.0;
+		double y = 0.0;
+		glfwGetCursorPos(mWindow, &x, &y);
+		return Vector2(static_cast<float32>(x), static_cast<float32>(y));
 	}
 
 	bool GlfwWindow::IsGamepadConnected(int32 gamepad) const

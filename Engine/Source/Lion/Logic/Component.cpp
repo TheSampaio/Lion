@@ -23,6 +23,11 @@ namespace Lion
 			void Field(const char8* name, bool& value) override        { mSerializer.Write(name, value); }
 			void Field(const char8* name, std::string& value) override { mSerializer.Write(name, value); }
 			void FieldAsset(const char8* name, std::string& path) override { mSerializer.Write(name, path); }
+			void FieldVector2(const char8* name, float32& x, float32& y) override
+			{
+				mSerializer.Write(std::string(name) + ".x", x);
+				mSerializer.Write(std::string(name) + ".y", y);
+			}
 
 			// A vector is three numbers, and it is stored as three numbers: the archive is a flat map of
 			// keys, so the shape of a field lives in the suffix rather than in a nested node.
@@ -49,6 +54,11 @@ namespace Lion
 			void Field(const char8* name, bool& value) override        { value = mSerializer.ReadBool(name, value); }
 			void Field(const char8* name, std::string& value) override { value = mSerializer.ReadString(name, value); }
 			void FieldAsset(const char8* name, std::string& path) override { path = mSerializer.ReadString(name, path); }
+			void FieldVector2(const char8* name, float32& x, float32& y) override
+			{
+				x = mSerializer.ReadFloat(std::string(name) + ".x", x);
+				y = mSerializer.ReadFloat(std::string(name) + ".y", y);
+			}
 
 			void Field(const char8* name, Vector& value) override
 			{
@@ -60,6 +70,14 @@ namespace Lion
 		private:
 			const Serializer& mSerializer;
 		};
+	}
+
+	void Reflector::FieldVector2(const char8* name, float32& x, float32& y)
+	{
+		Vector value(x, y, 0.0f);
+		Field(name, value);
+		x = value.x;
+		y = value.y;
 	}
 
 	Reference<Transform> Component::GetTransform() const

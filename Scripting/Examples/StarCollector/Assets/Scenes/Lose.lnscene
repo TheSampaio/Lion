@@ -1,0 +1,8 @@
+{
+  "gravity": [0, 0],
+  "entities": [
+    {"name":"Result","transform":{"position":[0,120],"rotation":0,"scale":[1,1]},"components":[{"type":"TextRenderer","Text":"TIME IS UP!","Font":"Fonts/Arcade.lnfont","Size":36,"Color.x":1,"Color.y":0.4,"Color.z":0.3},{"type":"StarCollector.MenuController"}]},
+    {"name":"Instructions","transform":{"position":[0,-60],"rotation":0,"scale":[1,1]},"components":[{"type":"TextRenderer","Text":"TRY TO COLLECT ALL 3 STARS\nENTER TO RETRY   ESC TO QUIT","Font":"Fonts/Arcade.lnfont","Size":18}]},
+    {"name":"Camera","components":[{"type":"Camera2D"}]}
+  ]
+}

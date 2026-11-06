@@ -14,6 +14,7 @@ namespace ComponentScripts
 	enum class Language
 	{
 		Cpp,
+		CSharp,
 	};
 
 	struct LanguageInfo

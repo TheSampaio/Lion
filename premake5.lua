@@ -11,6 +11,13 @@ premake.override(premake.vstudio.vc2010.elements, "user", function(base, cfg)
     return items
 end)
 
+-- Premake's vs2022 action hard-codes v143, even when a newer Visual Studio installation only ships
+-- its current compiler. Let Microsoft.Cpp.Default.props select the toolset installed with the IDE;
+-- this resolves to v143 in Visual Studio 2022 and v145 in Visual Studio 2026.
+premake.override(premake.vstudio.vc2010, "platformToolset", function()
+    premake.w('<PlatformToolset>$(DefaultPlatformToolset)</PlatformToolset>')
+end)
+
 workspace "Lion"
     configurations { "Debug", "Release", "Shipping" }
     startproject "Mane"  -- The project in Editor/; F5 in Visual Studio opens the editor.

@@ -1,0 +1,8 @@
+{
+  "actions": [
+    {"name":"MoveX","bindings":[{"device":"keyboard","code":65,"scale":-1},{"device":"keyboard","code":68,"scale":1},{"device":"keyboard","code":263,"scale":-1},{"device":"keyboard","code":262,"scale":1}]},
+    {"name":"MoveY","bindings":[{"device":"keyboard","code":83,"scale":-1},{"device":"keyboard","code":87,"scale":1},{"device":"keyboard","code":264,"scale":-1},{"device":"keyboard","code":265,"scale":1}]},
+    {"name":"Confirm","bindings":[{"device":"keyboard","code":257},{"device":"keyboard","code":32}]},
+    {"name":"Quit","bindings":[{"device":"keyboard","code":256}]}
+  ]
+}

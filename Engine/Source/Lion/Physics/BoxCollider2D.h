@@ -21,6 +21,7 @@ namespace Lion
 		LION_REQUIRES("RigidBody2D");
 
 		void OnAwake() override;
+		void OnDestroy() override;
 		void Serialize(Serializer& serializer) const override;
 		void Deserialize(const Serializer& serializer) override;
 
@@ -37,6 +38,9 @@ namespace Lion
 		void SetDensity(float32 value) { mDensity = value; }
 		void SetFriction(float32 value) { mFriction = value; }
 		void SetRestitution(float32 value) { mRestitution = value; }
+
+		// Rebuilds the native shape after a runtime Transform scale change.
+		LION_API void RefreshShape();
 
 	private:
 		float32 mWidth;

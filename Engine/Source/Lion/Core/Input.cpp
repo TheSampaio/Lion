@@ -3,6 +3,8 @@
 
 #include <Lion/Core/Vault.h>
 #include <Lion/Core/Window.h>
+#include <Lion/Signal/EventDispatcher.h>
+#include <Lion/Signal/EventInput.h>
 
 #include <nlohmann/json.hpp>
 
@@ -12,11 +14,19 @@
 
 namespace Lion
 {
-    Input* Input::sInstance = nullptr;
+	Input* Input::sInstance = nullptr;
 	bool Input::sControlKeys[GLFW_KEY_LAST + 1] = { false };
+	bool Input::sAnyKeyPressed = false;
+	bool Input::sAnyKeyPressedPrevious = false;
+	bool Input::sAnyKeyTapped = false;
+	bool Input::sAnyKeyEventPending = false;
+	Vector2 Input::sPointerViewportPosition;
+	Size Input::sPointerViewportSize;
 	std::vector<InputAction> Input::sActions;
 	std::unordered_map<std::string, float32> Input::sActionStrengths;
 	std::unordered_map<std::string, float32> Input::sPreviousActionStrengths;
+	InputMethod Input::sLastInputMethod = InputMethod::KeyboardMouse;
+	bool Input::sGamepadInputActive = false;
 
 	namespace
 	{
@@ -53,19 +63,28 @@ namespace Lion
         sInstance = nullptr;
     }
 
-    bool Input::GetKeyPress(KeyCode keyCode)
-    {
-        return Window::IsKeyPressed(static_cast<int32>(keyCode));
-    }
+	bool Input::GetKeyPress(KeyCode keyCode)
+	{
+		if (keyCode == KeyCode::AnyKey)
+			return sAnyKeyPressed;
 
-    bool Input::GetKeyRelease(KeyCode keyCode)
-    {
-        return Window::IsKeyReleased(static_cast<int32>(keyCode));
-    }
+		return Window::IsKeyPressed(static_cast<int32>(keyCode));
+	}
 
-    bool Input::GetKeyTap(KeyCode keyCode)
-    {
-        const int32 keyCodeId = static_cast<int32>(keyCode);
+	bool Input::GetKeyRelease(KeyCode keyCode)
+	{
+		if (keyCode == KeyCode::AnyKey)
+			return !sAnyKeyPressed;
+
+		return Window::IsKeyReleased(static_cast<int32>(keyCode));
+	}
+
+	bool Input::GetKeyTap(KeyCode keyCode)
+	{
+		if (keyCode == KeyCode::AnyKey)
+			return sAnyKeyTapped;
+
+		const int32 keyCodeId = static_cast<int32>(keyCode);
 
 		if (keyCodeId < 0 || keyCodeId > GLFW_KEY_LAST)
 			return false;
@@ -79,12 +98,61 @@ namespace Lion
             return true;
         }
 
-        return false;
-    }
+		return false;
+	}
+
+	bool Input::IsAnyKeyPressed()
+	{
+		for (int32 key = GLFW_KEY_SPACE; key <= GLFW_KEY_LAST; ++key)
+			if (Window::IsKeyPressed(key))
+				return true;
+
+		for (int32 button = GLFW_MOUSE_BUTTON_1; button <= GLFW_MOUSE_BUTTON_LAST; ++button)
+			if (Window::IsMouseButtonPressed(button))
+				return true;
+
+		for (int32 gamepad = 0; gamepad <= GLFW_JOYSTICK_LAST; ++gamepad)
+		{
+			if (!Window::IsGamepadConnected(gamepad))
+				continue;
+
+			for (int32 button = GLFW_GAMEPAD_BUTTON_A; button <= GLFW_GAMEPAD_BUTTON_LAST; ++button)
+				if (Window::IsGamepadButtonPressed(gamepad, button))
+					return true;
+		}
+
+		return false;
+	}
 
 	bool Input::GetMouseButtonPress(int32 button)
 	{
 		return Window::IsMouseButtonPressed(button);
+	}
+
+	Vector2 Input::GetPointerPosition()
+	{
+		const Vector2 pointer = Window::GetPointerPosition();
+		const Size windowSize = Window::GetSize();
+		const float32 viewportWidth = sPointerViewportSize.width > 0.0f
+			? sPointerViewportSize.width : windowSize.width;
+		const float32 viewportHeight = sPointerViewportSize.height > 0.0f
+			? sPointerViewportSize.height : windowSize.height;
+
+		if (viewportWidth <= 0.0f || viewportHeight <= 0.0f)
+			return Vector2();
+
+		const float32 x = (pointer.x - sPointerViewportPosition.x) / viewportWidth;
+		const float32 y = (pointer.y - sPointerViewportPosition.y) / viewportHeight;
+		return Vector2(
+			(x - 0.5f) * static_cast<float32>(Window::kDefaultViewportWidth),
+			(0.5f - y) * static_cast<float32>(Window::kDefaultViewportHeight));
+	}
+
+	void Input::SetPointerViewport(const Vector2& position, const Size& size)
+	{
+		sPointerViewportPosition = position;
+		sPointerViewportSize.width = size.width;
+		sPointerViewportSize.height = size.height;
 	}
 
 	bool Input::IsGamepadConnected(int32 gamepad)
@@ -105,6 +173,37 @@ namespace Lion
 	float32 Input::GetGamepadAxis(GamepadAxis axis, int32 gamepad)
 	{
 		return Window::GetGamepadAxis(gamepad, static_cast<int32>(axis));
+	}
+
+	InputMethod Input::GetLastInputMethod()
+	{
+		return sLastInputMethod;
+	}
+
+	bool Input::HasGamepadInput()
+	{
+		constexpr float32 kStickDeadzone = 0.25f;
+
+		for (int32 gamepad = 0; gamepad <= GLFW_JOYSTICK_LAST; ++gamepad)
+		{
+			if (!Window::IsGamepadConnected(gamepad))
+				continue;
+
+			for (int32 button = GLFW_GAMEPAD_BUTTON_A; button <= GLFW_GAMEPAD_BUTTON_LAST; ++button)
+				if (Window::IsGamepadButtonPressed(gamepad, button))
+					return true;
+
+			for (int32 axis = GLFW_GAMEPAD_AXIS_LEFT_X; axis <= GLFW_GAMEPAD_AXIS_RIGHT_Y; ++axis)
+				if (std::abs(Window::GetGamepadAxis(gamepad, axis)) >= kStickDeadzone)
+					return true;
+
+			for (int32 axis = GLFW_GAMEPAD_AXIS_LEFT_TRIGGER;
+				axis <= GLFW_GAMEPAD_AXIS_RIGHT_TRIGGER; ++axis)
+				if (Window::GetGamepadAxis(gamepad, axis) >= -1.0f + kStickDeadzone * 2.0f)
+					return true;
+		}
+
+		return false;
 	}
 
 	float32 Input::EvaluateAction(const InputAction& action)
@@ -172,11 +271,48 @@ namespace Lion
 
 	void Input::Update()
 	{
+		const bool gamepadInputActive = HasGamepadInput();
+
+		if (gamepadInputActive && !sGamepadInputActive)
+			sLastInputMethod = InputMethod::Gamepad;
+
+		sGamepadInputActive = gamepadInputActive;
+		sAnyKeyPressedPrevious = sAnyKeyPressed;
+		sAnyKeyPressed = IsAnyKeyPressed();
+		sAnyKeyTapped = sAnyKeyEventPending || (sAnyKeyPressed && !sAnyKeyPressedPrevious);
+		sAnyKeyEventPending = false;
 		sPreviousActionStrengths = sActionStrengths;
 		sActionStrengths.clear();
 
 		for (const InputAction& action : sActions)
 			sActionStrengths[action.name] = EvaluateAction(action);
+	}
+
+	void Input::OnEvent(Event& event)
+	{
+		EventDispatcher dispatcher(event);
+		dispatcher.Bind<EventInputKeyboardPress>([](const EventInputKeyboardPress&)
+		{
+			sLastInputMethod = InputMethod::KeyboardMouse;
+			sAnyKeyEventPending = true;
+			return false;
+		});
+		dispatcher.Bind<EventInputMouseMove>([](const EventInputMouseMove&)
+		{
+			sLastInputMethod = InputMethod::KeyboardMouse;
+			return false;
+		});
+		dispatcher.Bind<EventInputMousePress>([](const EventInputMousePress&)
+		{
+			sLastInputMethod = InputMethod::KeyboardMouse;
+			sAnyKeyEventPending = true;
+			return false;
+		});
+		dispatcher.Bind<EventInputMouseScroll>([](const EventInputMouseScroll&)
+		{
+			sLastInputMethod = InputMethod::KeyboardMouse;
+			return false;
+		});
 	}
 
 	float32 Input::GetActionStrength(const std::string& action)

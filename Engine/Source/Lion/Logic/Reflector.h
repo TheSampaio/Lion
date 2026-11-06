@@ -32,6 +32,10 @@ namespace Lion
 		virtual void Field(const char8* name, std::string& value) = 0;
 		virtual void Field(const char8* name, Vector& value) = 0;
 
+		// Local 2D values use the same field identity without exposing an unused Z control.
+		// The default adapts to Vector so existing custom Reflectors remain source-compatible.
+		virtual LION_API void FieldVector2(const char8* name, float32& x, float32& y);
+
 		// A field that names a file rather than holding a value. It is a string either way, but the editor
 		// gives it a browse button and takes a drop from the Content Browser, which is the difference
 		// between choosing a sprite and spelling one.

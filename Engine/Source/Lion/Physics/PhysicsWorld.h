@@ -5,6 +5,13 @@
 namespace Lion
 {
 	class RigidBody2D;
+	class Entity;
+	struct PhysicsRaycastHit
+	{
+		Entity* entity = nullptr;
+		glm::vec2 position{ 0.0f }, normal{ 0.0f };
+		float32 fraction = 0.0f;
+	};
 
 	// Owns and drives a Box2D simulation for a Scene.
 	//
@@ -29,6 +36,10 @@ namespace Lion
 
 		// Returns the current world gravity, in meters per second squared.
 		LION_API glm::vec2 GetGravity() const;
+
+		// Casts a world-pixel segment, optionally excluding the caller's own body.
+		LION_API bool Raycast(const glm::vec2& origin, const glm::vec2& translation,
+			PhysicsRaycastHit& hit, const Entity* ignore = nullptr) const;
 
 		// Advances the simulation, syncs transforms and dispatches collisions.
 		void Step(float32 deltaTime);

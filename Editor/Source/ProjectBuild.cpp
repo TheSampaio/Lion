@@ -4,6 +4,8 @@
 #include "Projects.h"
 
 #include <Lion/Core/Filesystem.h>
+#include <cctype>
+#include <regex>
 
 #ifdef LN_PLATFORM_WIN
 	#define WIN32_LEAN_AND_MEAN
@@ -37,6 +39,17 @@ namespace ProjectBuild
 		std::filesystem::path LibraryDirectory(const std::filesystem::path& sdkDirectory)
 		{
 			return sdkDirectory / "Bin";
+		}
+
+		bool IsEmptyScaffold(const std::filesystem::path& source)
+		{
+			if (source.filename() != "GameModule.cpp") return false;
+			std::ifstream file(source);
+			std::string text((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+			static const std::regex comments(R"(//[^\r\n]*|/\*[\s\S]*?\*/)");
+			text = std::regex_replace(text, comments, "");
+			text.erase(std::remove_if(text.begin(), text.end(), [](unsigned char value) { return std::isspace(value); }), text.end());
+			return text == "#include<Lion/Lion.h>extern\"C\"__declspec(dllexport)Lion::Application*LionCreateApplication(){returnnewLion::Application();}";
 		}
 
 		// The sources the module is built from: everything the project keeps, except what the build itself
@@ -117,6 +130,13 @@ namespace ProjectBuild
 		return Available(DefaultSdkDirectory());
 	}
 
+	bool HasNativeSources(const std::filesystem::path& project)
+	{
+		std::vector<std::filesystem::path> compile, include;
+		CollectSources(project, compile, include);
+		return std::any_of(compile.begin(), compile.end(), [](const auto& source) { return !IsEmptyScaffold(source); });
+	}
+
 	bool Available(const std::filesystem::path& sdkDirectory)
 	{
 		std::error_code error;
@@ -165,6 +185,31 @@ namespace ProjectBuild
 		std::vector<std::filesystem::path> compile;
 		std::vector<std::filesystem::path> include;
 		CollectSources(project, compile, include);
+
+		// The original editor scaffold returned an empty Application. Supply the scene driver in the
+		// generated build instead of rewriting authored files or making C# developers edit C++.
+		bool customEntry = false;
+		compile.erase(std::remove_if(compile.begin(), compile.end(), [&](const auto& source)
+		{
+			if (IsEmptyScaffold(source)) return true;
+			std::ifstream file(source);
+			const std::string text((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+			const size_t entry = text.find(kGameModuleEntryPoint);
+			if (entry == std::string::npos) return false;
+			customEntry = true;
+			return false;
+		}), compile.end());
+		if (!customEntry)
+		{
+			const auto bootstrap = project / "Build" / "GameModule.cpp";
+			std::ofstream file(bootstrap, std::ios::trunc);
+			file << "#include <Lion/Lion.h>\n#include <Lion/Runtime/ScenePlayer.h>\n\n"
+				<< "extern \"C\" __declspec(dllexport) Lion::Application* LionCreateApplication()\n"
+				<< "{\n\treturn Lion::CreateScenePlayer();\n}\n";
+			file.close();
+			if (!file) { error = "Could not write the scene-player bootstrap."; return false; }
+			compile.push_back(bootstrap);
+		}
 
 		// The one configuration this editor can load: the module shares the engine's C++ runtime, so it is
 		// built the way the engine running it was built — a Debug editor takes a Debug module, an optimised
@@ -262,13 +307,48 @@ namespace ProjectBuild
 				<< "EndProject\n"
 				<< "Global\n"
 				<< "\tGlobalSection(SolutionConfigurationPlatforms) = preSolution\n"
-				<< "\t\t" << configuration << "|x64 = " << configuration << "|x64\n"
+				<< "\t\tDebug|x64 = Debug|x64\n"
+				<< "\t\tRelease|x64 = Release|x64\n"
+				<< "\t\tShipping|x64 = Shipping|x64\n"
 				<< "\tEndGlobalSection\n"
 				<< "\tGlobalSection(ProjectConfigurationPlatforms) = postSolution\n"
-				<< "\t\t" << kProjectGuid << "." << configuration << "|x64.ActiveCfg = " << configuration << "|x64\n"
-				<< "\t\t" << kProjectGuid << "." << configuration << "|x64.Build.0 = " << configuration << "|x64\n"
+				<< "\t\t" << kProjectGuid << ".Debug|x64.ActiveCfg = Debug|x64\n"
+				<< "\t\t" << kProjectGuid << ".Debug|x64.Build.0 = Debug|x64\n"
+				<< "\t\t" << kProjectGuid << ".Release|x64.ActiveCfg = Release|x64\n"
+				<< "\t\t" << kProjectGuid << ".Release|x64.Build.0 = Release|x64\n"
+				<< "\t\t" << kProjectGuid << ".Shipping|x64.ActiveCfg = Shipping|x64\n"
+				<< "\t\t" << kProjectGuid << ".Shipping|x64.Build.0 = Shipping|x64\n"
 				<< "\tEndGlobalSection\n"
 				<< "EndGlobal\n";
+		}
+
+		// Older generated solutions listed only the configuration of the editor that created them.
+		// Add a missing configuration without replacing other projects or user-authored solution settings.
+		std::ifstream existing(solution);
+		std::string contents((std::istreambuf_iterator<char>(existing)), std::istreambuf_iterator<char>());
+		const std::string platform = configuration + "|x64";
+		if (contents.find(platform + " =") == std::string::npos)
+		{
+			const auto add = [&](const std::string& section, const std::string& lines) -> bool
+			{
+				const size_t start = contents.find("GlobalSection(" + section + ")");
+				const size_t end = start == std::string::npos ? start : contents.find("\tEndGlobalSection", start);
+				if (end == std::string::npos) return false;
+				contents.insert(end, lines);
+				return true;
+			};
+			if (!add("SolutionConfigurationPlatforms", "\t\t" + platform + " = " + platform + "\n")
+				|| !add("ProjectConfigurationPlatforms", "\t\t" + std::string(kProjectGuid) + "." + platform + ".ActiveCfg = " + platform
+					+ "\n\t\t" + kProjectGuid + "." + platform + ".Build.0 = " + platform + "\n"))
+			{
+				error = "The project solution is missing its build configuration sections.";
+				return false;
+			}
+			existing.close();
+			std::ofstream updated(solution, std::ios::trunc);
+			updated << contents;
+			updated.close();
+			if (!updated) { error = "Could not update the project solution configuration."; return false; }
 		}
 
 		return true;
@@ -357,6 +437,18 @@ namespace ProjectBuild
 	bool Build(const std::filesystem::path& project, const std::string& configuration,
 		const std::filesystem::path& sdkDirectory, std::string& output, std::string& error)
 	{
+		if (!HasNativeSources(project))
+		{
+			std::error_code code;
+			const auto module = ModulePath(project, configuration);
+			std::filesystem::create_directories(module.parent_path(), code);
+			if (!code) std::filesystem::copy_file(sdkDirectory / "ScenePlayer" / kGameModuleFile,
+				module, std::filesystem::copy_options::overwrite_existing, code);
+			if (code) { error = "Could not install the standard scene player: " + code.message(); return false; }
+			output += "Using the packaged scene player; no C++ compiler is required.\n";
+			error.clear();
+			return true;
+		}
 		if (MSBuildPath().empty())
 		{
 			error = "Could not locate MSBuild; install Visual Studio with the C++ tools.";
@@ -368,10 +460,10 @@ namespace ProjectBuild
 
 		const std::string command =
 			"\"" + MSBuildPath() + "\""
-			" \"" + VcxprojPath(project).string() + "\""
+			" \"" + (project / (Projects::DisplayName(project) + ".sln")).string() + "\""
 			" -p:PlatformToolset=" + PlatformToolset() +
 			" -p:Configuration=" + configuration +
-			" -p:Platform=x64 -v:minimal -nologo";
+			" -p:Platform=x64 -v:minimal -nologo -nodeReuse:false";
 
 		const int32 exitCode = RunCommand(command, output);
 

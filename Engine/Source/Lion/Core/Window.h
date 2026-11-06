@@ -21,6 +21,8 @@ namespace Lion
         // and a fresh game window agree before a project makes either one more specific.
         static constexpr uint32 kDefaultViewportWidth = 1280;
         static constexpr uint32 kDefaultViewportHeight = 720;
+		// Safe feature detection for headless hosts and managed diagnostics.
+		static LION_API bool IsAvailable();
 
         // Opaque native window handle (consumed by the graphics backend to build its surface).
         static LION_API void* GetNativeHandle() { return sInstance->mBackend->GetNativeHandle(); }
@@ -73,8 +75,9 @@ namespace Lion
 
         // Immediate keyboard state, using engine key codes.
         static LION_API bool IsKeyPressed(int32 keyCode) { return sInstance->mBackend->IsKeyPressed(keyCode); }
-        static LION_API bool IsKeyReleased(int32 keyCode) { return sInstance->mBackend->IsKeyReleased(keyCode); }
+		static LION_API bool IsKeyReleased(int32 keyCode) { return sInstance->mBackend->IsKeyReleased(keyCode); }
 		static LION_API bool IsMouseButtonPressed(int32 button) { return sInstance->mBackend->IsMouseButtonPressed(button); }
+		static LION_API Vector2 GetPointerPosition() { return sInstance->mBackend->GetPointerPosition(); }
 		static LION_API bool IsGamepadConnected(int32 gamepad) { return sInstance->mBackend->IsGamepadConnected(gamepad); }
 		static LION_API std::string GetGamepadName(int32 gamepad) { return sInstance->mBackend->GetGamepadName(gamepad); }
 		static LION_API bool IsGamepadButtonPressed(int32 gamepad, int32 button)
@@ -90,6 +93,9 @@ namespace Lion
 
         // Requests the window to close (used by editor/menu "Exit" actions).
         static LION_API void RequestClose();
+
+        // Cancels a close request so an application can ask how to handle unsaved work.
+        static LION_API void CancelClose();
 
         friend Application;
         friend Graphics;

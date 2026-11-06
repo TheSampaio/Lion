@@ -16,6 +16,7 @@ project "Lion"
         "%{prj.location}/**.cpp",
         "%{prj.location}/**.hint",
     }
+    removefiles { "%{prj.location}/ScenePlayerModule.cpp" }
 
     includedirs {
         "%{wks.location}/Engine",
@@ -60,4 +61,20 @@ project "Lion"
         buildoptions { "/utf-8" }
         defines "LN_PLATFORM_WIN"
         links "xaudio2"
+        systemversion "latest"
+
+    filter {}
+
+group "Runtime"
+project "Player"
+    kind "SharedLib"
+    targetname "lion-game"
+    targetdir ("%{wks.location}/Build/Bin/" .. output_dir .. "%{prj.name}")
+    objdir    ("%{wks.location}/Build/Obj/" .. output_dir .. "%{prj.name}")
+    files { "%{prj.location}/ScenePlayerModule.cpp" }
+    includedirs { "%{wks.location}/Engine/Source" }
+    links { "Lion" }
+    filter "system:windows"
+        defines "LN_PLATFORM_WIN"
+        buildoptions { "/utf-8" }
         systemversion "latest"

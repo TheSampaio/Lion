@@ -28,6 +28,7 @@ namespace Lion
 	void OpenGLRendererAPI::SetWireframe(bool enabled)
 	{
 		glPolygonMode(GL_FRONT_AND_BACK, enabled ? GL_LINE : GL_FILL);
+		glLineWidth(enabled ? 2.0f : 1.0f);
 	}
 
 	void OpenGLRendererAPI::DrawIndexed(uint32 indexCount)

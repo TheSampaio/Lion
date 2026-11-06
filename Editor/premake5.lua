@@ -52,7 +52,7 @@ project "Mane"
 
     -- The game module is loaded at runtime, not linked; name it so it is built (and copied below)
     -- before the editor runs, letting the editor list the game's components.
-    dependson { "Game" }
+    dependson { "Game", "Player" }
 
     filter "configurations:Shipping"
         kind "WindowedApp"

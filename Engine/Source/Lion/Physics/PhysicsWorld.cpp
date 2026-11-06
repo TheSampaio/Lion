@@ -61,6 +61,27 @@ namespace Lion
 			body->SyncTransform();
 	}
 
+	bool PhysicsWorld::Raycast(const glm::vec2& origin, const glm::vec2& translation,
+		PhysicsRaycastHit& hit, const Entity* ignore) const
+	{
+		hit = {};
+		if (!std::isfinite(origin.x) || !std::isfinite(origin.y)
+			|| !std::isfinite(translation.x) || !std::isfinite(translation.y)) return false;
+		struct Context { PhysicsRaycastHit& hit; const Entity* ignore; bool found = false; } context{ hit, ignore };
+		b2World_CastRay(mWorldId, { origin.x * MetersPerPixel, origin.y * MetersPerPixel },
+			{ translation.x * MetersPerPixel, translation.y * MetersPerPixel }, b2DefaultQueryFilter(),
+			[](b2ShapeId shape, b2Vec2 point, b2Vec2 normal, float fraction, void* user)
+			{
+				auto& context = *static_cast<Context*>(user);
+				auto* entity = static_cast<Entity*>(b2Body_GetUserData(b2Shape_GetBody(shape)));
+				if (!entity || entity == context.ignore || !entity->IsActive()) return -1.0f;
+				context.hit = { entity, { point.x * PixelsPerMeter, point.y * PixelsPerMeter }, { normal.x, normal.y }, fraction };
+				context.found = true;
+				return fraction;
+			}, &context);
+		return context.found;
+	}
+
 	void PhysicsWorld::Register(RigidBody2D* body)
 	{
 		mBodies.push_back(body);

@@ -16,4 +16,6 @@ protected:
 
 private:
 	Lion::Reference<Lion::CameraOrthographic> mCamera;
+
+	void UpdateMusic();
 };

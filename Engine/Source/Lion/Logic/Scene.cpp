@@ -4,6 +4,7 @@
 #include <Lion/Core/Clock.h>
 #include <Lion/Logic/Entity.h>
 #include <Lion/Physics/PhysicsWorld.h>
+#include <Lion/Scripting/CSharpRuntime.h>
 
 namespace Lion
 {
@@ -12,13 +13,24 @@ namespace Lion
     {
     }
 
-    Scene::~Scene() = default;
+    Scene::~Scene() { CSharpRuntime::InvalidateScene(*this); }
 
     void Scene::Add(Reference<Entity> entity)
     {
+        Attach(entity);
+        entity->Awake();
+    }
+
+    void Scene::Attach(const Reference<Entity>& entity)
+    {
         mEntities.push_back(entity);
         entity->mScene = shared_from_this();
-        entity->Awake();
+    }
+
+    void Scene::AddBatch(const std::vector<Reference<Entity>>& entities)
+    {
+        for (const auto& entity : entities) Attach(entity);
+        for (const auto& entity : entities) entity->Awake();
     }
 
     void Scene::Remove(Reference<Entity> entity)
@@ -76,6 +88,7 @@ namespace Lion
 
         mEntities.clear();
         mPendingRemoval.clear();
+        CSharpRuntime::InvalidateScene(*this);
     }
 
     void Scene::Reorder(const Reference<Entity>& moved, const Entity* before)
@@ -105,23 +118,27 @@ namespace Lion
         mEntities.splice(destination, mEntities, source);
     }
 
-    void Scene::OnUpdate(float32 deltaTime)
+    void Scene::OnUpdate(float32 deltaTime, bool paused)
     {
         if (deltaTime < 0.0f)
             deltaTime = Clock::GetDeltaTime();
 
-        for (auto& entity : mEntities)
-            entity->UpdateBegin();
+        mDeltaTime = deltaTime;
 
         for (auto& entity : mEntities)
-            entity->Update();
+            entity->UpdateBegin(paused);
 
         for (auto& entity : mEntities)
-            entity->UpdateEnd();
+            entity->Update(paused);
+
+        for (auto& entity : mEntities)
+            entity->UpdateEnd(paused);
 
         // Advance the simulation, then reflect the results on the entities and fire collisions.
-        mPhysicsWorld->Step(deltaTime);
+        if (!paused)
+            mPhysicsWorld->Step(deltaTime);
 
+        CSharpRuntime::FlushComponentRemovals();
         FlushPendingRemoval();
     }
 

@@ -1,0 +1,30 @@
+#shader vertex
+#version 460 core
+
+layout(location = 0) in vec3 iPosition;
+layout(location = 4) in float iEntityId;
+
+flat out int vEntityId;
+
+uniform mat4 uView;
+uniform mat4 uProjection;
+
+void main()
+{
+	vEntityId = int(iEntityId);
+	gl_Position = uProjection * uView * vec4(iPosition, 1.0);
+}
+
+#shader fragment
+#version 460 core
+
+flat in int vEntityId;
+
+layout(location = 0) out vec4 oFragment;
+layout(location = 1) out int oEntityId;
+
+void main()
+{
+	oFragment = vec4(1.0, 0.45, 0.08, 1.0);
+	oEntityId = vEntityId;
+}

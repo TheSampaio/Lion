@@ -29,13 +29,13 @@ namespace Lion
 			mClip = Asset::LoadAudio(mClipPath, mClipPath);
 
 		if (mPlayOnAwake)
-			Play();
+			Play(true);
 	}
 
 	void AudioPlayer::OnEnable()
 	{
 		if (mPlayOnAwake && !IsPlaying())
-			Play();
+			Play(true);
 	}
 
 	void AudioPlayer::OnDisable()
@@ -63,6 +63,11 @@ namespace Lion
 
 	bool AudioPlayer::Play()
 	{
+		return Play(false);
+	}
+
+	bool AudioPlayer::Play(bool preserveAcrossReload)
+	{
 		if (!mClip && !mClipPath.empty())
 			mClip = Asset::LoadAudio(mClipPath, mClipPath);
 
@@ -72,8 +77,10 @@ namespace Lion
 		mVoices.erase(std::remove_if(mVoices.begin(), mVoices.end(),
 			[](AudioVoice voice) { return !Audio::IsPlaying(voice); }), mVoices.end());
 
+		// Explicit gameplay calls are one-shots and may overlap. Only automatic playback uses a
+		// persistence key, which prevents a scene reload from starting a second copy of lasting audio.
 		const AudioVoice voice = Audio::Play(mClip, Playback(),
-			mRestartOnSceneReload ? std::string() : PersistenceKey());
+			preserveAcrossReload && !mRestartOnSceneReload ? PersistenceKey() : std::string());
 
 		if (voice == kInvalidAudioVoice)
 			return false;

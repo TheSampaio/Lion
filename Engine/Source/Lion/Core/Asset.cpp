@@ -2,11 +2,13 @@
 #include "Asset.h"
 
 #include <Lion/Core/Log.h>
+#include <Lion/Render/BitmapFont.h>
 
 namespace Lion
 {
 	Asset::~Asset()
 	{
+		sFonts.clear();
 		sAudioClips.clear();
 		sTextures.clear();
 	}
@@ -60,5 +62,31 @@ namespace Lion
 			sAudioClips[name] = clip;
 
 		return clip;
+	}
+
+	Reference<BitmapFont> Asset::LoadFont(const std::string& name)
+	{
+		const auto found = sFonts.find(name);
+
+		if (found != sFonts.end())
+			return found->second;
+
+		Log::Console(LogLevel::Error, LION_FORMAT_TEXT("[Asset] Font '{}' not found in cache.", name));
+		return nullptr;
+	}
+
+	Reference<BitmapFont> Asset::LoadFont(const std::string& name, const std::string& filePath)
+	{
+		const auto found = sFonts.find(name);
+
+		if (found != sFonts.end())
+			return found->second;
+
+		Reference<BitmapFont> font = BitmapFont::Create(filePath);
+
+		if (font)
+			sFonts[name] = font;
+
+		return font;
 	}
 }

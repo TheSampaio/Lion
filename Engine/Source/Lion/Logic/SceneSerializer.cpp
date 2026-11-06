@@ -342,8 +342,7 @@ namespace Lion
 			index++;
 		}
 
-		for (const auto& entity : entities)
-			scene->Add(entity);
+		scene->AddBatch(entities);
 
 		return true;
 	}
@@ -487,8 +486,7 @@ namespace Lion
 
 		std::vector<Reference<Entity>> entities = EntityTreeFromJson(node, resourceRoot);
 
-		for (const auto& entity : entities)
-			scene->Add(entity);
+		scene->AddBatch(entities);
 
 		return entities.empty() ? nullptr : entities.front();
 	}

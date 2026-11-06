@@ -22,6 +22,12 @@ namespace Lion
         // so moving a row down the list moves it in front. Setting it is overriding that.
         int32 order = 0;
 
+        // A sprite normally reads the complete texture. Bitmap fonts and sprite sheets select a
+        // normalized sub-rectangle without creating another texture or draw call.
+        Vector uvMinimum = { 0.0f, 0.0f, 0.0f };
+        Vector uvMaximum = { 1.0f, 1.0f, 0.0f };
+        Vector color = { 1.0f, 1.0f, 1.0f };
+
         // Mirroring, which a sprite does by reading its texture backwards rather than by taking a
         // negative scale: a scale of -1 also flips the collider, the children and the maths.
         bool flipX = false;
@@ -37,6 +43,8 @@ namespace Lion
 
         // Returns the sprite's pixel size.
         Size LION_API GetSize();
+		// The dimensions selected by SetRegion, independent of the underlying atlas size.
+		Size LION_API GetRegionSize() const;
 
         // Returns the sprite's pixel center.
         Size LION_API GetCenter();
@@ -53,6 +61,8 @@ namespace Lion
         // is read. Set before Draw; they travel with the submission.
         void LION_API SetOrder(int32 order);
         void LION_API SetFlip(bool flipX, bool flipY);
+        void LION_API SetRegion(const Vector& uvMinimum, const Vector& uvMaximum, const Size& size);
+        void LION_API SetColor(const Vector& color);
 
     private:
         // Attributes

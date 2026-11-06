@@ -1,5 +1,7 @@
 #pragma once
 
+#include <Lion/Math/Vector2.h>
+
 namespace Lion
 {
 	class Event;
@@ -71,11 +73,17 @@ namespace Lion
 		// Programmatically requests the window to close (e.g. an editor "Exit" action).
 		virtual void RequestClose() = 0;
 
+		// Cancels a close request while an application resolves pending work with the user.
+		virtual void CancelClose() = 0;
+
 		// Updates the text shown in the title bar (does not change the stored base title).
 		virtual void SetDisplayTitle(const std::string& title) = 0;
 
 		// Allows or forbids the user to resize the window at runtime.
 		virtual void SetResizable(bool enable) = 0;
+
+		// Changes the live client size while preserving the current window mode.
+		virtual void SetSize(uint32 width, uint32 height) = 0;
 
 		// Loads and applies a window icon from an image file.
 		virtual void SetIcon(const std::string& filePath) = 0;
@@ -89,6 +97,7 @@ namespace Lion
 		virtual bool IsKeyPressed(int32 keyCode) const = 0;
 		virtual bool IsKeyReleased(int32 keyCode) const = 0;
 		virtual bool IsMouseButtonPressed(int32 button) const = 0;
+		virtual Vector2 GetPointerPosition() const = 0;
 		virtual bool IsGamepadConnected(int32 gamepad) const = 0;
 		virtual std::string GetGamepadName(int32 gamepad) const = 0;
 		virtual bool IsGamepadButtonPressed(int32 gamepad, int32 button) const = 0;

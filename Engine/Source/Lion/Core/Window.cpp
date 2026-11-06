@@ -5,6 +5,7 @@
 
 namespace Lion
 {
+    bool Window::IsAvailable() { return sInstance && sInstance->mBackend && sInstance->mBackend->GetNativeHandle(); }
     Window* Window::sInstance = nullptr;
 
     void Window::New()
@@ -54,6 +55,11 @@ namespace Lion
     void Window::RequestClose()
     {
         sInstance->mBackend->RequestClose();
+    }
+
+    void Window::CancelClose()
+    {
+        sInstance->mBackend->CancelClose();
     }
 
     void Window::SetBackgroundColor(float32 red, float32 green, float32 blue)
@@ -131,6 +137,7 @@ namespace Lion
     {
         sInstance->mData.width = width;
         sInstance->mData.height = height;
+        sInstance->mBackend->SetSize(width, height);
     }
 
     void Window::SetTitle(const std::string& title)

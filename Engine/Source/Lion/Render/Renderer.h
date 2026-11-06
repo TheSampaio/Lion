@@ -4,7 +4,9 @@ namespace Lion
 {
     class Application;
     class Camera;
+	class Framebuffer;
     class Sprite;
+	class PostProcessingComponent;
 
     class Shader;
     class Texture;
@@ -41,11 +43,19 @@ namespace Lion
         // Clears the currently bound framebuffer with the given color.
         static LION_API void Clear(float32 red, float32 green, float32 blue, float32 alpha = 1.0f);
 
+        // Draws subsequent sprite batches as solid, high-contrast edges instead of textured fills.
+        static LION_API void SetWireframe(bool enabled);
+
         // Begins a batch: binds the shared shader/geometry and uploads the camera matrices.
         static LION_API void RenderBegin(const Reference<Camera>& camera);
 
         // Ends a batch: builds geometry, binds textures and flushes a single draw call.
         static LION_API void RenderEnd();
+
+		// Redirects the scene to an intermediate target and composites it through the camera's full-screen
+		// effect after RenderEnd. Returns false when there is no enabled effect to apply.
+		static LION_API bool BeginPostProcessing(PostProcessingComponent* component, uint32 width, uint32 height);
+		static LION_API void EndPostProcessing(const Reference<Framebuffer>& target = nullptr);
 
         friend Application;
         friend Sprite;
@@ -61,14 +71,24 @@ namespace Lion
 
     private:
         Reference<Shader> mShader;
+        Reference<Shader> mWireframeShader;
         Reference<VertexArray> mVertexArray;
         Reference<VertexBuffer> mVertexBuffer;
         Reference<IndexBuffer> mIndexBuffer;
+		Reference<Framebuffer> mPostFramebuffer;
+		Reference<Shader> mPostShader;
+		Reference<Shader> mCustomPostShader;
+		Reference<VertexArray> mPostVertexArray;
+		Reference<VertexBuffer> mPostVertexBuffer;
+		Reference<IndexBuffer> mPostIndexBuffer;
+		PostProcessingComponent* mActivePostProcessing = nullptr;
+		std::string mCustomPostShaderPath;
 
         std::vector<SpriteInfo*> mSpriteBuffer;   // Sprites submitted this frame.
         std::vector<Texture*> mTextureSlots;      // Slot index -> texture, rebuilt every frame.
         std::vector<Vertex> mVertexData;          // CPU-side staging for the vertex buffer.
         RenderStats mStats;                       // What the last flush cost (see GetStats).
+        bool mWireframe = false;
 
         Renderer() = default;
 
